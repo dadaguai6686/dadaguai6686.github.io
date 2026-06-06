@@ -118,6 +118,10 @@ const overlayCopy = overlay.querySelector<HTMLElement>("p")!;
 const missionBrief = document.querySelector<HTMLDivElement>("#mission-brief")!;
 const fieldGuide = document.querySelector<HTMLDivElement>("#field-guide")!;
 const howToPlay = document.querySelector<HTMLDivElement>("#how-to-play")!;
+const nextRunPanel = document.querySelector<HTMLDivElement>("#next-run-panel")!;
+const nextRunTitle = document.querySelector<HTMLElement>("#next-run-title")!;
+const nextRunFocus = document.querySelector<HTMLElement>("#next-run-focus")!;
+const nextRunGoals = document.querySelector<HTMLDivElement>("#next-run-goals")!;
 const runRecap = document.querySelector<HTMLDivElement>("#run-recap")!;
 const recapRating = document.querySelector<HTMLDivElement>("#recap-rating")!;
 const recapRatingGrade = document.querySelector<HTMLElement>("#recap-rating-grade")!;
@@ -176,6 +180,12 @@ type RunHistoryEntry = {
   status: RunEndDetail["status"];
   timestamp: number;
   wave: number;
+};
+
+type NextRunGoal = {
+  label: string;
+  text: string;
+  tone: "primary" | "steady" | "warning" | "complete";
 };
 
 type RunEndDetail = {
@@ -298,6 +308,7 @@ resetSaveButton.addEventListener("click", () => {
   updateRecordUi();
   updateAchievementUi();
   updateRunHistoryUi();
+  updateNextRunPanel();
   disarmResetSave();
   setSessionFeedback("本地存档已清空。");
 });
@@ -441,6 +452,7 @@ window.addEventListener("game:ended", (event) => {
   missionBrief.hidden = true;
   fieldGuide.hidden = true;
   renderRunRecap(detail, newlyUnlocked);
+  updateNextRunPanel(detail);
   updateSessionTools();
   startButton.textContent =
     detail.status === "completed" ? "再次救援" : detail.status === "won" ? "不升级，进入下一波" : "重新救援";
@@ -550,6 +562,7 @@ function showHelpOverlay(): void {
   missionBrief.hidden = false;
   fieldGuide.hidden = false;
   howToPlay.hidden = false;
+  updateNextRunPanel();
   upgradeChoices.hidden = true;
   startButton.hidden = latestStatus === "paused";
   resumeButton.hidden = latestStatus !== "paused";
@@ -638,6 +651,7 @@ function updateDifficultyUi(): void {
   const difficulty = DIFFICULTY_SETTINGS[selectedDifficulty];
   difficultyDetail.textContent = `${difficulty.name}模式：${difficulty.description}`;
   updateDailyChallengeUi();
+  updateNextRunPanel();
 }
 
 function updateAudioUi(): void {
@@ -651,6 +665,148 @@ function updateDailyChallengeUi(): void {
   dailyRouteButton.textContent = `今日挑战 · ${daily.routeName}`;
   dailyRouteButton.title = `${daily.label}，${difficulty.name}模式，固定救援代号 ${daily.routeName}`;
   dailyDetail.textContent = buildDailyChallengeDetail(daily);
+}
+
+function updateNextRunPanel(detail?: RunEndDetail): void {
+  const summary = buildNextRunSummary(detail);
+  nextRunPanel.hidden = false;
+  nextRunTitle.textContent = summary.title;
+  nextRunFocus.textContent = summary.focus;
+  nextRunGoals.replaceChildren(
+    ...summary.goals.map((goal) => {
+      const item = document.createElement("article");
+      item.dataset.tone = goal.tone;
+      const label = document.createElement("strong");
+      const text = document.createElement("span");
+      label.textContent = goal.label;
+      text.textContent = goal.text;
+      item.append(label, text);
+      return item;
+    })
+  );
+}
+
+function buildNextRunSummary(detail?: RunEndDetail): { title: string; focus: string; goals: NextRunGoal[] } {
+  const difficulty = DIFFICULTY_SETTINGS[selectedDifficulty];
+  const daily = getDailyChallenge();
+  const dailyBest = getCurrentDailyBest(daily);
+  const nextAchievement = getNextAchievementTarget();
+  const lastRun = saveData.runHistory[0];
+  const title = detail?.status === "won" ? "下一波目标" : "下一局目标";
+  const focus = buildNextRunFocus(detail, dailyBest);
+  const goals: NextRunGoal[] = [
+    {
+      label: "当前路线",
+      text:
+        detail?.status === "won"
+          ? `继续 ${detail.routePlan.name}，第 ${Math.min(detail.wave + 1, 5)}/5 波会换区域和事件。`
+          : `普通救援生成新代号；今日挑战固定为 ${daily.routeName}。`,
+      tone: "primary"
+    },
+    {
+      label: "难度节奏",
+      text: `${difficulty.name}模式：${difficulty.description}`,
+      tone: selectedDifficulty === "hardcore" ? "warning" : "steady"
+    },
+    {
+      label: "今日挑战",
+      text: dailyBest
+        ? `今日最佳 ${dailyBest.score.toLocaleString()} 分 / ${dailyBest.ratingId} ${dailyBest.ratingName} / 第 ${dailyBest.wave}/5 波。`
+        : `${daily.label}还没有成绩，打一把会记录当天固定路线。`,
+      tone: dailyBest ? "complete" : "primary"
+    },
+    {
+      label: nextAchievement ? `成就目标：${nextAchievement.name}` : "成就目标",
+      text: nextAchievement ? nextAchievement.requirement : "成就已全解锁，下一步冲硬核高分和今日最佳。",
+      tone: nextAchievement ? "steady" : "complete"
+    }
+  ];
+
+  if (lastRun && !detail) {
+    goals[0] = {
+      label: "上次路线",
+      text: `${lastRun.routeName}：${getRunStatusLabel(lastRun.status)}，${lastRun.score.toLocaleString()} 分，合约 ${lastRun.contractsCompleted}/5。`,
+      tone: lastRun.status === "lost" ? "warning" : "complete"
+    };
+  }
+
+  if (detail?.status === "lost") {
+    goals[1] = {
+      label: "修正重点",
+      text: buildLossCorrection(detail),
+      tone: "warning"
+    };
+  } else if (detail?.status === "won") {
+    goals[1] = {
+      label: "升级判断",
+      text: buildUpgradeAdvice(detail),
+      tone: "primary"
+    };
+  } else if (detail?.status === "completed") {
+    goals[1] = {
+      label: "发行循环",
+      text: detail.difficulty === "hardcore" ? "硬核已通关，下一步冲今日挑战和 S 级速度。" : "完整五波已通关，可以切硬核或用今日挑战复盘路线。",
+      tone: "complete"
+    };
+  }
+
+  return { title, focus, goals };
+}
+
+function buildNextRunFocus(detail: RunEndDetail | undefined, dailyBest: DailyBestEntry | undefined): string {
+  if (!detail) {
+    if (!saveData.achievements.includes("firstRepair")) {
+      return "首次目标：先捡 2 个金色流明，再修复第一座蓝色信标。";
+    }
+    if (saveData.bestWave < 2) {
+      return "下一局先稳定第一波：补流明、修 4 座信标、从北侧光门撤离。";
+    }
+    if (saveData.bestContracts === 0) {
+      return "下一局把战术合约当成路线目标，完成后再撤离。";
+    }
+    if (!dailyBest) {
+      return "今日挑战还没有成绩，适合用固定路线练习和复盘。";
+    }
+    return "下一局目标：读合约、保连锁、少受击，把实时评级推到 A 或 S。";
+  }
+
+  if (detail.status === "won") {
+    return `第 ${detail.wave}/5 波已稳定。先选升级，再进入第 ${Math.min(detail.wave + 1, 5)}/5 波读新合约。`;
+  }
+  if (detail.status === "completed") {
+    return "五波救援完成。下一局可以挑战硬核、今日挑战，或追求 S 级无损高分。";
+  }
+  return buildLossCorrection(detail);
+}
+
+function buildLossCorrection(detail: RunEndDetail): string {
+  if (detail.endReason === "chargeDepleted") {
+    return detail.stats.lumenCollected < 3
+      ? "电量归零：开局先吃 2-3 个流明，别直接硬修信标。"
+      : "电量归零：修到一半可以先离开补流明，再回到信标继续。";
+  }
+  if (detail.endReason === "hullDestroyed") {
+    return detail.stats.pulseUses === 0
+      ? "机体损毁：粉色碎片贴近时用 Q 脉冲，不要把技能留到失败。"
+      : "机体损毁：减少穿越碎片线，推进用于脱离危险，不只用于赶路。";
+  }
+  return "信号中断：先保命完成主目标，再追求合约、连锁和 S 级评价。";
+}
+
+function buildUpgradeAdvice(detail: RunEndDetail): string {
+  if (detail.stats.stormSeconds > 2 || detail.charge < 34) return "缺电或风暴停留偏高，优先深层电容或矢量引擎。";
+  if (detail.stats.hitsTaken > 0 || detail.hull < 46) return "受击偏多，优先曜盾机体；如果常被贴脸，选棱镜脉冲。";
+  if (detail.elapsed > detail.wave * 58) return "清波偏慢，优先信标织机或矢量引擎。";
+  return "路线稳定，可以按冲分选择信标织机，或按续航选择深层电容。";
+}
+
+function getCurrentDailyBest(daily: ReturnType<typeof getDailyChallenge>): DailyBestEntry | undefined {
+  const best = saveData.dailyBest;
+  return best && best.key === daily.key && best.routeSeed === daily.seed ? best : undefined;
+}
+
+function getNextAchievementTarget(): ReturnType<typeof getAchievementSummaries>[number] | undefined {
+  return getAchievementSummaries(saveData.achievements).find((summary) => !summary.unlocked);
 }
 
 function updateRecordUi(): void {
@@ -757,6 +913,7 @@ function persistRunResult(detail: RunEndDetail): AchievementId[] {
   updateDailyChallengeUi();
   updateAchievementUi();
   updateRunHistoryUi();
+  updateNextRunPanel(detail);
   return newlyUnlocked;
 }
 

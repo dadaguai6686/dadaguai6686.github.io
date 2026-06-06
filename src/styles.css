@@ -762,6 +762,8 @@ button {
 
 .panel {
   width: min(720px, 100%);
+  max-height: calc(100vh - 44px);
+  overflow: auto;
   padding: clamp(24px, 5vw, 54px);
   border: 1px solid rgba(172, 245, 255, 0.24);
   border-radius: 8px;
@@ -973,6 +975,87 @@ h1 {
   color: #b7d7e6;
   font-size: 12px;
   line-height: 1.4;
+}
+
+#next-run-panel {
+  display: grid;
+  gap: 8px;
+  max-width: 660px;
+  margin: 0 auto 16px;
+  text-align: left;
+}
+
+#next-run-panel[hidden] {
+  display: none;
+}
+
+.next-run-head {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 226, 122, 0.2);
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(255, 226, 122, 0.12), rgba(103, 244, 255, 0.06));
+}
+
+.next-run-head strong,
+.next-run-head span,
+#next-run-goals strong,
+#next-run-goals span {
+  display: block;
+}
+
+.next-run-head strong {
+  color: #fff3ad;
+  font-size: 13px;
+  font-weight: 1000;
+}
+
+.next-run-head span {
+  margin-top: 4px;
+  color: #d8eaf7;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+#next-run-goals {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+#next-run-goals article {
+  min-height: 76px;
+  padding: 10px;
+  border: 1px solid rgba(126, 239, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+#next-run-goals article[data-tone="primary"] {
+  border-color: rgba(103, 244, 255, 0.26);
+  background: linear-gradient(135deg, rgba(103, 244, 255, 0.13), rgba(255, 226, 122, 0.06));
+}
+
+#next-run-goals article[data-tone="warning"] {
+  border-color: rgba(255, 95, 155, 0.3);
+  background: linear-gradient(135deg, rgba(255, 95, 155, 0.12), rgba(255, 226, 122, 0.06));
+}
+
+#next-run-goals article[data-tone="complete"] {
+  border-color: rgba(255, 226, 122, 0.28);
+  background: linear-gradient(135deg, rgba(255, 226, 122, 0.13), rgba(103, 244, 255, 0.06));
+}
+
+#next-run-goals strong {
+  color: #fff3ad;
+  font-size: 11px;
+  font-weight: 1000;
+}
+
+#next-run-goals span {
+  margin-top: 5px;
+  color: #c3d7e7;
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 #run-recap {
@@ -1583,6 +1666,59 @@ h1 {
   }
 }
 
+@media (max-height: 760px) and (min-width: 701px) {
+  .panel {
+    padding: 18px 28px;
+  }
+
+  h1 {
+    margin: 6px 0 8px;
+    font-size: 52px;
+  }
+
+  .panel p {
+    margin-bottom: 12px;
+    font-size: 14px;
+    line-height: 1.42;
+  }
+
+  #mission-brief {
+    margin-bottom: 10px;
+    padding: 8px 10px;
+  }
+
+  #field-guide {
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  #field-guide article {
+    min-height: 50px;
+    padding: 8px;
+  }
+
+  #menu-options {
+    margin-bottom: 8px;
+  }
+
+  #daily-detail {
+    margin-bottom: 10px;
+  }
+
+  #next-run-panel {
+    margin-bottom: 12px;
+  }
+
+  .next-run-head {
+    padding: 8px 10px;
+  }
+
+  #next-run-goals article {
+    min-height: 62px;
+    padding: 8px;
+  }
+}
+
 @media (max-width: 700px) {
   #objective-strip {
     top: auto;
@@ -1834,6 +1970,29 @@ h1 {
   #daily-detail {
     margin-bottom: 10px;
     font-size: 11px;
+  }
+
+  #next-run-panel {
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .next-run-head {
+    padding: 9px 10px;
+  }
+
+  .next-run-head span {
+    font-size: 11px;
+  }
+
+  #next-run-goals {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  #next-run-goals article {
+    min-height: 0;
+    padding: 9px 10px;
   }
 
   #start-button,
