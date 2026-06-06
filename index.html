@@ -15,7 +15,7 @@
   <meta property="og:image" content="https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=1200">
   <meta name="twitter:card" content="summary_large_image">
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="style.css?v=20260529-arcade-v4">
+  <link rel="stylesheet" href="style.css?v=20260606-touch-v1">
   <link rel="manifest" href="/manifest.webmanifest">
   <!-- Lucide Icons Local -->
   <script src="lucide.min.js"></script>
@@ -922,14 +922,21 @@
             </div>
             
             <!-- Action buttons -->
-            <div style="display: flex; align-items: center; gap: 0.8rem;">
+            <div class="runner-touch-pad" id="runner-touch-controls" aria-label="主线游戏触控控制器">
               <button type="button" class="action-btn" id="game-restart-btn" style="height: 32px; font-size: 0.8rem; padding: 0 1rem; border-radius: 4px; border: 1px solid rgba(139,92,246,0.3); background: rgba(139,92,246,0.1); color: #fff; cursor: pointer; display: flex; align-items: center; gap: 0.3rem;">
                 <i data-lucide="rotate-ccw" style="width: 14px; height: 14px;"></i> 重新加载关卡
               </button>
               
-              <div style="display: flex; gap: 0.4rem;">
-                <button type="button" id="btn-jump-led" style="width: 38px; height: 38px; border-radius: 50%; background: radial-gradient(circle, #ec4899 0%, #be185d 100%); border: 3px solid #fff; box-shadow: 0 0 10px rgba(236,72,153,0.6); color: #fff; font-size: 0.65rem; font-weight: 800; display: flex; justify-content: center; align-items: center; cursor: pointer; transition: transform 0.1s, box-shadow 0.1s; outline: none; user-select: none;">JUMP</button>
-                <button type="button" id="btn-bgm-led" style="width: 38px; height: 38px; border-radius: 50%; background: radial-gradient(circle, #3b82f6 0%, #1d4ed8 100%); border: 3px solid #fff; box-shadow: 0 0 10px rgba(59,130,246,0.6); color: #fff; font-size: 0.65rem; font-weight: 800; display: flex; justify-content: center; align-items: center; cursor: pointer; transition: transform 0.1s, box-shadow 0.1s; outline: none; user-select: none;">BGM</button>
+              <div class="runner-dpad" aria-label="移动方向">
+                <button type="button" id="btn-left-led" data-runner-control="left" aria-label="向左移动">◀</button>
+                <button type="button" id="btn-right-led" data-runner-control="right" aria-label="向右移动">▶</button>
+              </div>
+
+              <div class="runner-action-cluster">
+                <button type="button" id="btn-start-led" data-runner-control="start" aria-label="开始或继续">START</button>
+                <button type="button" id="btn-jump-led" data-runner-control="jump" aria-label="跳跃">JUMP</button>
+                <button type="button" id="btn-dash-led" data-runner-control="dash" aria-label="冲刺">DASH</button>
+                <button type="button" id="btn-bgm-led" data-runner-control="bgm" aria-label="切换音乐">BGM</button>
               </div>
             </div>
             
@@ -1200,6 +1207,6 @@
   <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <!-- Main JavaScript File -->
-  <script src="app.js?v=20260529-arcade-v4"></script>
+  <script src="app.js?v=20260606-touch-v1"></script>
 </body>
 </html>

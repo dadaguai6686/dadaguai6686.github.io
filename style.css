@@ -2969,6 +2969,98 @@ main {
   transform: translateY(2px) scale(0.95) !important;
 }
 
+.runner-touch-pad {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  order: -1;
+}
+
+.runner-dpad,
+.runner-action-cluster {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.runner-dpad button,
+.runner-action-cluster button {
+  min-width: 42px;
+  height: 42px;
+  border: 2px solid rgba(255, 255, 255, 0.78);
+  border-radius: 999px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  outline: none;
+  user-select: none;
+  touch-action: none;
+  transition: transform 0.08s ease, filter 0.12s ease, box-shadow 0.12s ease;
+}
+
+.runner-dpad button {
+  background: radial-gradient(circle at 50% 28%, #334155 0%, #111827 100%);
+  box-shadow: 0 3px 0 #020617, 0 0 12px rgba(148, 163, 184, 0.28);
+  font-size: 0.95rem;
+}
+
+.runner-action-cluster button {
+  padding-inline: 0.55rem;
+}
+
+#btn-start-led {
+  background: radial-gradient(circle at 50% 28%, #22c55e 0%, #15803d 100%);
+  box-shadow: 0 3px 0 #064e3b, 0 0 12px rgba(34, 197, 94, 0.45);
+}
+
+#btn-jump-led {
+  background: radial-gradient(circle at 50% 28%, #ec4899 0%, #be185d 100%);
+  box-shadow: 0 3px 0 #831843, 0 0 12px rgba(236, 72, 153, 0.5);
+}
+
+#btn-dash-led {
+  background: radial-gradient(circle at 50% 28%, #f59e0b 0%, #b45309 100%);
+  box-shadow: 0 3px 0 #78350f, 0 0 12px rgba(245, 158, 11, 0.48);
+}
+
+#btn-bgm-led {
+  background: radial-gradient(circle at 50% 28%, #3b82f6 0%, #1d4ed8 100%);
+  box-shadow: 0 3px 0 #1e3a8a, 0 0 12px rgba(59, 130, 246, 0.5);
+}
+
+.runner-dpad button:active,
+.runner-dpad button.is-held,
+.runner-action-cluster button:active,
+.runner-action-cluster button.is-held {
+  transform: translateY(2px) scale(0.96);
+  filter: brightness(1.2);
+}
+
+@media (max-width: 720px) {
+  .runner-touch-pad {
+    width: 100%;
+    justify-content: center;
+    padding: 0.45rem;
+    border: 1px solid rgba(139, 92, 246, 0.16);
+    border-radius: 12px;
+    background: rgba(10, 8, 20, 0.48);
+  }
+
+  .runner-dpad,
+  .runner-action-cluster {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .runner-action-cluster {
+    flex: 1 1 210px;
+  }
+}
+
 /* Pulsing light markers */
 .status-light {
   width: 8px;

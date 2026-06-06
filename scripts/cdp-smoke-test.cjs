@@ -319,6 +319,41 @@ async function run() {
     timer: document.querySelector('#game-timer')?.textContent,
     title: document.querySelector('#game-overlay-title')?.textContent
   }))()`);
+  const runnerTouchState = await evaluate(`(async () => {
+    const firePointer = (selector, type) => {
+      const el = document.querySelector(selector);
+      if (!el) return false;
+      el.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        pointerId: 7,
+        pointerType: 'touch',
+        isPrimary: true
+      }));
+      return true;
+    };
+    const controls = document.querySelectorAll('[data-runner-control]').length;
+    const beforeX = window.__atherixDebug?.player?.x || 0;
+    firePointer('#btn-start-led', 'pointerdown');
+    firePointer('#btn-start-led', 'pointerup');
+    await new Promise(resolve => setTimeout(resolve, 180));
+    firePointer('#btn-right-led', 'pointerdown');
+    await new Promise(resolve => setTimeout(resolve, 360));
+    firePointer('#btn-right-led', 'pointerup');
+    firePointer('#btn-dash-led', 'pointerdown');
+    firePointer('#btn-dash-led', 'pointerup');
+    await new Promise(resolve => setTimeout(resolve, 220));
+    const player = window.__atherixDebug?.player || {};
+    return {
+      controls,
+      overlayAfterStart: document.querySelector('#game-overlay-screen')?.style.display || '',
+      beforeX,
+      afterX: player.x || 0,
+      dashReady: !!player.dashReady,
+      dashCooldownUntil: player.dashCooldownUntil || 0,
+      running: !!window.__atherixDebug?.gameRunning?.()
+    };
+  })()`, 7000);
   const arcadeInitial = await evaluate(`(() => ({
     premium: !!document.querySelector('#premium-game-stage'),
     careerPanel: !!document.querySelector('#premium-career-rating'),
@@ -412,6 +447,29 @@ async function run() {
       scope: registration?.scope || ''
     };
   })()`, 10000);
+  await send('Emulation.setDeviceMetricsOverride', {
+    width: 390,
+    height: 844,
+    deviceScaleFactor: 1,
+    mobile: true
+  });
+  await send('Page.navigate', { url: `${appUrl}/#game` });
+  await waitFor('#runner-touch-controls', 12000);
+  await wait(700);
+  const runnerMobileState = await evaluate(`(() => {
+    const pad = document.querySelector('#runner-touch-controls');
+    const rect = pad?.getBoundingClientRect();
+    return {
+      width: document.documentElement.clientWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+      controls: document.querySelectorAll('[data-runner-control]').length,
+      padTop: rect ? Math.round(rect.top) : null,
+      padBottom: rect ? Math.round(rect.bottom) : null,
+      visibleInFirstViewport: !!rect && rect.top < window.innerHeight && rect.bottom > 0,
+      horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+    };
+  })()`);
+  await send('Emulation.clearDeviceMetricsOverride');
 
   assert(blogState.visibleArticle && blogState.articleChars > 100, 'blog reader should open a populated article');
   assert(!adminStartupState.token && !adminStartupState.blogActionsVisible && !adminStartupState.projectActionsVisible, 'invalid cached admin token should be cleared on startup');
@@ -438,6 +496,10 @@ async function run() {
     `game navigation should reset scroll into visible content: ${JSON.stringify(gameViewportState)}`
   );
   assert(mainSpaceState.overlayBefore === 'flex' && mainSpaceState.overlayAfter === 'flex', 'Space should not start/retry the main game overlay');
+  assert(runnerTouchState.controls >= 5 && runnerTouchState.overlayAfterStart === 'none', 'runner touch controls should start the main game');
+  assert(runnerTouchState.running && runnerTouchState.afterX > runnerTouchState.beforeX, 'runner touch controls should move the player horizontally');
+  assert(!runnerTouchState.dashReady && runnerTouchState.dashCooldownUntil > 0, 'runner touch controls should trigger dash cooldown');
+  assert(runnerMobileState.controls >= 5 && runnerMobileState.visibleInFirstViewport && !runnerMobileState.horizontalOverflow, `runner touch controls should be reachable on mobile: ${JSON.stringify(runnerMobileState)}`);
   assert(arcadeInitial.premium && arcadeInitial.careerPanel, 'premium arcade career panel should render');
   assert(arcadeInitial.oldPrototypeCount === 0, 'old prototype mini-games should be replaced');
   assert(arcadeInitial.touchControls >= 5, 'premium touch controls should be available');
@@ -463,6 +525,8 @@ async function run() {
     projectState,
     gameViewportState,
     mainSpaceState,
+    runnerTouchState,
+    runnerMobileState,
     arcadeInitial,
     survivorState,
     bossState,

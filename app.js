@@ -4649,6 +4649,10 @@ function init() {
   const gameShieldSpan = document.getElementById('game-shield');
   const gameStatusSpan = document.getElementById('game-status');
   const btnJumpLed = document.getElementById('btn-jump-led');
+  const btnLeftLed = document.getElementById('btn-left-led');
+  const btnRightLed = document.getElementById('btn-right-led');
+  const btnDashLed = document.getElementById('btn-dash-led');
+  const btnStartLed = document.getElementById('btn-start-led');
   const btnBgmLed = document.getElementById('btn-bgm-led');
   const joystickShaft = document.getElementById('joystick-shaft');
 
@@ -5656,6 +5660,15 @@ function init() {
     invulnerableUntil: 0
   };
 
+  if (['127.0.0.1', 'localhost'].includes(window.location.hostname)) {
+    window.__atherixDebug = {
+      get player() {
+        return { ...player };
+      },
+      gameRunning: () => gameRunning
+    };
+  }
+
   initLevelData = function() {
     const lvl = gameLevels[currentLevelIndex];
     if (!lvl) return;
@@ -5717,6 +5730,44 @@ function init() {
 
   const gameKeys = {};
   const overlayActionCodes = ['Enter'];
+  const runnerTouchMap = {
+    left: 'ArrowLeft',
+    right: 'ArrowRight'
+  };
+
+  function setRunnerTouchButtonState(button, held) {
+    if (!button) return;
+    button.classList.toggle('is-held', held);
+  }
+
+  function setRunnerDirection(control, pressed) {
+    const code = runnerTouchMap[control];
+    if (!code) return;
+    gameKeys[code] = pressed;
+    setRunnerTouchButtonState(control === 'left' ? btnLeftLed : btnRightLed, pressed);
+    if (joystickShaft) {
+      if (pressed) {
+        joystickShaft.style.transform = control === 'left' ? 'translate(-6px, 0)' : 'translate(6px, 0)';
+      } else if (!gameKeys.ArrowLeft && !gameKeys.ArrowRight) {
+        joystickShaft.style.transform = 'translate(0, 0)';
+      }
+    }
+  }
+
+  function runOverlayAction() {
+    if (!gameOverlay || gameOverlay.style.display === 'none') return false;
+    const titleText = document.getElementById('game-overlay-title').textContent;
+    if (titleText === 'VICTORY!' && currentLevelIndex < gameLevels.length - 1) {
+      currentLevelIndex++;
+      if (levelSelect) levelSelect.value = String(currentLevelIndex);
+      startLevel();
+    } else if (titleText === 'GAME OVER' && hasActiveCheckpoint()) {
+      respawnAtCheckpoint();
+    } else {
+      startLevel();
+    }
+    return true;
+  }
 
   window.addEventListener('keydown', (e) => {
     const gameControlCodes = ['Space', 'Enter', 'KeyW', 'KeyA', 'KeyD', 'KeyK', 'ShiftLeft', 'ShiftRight', 'ArrowUp', 'ArrowLeft', 'ArrowRight'];
@@ -5734,18 +5785,7 @@ function init() {
       if (gameIsActive && !isEditableTarget(e.target) && !miniGameHasFocus) {
         if (overlayActionCodes.includes(e.code)) {
           e.preventDefault();
-          if (gameOverlay && gameOverlay.style.display !== 'none') {
-            const titleText = document.getElementById('game-overlay-title').textContent;
-            if (titleText === 'VICTORY!' && currentLevelIndex < gameLevels.length - 1) {
-              currentLevelIndex++;
-              if (levelSelect) levelSelect.value = String(currentLevelIndex);
-              startLevel();
-            } else if (titleText === 'GAME OVER' && hasActiveCheckpoint()) {
-              respawnAtCheckpoint();
-            } else {
-              startLevel();
-            }
-          }
+          runOverlayAction();
         }
       }
       return;
@@ -6426,16 +6466,7 @@ function init() {
 
   if (gameOverlay) {
     gameOverlay.addEventListener('click', () => {
-      const titleText = document.getElementById('game-overlay-title').textContent;
-      if (titleText === 'VICTORY!' && currentLevelIndex < gameLevels.length - 1) {
-        currentLevelIndex++;
-        if (levelSelect) levelSelect.value = String(currentLevelIndex);
-        startLevel();
-      } else if (titleText === 'GAME OVER' && hasActiveCheckpoint()) {
-        respawnAtCheckpoint();
-      } else {
-        startLevel();
-      }
+      runOverlayAction();
     });
   }
 
@@ -6473,6 +6504,51 @@ function init() {
     });
     btnJumpLed.addEventListener('touchend', () => {
       if (joystickShaft) joystickShaft.style.transform = 'translate(0, 0)';
+    });
+  }
+
+  function bindRunnerHoldControl(button, control) {
+    if (!button) return;
+    const release = () => setRunnerDirection(control, false);
+    button.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      setRunnerDirection(control, true);
+      try {
+        button.setPointerCapture?.(e.pointerId);
+      } catch (err) {
+        // Pointer capture can fail for interrupted or synthetic pointer streams.
+      }
+      releaseArcadeButtonFocus();
+    });
+    button.addEventListener('pointerup', release);
+    button.addEventListener('pointercancel', release);
+    button.addEventListener('pointerleave', release);
+  }
+
+  bindRunnerHoldControl(btnLeftLed, 'left');
+  bindRunnerHoldControl(btnRightLed, 'right');
+
+  if (btnStartLed) {
+    btnStartLed.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      setRunnerTouchButtonState(btnStartLed, true);
+      if (!runOverlayAction() && !gameRunning) startLevel();
+      releaseArcadeButtonFocus();
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(type => {
+      btnStartLed.addEventListener(type, () => setRunnerTouchButtonState(btnStartLed, false));
+    });
+  }
+
+  if (btnDashLed) {
+    btnDashLed.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      setRunnerTouchButtonState(btnDashLed, true);
+      if (gameRunning) triggerPlayerDash();
+      releaseArcadeButtonFocus();
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(type => {
+      btnDashLed.addEventListener(type, () => setRunnerTouchButtonState(btnDashLed, false));
     });
   }
 
