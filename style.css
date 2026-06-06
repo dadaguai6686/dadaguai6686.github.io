@@ -5106,6 +5106,143 @@ body.command-open {
   flex-wrap: wrap;
 }
 
+.mini-playfield-stack {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  justify-self: center;
+}
+
+.mini-playfield-stack .mini-canvas {
+  display: block;
+}
+
+.survivor-upgrade-draft {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-content: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: 10px;
+  border: 1px solid rgba(186, 230, 253, 0.2);
+  background:
+    linear-gradient(180deg, rgba(5, 8, 22, 0.82), rgba(5, 8, 22, 0.92)),
+    radial-gradient(circle at 50% 28%, rgba(34, 211, 238, 0.2), transparent 45%);
+  box-shadow: inset 0 0 32px rgba(34, 211, 238, 0.08);
+  z-index: 3;
+}
+
+.survivor-upgrade-draft.active {
+  display: grid;
+}
+
+.survivor-draft-heading {
+  display: grid;
+  gap: 0.22rem;
+  text-align: center;
+}
+
+.survivor-draft-heading span {
+  color: #bae6fd;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.survivor-draft-heading strong {
+  color: #fff;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.08rem;
+}
+
+.survivor-draft-heading small {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+
+.survivor-upgrade-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.survivor-upgrade-option {
+  min-height: 142px;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 0.34rem;
+  padding: 0.72rem;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.68);
+  color: #fff;
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+}
+
+.survivor-upgrade-option:hover,
+.survivor-upgrade-option:focus-visible {
+  transform: translateY(-2px);
+  border-color: rgba(186, 230, 253, 0.5);
+  background: rgba(15, 23, 42, 0.86);
+}
+
+.survivor-upgrade-option span {
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(186, 230, 253, 0.3);
+  border-radius: 999px;
+  color: #bae6fd;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.survivor-upgrade-option strong {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.9rem;
+  line-height: 1.2;
+}
+
+.survivor-upgrade-option small {
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.survivor-upgrade-option em {
+  color: #dffaff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.survivor-upgrade-option[data-tone="rail"],
+.survivor-upgrade-option[data-tone="overcharge"] {
+  border-color: rgba(251, 113, 133, 0.26);
+}
+
+.survivor-upgrade-option[data-tone="pulse"],
+.survivor-upgrade-option[data-tone="nova"] {
+  border-color: rgba(34, 211, 238, 0.3);
+}
+
+.survivor-upgrade-option[data-tone="drone"],
+.survivor-upgrade-option[data-tone="magnet"],
+.survivor-upgrade-option[data-tone="thruster"] {
+  border-color: rgba(52, 211, 153, 0.24);
+}
+
+.survivor-upgrade-option[data-tone="reactor"] {
+  border-color: rgba(251, 191, 36, 0.28);
+}
+
 .mini-canvas {
   width: 100%;
   max-width: 520px;
@@ -5359,6 +5496,19 @@ body.command-open {
   }
   .mini-canvas {
     max-width: 100%;
+  }
+  .mini-playfield-stack {
+    max-width: 100%;
+  }
+  .survivor-upgrade-draft {
+    position: relative;
+    margin-top: 0.75rem;
+  }
+  .survivor-upgrade-grid {
+    grid-template-columns: 1fr;
+  }
+  .survivor-upgrade-option {
+    min-height: 104px;
   }
   .premium-touch-controls {
     display: flex;

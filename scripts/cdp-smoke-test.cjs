@@ -174,8 +174,21 @@ async function run() {
 
   let id = 0;
   const pending = new Map();
+  let socketClosed = false;
+  function rejectPending(reason) {
+    for (const [callId, slot] of pending.entries()) {
+      clearTimeout(slot.timer);
+      slot.reject(new Error(reason));
+      pending.delete(callId);
+    }
+  }
   ws.addEventListener('message', event => {
-    const message = JSON.parse(event.data);
+    let message;
+    try {
+      message = JSON.parse(event.data);
+    } catch {
+      return;
+    }
     if (!message.id || !pending.has(message.id)) return;
     const slot = pending.get(message.id);
     clearTimeout(slot.timer);
@@ -183,17 +196,42 @@ async function run() {
     if (message.error) slot.reject(new Error(message.error.message));
     else slot.resolve(message.result);
   });
+  ws.addEventListener('close', () => {
+    socketClosed = true;
+    rejectPending('CDP websocket closed');
+  });
+  ws.addEventListener('error', event => {
+    socketClosed = true;
+    rejectPending(event.error?.message || 'CDP websocket error');
+  });
 
   function send(method, params = {}, timeout = 20000) {
+    if (socketClosed || ws.readyState !== 1) {
+      return Promise.reject(new Error(`CDP websocket is not open for ${method}`));
+    }
     const callId = ++id;
-    ws.send(JSON.stringify({ id: callId, method, params }));
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.delete(callId);
         reject(new Error(`${method} timeout`));
       }, timeout);
       pending.set(callId, { resolve, reject, timer });
+      try {
+        ws.send(JSON.stringify({ id: callId, method, params }));
+      } catch (error) {
+        clearTimeout(timer);
+        pending.delete(callId);
+        reject(error);
+      }
     });
+  }
+
+  async function bestEffortSend(method, params = {}, timeout = 3500) {
+    try {
+      return await send(method, params, timeout);
+    } catch {
+      return null;
+    }
   }
 
   async function evaluate(expression, timeout) {
@@ -797,6 +835,41 @@ async function run() {
       hp: document.querySelector('#premium-survivor-hp')?.textContent
     };
   })()`);
+  const survivorDraftOpenState = await evaluate(`(() => {
+    const choices = window.__atherixDebug?.premium?.openSurvivorDraft?.() || [];
+    const beforeElapsed = Number(window.__atherixDebug?.premium?.survivorElapsed?.() || 0);
+    const beforeScore = Number(window.__atherixDebug?.premium?.survivorScore?.() || 0);
+    return {
+      open: !!window.__atherixDebug?.premium?.survivorDraftOpen?.(),
+      ariaHidden: document.querySelector('#premium-survivor-draft')?.getAttribute('aria-hidden') || '',
+      optionCards: document.querySelectorAll('.survivor-upgrade-option').length,
+      choices,
+      beforeElapsed,
+      beforeScore,
+      running: !!window.__atherixDebug?.premium?.survivorRunning?.(),
+      paused: !!window.__atherixDebug?.premium?.survivorPaused?.(),
+      title: document.querySelector('#premium-survivor-draft-title')?.textContent || ''
+    };
+  })()`);
+  await wait(320);
+  const survivorDraftFreezeState = await evaluate(`(() => ({
+    open: !!window.__atherixDebug?.premium?.survivorDraftOpen?.(),
+    elapsedAfter: Number(window.__atherixDebug?.premium?.survivorElapsed?.() || 0),
+    scoreAfter: Number(window.__atherixDebug?.premium?.survivorScore?.() || 0)
+  }))()`);
+  await key('keyDown', '1', 'Digit1');
+  await key('keyUp', '1', 'Digit1');
+  await wait(220);
+  const survivorDraftChosenState = await evaluate(`(() => ({
+    open: !!window.__atherixDebug?.premium?.survivorDraftOpen?.(),
+    ariaHidden: document.querySelector('#premium-survivor-draft')?.getAttribute('aria-hidden') || '',
+    optionCards: document.querySelectorAll('.survivor-upgrade-option').length,
+    running: !!window.__atherixDebug?.premium?.survivorRunning?.(),
+    build: window.__atherixDebug?.premium?.survivorBuild?.() || '',
+    buildText: document.querySelector('#premium-survivor-build')?.textContent || '',
+    level: document.querySelector('#premium-survivor-level')?.textContent || '',
+    score: Number(window.__atherixDebug?.premium?.survivorScore?.() || 0)
+  }))()`);
 
   await click('[data-premium-game="boss"]');
   await wait(200);
@@ -1106,6 +1179,9 @@ async function run() {
   assert(['runner', 'survivor', 'boss', 'drift', 'heist', 'chain', 'tactics'].includes(directorLaunchState.target) && (directorLaunchState.target === 'runner' || directorLaunchState.active === directorLaunchState.target) && !directorLaunchState.horizontalOverflow, `premium arcade director should launch the recommended target: ${JSON.stringify(directorLaunchState)}`);
   assert(arcadeInitial.touchControls >= 5, 'premium touch controls should be available');
   assert(survivorState.nonBlank && survivorState.threat, 'survivor canvas should render active state');
+  assert(survivorDraftOpenState.open && survivorDraftOpenState.ariaHidden === 'false' && survivorDraftOpenState.optionCards === 3 && survivorDraftOpenState.choices.length === 3 && survivorDraftOpenState.running && !survivorDraftOpenState.paused, `survivor roguelite draft should open three upgrade choices without using pause state: ${JSON.stringify(survivorDraftOpenState)}`);
+  assert(survivorDraftFreezeState.open && Math.abs(survivorDraftFreezeState.elapsedAfter - survivorDraftOpenState.beforeElapsed) < 1 && Math.abs(survivorDraftFreezeState.scoreAfter - survivorDraftOpenState.beforeScore) < 1, `survivor roguelite draft should freeze the run clock and score until a choice is made: ${JSON.stringify({ survivorDraftOpenState, survivorDraftFreezeState })}`);
+  assert(!survivorDraftChosenState.open && survivorDraftChosenState.ariaHidden === 'true' && survivorDraftChosenState.optionCards === 0 && survivorDraftChosenState.running && Number(survivorDraftChosenState.level) >= 2 && survivorDraftChosenState.score > survivorDraftOpenState.beforeScore && survivorDraftChosenState.buildText.length > 2, `survivor roguelite draft should apply a chosen upgrade and resume the run: ${JSON.stringify(survivorDraftChosenState)}`);
   assert(bossState.nonBlank && bossState.dash && bossState.lives >= 4, `boss canvas should render active state and apply equipped loadout: ${JSON.stringify(bossState)}`);
   assert(bossPauseState.running && bossPauseState.paused && bossPauseState.pauseButton === '继续', `boss mode should enter pause with keyboard: ${JSON.stringify(bossPauseState)}`);
   assert(
@@ -1138,8 +1214,8 @@ async function run() {
   assert(tacticsState.nonBlank && Number(tacticsState.ap) < 3 && tacticsState.action, `tactics mode should render and accept actions: ${JSON.stringify(tacticsState)}`);
   assert(pwaState.supported && pwaState.registered, 'service worker should register');
 
-  await send('Page.close').catch(() => {});
-  if (launched) await send('Browser.close').catch(() => {});
+  await bestEffortSend('Page.close');
+  if (launched) await bestEffortSend('Browser.close');
   ws.close();
 
   return {
@@ -1177,6 +1253,9 @@ async function run() {
     difficultyProgressState,
     directorLaunchState,
     survivorState,
+    survivorDraftOpenState,
+    survivorDraftFreezeState,
+    survivorDraftChosenState,
     bossState,
     bossPauseState,
     bossPauseFreezeState,

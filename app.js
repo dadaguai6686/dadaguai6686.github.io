@@ -4417,7 +4417,17 @@ function init() {
               <button type="button" class="action-btn" id="premium-survivor-pause">暂停</button>
             </div>
           </div>
-          <canvas class="mini-canvas mini-canvas-wide" id="premium-survivor-canvas" width="560" height="360"></canvas>
+          <div class="mini-playfield-stack">
+            <canvas class="mini-canvas mini-canvas-wide" id="premium-survivor-canvas" width="560" height="360"></canvas>
+            <div class="survivor-upgrade-draft" id="premium-survivor-draft" aria-hidden="true">
+              <div class="survivor-draft-heading">
+                <span>LEVEL UP</span>
+                <strong id="premium-survivor-draft-title">选择星核改造</strong>
+                <small>按 1/2/3 或点击卡片，立即改变本局构筑。</small>
+              </div>
+              <div class="survivor-upgrade-grid" id="premium-survivor-draft-options"></div>
+            </div>
+          </div>
         </div>
         <div class="mini-game-panel" id="premium-boss">
           <div class="mini-game-copy">
@@ -5456,6 +5466,10 @@ function init() {
     });
 
     function applyPremiumControl(control, pressed) {
+      if (pressed && premiumActive === 'survivor' && survivor.draftOpen && control === 'action') {
+        selectSurvivorUpgrade(survivor.draftChoices[0]?.id);
+        return;
+      }
       if (control === 'up') premiumKeys.up = pressed;
       if (control === 'down') premiumKeys.down = pressed;
       if (control === 'left') premiumKeys.left = pressed;
@@ -5547,15 +5561,140 @@ function init() {
       bullets: [],
       orbs: [],
       pickups: [],
-      particles: []
+      particles: [],
+      draftOpen: false,
+      draftChoices: []
     };
+
+    const survivorUpgradeDefs = [
+      {
+        id: 'rail',
+        tone: 'rail',
+        title: '裂轨弹头',
+        desc: '伤害 +7，穿透 +1。适合切开精英潮。',
+        tag: 'Rail',
+        available: p => p.pierce < 5,
+        apply: p => {
+          p.damage += 7;
+          p.pierce = Math.min(5, p.pierce + 1);
+        }
+      },
+      {
+        id: 'pulse',
+        tone: 'pulse',
+        title: '脉冲超频',
+        desc: '射击间隔 -28ms，子弹速度提升。',
+        tag: 'Pulse',
+        available: p => p.fireRate > 72,
+        apply: p => {
+          p.fireRate = Math.max(72, p.fireRate - 28);
+          p.bulletSpeed += 22;
+        }
+      },
+      {
+        id: 'drone',
+        tone: 'drone',
+        title: '伴飞无人机',
+        desc: '增加一台环绕火力无人机。',
+        tag: 'Drone',
+        available: p => p.drones < 4,
+        apply: p => {
+          p.drones = Math.min(4, p.drones + 1);
+        }
+      },
+      {
+        id: 'nova',
+        tone: 'nova',
+        title: '星爆核心',
+        desc: '星爆半径与伤害提升，冷却缩短。',
+        tag: 'Nova',
+        available: p => p.novaRadius < 210,
+        apply: p => {
+          p.novaRadius = Math.min(210, p.novaRadius + 22);
+          p.novaDamage += 28;
+          p.novaCooldownMax = Math.max(3600, p.novaCooldownMax - 520);
+        }
+      },
+      {
+        id: 'magnet',
+        tone: 'magnet',
+        title: '星核牵引',
+        desc: '吸附范围 +34，移速 +8。',
+        tag: 'Magnet',
+        available: p => p.magnet < 235,
+        apply: p => {
+          p.magnet += 34;
+          p.speed += 8;
+        }
+      },
+      {
+        id: 'reactor',
+        tone: 'reactor',
+        title: '反应炉装甲',
+        desc: '生命上限 +18，并立即修复 32 点。',
+        tag: 'Reactor',
+        available: p => p.maxHp < 185,
+        apply: p => {
+          p.maxHp += 18;
+          p.hp = Math.min(p.maxHp, p.hp + 32);
+        }
+      },
+      {
+        id: 'thruster',
+        tone: 'thruster',
+        title: '相位推进器',
+        desc: '移动速度 +22，碰撞半径略降。',
+        tag: 'Thrust',
+        available: p => p.speed < 310,
+        apply: p => {
+          p.speed += 22;
+          p.r = Math.max(9, p.r - 0.6);
+        }
+      },
+      {
+        id: 'overcharge',
+        tone: 'overcharge',
+        title: '过载协议',
+        desc: '伤害 +14，射速提升，但当前生命 -8。',
+        tag: 'Over',
+        available: p => p.hp > 22,
+        apply: p => {
+          p.damage += 14;
+          p.fireRate = Math.max(76, p.fireRate - 16);
+          p.hp = Math.max(16, p.hp - 8);
+        }
+      }
+    ];
+
+    function survivorUpgradeCount(id) {
+      return survivor.player?.upgrades?.filter(item => item === id).length || 0;
+    }
+
+    function survivorBuildSummary() {
+      const p = survivor.player;
+      if (!p) return 'Pulse I';
+      const counts = (p.upgrades || []).reduce((map, id) => {
+        map[id] = (map[id] || 0) + 1;
+        return map;
+      }, {});
+      const labels = Object.entries(counts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 2)
+        .map(([id, count]) => `${survivorUpgradeDefs.find(def => def.id === id)?.tag || id}${count > 1 ? count : ''}`);
+      return labels.length ? labels.join(' + ') : p.build;
+    }
+
+    function survivorXpTarget() {
+      const p = survivor.player;
+      return p ? 90 + p.level * 38 : 128;
+    }
 
     function setSurvivorUi() {
       document.getElementById('premium-survivor-score').textContent = Math.floor(survivor.score);
       document.getElementById('premium-survivor-best').textContent = localStorage.getItem(survivor.bestKey) || '0';
       document.getElementById('premium-survivor-level').textContent = survivor.player?.level || 1;
       document.getElementById('premium-survivor-hp').textContent = Math.max(0, Math.ceil(survivor.player?.hp || 100));
-      document.getElementById('premium-survivor-build').textContent = survivor.player?.build || 'Pulse I';
+      document.getElementById('premium-survivor-build').textContent = survivorBuildSummary();
       document.getElementById('premium-survivor-threat').textContent = `WAVE ${Math.max(1, Math.floor(survivor.elapsed / 18000) + 1)}`;
     }
 
@@ -5569,11 +5708,16 @@ function init() {
       survivor.spawn = 0;
       survivor.shot = 0;
       survivor.score = 0;
+      survivor.draftOpen = false;
+      survivor.draftChoices = [];
+      hideSurvivorDraft();
+      const hpMax = 100 + Number(bonuses.survivorHp || 0) + Number(tuning.hp || 0);
       survivor.player = {
         x: 280,
         y: 180,
         r: 12,
-        hp: 100 + Number(bonuses.survivorHp || 0) + Number(tuning.hp || 0),
+        hp: hpMax,
+        maxHp: hpMax,
         xp: 0,
         level: 1,
         fireRate: 240,
@@ -5583,9 +5727,13 @@ function init() {
         build: activeLoadoutDef().id === 'pulse' ? 'Pulse Sync' : activeLoadoutDef().label,
         magnet: 85 + Number(bonuses.survivorMagnet || 0),
         novaCooldown: 0,
+        novaCooldownMax: 6200,
+        novaRadius: 138,
+        novaDamage: 95,
         novaFlash: 0,
         drones: 0,
-        pierce: 0
+        pierce: 0,
+        upgrades: []
       };
       survivor.enemies = [];
       survivor.bullets = [];
@@ -5641,32 +5789,81 @@ function init() {
       }
     }
 
-    function levelUpSurvivor() {
+    function pickSurvivorUpgrades() {
       const p = survivor.player;
+      const pool = survivorUpgradeDefs.filter(def => !def.available || def.available(p));
+      const choices = [];
+      const mutable = pool.length ? [...pool] : [...survivorUpgradeDefs];
+      while (choices.length < 3 && mutable.length) {
+        const index = Math.floor(Math.random() * mutable.length);
+        choices.push(mutable.splice(index, 1)[0]);
+      }
+      return choices;
+    }
+
+    function hideSurvivorDraft() {
+      const draft = document.getElementById('premium-survivor-draft');
+      const options = document.getElementById('premium-survivor-draft-options');
+      if (draft) {
+        draft.classList.remove('active');
+        draft.setAttribute('aria-hidden', 'true');
+      }
+      if (options) options.innerHTML = '';
+    }
+
+    function renderSurvivorDraft() {
+      const draft = document.getElementById('premium-survivor-draft');
+      const options = document.getElementById('premium-survivor-draft-options');
+      const title = document.getElementById('premium-survivor-draft-title');
+      if (!draft || !options || !survivor.player) return;
+      draft.classList.toggle('active', survivor.draftOpen);
+      draft.setAttribute('aria-hidden', survivor.draftOpen ? 'false' : 'true');
+      if (title) title.textContent = `选择第 ${survivor.player.level} 级改造`;
+      options.innerHTML = survivor.draftChoices.map((choice, index) => `
+        <button type="button" class="survivor-upgrade-option" data-survivor-upgrade="${escapeHTML(choice.id)}" data-tone="${escapeHTML(choice.tone)}">
+          <span>${index + 1}</span>
+          <strong>${escapeHTML(choice.title)}</strong>
+          <small>${escapeHTML(choice.desc)}</small>
+          <em>已选 ${survivorUpgradeCount(choice.id)}</em>
+        </button>
+      `).join('');
+      options.querySelectorAll('[data-survivor-upgrade]').forEach(btn => {
+        btn.addEventListener('click', () => selectSurvivorUpgrade(btn.dataset.survivorUpgrade));
+      });
+    }
+
+    function openSurvivorDraft() {
+      const p = survivor.player;
+      if (!p || survivor.draftOpen) return;
       p.level++;
       p.xp = 0;
-      const upgrade = p.level % 5;
-      if (upgrade === 0) {
-        p.drones++;
-        p.build = `Drone ${p.drones}`;
-      } else if (upgrade === 1) {
-        p.pierce++;
-        p.damage += 6;
-        p.build = `Rail ${p.pierce + 1}`;
-      } else if (upgrade === 2) {
-        p.fireRate = Math.max(72, p.fireRate - 30);
-        p.build = `Pulse ${p.level}`;
-      } else if (upgrade === 3) {
-        p.magnet += 28;
-        p.speed += 12;
-        p.build = 'Magnet+';
-      } else {
-        p.hp = Math.min(115, p.hp + 30);
-        p.damage += 9;
-        p.build = 'Overcharge';
-      }
+      survivor.draftOpen = true;
+      survivor.draftChoices = pickSurvivorUpgrades();
+      clearPremiumKeys();
       if (p.level >= 4) unlockAchievement('survivor_level_4');
       survivorBurst(p.x, p.y, '#34D399', 42);
+      renderSurvivorDraft();
+      setSurvivorUi();
+    }
+
+    function selectSurvivorUpgrade(id) {
+      const p = survivor.player;
+      const choice = survivor.draftChoices.find(item => item.id === id);
+      if (!p || !survivor.draftOpen || !choice) return false;
+      choice.apply(p);
+      p.upgrades.push(choice.id);
+      p.build = survivorBuildSummary();
+      survivor.score += 60 + p.level * 16;
+      survivor.draftOpen = false;
+      survivor.draftChoices = [];
+      hideSurvivorDraft();
+      clearPremiumKeys();
+      survivor.last = performance.now();
+      survivorBurst(p.x, p.y, '#BAE6FD', 34);
+      setSurvivorUi();
+      drawSurvivor();
+      focusStage();
+      return true;
     }
 
     function fireSurvivorVolley() {
@@ -5703,17 +5900,20 @@ function init() {
     function triggerSurvivorNova() {
       const p = survivor.player;
       if (!p || p.novaCooldown > 0) return;
-      p.novaCooldown = 6200;
+      p.novaCooldown = p.novaCooldownMax || 6200;
       p.novaFlash = 320;
       survivor.enemies.forEach(enemy => {
         const d = Math.hypot(enemy.x - p.x, enemy.y - p.y);
-        if (d < 138) enemy.hp -= 95;
+        if (d < (p.novaRadius || 138)) enemy.hp -= (p.novaDamage || 95);
       });
       survivorBurst(p.x, p.y, '#BAE6FD', 68);
     }
 
     function finishSurvivor(text) {
       survivor.running = false;
+      survivor.draftOpen = false;
+      survivor.draftChoices = [];
+      hideSurvivorDraft();
       cancelAnimationFrame(survivor.raf);
       const finalScore = Math.floor(survivor.score + survivor.elapsed / 120);
       localStorage.setItem(survivor.bestKey, String(Math.max(Number(localStorage.getItem(survivor.bestKey) || 0), finalScore)));
@@ -5728,6 +5928,11 @@ function init() {
       if (!survivor.running) return;
       const dt = Math.min(34, now - survivor.last);
       survivor.last = now;
+      if (survivor.draftOpen) {
+        drawSurvivor();
+        survivor.raf = requestAnimationFrame(runSurvivor);
+        return;
+      }
       if (survivor.paused) {
         drawSurvivor();
         overlay(survivor.ctx, survivor.canvas.width, survivor.canvas.height, 'PAUSED', '点击继续或按按钮恢复');
@@ -5818,8 +6023,8 @@ function init() {
         if (Math.hypot(p.x - orb.x, p.y - orb.y) < p.r + orb.r) {
           p.xp += orb.value;
           survivor.score += orb.value;
-          if (p.xp >= 90 + p.level * 38) {
-            levelUpSurvivor();
+          if (p.xp >= survivorXpTarget() && !survivor.draftOpen) {
+            openSurvivorDraft();
           }
           return false;
         }
@@ -5867,10 +6072,11 @@ function init() {
       survivor.particles.forEach(pt => { ctx.globalAlpha = Math.max(0, pt.life / 420); ctx.fillStyle = pt.color; ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.r, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; });
       const p = survivor.player || { x: 280, y: 180, r: 12, hp: 100 };
       if (p.novaFlash > 0) {
+        const radius = p.novaRadius || 138;
         ctx.strokeStyle = `rgba(186, 230, 253, ${p.novaFlash / 320})`;
         ctx.lineWidth = 4;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 138 * (1 - p.novaFlash / 480), 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, radius * (1 - p.novaFlash / 480), 0, Math.PI * 2);
         ctx.stroke();
       }
       ctx.shadowColor = '#34D399';
@@ -5883,7 +6089,7 @@ function init() {
       ctx.strokeStyle = '#fff';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.r + 5, 0, Math.PI * 2 * (p.hp / 100));
+      ctx.arc(p.x, p.y, p.r + 5, 0, Math.PI * 2 * clamp(p.hp / (p.maxHp || 100), 0, 1));
       ctx.stroke();
       ctx.fillStyle = '#fff';
       ctx.font = '700 12px JetBrains Mono, monospace';
@@ -5897,7 +6103,7 @@ function init() {
     }
 
     function toggleSurvivorPause(force) {
-      if (!survivor.running) return false;
+      if (!survivor.running || survivor.draftOpen) return false;
       survivor.paused = typeof force === 'boolean' ? force : !survivor.paused;
       clearPremiumKeys();
       updateSurvivorPauseButton();
@@ -7235,6 +7441,17 @@ function init() {
           active: () => premiumActive,
           survivorRunning: () => survivor.running,
           survivorPaused: () => survivor.paused,
+          survivorElapsed: () => survivor.elapsed,
+          survivorScore: () => survivor.score,
+          survivorDraftOpen: () => survivor.draftOpen,
+          survivorDraftChoices: () => survivor.draftChoices.map(choice => ({ id: choice.id, title: choice.title })),
+          openSurvivorDraft: () => {
+            if (!survivor.running) startSurvivor();
+            if (!survivor.draftOpen) openSurvivorDraft();
+            return survivor.draftChoices.map(choice => choice.id);
+          },
+          chooseSurvivorUpgrade: (id) => selectSurvivorUpgrade(id || survivor.draftChoices[0]?.id),
+          survivorBuild: () => survivorBuildSummary(),
           bossRunning: () => bossMode.running,
           bossPaused: () => bossMode.paused,
           bossPhase: () => bossMode.boss.phase,
@@ -7254,9 +7471,15 @@ function init() {
 
     window.addEventListener('keydown', (e) => {
       if (!isGameSectionActive() || isEditableTarget(e.target) || !document.activeElement?.closest?.('#premium-game-stage')) return;
-      const codes = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyP', 'Escape'];
+      const codes = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyP', 'Escape', 'Digit1', 'Digit2', 'Digit3'];
       if (!codes.includes(e.code)) return;
       e.preventDefault();
+      if (premiumActive === 'survivor' && survivor.draftOpen) {
+        if (['Digit1', 'Digit2', 'Digit3'].includes(e.code)) {
+          selectSurvivorUpgrade(survivor.draftChoices[Number(e.code.replace('Digit', '')) - 1]?.id);
+        }
+        return;
+      }
       if (e.code === 'KeyP' || e.code === 'Escape') {
         if (premiumActive === 'survivor') toggleSurvivorPause();
         if (premiumActive === 'boss') toggleBossPause();
