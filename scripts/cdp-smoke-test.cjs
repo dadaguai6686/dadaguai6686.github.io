@@ -578,6 +578,10 @@ async function run() {
     directorMedals: document.querySelector('#premium-director-medals')?.textContent || '',
     directorAchievements: document.querySelector('#premium-director-achievements')?.textContent || '',
     directorCompletion: document.querySelector('#premium-director-completion')?.textContent || '',
+    contractBoard: !!document.querySelector('#premium-contract-board'),
+    contractCards: document.querySelectorAll('.arcade-contract-card').length,
+    debugContracts: window.__atherixDebug?.premium?.contracts?.().length || 0,
+    firstContractProgress: window.__atherixDebug?.premium?.contracts?.()[0]?.progress ?? -1,
     premiumTabs: document.querySelectorAll('[data-premium-game]').length,
     tabBadges: document.querySelectorAll('.mini-game-medal-chip').length,
     driftPanel: !!document.querySelector('#premium-drift-canvas'),
@@ -587,6 +591,20 @@ async function run() {
     chainCells: document.querySelectorAll('#premium-chain-board .chain-cell').length,
     chainTarget: document.querySelector('#premium-chain-target')?.textContent
   }))()`);
+  const contractProgressState = await evaluate(`(() => {
+    const before = window.__atherixDebug?.premium?.contracts?.() || [];
+    window.atherixArcadeCareer?.recordResult?.('survivor', 900, { smoke: true });
+    const after = window.__atherixDebug?.premium?.contracts?.() || [];
+    return {
+      beforeFirst: before[0]?.progress ?? -1,
+      afterFirst: after[0]?.progress ?? -1,
+      afterContracts: after.length,
+      completed: after.filter(contract => contract.claimed).length,
+      cards: document.querySelectorAll('.arcade-contract-card').length,
+      toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || '',
+      total: document.querySelector('#premium-career-total')?.textContent || ''
+    };
+  })()`);
   await click('#premium-director-start');
   await wait(220);
   const directorLaunchState = await evaluate(`(() => ({
@@ -905,6 +923,8 @@ async function run() {
   assert(arcadeInitial.oldPrototypeCount === 0, 'old prototype mini-games should be replaced');
   assert(arcadeInitial.premiumTabs >= 6 && arcadeInitial.driftPanel && arcadeInitial.tacticsPanel, 'premium arcade should include drift and tactics modes');
   assert(arcadeInitial.directorPanel && arcadeInitial.directorTarget && arcadeInitial.directorTitle.length > 5 && arcadeInitial.directorReason.length > 10 && /^\d+%$/.test(arcadeInitial.directorCompletion) && arcadeInitial.tabBadges >= 6, `premium arcade director should render actionable progression guidance: ${JSON.stringify(arcadeInitial)}`);
+  assert(arcadeInitial.contractBoard && arcadeInitial.contractCards === 3 && arcadeInitial.debugContracts === 3 && arcadeInitial.firstContractProgress === 0, `premium arcade contracts should render as daily progression goals: ${JSON.stringify(arcadeInitial)}`);
+  assert(contractProgressState.afterContracts === 3 && contractProgressState.cards === 3 && contractProgressState.afterFirst > contractProgressState.beforeFirst && /总声望/.test(contractProgressState.total), `premium arcade contracts should advance after a scored run: ${JSON.stringify(contractProgressState)}`);
   assert(['runner', 'survivor', 'boss', 'drift', 'heist', 'chain', 'tactics'].includes(directorLaunchState.target) && (directorLaunchState.target === 'runner' || directorLaunchState.active === directorLaunchState.target) && !directorLaunchState.horizontalOverflow, `premium arcade director should launch the recommended target: ${JSON.stringify(directorLaunchState)}`);
   assert(arcadeInitial.touchControls >= 5, 'premium touch controls should be available');
   assert(survivorState.nonBlank && survivorState.threat, 'survivor canvas should render active state');
@@ -970,6 +990,7 @@ async function run() {
     runnerTouchState,
     runnerMobileState,
     arcadeInitial,
+    contractProgressState,
     directorLaunchState,
     survivorState,
     bossState,

@@ -4030,6 +4030,13 @@ function init() {
           <span>进入推荐挑战</span>
         </button>
       </div>
+      <div class="arcade-contract-board" id="premium-contract-board" aria-label="街机契约任务">
+        <div class="arcade-contract-heading">
+          <span><i data-lucide="clipboard-check"></i> CREW CONTRACTS</span>
+          <strong>今日契约</strong>
+        </div>
+        <div class="arcade-contract-grid" id="premium-contract-list"></div>
+      </div>
       <div class="premium-career-dialog" id="premium-career-dialog" aria-hidden="true">
         <div class="premium-career-card" role="dialog" aria-modal="true" aria-labelledby="premium-career-title">
           <button type="button" class="premium-career-close" id="premium-career-close" aria-label="关闭生涯档案">
@@ -4255,6 +4262,7 @@ function init() {
       { id: 'tactics_sweep', label: '战术清场', desc: '裂隙战术中击破全部敌人' },
       { id: 'tactics_clean', label: '无损机甲', desc: '高装甲完成裂隙战术' },
       { id: 'runner_final', label: '星门远征', desc: '通关主线最终关' },
+      { id: 'contract_clear', label: '契约猎手', desc: '完成任意街机契约' },
       { id: 'daily_clear', label: '今日制霸', desc: '完成每日街机挑战' }
     ];
     const dailyChallenges = [
@@ -4265,6 +4273,14 @@ function init() {
       { id: 'chain_6000', label: '连锁炼金得分 6000+', game: 'chain', check: (game, score) => game === 'chain' && score >= 6000 },
       { id: 'tactics_1100', label: '裂隙战术评分 1100+', game: 'tactics', check: (game, score) => game === 'tactics' && score >= 1100 },
       { id: 'runner_1500', label: '主线关卡评分 1500+', game: 'runner', check: (game, score) => game === 'runner' && score >= 1500 }
+    ];
+    const contractDefs = [
+      { id: 'score_pool', title: '火力热身', desc: '任意街机累计声望', tone: 'score', type: 'score_pool', target: 2200, reward: 260 },
+      { id: 'mode_sampler', title: '轮换出击', desc: '完成 3 个不同模式的结算', tone: 'modes', type: 'distinct_modes', targetCount: 3, reward: 320 },
+      { id: 'medal_push', title: '奖牌推进', desc: '在 2 个模式拿到铜牌以上', tone: 'medal', type: 'medal_result', targetCount: 2, reward: 360 },
+      { id: 'combat_contract', title: '火线突破', desc: '幸存者 800+ 或 Boss 700+', tone: 'combat', type: 'target_games', games: ['survivor', 'boss'], scoreTarget: 700, targetCount: 1, reward: 280 },
+      { id: 'mind_contract', title: '冷静解法', desc: '连锁 4500+ 或战术 850+', tone: 'mind', type: 'target_games', games: ['chain', 'tactics'], scoreTarget: 850, targetCount: 1, reward: 300 },
+      { id: 'speed_contract', title: '高速航线', desc: '主线 900+ 或漂移 850+', tone: 'speed', type: 'target_games', games: ['runner', 'drift'], scoreTarget: 850, targetCount: 1, reward: 300 }
     ];
 
     function todayKey() {
@@ -4280,6 +4296,30 @@ function init() {
       return { ...dailyChallenges[seed % dailyChallenges.length], date: key };
     }
 
+    function getDailyContracts() {
+      const key = todayKey();
+      const seed = key.split('').reduce((sum, char, index) => sum + char.charCodeAt(0) * (index + 3), 0);
+      const pool = contractDefs.slice(1);
+      const selected = [contractDefs[0]];
+      let cursor = seed % pool.length;
+      while (selected.length < 3 && selected.length <= contractDefs.length) {
+        const candidate = pool[cursor % pool.length];
+        if (!selected.some(contract => contract.id === candidate.id)) {
+          selected.push(candidate);
+        }
+        cursor += 2;
+      }
+      return selected.map(contract => ({ ...contract, date: key }));
+    }
+
+    function createDefaultContractState(date = todayKey()) {
+      return {
+        date,
+        claimed: [],
+        progress: {}
+      };
+    }
+
     function createDefaultCareer() {
       return {
         totalScore: 0,
@@ -4287,7 +4327,8 @@ function init() {
         best: {},
         medals: {},
         achievements: [],
-        daily: {}
+        daily: {},
+        contracts: createDefaultContractState()
       };
     }
 
@@ -4299,6 +4340,9 @@ function init() {
         merged.medals = merged.medals && typeof merged.medals === 'object' ? merged.medals : {};
         merged.achievements = Array.isArray(merged.achievements) ? merged.achievements : [];
         merged.daily = merged.daily && typeof merged.daily === 'object' ? merged.daily : {};
+        merged.contracts = merged.contracts && typeof merged.contracts === 'object' ? merged.contracts : createDefaultContractState();
+        if (!Array.isArray(merged.contracts.claimed)) merged.contracts.claimed = [];
+        if (!merged.contracts.progress || typeof merged.contracts.progress !== 'object') merged.contracts.progress = {};
         merged.totalScore = Number.isFinite(Number(merged.totalScore)) ? Number(merged.totalScore) : 0;
         merged.plays = Number.isFinite(Number(merged.plays)) ? Number(merged.plays) : 0;
         return merged;
@@ -4311,6 +4355,28 @@ function init() {
 
     function saveCareer() {
       localStorage.setItem(careerKey, JSON.stringify(career));
+    }
+
+    function ensureContractsForToday() {
+      const date = todayKey();
+      if (!career.contracts || career.contracts.date !== date) {
+        career.contracts = createDefaultContractState(date);
+      }
+      if (!Array.isArray(career.contracts.claimed)) career.contracts.claimed = [];
+      if (!career.contracts.progress || typeof career.contracts.progress !== 'object') career.contracts.progress = {};
+      return career.contracts;
+    }
+
+    function contractProgressEntry(contractId) {
+      const state = ensureContractsForToday();
+      if (!state.progress[contractId] || typeof state.progress[contractId] !== 'object') {
+        state.progress[contractId] = { value: 0, games: {} };
+      }
+      if (!state.progress[contractId].games || typeof state.progress[contractId].games !== 'object') {
+        state.progress[contractId].games = {};
+      }
+      state.progress[contractId].value = Number(state.progress[contractId].value || 0);
+      return state.progress[contractId];
     }
 
     function medalFor(game, score) {
@@ -4370,6 +4436,85 @@ function init() {
         ? career.achievements.length / achievementDefs.length
         : 0;
       return Math.round((medalProgress * 0.58 + achievementProgress * 0.42) * 100);
+    }
+
+    function contractTargetValue(contract) {
+      return contract.type === 'score_pool' ? contract.target : contract.targetCount;
+    }
+
+    function contractProgressValue(contract) {
+      const entry = contractProgressEntry(contract.id);
+      if (contract.type === 'score_pool') {
+        return Math.min(contract.target, Math.max(0, Number(entry.value || 0)));
+      }
+      return Math.min(contract.targetCount, Object.keys(entry.games || {}).length);
+    }
+
+    function contractProgressLabel(contract) {
+      const progress = contractProgressValue(contract);
+      const target = contractTargetValue(contract);
+      return contract.type === 'score_pool'
+        ? `${progress}/${target}`
+        : `${progress}/${target}`;
+    }
+
+    function renderArcadeContracts() {
+      const list = document.getElementById('premium-contract-list');
+      if (!list) return;
+      const state = ensureContractsForToday();
+      list.innerHTML = getDailyContracts().map(contract => {
+        const progress = contractProgressValue(contract);
+        const target = contractTargetValue(contract);
+        const complete = progress >= target;
+        const claimed = state.claimed.includes(contract.id);
+        const percent = target > 0 ? Math.min(100, Math.round(progress / target * 100)) : 0;
+        return `
+          <article class="arcade-contract-card ${claimed ? 'is-complete' : ''}" data-contract-id="${escapeHTML(contract.id)}" data-tone="${escapeHTML(contract.tone)}">
+            <div class="arcade-contract-top">
+              <span>${claimed ? '已结算' : complete ? '待结算' : '进行中'}</span>
+              <b>+${Number(contract.reward || 0)}</b>
+            </div>
+            <strong>${escapeHTML(contract.title)}</strong>
+            <small>${escapeHTML(contract.desc)}</small>
+            <div class="arcade-contract-progress" aria-label="${escapeHTML(contract.title)} ${contractProgressLabel(contract)}">
+              <span><i style="width: ${percent}%"></i></span>
+              <b>${escapeHTML(contractProgressLabel(contract))}</b>
+            </div>
+          </article>
+        `;
+      }).join('');
+    }
+
+    function updateArcadeContracts(game, score, details = {}) {
+      const state = ensureContractsForToday();
+      const completed = [];
+      getDailyContracts().forEach(contract => {
+        const entry = contractProgressEntry(contract.id);
+        const beforeComplete = contractProgressValue(contract) >= contractTargetValue(contract);
+        if (contract.type === 'score_pool') {
+          entry.value = Math.max(0, Number(entry.value || 0) + score);
+        } else if (contract.type === 'distinct_modes') {
+          entry.games[game] = true;
+        } else if (contract.type === 'medal_result') {
+          if (medalFor(game, score) !== 'none') entry.games[game] = true;
+        } else if (contract.type === 'target_games') {
+          const targetScore = Number(contract.scoreTarget || 0);
+          if ((contract.games || []).includes(game) && score >= targetScore) {
+            entry.games[game] = true;
+          }
+        }
+        const nowComplete = contractProgressValue(contract) >= contractTargetValue(contract);
+        if (!beforeComplete && nowComplete && !state.claimed.includes(contract.id)) {
+          state.claimed.push(contract.id);
+          career.totalScore = Math.max(0, (career.totalScore || 0) + Number(contract.reward || 0));
+          completed.push(contract);
+        }
+      });
+      if (completed.length) {
+        unlockAchievement('contract_clear');
+        showToast(`契约完成：${completed.map(contract => contract.title).join('、')}`, 'success');
+      }
+      return { completed, details };
     }
 
     function arcadeDirective() {
@@ -4521,6 +4666,7 @@ function init() {
       }
       renderAchievementFeed();
       renderArcadeDirector();
+      renderArcadeContracts();
       updatePremiumTabBadges();
       renderCareerDialog();
     }
@@ -4547,6 +4693,7 @@ function init() {
         career.daily = { date: daily.date, id: daily.id, done: true };
         unlockAchievement('daily_clear');
       }
+      updateArcadeContracts(game, value, details);
       saveCareer();
       updateCareerPanel();
     }
@@ -4554,7 +4701,14 @@ function init() {
     window.atherixArcadeCareer = {
       recordResult: recordPremiumResult,
       unlock: unlockAchievement,
-      update: updateCareerPanel
+      update: updateCareerPanel,
+      contracts: () => getDailyContracts().map(contract => ({
+        id: contract.id,
+        title: contract.title,
+        progress: contractProgressValue(contract),
+        target: contractTargetValue(contract),
+        claimed: ensureContractsForToday().claimed.includes(contract.id)
+      }))
     };
     updateCareerPanel();
 
@@ -6389,7 +6543,8 @@ function init() {
           driftGates: () => drift.gateIndex,
           driftShield: () => drift.player.shield,
           heistSteps: () => heist.steps,
-          tacticsTurn: () => tactics.turn
+          tacticsTurn: () => tactics.turn,
+          contracts: () => window.atherixArcadeCareer?.contracts?.() || []
         }
       };
     }

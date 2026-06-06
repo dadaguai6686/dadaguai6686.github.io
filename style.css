@@ -3975,6 +3975,159 @@ body.command-open {
   height: 15px;
 }
 
+.arcade-contract-board {
+  margin-bottom: 1rem;
+  padding: 0.85rem;
+  border: 1px solid rgba(167, 139, 250, 0.2);
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(34, 211, 238, 0.06)),
+    rgba(3, 7, 18, 0.48);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.arcade-contract-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.arcade-contract-heading span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #ddd6fe;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.arcade-contract-heading svg {
+  width: 14px;
+  height: 14px;
+}
+
+.arcade-contract-heading strong {
+  color: #fff;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1rem;
+}
+
+.arcade-contract-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.arcade-contract-card {
+  min-height: 128px;
+  padding: 0.7rem;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.arcade-contract-card[data-tone="score"] {
+  border-color: rgba(34, 211, 238, 0.24);
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.1), rgba(15, 23, 42, 0.52));
+}
+
+.arcade-contract-card[data-tone="medal"] {
+  border-color: rgba(251, 191, 36, 0.24);
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(15, 23, 42, 0.52));
+}
+
+.arcade-contract-card[data-tone="combat"] {
+  border-color: rgba(236, 72, 153, 0.24);
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.1), rgba(15, 23, 42, 0.52));
+}
+
+.arcade-contract-card[data-tone="mind"] {
+  border-color: rgba(167, 139, 250, 0.24);
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.1), rgba(15, 23, 42, 0.52));
+}
+
+.arcade-contract-card[data-tone="speed"],
+.arcade-contract-card[data-tone="modes"] {
+  border-color: rgba(52, 211, 153, 0.24);
+  background: linear-gradient(135deg, rgba(52, 211, 153, 0.1), rgba(15, 23, 42, 0.52));
+}
+
+.arcade-contract-card.is-complete {
+  border-color: rgba(52, 211, 153, 0.38);
+  box-shadow: inset 0 0 22px rgba(52, 211, 153, 0.08);
+}
+
+.arcade-contract-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.arcade-contract-top span {
+  color: var(--text-muted);
+  font-size: 0.65rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.arcade-contract-top b {
+  border-radius: 999px;
+  padding: 0.12rem 0.42rem;
+  color: #d1fae5;
+  background: rgba(52, 211, 153, 0.12);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem;
+}
+
+.arcade-contract-card strong {
+  color: #fff;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.95rem;
+  line-height: 1.25;
+}
+
+.arcade-contract-card small {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  line-height: 1.35;
+  flex: 1;
+}
+
+.arcade-contract-progress {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.arcade-contract-progress span {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+}
+
+.arcade-contract-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22d3ee, #34d399);
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.28);
+}
+
+.arcade-contract-progress b {
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+}
+
 .premium-career-dialog {
   position: fixed;
   inset: 0;
@@ -4515,6 +4668,13 @@ body.command-open {
   }
   .arcade-director-action {
     width: 100%;
+  }
+  .arcade-contract-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .arcade-contract-grid {
+    grid-template-columns: 1fr;
   }
   .premium-career-card {
     width: min(96vw, 560px);
