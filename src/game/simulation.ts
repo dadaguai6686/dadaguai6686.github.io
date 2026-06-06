@@ -252,6 +252,7 @@ export type HazardThreat = {
 };
 
 export const CAMPAIGN_WAVES = 5;
+export const COMBO_WINDOW_SECONDS = 3.4;
 export const MAX_UPGRADE_LEVEL = 3;
 export const REPAIR_RADIUS = 76;
 export const LUMEN_PICKUP_RADIUS = 34;
@@ -1663,7 +1664,7 @@ function sectorSalt(sector: SectorId): number {
 
 function awardScore(state: GameState, base: number, comboGain: number): void {
   state.combo = Math.min(5, state.combo + comboGain);
-  state.comboTimer = 3.4;
+  state.comboTimer = COMBO_WINDOW_SECONDS;
   state.bestCombo = Math.max(state.bestCombo, state.combo);
   state.score += Math.round(
     base *

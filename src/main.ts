@@ -74,6 +74,9 @@ const recordCombo = document.querySelector<HTMLElement>("#record-combo")!;
 const recordContracts = document.querySelector<HTMLElement>("#record-contracts")!;
 const boostPill = document.querySelector<HTMLElement>("#boost-pill")!;
 const pulsePill = document.querySelector<HTMLElement>("#pulse-pill")!;
+const comboTimer = document.querySelector<HTMLDivElement>("#combo-timer")!;
+const comboTimerValue = document.querySelector<HTMLElement>("#combo-timer-value")!;
+const comboTimerFill = document.querySelector<HTMLElement>("#combo-timer-fill")!;
 const signalPanel = document.querySelector<HTMLDivElement>("#signal-panel")!;
 const signalGrade = document.querySelector<HTMLElement>("#signal-grade")!;
 const signalPoints = document.querySelector<HTMLElement>("#signal-points")!;
@@ -343,6 +346,8 @@ window.addEventListener("game:hud", (event) => {
     wave: number;
     score: number;
     combo: number;
+    comboTimer: number;
+    comboWindow: number;
     bestCombo: number;
     boostReady: boolean;
     pulseReady: boolean;
@@ -381,6 +386,7 @@ window.addEventListener("game:hud", (event) => {
   scoreValue.textContent = detail.score.toLocaleString();
   comboValue.textContent = `${detail.combo.toFixed(1)}x`;
   bestComboValue.textContent = `${detail.bestCombo.toFixed(1)}x`;
+  renderComboTimer(detail.combo, detail.comboTimer, detail.comboWindow, detail.status);
   boostPill.textContent = detail.boostReady ? "推进就绪" : "推进冷却中";
   pulsePill.textContent = detail.pulseReady ? "脉冲就绪" : "脉冲冷却中";
   boostPill.classList.toggle("cooling", !detail.boostReady);
@@ -492,6 +498,16 @@ function renderPerformance(performance: RunPerformance, status: GameStatus): voi
   signalPoints.textContent = `${performance.points}/100`;
   signalFill.style.width = `${Math.max(0, Math.min(100, performance.fill))}%`;
   signalDetail.textContent = performance.detail;
+}
+
+function renderComboTimer(combo: number, timer: number, windowSeconds: number, status: GameStatus): void {
+  comboTimer.hidden = status === "menu";
+  if (comboTimer.hidden) return;
+  const active = status === "playing" && combo > 1 && timer > 0;
+  const fill = active ? ratio(timer, windowSeconds) : 0;
+  comboTimer.dataset.state = active ? (fill <= 28 ? "ending" : "active") : "idle";
+  comboTimerFill.style.width = `${fill}%`;
+  comboTimerValue.textContent = active ? `${combo.toFixed(1)}x · ${timer.toFixed(1)}秒` : "完成得分动作后开启";
 }
 
 function renderCoachDirective(directive: CoachDirective, status: GameStatus): void {

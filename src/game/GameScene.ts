@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { InputMapper } from "./input";
 import {
+  COMBO_WINDOW_SECONDS,
   createInitialState,
   getActiveRepairTarget,
   getCoachDirective,
@@ -50,6 +51,8 @@ type HudSnapshot = {
   wave: number;
   score: number;
   combo: number;
+  comboTimer: number;
+  comboWindow: number;
   bestCombo: number;
   difficulty: DifficultyId;
   campaignWaves: number;
@@ -465,6 +468,8 @@ export class GameScene extends Phaser.Scene {
       wave: this.state.wave,
       score: this.state.score,
       combo: this.state.combo,
+      comboTimer: this.state.comboTimer,
+      comboWindow: COMBO_WINDOW_SECONDS,
       bestCombo: this.state.bestCombo,
       difficulty: this.state.difficulty,
       campaignWaves: this.state.campaignWaves,

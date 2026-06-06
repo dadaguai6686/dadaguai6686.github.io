@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   ACHIEVEMENTS,
   CAMPAIGN_WAVES,
+  COMBO_WINDOW_SECONDS,
   MAX_UPGRADE_LEVEL,
   SECTOR_LAYOUTS,
   WAVE_MODIFIERS,
@@ -146,6 +147,10 @@ const nearbyLumen = state.lumen.find((drop) => !drop.collected)!;
 state = movePlayerTo(state, nearbyLumen.position.x, nearbyLumen.position.y);
 state = updateSimulation(state, idle, 0.016);
 assert.equal(state.stats.lumenCollected, 1, "collected lumen should be counted");
+assert.equal(state.comboTimer, COMBO_WINDOW_SECONDS, "scoring actions should open the combo window");
+const comboWindowState = updateSimulation(state, idle, COMBO_WINDOW_SECONDS + 0.1);
+assert.equal(comboWindowState.combo, 1, "combo should reset when the combo window expires");
+assert.equal(comboWindowState.comboTimer, 0, "combo timer should expire cleanly");
 
 let lowCharge = movePlayerTo(state, 500, 350);
 lowCharge.player.charge = 24;
