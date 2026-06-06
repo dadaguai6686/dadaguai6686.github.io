@@ -107,6 +107,18 @@
         </div>
       </div>
     </main>
-    <script type="module" src="/src/main.ts"></script>
+    <script type="module">
+      const isPagesBuild = location.hostname.endsWith("github.io");
+      if (isPagesBuild) {
+        const stylesheet = document.createElement("link");
+        stylesheet.rel = "stylesheet";
+        stylesheet.href = "/assets/main.css";
+        document.head.append(stylesheet);
+        const productionEntry = "/assets/main.js";
+        import(/* @vite-ignore */ productionEntry);
+      } else {
+        import("/src/main.ts");
+      }
+    </script>
   </body>
 </html>
