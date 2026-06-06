@@ -40,6 +40,7 @@ const config: Phaser.Types.Core.GameConfig = {
 
 new Phaser.Game(config);
 
+const shell = document.querySelector<HTMLDivElement>("#shell")!;
 const overlay = document.querySelector<HTMLDivElement>("#overlay")!;
 const objectiveTitle = document.querySelector<HTMLElement>("#objective-title")!;
 const objectiveDetail = document.querySelector<HTMLElement>("#objective-detail")!;
@@ -224,6 +225,7 @@ window.addEventListener("game:hud", (event) => {
   };
 
   latestStatus = detail.status;
+  setShellStatus(detail.status);
   latestScore = detail.score;
   latestWave = detail.wave;
   latestBestCombo = detail.bestCombo;
@@ -269,6 +271,7 @@ window.addEventListener("game:hud", (event) => {
 window.addEventListener("game:ended", (event) => {
   const detail = (event as CustomEvent).detail as RunEndDetail;
   latestStatus = detail.status;
+  setShellStatus(detail.status);
   latestScore = detail.score;
   latestWave = detail.wave;
   latestBestCombo = detail.bestCombo;
@@ -349,6 +352,7 @@ function showHelpOverlay(): void {
   if (latestStatus === "playing") {
     window.dispatchEvent(new CustomEvent("game:pause"));
     latestStatus = "paused";
+    setShellStatus(latestStatus);
   }
   overlay.classList.add("show");
   achievementStrip.hidden = false;
@@ -457,6 +461,10 @@ function updateRecordUi(): void {
   recordWave.textContent = `${Math.max(1, saveData.bestWave)}/5`;
   recordCombo.textContent = `${saveData.bestCombo.toFixed(1)}x`;
   recordContracts.textContent = `${saveData.bestContracts}/5`;
+}
+
+function setShellStatus(status: GameStatus): void {
+  shell.dataset.status = status;
 }
 
 function setDifficultyPickerVisible(visible: boolean): void {
@@ -746,6 +754,7 @@ class AudioBus {
 }
 
 audioBus = new AudioBus(() => saveData.audioEnabled);
+setShellStatus(latestStatus);
 updateDifficultyUi();
 updateAudioUi();
 updateRecordUi();
