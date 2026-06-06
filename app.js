@@ -21,6 +21,13 @@ function init() {
   // Initialize Lucide Icons
   safeCreateIcons();
 
+  if ('serviceWorker' in navigator && window.isSecureContext) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js')
+        .catch(err => console.warn('Service worker registration failed:', err.message));
+    });
+  }
+
   // Hide loader after loading completes
   const loader = document.getElementById('loading-overlay');
   if (loader) {

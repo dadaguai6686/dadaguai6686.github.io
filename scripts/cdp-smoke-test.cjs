@@ -317,6 +317,17 @@ async function run() {
     target: document.querySelector('#premium-chain-target')?.textContent
   }))()`);
 
+  const pwaState = await evaluate(`(async () => {
+    if (!('serviceWorker' in navigator)) return { supported: false, registered: false };
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    const registration = await navigator.serviceWorker.getRegistration('/');
+    return {
+      supported: true,
+      registered: !!registration,
+      scope: registration?.scope || ''
+    };
+  })()`, 10000);
+
   await send('Page.close').catch(() => {});
   ws.close();
 
@@ -330,7 +341,8 @@ async function run() {
     survivorState,
     bossState,
     heistState,
-    chainState
+    chainState,
+    pwaState
   };
 }
 

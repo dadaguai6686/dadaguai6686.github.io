@@ -27,6 +27,7 @@ const contentSecurityPolicy = [
   "font-src 'self' data:",
   "connect-src 'self'",
   "media-src 'self' blob:",
+  "worker-src 'self'",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -47,6 +48,7 @@ const publicRootFiles = new Set([
   '/app.js',
   '/lucide.min.js',
   '/manifest.webmanifest',
+  '/sw.js',
   '/robots.txt',
   '/sitemap.xml'
 ]);

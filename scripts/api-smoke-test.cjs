@@ -120,6 +120,10 @@ async function run() {
     assert(blockedCors.status === 200, 'blocked-origin non-browser request should still reach health');
     assert(!blockedCors.headers.get('access-control-allow-origin'), 'disallowed origin should not receive CORS allow header');
 
+    const serviceWorkerScript = await fetch(`${baseUrl}/sw.js`);
+    assert(serviceWorkerScript.status === 200, 'service worker should be publicly served');
+    assert((serviceWorkerScript.headers.get('content-type') || '').includes('javascript'), 'service worker should be served as javascript');
+
     const sensitivePaths = ['/server.js', '/db.js', '/auth.js', '/package.json', '/package-lock.json', '/scripts/api-smoke-test.cjs', '/Dockerfile'];
     const sensitiveResults = {};
     for (const pathname of sensitivePaths) {
@@ -188,6 +192,7 @@ async function run() {
       posts: postList.length,
       corsAllowed: health.headers.get('access-control-allow-origin'),
       corsBlockedHeader: blockedCors.headers.get('access-control-allow-origin') || null,
+      serviceWorkerStatus: serviceWorkerScript.status,
       sensitiveResults,
       sanitizedAvatar: sanitizedBody.comment.avatar,
       forgedUploadStatus: fakeImageUpload.status
