@@ -15,7 +15,7 @@
   <meta property="og:image" content="https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=1200">
   <meta name="twitter:card" content="summary_large_image">
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="style.css?v=20260606-touch-v1">
+  <link rel="stylesheet" href="style.css?v=20260606-tactics-v1">
   <link rel="manifest" href="/manifest.webmanifest">
   <!-- Lucide Icons Local -->
   <script src="lucide.min.js"></script>
@@ -763,12 +763,16 @@
           <div class="form-row">
             <div class="form-group">
               <label for="gb-nickname">昵称 *</label>
-              <input type="text" class="form-input" id="gb-nickname" placeholder="如何称呼您" required>
+              <input type="text" class="form-input" id="gb-nickname" placeholder="如何称呼您" maxlength="60" required>
             </div>
             <div class="form-group">
               <label for="gb-website">个人网站 (选填)</label>
-              <input type="url" class="form-input" id="gb-website" placeholder="https://example.com">
+              <input type="url" class="form-input" id="gb-website" placeholder="https://example.com" maxlength="2048">
             </div>
+          </div>
+          <div class="form-group honeypot-field" aria-hidden="true">
+            <label for="gb-company">公司</label>
+            <input type="text" class="form-input" id="gb-company" name="company" tabindex="-1" autocomplete="off">
           </div>
           <!-- Avatar Selector Grid -->
           <div class="form-group">
@@ -789,7 +793,11 @@
           </div>
           <div class="form-group">
             <label for="gb-content">留言内容 *</label>
-            <textarea class="form-input form-textarea" id="gb-content" placeholder="输入你想留言的内容..." required></textarea>
+            <textarea class="form-input form-textarea" id="gb-content" placeholder="输入你想留言的内容..." maxlength="1000" required></textarea>
+            <div class="guestbook-helper-row">
+              <span class="guestbook-status" id="guestbook-status" role="status">支持友链、建议和反馈；请避免一次塞太多链接。</span>
+              <span class="guestbook-counter" id="guestbook-counter">0 / 1000</span>
+            </div>
           </div>
           <div class="form-actions-row">
             <div class="emoji-selector-trigger">
@@ -809,7 +817,7 @@
                 <span class="emoji-item">💡</span>
               </div>
             </div>
-            <button type="submit" class="action-btn action-btn-primary">
+            <button type="submit" class="action-btn action-btn-primary" id="guestbook-submit-btn">
               <i data-lucide="send"></i> 发送留言
             </button>
           </div>
@@ -1207,6 +1215,6 @@
   <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <!-- Main JavaScript File -->
-  <script src="app.js?v=20260606-touch-v1"></script>
+  <script src="app.js?v=20260606-tactics-v1"></script>
 </body>
 </html>

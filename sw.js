@@ -1,9 +1,9 @@
-const CACHE_VERSION = 'atherix-static-v2-touch';
+const CACHE_VERSION = 'atherix-static-v3-tactics';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/style.css?v=20260606-touch-v1',
-  '/app.js?v=20260606-touch-v1',
+  '/style.css?v=20260606-tactics-v1',
+  '/app.js?v=20260606-tactics-v1',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/assets/atherix-icon.svg'

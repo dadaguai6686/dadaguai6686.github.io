@@ -111,6 +111,8 @@ async function run() {
     assert(health.headers.get('x-content-type-options') === 'nosniff', 'nosniff header missing');
     assert(health.headers.get('x-frame-options') === 'SAMEORIGIN', 'x-frame-options header missing');
     assert(health.headers.get('content-security-policy')?.includes("object-src 'none'"), 'CSP object-src guard missing');
+    assert(health.headers.get('content-security-policy')?.includes('https://fonts.googleapis.com'), 'CSP should allow configured web font stylesheet');
+    assert(health.headers.get('content-security-policy')?.includes('https://fonts.gstatic.com'), 'CSP should allow configured web font files');
     assert(health.headers.get('strict-transport-security')?.includes('max-age=31536000'), 'HSTS header missing in production');
     assert(health.headers.get('access-control-allow-origin') === allowedOrigin, 'allowed CORS origin not echoed');
 
@@ -168,6 +170,20 @@ async function run() {
     });
     assert(badWebsite.status === 400, 'javascript: website should be rejected');
 
+    const spamTrap = await fetch(`${baseUrl}/api/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nickname: 'Bot', content: 'looks normal', company: 'filled by bot' })
+    });
+    assert(spamTrap.status === 400, 'comment honeypot should reject bot-like submissions');
+
+    const linkSpam = await fetch(`${baseUrl}/api/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nickname: 'Link Bot', content: 'https://a.test https://b.test https://c.test https://d.test' })
+    });
+    assert(linkSpam.status === 400, 'link-heavy comments should be rejected');
+
     const sanitizedComment = await fetch(`${baseUrl}/api/comments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -210,6 +226,8 @@ async function run() {
       serviceWorkerStatus: serviceWorkerScript.status,
       sensitiveResults,
       sanitizedAvatar: sanitizedBody.comment.avatar,
+      spamTrapStatus: spamTrap.status,
+      linkSpamStatus: linkSpam.status,
       forgedUploadStatus: fakeImageUpload.status
     };
   } finally {

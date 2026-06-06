@@ -358,6 +358,8 @@ async function run() {
     premium: !!document.querySelector('#premium-game-stage'),
     careerPanel: !!document.querySelector('#premium-career-rating'),
     dailyChallenge: document.querySelector('#premium-daily-challenge')?.textContent || '',
+    premiumTabs: document.querySelectorAll('[data-premium-game]').length,
+    tacticsPanel: !!document.querySelector('#premium-tactics-canvas'),
     oldPrototypeCount: document.querySelectorAll('#snake-canvas,#breakout-canvas,#tile-board,#memory-board').length,
     touchControls: document.querySelectorAll('[data-premium-control]').length,
     chainCells: document.querySelectorAll('#premium-chain-board .chain-cell').length,
@@ -437,6 +439,31 @@ async function run() {
     target: document.querySelector('#premium-chain-target')?.textContent
   }))()`);
 
+  await click('[data-premium-game="tactics"]');
+  await wait(250);
+  await click('#premium-tactics-start');
+  await wait(200);
+  await key('keyDown', 'ArrowRight', 'ArrowRight');
+  await key('keyUp', 'ArrowRight', 'ArrowRight');
+  await wait(160);
+  await key('keyDown', ' ', 'Space');
+  await key('keyUp', ' ', 'Space');
+  await wait(240);
+  const tacticsState = await evaluate(`(() => {
+    const c = document.querySelector('#premium-tactics-canvas');
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let colored = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] || d[i + 1] || d[i + 2]) colored++;
+    return {
+      nonBlank: colored > 1000,
+      ap: document.querySelector('#premium-tactics-ap')?.textContent,
+      turn: document.querySelector('#premium-tactics-turn')?.textContent,
+      hp: document.querySelector('#premium-tactics-hp')?.textContent,
+      threat: document.querySelector('#premium-tactics-threat')?.textContent,
+      action: document.querySelector('#premium-tactics-action')?.textContent
+    };
+  })()`);
+
   const pwaState = await evaluate(`(async () => {
     if (!('serviceWorker' in navigator)) return { supported: false, registered: false };
     await new Promise(resolve => setTimeout(resolve, 1200));
@@ -502,12 +529,14 @@ async function run() {
   assert(runnerMobileState.controls >= 5 && runnerMobileState.visibleInFirstViewport && !runnerMobileState.horizontalOverflow, `runner touch controls should be reachable on mobile: ${JSON.stringify(runnerMobileState)}`);
   assert(arcadeInitial.premium && arcadeInitial.careerPanel, 'premium arcade career panel should render');
   assert(arcadeInitial.oldPrototypeCount === 0, 'old prototype mini-games should be replaced');
+  assert(arcadeInitial.premiumTabs >= 5 && arcadeInitial.tacticsPanel, 'premium arcade should include the tactics mode');
   assert(arcadeInitial.touchControls >= 5, 'premium touch controls should be available');
   assert(survivorState.nonBlank && survivorState.threat, 'survivor canvas should render active state');
   assert(bossState.nonBlank && bossState.dash, 'boss canvas should render active state');
   assert(heistState.nonBlank && Number(heistState.steps) >= 1, 'heist should accept keyboard movement');
   assert(heistState.achievementBadges >= 1, 'heist cloak should unlock at least one achievement badge');
   assert(chainState.cells === 49 && Number(chainState.specials) >= 1, 'chain board should render with special cells');
+  assert(tacticsState.nonBlank && Number(tacticsState.ap) < 3 && tacticsState.action, `tactics mode should render and accept actions: ${JSON.stringify(tacticsState)}`);
   assert(pwaState.supported && pwaState.registered, 'service worker should register');
 
   await send('Page.close').catch(() => {});
@@ -532,6 +561,7 @@ async function run() {
     bossState,
     heistState,
     chainState,
+    tacticsState,
     pwaState
   };
 }

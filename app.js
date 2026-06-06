@@ -1606,7 +1606,44 @@ function init() {
   const emojiTrigger = document.getElementById('emoji-trigger');
   const emojiPopover = document.getElementById('emoji-popover');
   const gbContent = document.getElementById('gb-content');
+  const gbCompany = document.getElementById('gb-company');
+  const guestbookCounter = document.getElementById('guestbook-counter');
+  const guestbookStatus = document.getElementById('guestbook-status');
+  const guestbookSubmitBtn = document.getElementById('guestbook-submit-btn');
   const avatarOptions = document.querySelectorAll('.avatar-option');
+  const guestbookDefaultStatus = '支持友链、建议和反馈；请避免一次塞太多链接。';
+
+  function setGuestbookStatus(message = guestbookDefaultStatus, type = 'info') {
+    if (!guestbookStatus) return;
+    guestbookStatus.textContent = message;
+    guestbookStatus.classList.toggle('is-error', type === 'error');
+    guestbookStatus.classList.toggle('is-success', type === 'success');
+  }
+
+  function updateGuestbookCounter() {
+    if (!gbContent || !guestbookCounter) return;
+    const length = gbContent.value.length;
+    guestbookCounter.textContent = `${length} / 1000`;
+    guestbookCounter.classList.toggle('is-near-limit', length >= 850 && length < 1000);
+    guestbookCounter.classList.toggle('is-limit', length >= 1000);
+  }
+
+  function setGuestbookSubmitting(isSubmitting) {
+    if (!guestbookSubmitBtn) return;
+    guestbookSubmitBtn.disabled = isSubmitting;
+    guestbookSubmitBtn.innerHTML = isSubmitting
+      ? '<i data-lucide="loader-circle"></i> 发送中...'
+      : '<i data-lucide="send"></i> 发送留言';
+    safeCreateIcons();
+  }
+
+  function renderCommentEmpty(message) {
+    if (!guestbookComments) return;
+    const empty = document.createElement('div');
+    empty.className = 'comment-empty';
+    empty.textContent = message;
+    guestbookComments.replaceChildren(empty);
+  }
 
   // Handle avatar select
   avatarOptions.forEach(opt => {
@@ -1620,6 +1657,7 @@ function init() {
   async function loadComments() {
     if (!guestbookComments) return;
     let comments = [];
+    renderCommentEmpty('正在同步留言...');
 
     try {
       comments = await fetchAPI('/api/comments');
@@ -1632,6 +1670,11 @@ function init() {
     localStorage.setItem('fallback_comments', JSON.stringify(comments));
 
     guestbookComments.innerHTML = '';
+    if (comments.length === 0) {
+      renderCommentEmpty('还没有留言。你可以成为第一位留下足迹的人。');
+      return;
+    }
+
     comments.forEach(c => {
       const nickname = escapeHTML(c.nickname || '匿名');
       const avatar = escapeHTML(c.avatar || '👤');
@@ -1697,13 +1740,23 @@ function init() {
       const website = document.getElementById('gb-website').value.trim();
       const avatar = document.getElementById('gb-avatar-val').value;
       const content = gbContent.value.trim();
+      const company = gbCompany?.value.trim() || '';
 
-      if (!nickname || !content) return;
+      if (!nickname || !content) {
+        setGuestbookStatus('昵称和留言内容都需要填写。', 'error');
+        return;
+      }
+      if (content.length > 1000) {
+        setGuestbookStatus('留言内容不能超过 1000 字。', 'error');
+        return;
+      }
 
       try {
-        await fetchAPI('/api/comments', {
+        setGuestbookSubmitting(true);
+        setGuestbookStatus('正在发送留言...', 'info');
+        const data = await fetchAPI('/api/comments', {
           method: 'POST',
-          body: { nickname, website, avatar, content }
+          body: { nickname, website, avatar, content, company }
         });
         
         guestbookForm.reset();
@@ -1711,13 +1764,28 @@ function init() {
         avatarOptions.forEach(o => o.classList.remove('active'));
         avatarOptions[0].classList.add('active');
         document.getElementById('gb-avatar-val').value = '👨‍💻';
+        updateGuestbookCounter();
 
         loadComments();
+        setGuestbookStatus(data?.comment ? '留言已发布，感谢你的反馈。' : '留言发表成功。', 'success');
         showToast('留言发表成功', 'success');
       } catch (err) {
+        setGuestbookStatus(err.message || '留言发表失败，请稍后再试。', 'error');
         showToast(`留言发表失败: ${err.message}`, 'error');
+      } finally {
+        setGuestbookSubmitting(false);
       }
     });
+  }
+
+  if (gbContent) {
+    gbContent.addEventListener('input', () => {
+      updateGuestbookCounter();
+      if (guestbookStatus?.classList.contains('is-error')) {
+        setGuestbookStatus();
+      }
+    });
+    updateGuestbookCounter();
   }
 
   // Emoji Popover
@@ -1736,6 +1804,7 @@ function init() {
         e.stopPropagation();
         if (gbContent) {
           gbContent.value += item.textContent;
+          updateGuestbookCounter();
           gbContent.focus();
         }
         if (emojiPopover) emojiPopover.classList.remove('active');
@@ -3286,7 +3355,7 @@ function init() {
         <div>
           <span class="quick-card-kicker"><i data-lucide="sparkles"></i> PREMIUM ARCADE</span>
           <h2>高能街机实验室</h2>
-          <p>四个高级街机模式：生存构筑、Boss 弹幕、潜行劫取、连锁解谜。每局都有阶段事件、局内成长、特殊道具和最佳纪录。</p>
+          <p>五个高级街机模式：生存构筑、Boss 弹幕、潜行劫取、连锁解谜、回合战术。每局都有阶段事件、局内成长、特殊道具和最佳纪录。</p>
         </div>
         <div class="mini-game-scoreboard">
           <span>当前游戏</span>
@@ -3311,6 +3380,7 @@ function init() {
         <button type="button" class="mini-game-tab" data-premium-game="boss">棱镜 Boss</button>
         <button type="button" class="mini-game-tab" data-premium-game="heist">赛博潜入</button>
         <button type="button" class="mini-game-tab" data-premium-game="chain">连锁炼金</button>
+        <button type="button" class="mini-game-tab" data-premium-game="tactics">裂隙战术</button>
       </div>
       <div class="mini-game-stage" id="premium-game-stage" tabindex="0" aria-label="精品街机操作区">
         <div class="mini-game-panel active" id="premium-survivor">
@@ -3384,6 +3454,25 @@ function init() {
           </div>
           <div class="memory-board chain-board" id="premium-chain-board" aria-label="连锁消除棋盘"></div>
         </div>
+        <div class="mini-game-panel" id="premium-tactics">
+          <div class="mini-game-copy">
+            <h3>Rift Tactics</h3>
+            <p>回合制机甲战术。WASD / 方向键移动，Space 释放相位爆破或架盾；夺取 3 个数据核心后撤离，敌人会包抄、射线压制与近战追击。</p>
+            <div class="mini-stats">
+              <span>核心 <strong id="premium-tactics-cores">0</strong>/3</span>
+              <span>装甲 <strong id="premium-tactics-hp">100</strong></span>
+              <span>行动 <strong id="premium-tactics-ap">3</strong></span>
+              <span>回合 <strong id="premium-tactics-turn">1</strong></span>
+              <span>威胁 <strong id="premium-tactics-threat">LOW</strong></span>
+              <span>最佳 <strong id="premium-tactics-best">0</strong></span>
+            </div>
+            <div class="mini-actions">
+              <button type="button" class="action-btn action-btn-primary" id="premium-tactics-start">开始行动 / 重开</button>
+              <button type="button" class="action-btn" id="premium-tactics-action">相位爆破</button>
+            </div>
+          </div>
+          <canvas class="mini-canvas mini-canvas-wide" id="premium-tactics-canvas" width="560" height="360" aria-label="裂隙战术棋盘"></canvas>
+        </div>
         <div class="premium-touch-controls" aria-label="触控街机控制器">
           <div class="premium-dpad">
             <button type="button" data-premium-control="up" aria-label="上">▲</button>
@@ -3406,6 +3495,7 @@ function init() {
       boss: '棱镜 Boss Rush',
       heist: '赛博潜入 Cyber Heist',
       chain: '连锁炼金 Alchemy Chain',
+      tactics: '裂隙战术 Rift Tactics',
       runner: '主线远征 Cyber Astro-Runner'
     };
     const careerKey = 'atherix_premium_arcade_career_v2';
@@ -3432,6 +3522,11 @@ function init() {
         { name: 'silver', threshold: 7000 },
         { name: 'bronze', threshold: 4500 }
       ],
+      tactics: [
+        { name: 'gold', threshold: 1800 },
+        { name: 'silver', threshold: 1250 },
+        { name: 'bronze', threshold: 850 }
+      ],
       runner: [
         { name: 'gold', threshold: 2600 },
         { name: 'silver', threshold: 1800 },
@@ -3447,6 +3542,9 @@ function init() {
       { id: 'heist_clean', label: '无声撤离', desc: '低步数完成潜入' },
       { id: 'chain_combo_9', label: '九连炼成', desc: '一次连锁爆破 9 格以上' },
       { id: 'chain_clear', label: '贤者能场', desc: '完成连锁炼金目标' },
+      { id: 'tactics_clear', label: '裂隙撤离', desc: '完成裂隙战术撤离' },
+      { id: 'tactics_sweep', label: '战术清场', desc: '裂隙战术中击破全部敌人' },
+      { id: 'tactics_clean', label: '无损机甲', desc: '高装甲完成裂隙战术' },
       { id: 'runner_final', label: '星门远征', desc: '通关主线最终关' },
       { id: 'daily_clear', label: '今日制霸', desc: '完成每日街机挑战' }
     ];
@@ -3455,6 +3553,7 @@ function init() {
       { id: 'boss_900', label: '棱镜 Boss 得分 900+', game: 'boss', check: (game, score) => game === 'boss' && score >= 900 },
       { id: 'heist_700', label: '赛博潜入评分 700+', game: 'heist', check: (game, score) => game === 'heist' && score >= 700 },
       { id: 'chain_6000', label: '连锁炼金得分 6000+', game: 'chain', check: (game, score) => game === 'chain' && score >= 6000 },
+      { id: 'tactics_1100', label: '裂隙战术评分 1100+', game: 'tactics', check: (game, score) => game === 'tactics' && score >= 1100 },
       { id: 'runner_1500', label: '主线关卡评分 1500+', game: 'runner', check: (game, score) => game === 'runner' && score >= 1500 }
     ];
 
@@ -3609,6 +3708,7 @@ function init() {
         panel.classList.toggle('active', panel.id === `premium-${name}`);
       });
       if (title) title.textContent = titles[name];
+      if (name === 'tactics') drawTactics();
       focusStage();
     }
 
@@ -3628,6 +3728,13 @@ function init() {
         if (control === 'left') moveHeist(-1, 0);
         if (control === 'right') moveHeist(1, 0);
         if (control === 'action') triggerHeistCloak();
+      }
+      if (pressed && premiumActive === 'tactics') {
+        if (control === 'up') moveTactics(0, -1);
+        if (control === 'down') moveTactics(0, 1);
+        if (control === 'left') moveTactics(-1, 0);
+        if (control === 'right') moveTactics(1, 0);
+        if (control === 'action') triggerTacticsAction();
       }
     }
 
@@ -4598,6 +4705,363 @@ function init() {
     document.getElementById('premium-chain-new').addEventListener('click', newChain);
     newChain();
 
+    const tactics = {
+      canvas: document.getElementById('premium-tactics-canvas'),
+      ctx: document.getElementById('premium-tactics-canvas')?.getContext('2d'),
+      bestKey: 'atherix_premium_tactics_best',
+      cols: 10,
+      rows: 8,
+      tile: 42,
+      offsetX: 70,
+      offsetY: 22,
+      walls: new Set(),
+      cores: [],
+      enemies: [],
+      exit: { x: 9, y: 0 },
+      player: { x: 1, y: 6, hp: 100, shield: 0, ap: 3, charge: 1, cores: 0 },
+      turn: 1,
+      kills: 0,
+      won: false,
+      lost: false,
+      message: '夺取 3 个数据核心后撤离',
+      flash: 0
+    };
+
+    function tacticsKey(x, y) {
+      return `${x},${y}`;
+    }
+
+    function newTactics({ shouldFocus = false } = {}) {
+      tactics.walls = new Set([
+        tacticsKey(2, 2), tacticsKey(3, 2), tacticsKey(7, 2),
+        tacticsKey(5, 3), tacticsKey(1, 4), tacticsKey(8, 4),
+        tacticsKey(4, 5), tacticsKey(6, 6)
+      ]);
+      tactics.cores = [
+        { x: 1, y: 1, taken: false },
+        { x: 6, y: 1, taken: false },
+        { x: 8, y: 6, taken: false }
+      ];
+      tactics.enemies = [
+        { id: 'drone-a', type: 'drone', x: 4, y: 1, hp: 45, maxHp: 45 },
+        { id: 'turret-a', type: 'turret', x: 8, y: 1, hp: 60, maxHp: 60 },
+        { id: 'hunter-a', type: 'hunter', x: 6, y: 5, hp: 70, maxHp: 70 },
+        { id: 'warden-a', type: 'warden', x: 3, y: 6, hp: 95, maxHp: 95 }
+      ];
+      tactics.exit = { x: 9, y: 0 };
+      tactics.player = { x: 1, y: 6, hp: 100, shield: 0, ap: 3, charge: 1, cores: 0 };
+      tactics.turn = 1;
+      tactics.kills = 0;
+      tactics.won = false;
+      tactics.lost = false;
+      tactics.message = '夺取 3 个数据核心后撤离';
+      tactics.flash = 0;
+      setTacticsUi();
+      if (shouldFocus) focusStage();
+      drawTactics();
+    }
+
+    function livingTacticsEnemies() {
+      return tactics.enemies.filter(enemy => enemy.hp > 0);
+    }
+
+    function tacticsEnemyAt(x, y) {
+      return livingTacticsEnemies().find(enemy => enemy.x === x && enemy.y === y);
+    }
+
+    function tacticsBlocked(x, y, { ignoreEnemies = false } = {}) {
+      if (x < 0 || y < 0 || x >= tactics.cols || y >= tactics.rows) return true;
+      if (tactics.walls.has(tacticsKey(x, y))) return true;
+      return !ignoreEnemies && !!tacticsEnemyAt(x, y);
+    }
+
+    function tacticsLineClear(ax, ay, bx, by) {
+      if (ax !== bx && ay !== by) return false;
+      const dx = Math.sign(bx - ax);
+      const dy = Math.sign(by - ay);
+      let x = ax + dx;
+      let y = ay + dy;
+      while (x !== bx || y !== by) {
+        if (tactics.walls.has(tacticsKey(x, y))) return false;
+        x += dx;
+        y += dy;
+      }
+      return true;
+    }
+
+    function setTacticsUi() {
+      const p = tactics.player;
+      document.getElementById('premium-tactics-cores').textContent = p.cores;
+      document.getElementById('premium-tactics-hp').textContent = Math.max(0, Math.ceil(p.hp));
+      document.getElementById('premium-tactics-ap').textContent = p.ap;
+      document.getElementById('premium-tactics-turn').textContent = tactics.turn;
+      document.getElementById('premium-tactics-best').textContent = localStorage.getItem(tactics.bestKey) || '0';
+      const threatEl = document.getElementById('premium-tactics-threat');
+      const nearby = livingTacticsEnemies().filter(enemy => Math.abs(enemy.x - p.x) + Math.abs(enemy.y - p.y) <= 3).length;
+      const threat = tactics.lost ? 'DOWN' : tactics.won ? 'CLEAR' : nearby >= 2 ? 'HIGH' : nearby === 1 ? 'MID' : 'LOW';
+      threatEl.textContent = threat;
+      threatEl.style.color = threat === 'HIGH' || threat === 'DOWN' ? '#EF4444' : threat === 'MID' ? '#FBBF24' : '#34D399';
+      const actionBtn = document.getElementById('premium-tactics-action');
+      if (actionBtn) actionBtn.textContent = p.charge > 0 ? `相位爆破 x${p.charge}` : '架盾待机';
+    }
+
+    function spendTacticsAp(amount = 1) {
+      tactics.player.ap = Math.max(0, tactics.player.ap - amount);
+      if (tactics.player.ap <= 0 && !tactics.won && !tactics.lost) {
+        enemyTacticsTurn();
+        if (!tactics.won && !tactics.lost) {
+          tactics.player.ap = 3;
+          tactics.turn++;
+        }
+      }
+    }
+
+    function damageTacticsPlayer(amount) {
+      const absorbed = Math.min(tactics.player.shield, amount);
+      tactics.player.shield -= absorbed;
+      tactics.player.hp -= amount - absorbed;
+      tactics.flash = 10;
+      if (tactics.player.hp <= 0) {
+        tactics.player.hp = 0;
+        tactics.lost = true;
+        tactics.message = '机甲失去行动能力';
+      }
+    }
+
+    function damageTacticsEnemy(enemy, amount) {
+      enemy.hp -= amount;
+      if (enemy.hp <= 0) {
+        enemy.hp = 0;
+        tactics.kills++;
+        tactics.player.charge = Math.min(3, tactics.player.charge + 1);
+      }
+    }
+
+    function finishTacticsWin() {
+      if (tactics.won) return;
+      tactics.won = true;
+      const score = Math.max(250, 800 + tactics.player.hp * 8 + tactics.kills * 180 + tactics.player.cores * 260 - tactics.turn * 22);
+      localStorage.setItem(tactics.bestKey, String(Math.max(Number(localStorage.getItem(tactics.bestKey) || 0), Math.floor(score))));
+      unlockAchievement('tactics_clear');
+      if (tactics.player.hp >= 80) unlockAchievement('tactics_clean');
+      if (livingTacticsEnemies().length === 0) unlockAchievement('tactics_sweep');
+      recordPremiumResult('tactics', score, { turns: tactics.turn, hp: tactics.player.hp, kills: tactics.kills });
+      tactics.message = `撤离成功 · 评分 ${Math.floor(score)}`;
+    }
+
+    function collectTacticsCore() {
+      const core = tactics.cores.find(item => !item.taken && item.x === tactics.player.x && item.y === tactics.player.y);
+      if (!core) return;
+      core.taken = true;
+      tactics.player.cores++;
+      tactics.player.charge = Math.min(3, tactics.player.charge + 1);
+      tactics.message = tactics.player.cores >= 3 ? '核心齐备，前往右上撤离点' : '数据核心已夺取';
+    }
+
+    function moveTactics(dx, dy) {
+      if (premiumActive !== 'tactics' || tactics.won || tactics.lost) return;
+      const nx = tactics.player.x + dx;
+      const ny = tactics.player.y + dy;
+      const enemy = tacticsEnemyAt(nx, ny);
+      if (enemy) {
+        damageTacticsEnemy(enemy, 28);
+        tactics.message = enemy.hp <= 0 ? '近战击破目标' : '近战压制目标';
+        spendTacticsAp(1);
+        setTacticsUi();
+        drawTactics();
+        return;
+      }
+      if (tacticsBlocked(nx, ny, { ignoreEnemies: true })) {
+        tactics.message = '该格无法通行';
+        drawTactics();
+        return;
+      }
+      tactics.player.x = nx;
+      tactics.player.y = ny;
+      collectTacticsCore();
+      if (tactics.player.cores >= 3 && tactics.player.x === tactics.exit.x && tactics.player.y === tactics.exit.y) {
+        finishTacticsWin();
+      } else {
+        spendTacticsAp(1);
+      }
+      setTacticsUi();
+      drawTactics();
+    }
+
+    function triggerTacticsAction() {
+      if (premiumActive !== 'tactics' || tactics.won || tactics.lost) return;
+      const p = tactics.player;
+      if (p.charge <= 0) {
+        p.shield = Math.min(35, p.shield + 14);
+        tactics.message = '架盾待机：下回合前吸收伤害';
+        spendTacticsAp(1);
+        setTacticsUi();
+        drawTactics();
+        return;
+      }
+      const targets = livingTacticsEnemies()
+        .filter(enemy => {
+          const dist = Math.abs(enemy.x - p.x) + Math.abs(enemy.y - p.y);
+          return dist <= 4 && (enemy.x === p.x || enemy.y === p.y) && tacticsLineClear(p.x, p.y, enemy.x, enemy.y);
+        })
+        .sort((a, b) => (Math.abs(a.x - p.x) + Math.abs(a.y - p.y)) - (Math.abs(b.x - p.x) + Math.abs(b.y - p.y)));
+      if (!targets.length) {
+        p.shield = Math.min(35, p.shield + 18);
+        p.charge--;
+        tactics.message = '没有直线目标，能量转为护盾';
+      } else {
+        targets.slice(0, 2).forEach(enemy => damageTacticsEnemy(enemy, 48));
+        p.charge--;
+        tactics.message = targets.length > 1 ? '相位爆破贯穿双目标' : '相位爆破命中目标';
+      }
+      spendTacticsAp(1);
+      setTacticsUi();
+      drawTactics();
+    }
+
+    function enemyTacticsTurn() {
+      const p = tactics.player;
+      livingTacticsEnemies().forEach(enemy => {
+        if (tactics.lost) return;
+        const dist = Math.abs(enemy.x - p.x) + Math.abs(enemy.y - p.y);
+        const aligned = (enemy.x === p.x || enemy.y === p.y) && tacticsLineClear(enemy.x, enemy.y, p.x, p.y);
+        if (enemy.type === 'turret' && aligned && dist <= 6) {
+          damageTacticsPlayer(16);
+          tactics.message = '炮塔射线命中机甲';
+          return;
+        }
+        if (dist <= 1) {
+          damageTacticsPlayer(enemy.type === 'warden' ? 24 : 15);
+          tactics.message = '敌方近战接触';
+          return;
+        }
+        const options = [
+          { dx: Math.sign(p.x - enemy.x), dy: 0 },
+          { dx: 0, dy: Math.sign(p.y - enemy.y) },
+          { dx: -Math.sign(p.x - enemy.x), dy: 0 },
+          { dx: 0, dy: -Math.sign(p.y - enemy.y) }
+        ].filter(step => step.dx || step.dy);
+        const step = options.find(item => {
+          const nx = enemy.x + item.dx;
+          const ny = enemy.y + item.dy;
+          return !tacticsBlocked(nx, ny) && !(nx === p.x && ny === p.y);
+        });
+        if (step && enemy.type !== 'turret') {
+          enemy.x += step.dx;
+          enemy.y += step.dy;
+        }
+      });
+      tactics.player.shield = Math.max(0, tactics.player.shield - 6);
+    }
+
+    function drawTactics() {
+      const { ctx, canvas: c } = tactics;
+      if (!ctx || !c) return;
+      ctx.fillStyle = '#06111f';
+      ctx.fillRect(0, 0, c.width, c.height);
+      drawGrid(ctx, c.width, c.height, 'rgba(56, 189, 248, 0.06)', 28);
+
+      for (let y = 0; y < tactics.rows; y++) {
+        for (let x = 0; x < tactics.cols; x++) {
+          const px = tactics.offsetX + x * tactics.tile;
+          const py = tactics.offsetY + y * tactics.tile;
+          const isExit = x === tactics.exit.x && y === tactics.exit.y;
+          const isWall = tactics.walls.has(tacticsKey(x, y));
+          ctx.fillStyle = isWall ? '#172033' : isExit ? 'rgba(52, 211, 153, 0.22)' : 'rgba(15, 23, 42, 0.82)';
+          ctx.fillRect(px, py, tactics.tile - 2, tactics.tile - 2);
+          ctx.strokeStyle = isExit ? 'rgba(52, 211, 153, 0.55)' : 'rgba(148, 163, 184, 0.14)';
+          ctx.strokeRect(px + 0.5, py + 0.5, tactics.tile - 3, tactics.tile - 3);
+        }
+      }
+
+      tactics.cores.forEach(core => {
+        if (core.taken) return;
+        const cx = tactics.offsetX + core.x * tactics.tile + tactics.tile / 2;
+        const cy = tactics.offsetY + core.y * tactics.tile + tactics.tile / 2;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(performance.now() / 700);
+        ctx.fillStyle = '#FBBF24';
+        ctx.shadowColor = '#FBBF24';
+        ctx.shadowBlur = 14;
+        ctx.beginPath();
+        ctx.moveTo(0, -12);
+        ctx.lineTo(10, 0);
+        ctx.lineTo(0, 12);
+        ctx.lineTo(-10, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      });
+
+      livingTacticsEnemies().forEach(enemy => {
+        const px = tactics.offsetX + enemy.x * tactics.tile;
+        const py = tactics.offsetY + enemy.y * tactics.tile;
+        const color = enemy.type === 'turret' ? '#F97316' : enemy.type === 'warden' ? '#EC4899' : '#EF4444';
+        if ((enemy.x === tactics.player.x || enemy.y === tactics.player.y) && tacticsLineClear(enemy.x, enemy.y, tactics.player.x, tactics.player.y)) {
+          ctx.strokeStyle = 'rgba(239, 68, 68, 0.28)';
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(px + tactics.tile / 2, py + tactics.tile / 2);
+          ctx.lineTo(tactics.offsetX + tactics.player.x * tactics.tile + tactics.tile / 2, tactics.offsetY + tactics.player.y * tactics.tile + tactics.tile / 2);
+          ctx.stroke();
+        }
+        ctx.fillStyle = color;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 10;
+        ctx.fillRect(px + 8, py + 8, tactics.tile - 18, tactics.tile - 18);
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(px + 7, py + tactics.tile - 8, tactics.tile - 16, 4);
+        ctx.fillStyle = '#34D399';
+        ctx.fillRect(px + 7, py + tactics.tile - 8, (tactics.tile - 16) * Math.max(0, enemy.hp / enemy.maxHp), 4);
+      });
+
+      const p = tactics.player;
+      const px = tactics.offsetX + p.x * tactics.tile;
+      const py = tactics.offsetY + p.y * tactics.tile;
+      if (tactics.flash > 0) tactics.flash--;
+      ctx.save();
+      ctx.shadowColor = p.shield > 0 ? '#34D399' : '#38BDF8';
+      ctx.shadowBlur = p.shield > 0 ? 20 : 12;
+      ctx.fillStyle = tactics.flash > 0 ? '#FDE68A' : '#38BDF8';
+      if (typeof ctx.roundRect === 'function') {
+        ctx.beginPath();
+        ctx.roundRect(px + 7, py + 5, tactics.tile - 14, tactics.tile - 10, 7);
+        ctx.fill();
+      } else {
+        ctx.fillRect(px + 7, py + 5, tactics.tile - 14, tactics.tile - 10);
+      }
+      ctx.fillStyle = '#08111f';
+      ctx.fillRect(px + 15, py + 15, 7, 7);
+      ctx.fillRect(px + 25, py + 15, 7, 7);
+      if (p.shield > 0) {
+        ctx.strokeStyle = 'rgba(52, 211, 153, 0.85)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(px + tactics.tile / 2, py + tactics.tile / 2, 22, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      ctx.fillStyle = '#fff';
+      ctx.font = '800 12px JetBrains Mono, monospace';
+      ctx.fillText(`SHIELD ${Math.round(p.shield)} · CHARGE ${p.charge}`, 18, 24);
+      ctx.fillStyle = '#A78BFA';
+      ctx.font = '700 12px Plus Jakarta Sans, sans-serif';
+      ctx.fillText(tactics.message, 18, 344);
+
+      if (tactics.won) overlay(ctx, c.width, c.height, 'RIFT SECURED', '数据核心撤离成功 · 评分已保存');
+      if (tactics.lost) overlay(ctx, c.width, c.height, 'MECH DOWN', '点击开始行动重开战术任务');
+    }
+
+    document.getElementById('premium-tactics-start').addEventListener('click', () => newTactics({ shouldFocus: true }));
+    document.getElementById('premium-tactics-action').addEventListener('click', () => {
+      focusStage();
+      triggerTacticsAction();
+    });
+    newTactics();
+
     window.addEventListener('keydown', (e) => {
       if (!isGameSectionActive() || isEditableTarget(e.target) || !document.activeElement?.closest?.('#premium-game-stage')) return;
       const codes = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space'];
@@ -4614,6 +5078,13 @@ function init() {
         if (e.code === 'ArrowLeft' || e.code === 'KeyA') moveHeist(-1, 0);
         if (e.code === 'ArrowRight' || e.code === 'KeyD') moveHeist(1, 0);
         if (e.code === 'Space') triggerHeistCloak();
+      }
+      if (premiumActive === 'tactics') {
+        if (e.code === 'ArrowUp' || e.code === 'KeyW') moveTactics(0, -1);
+        if (e.code === 'ArrowDown' || e.code === 'KeyS') moveTactics(0, 1);
+        if (e.code === 'ArrowLeft' || e.code === 'KeyA') moveTactics(-1, 0);
+        if (e.code === 'ArrowRight' || e.code === 'KeyD') moveTactics(1, 0);
+        if (e.code === 'Space') triggerTacticsAction();
       }
     });
 

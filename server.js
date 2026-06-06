@@ -22,9 +22,9 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
 const contentSecurityPolicy = [
   "default-src 'self'",
   "script-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "img-src 'self' https: data: blob:",
-  "font-src 'self' data:",
+  "font-src 'self' https://fonts.gstatic.com data:",
   "connect-src 'self'",
   "media-src 'self' blob:",
   "worker-src 'self'",
@@ -524,11 +524,19 @@ app.get('/api/comments', (req, res) => {
 
 // POST: Post comments
 app.post('/api/comments', writeLimiter, (req, res) => {
+  const honeypot = String(req.body.company || '').trim();
+  if (honeypot) {
+    return res.status(400).json({ error: 'Spam protection triggered.' });
+  }
   const nickname = readTextField(res, 'Nickname', req.body.nickname, { required: true, max: 60 });
   const content = readTextField(res, 'Content', req.body.content, { required: true, max: 1000 });
   const website = readUrlField(res, 'Website', req.body.website);
   const rawAvatar = readTextField(res, 'Avatar', req.body.avatar, { max: 8, fallback: '👤' });
   if ([nickname, content, website, rawAvatar].some(value => value === undefined)) return;
+  const linkCount = (content.match(/https?:\/\//gi) || []).length;
+  if (linkCount > 3) {
+    return res.status(400).json({ error: 'Please keep comment links to three or fewer.' });
+  }
   const avatar = allowedCommentAvatars.has(rawAvatar) ? rawAvatar : '👤';
 
   // Generate current timestamp string "YYYY-MM-DD HH:MM"
