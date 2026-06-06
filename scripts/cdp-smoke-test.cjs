@@ -230,6 +230,19 @@ async function run() {
     articleChars: document.querySelector('#reader-post-content')?.innerText.trim().length || 0
   }))()`);
 
+  await click('.nav-item[data-target="projects"]');
+  await waitFor('.project-card');
+  await wait(300);
+  await click('.modal-trigger-btn');
+  await wait(250);
+  const projectState = await evaluate(`(() => ({
+    cards: document.querySelectorAll('.project-card').length,
+    disabledLiveButtons: document.querySelectorAll('.project-card .project-btn-disabled[aria-disabled="true"]').length,
+    modalOpen: document.querySelector('#project-modal')?.classList.contains('active') || false,
+    modalLiveDisabled: document.querySelector('#modal-live-link')?.getAttribute('aria-disabled') === 'true',
+    fakeHashLinks: [...document.querySelectorAll('.project-card a[href$="/#"], .project-card a[href="#"]')].length
+  }))()`);
+
   await click('.nav-item[data-target="game"]');
   await wait(600);
   const mainOverlayBeforeSpace = await evaluate(`document.querySelector('#game-overlay-screen')?.style.display || ''`);
@@ -337,6 +350,9 @@ async function run() {
   })()`, 10000);
 
   assert(blogState.visibleArticle && blogState.articleChars > 100, 'blog reader should open a populated article');
+  assert(projectState.cards >= 1, 'project cards should render');
+  assert(projectState.disabledLiveButtons >= 1 && projectState.modalLiveDisabled, 'projects without demos should render disabled live actions');
+  assert(projectState.fakeHashLinks === 0, 'project cards should not convert placeholder live links into fake hash URLs');
   assert(mainSpaceState.overlayBefore === 'flex' && mainSpaceState.overlayAfter === 'flex', 'Space should not start/retry the main game overlay');
   assert(arcadeInitial.premium && arcadeInitial.careerPanel, 'premium arcade career panel should render');
   assert(arcadeInitial.oldPrototypeCount === 0, 'old prototype mini-games should be replaced');
@@ -356,6 +372,7 @@ async function run() {
     managedServer,
     appUrl,
     blogState,
+    projectState,
     mainSpaceState,
     arcadeInitial,
     survivorState,

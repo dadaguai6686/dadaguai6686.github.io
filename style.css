@@ -1804,6 +1804,15 @@ main {
   color: white;
 }
 
+.project-btn-disabled,
+.project-btn-disabled:hover {
+  border-color: rgba(148, 163, 184, 0.12);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 /* Modal Detailed Card (Popup) */
 .project-modal {
   display: none;

@@ -167,15 +167,34 @@ function init() {
       .replace(/'/g, '&#39;');
   }
 
-  function normalizeUrl(value) {
+  function normalizeUrl(value, { allowRelativeUpload = false } = {}) {
     const raw = String(value || '').trim();
-    if (!raw) return '';
+    if (!raw || raw === '#') return '';
+    if (allowRelativeUpload && raw.startsWith('/uploads/')) return raw;
+    if (raw.startsWith('/') || raw.startsWith('#')) return '';
     try {
       const url = new URL(raw, window.location.origin);
       return ['http:', 'https:'].includes(url.protocol) ? url.href : '';
     } catch (err) {
       return '';
     }
+  }
+
+  function setOptionalExternalLink(anchor, url, fallbackLabel) {
+    if (!anchor) return;
+    const normalized = normalizeUrl(url);
+    if (normalized) {
+      anchor.href = normalized;
+      anchor.removeAttribute('aria-disabled');
+      anchor.classList.remove('project-btn-disabled');
+      anchor.tabIndex = 0;
+      return;
+    }
+    anchor.href = '#';
+    anchor.setAttribute('aria-disabled', 'true');
+    anchor.classList.add('project-btn-disabled');
+    anchor.tabIndex = -1;
+    if (fallbackLabel) anchor.dataset.fallbackLabel = fallbackLabel;
   }
 
   function copyText(text, successMessage = '已复制到剪贴板') {
@@ -1210,8 +1229,11 @@ function init() {
       const title = escapeHTML(proj.title || '未命名项目');
       const tag = escapeHTML(proj.tag || '未分类');
       const desc = escapeHTML(proj.desc || '暂无项目简介。');
-      const imgUrl = escapeHTML(normalizeUrl(proj.img) || 'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=500');
-      const liveUrl = escapeHTML(normalizeUrl(proj.live) || '#');
+      const imgUrl = escapeHTML(normalizeUrl(proj.img, { allowRelativeUpload: true }) || 'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=500');
+      const liveUrl = normalizeUrl(proj.live);
+      const liveAction = liveUrl
+        ? `<a href="${escapeHTML(liveUrl)}" class="project-btn project-btn-primary" target="_blank" rel="noopener noreferrer"><i data-lucide="external-link"></i> Live Demo</a>`
+        : '<button type="button" class="project-btn project-btn-disabled" aria-disabled="true"><i data-lucide="external-link"></i> 暂无演示</button>';
       
       let adminControls = '';
       if (isAdmin) {
@@ -1240,7 +1262,7 @@ function init() {
           </div>
           <div class="project-actions">
             <button class="project-btn modal-trigger-btn" data-proj-id="${projId}"><i data-lucide="info"></i> 项目详情</button>
-            <a href="${liveUrl}" class="project-btn project-btn-primary" target="_blank" rel="noopener noreferrer"><i data-lucide="external-link"></i> Live Demo</a>
+            ${liveAction}
           </div>
         </div>
       `;
@@ -1274,15 +1296,24 @@ function init() {
 
     document.getElementById('modal-project-tag').textContent = proj.tag || '未分类';
     document.getElementById('modal-project-title').textContent = proj.title || '未命名项目';
-    document.getElementById('modal-project-img').src = normalizeUrl(proj.img) || 'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=500';
+    document.getElementById('modal-project-img').src = normalizeUrl(proj.img, { allowRelativeUpload: true }) || 'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=500';
     document.getElementById('modal-project-desc').textContent = proj.desc || '暂无项目简介。';
     document.getElementById('modal-project-pain').textContent = proj.pain || '暂无详细描述。';
     document.getElementById('modal-project-solution').textContent = proj.solution || '暂无详细描述。';
-    document.getElementById('modal-github-link').href = normalizeUrl(proj.github) || '#';
-    document.getElementById('modal-live-link').href = normalizeUrl(proj.live) || '#';
+    setOptionalExternalLink(document.getElementById('modal-github-link'), proj.github, '暂无代码仓库');
+    setOptionalExternalLink(document.getElementById('modal-live-link'), proj.live, '暂无在线演示');
 
     openModal(projectModal);
   }
+
+  document.querySelectorAll('#modal-github-link, #modal-live-link').forEach(link => {
+    link.addEventListener('click', (e) => {
+      if (link.getAttribute('aria-disabled') === 'true') {
+        e.preventDefault();
+        showToast(link.dataset.fallbackLabel || '当前项目暂未提供外链', 'warning');
+      }
+    });
+  });
 
   if (modalCloseBtn) {
     modalCloseBtn.addEventListener('click', () => closeModal(projectModal));
