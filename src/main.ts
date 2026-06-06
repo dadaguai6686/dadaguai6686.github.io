@@ -10,6 +10,7 @@ import {
   type RunStats,
   type Upgrade,
   type UpgradeId,
+  type UpgradeSummary,
   type WaveModifier
 } from "./game/simulation";
 import "./styles.css";
@@ -51,6 +52,7 @@ const recordWave = document.querySelector<HTMLElement>("#record-wave")!;
 const recordCombo = document.querySelector<HTMLElement>("#record-combo")!;
 const boostPill = document.querySelector<HTMLElement>("#boost-pill")!;
 const pulsePill = document.querySelector<HTMLElement>("#pulse-pill")!;
+const loadoutStrip = document.querySelector<HTMLDivElement>("#loadout-strip")!;
 const waveEvent = document.querySelector<HTMLDivElement>("#wave-event")!;
 const waveEventTitle = document.querySelector<HTMLElement>("#wave-event-title")!;
 const waveEventDetail = document.querySelector<HTMLElement>("#wave-event-detail")!;
@@ -102,6 +104,7 @@ type RunEndDetail = {
 };
 
 let latestUpgradeChoices: Upgrade[] = [];
+let latestUpgradeSummaries: UpgradeSummary[] = [];
 let latestStatus: GameStatus = "menu";
 let latestScore = 0;
 let latestWave = 1;
@@ -184,6 +187,7 @@ window.addEventListener("game:hud", (event) => {
     campaignWaves: number;
     status: GameStatus;
     waveModifier: WaveModifier;
+    upgradeSummaries: UpgradeSummary[];
     upgradeChoices: Upgrade[];
   };
 
@@ -206,6 +210,8 @@ window.addEventListener("game:hud", (event) => {
   pulsePill.textContent = detail.pulseReady ? "脉冲就绪" : "脉冲冷却中";
   boostPill.classList.toggle("cooling", !detail.boostReady);
   pulsePill.classList.toggle("cooling", !detail.pulseReady);
+  latestUpgradeSummaries = detail.upgradeSummaries;
+  renderLoadout(detail.upgradeSummaries, detail.status);
   waveEvent.hidden = detail.status !== "playing";
   waveEventTitle.textContent = `本波事件：${detail.waveModifier.name}`;
   waveEventDetail.textContent = detail.waveModifier.description;
@@ -254,16 +260,48 @@ window.addEventListener("game:feedback", (event) => {
 
 function renderUpgradeChoices(): void {
   const choices = latestUpgradeChoices.length > 0 ? latestUpgradeChoices : Object.values(UPGRADE_CATALOG).slice(0, 3);
+  const summaries = new Map(latestUpgradeSummaries.map((summary) => [summary.id, summary]));
   upgradeChoices.replaceChildren(
     ...choices.map((choice) => {
+      const summary = summaries.get(choice.id);
       const button = document.createElement("button");
       button.type = "button";
       button.className = "upgrade-option";
-      button.innerHTML = `<strong>${choice.name}</strong><span>${choice.description}</span><em>选择后进入下一波</em>`;
+      button.innerHTML = `
+        <strong>${choice.name} <small>Lv ${summary?.level ?? 0}/${summary?.maxLevel ?? 3}</small></strong>
+        <span>${choice.description}</span>
+        <em>当前：${summary?.currentEffect ?? "基础配置"}</em>
+        <em>升级后：${summary?.nextEffect ?? "已满级"}</em>
+      `;
       button.addEventListener("click", () => launchRun(choice.id));
       return button;
     })
   );
+}
+
+function renderLoadout(summaries: UpgradeSummary[], status: GameStatus): void {
+  loadoutStrip.hidden = status === "menu";
+  if (loadoutStrip.hidden) return;
+  loadoutStrip.replaceChildren(
+    ...summaries.map((summary) => {
+      const item = document.createElement("span");
+      item.title = `${summary.name}: ${summary.currentEffect}`;
+      item.textContent = `${shortUpgradeName(summary.id)} ${summary.level}/${summary.maxLevel}`;
+      item.classList.toggle("active", summary.level > 0);
+      return item;
+    })
+  );
+}
+
+function shortUpgradeName(id: UpgradeId): string {
+  const names: Record<UpgradeId, string> = {
+    engine: "引擎",
+    repair: "织机",
+    capacitor: "电容",
+    pulse: "脉冲",
+    shield: "曜盾"
+  };
+  return names[id];
 }
 
 function showHelpOverlay(): void {

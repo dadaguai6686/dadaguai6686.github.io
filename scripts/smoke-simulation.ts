@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import {
   CAMPAIGN_WAVES,
+  MAX_UPGRADE_LEVEL,
   WAVE_MODIFIERS,
   createInitialState,
   getObjectiveHint,
   getUpgradeChoices,
+  getUpgradeSummaries,
+  getUpgradeSummary,
   getWaveModifierFor,
   pauseRun,
   resumeRun,
@@ -28,6 +31,9 @@ assert.equal(state.campaignWaves, CAMPAIGN_WAVES);
 assert.equal(state.relays.length, 4);
 assert.equal(state.gate.open, false);
 assert.equal(state.waveModifier, "steadySignal");
+assert.equal(getUpgradeSummaries(state.upgrades).length, 5, "all upgrade tracks should be summarized");
+assert.equal(getUpgradeSummary(state.upgrades, "engine").maxLevel, MAX_UPGRADE_LEVEL);
+assert.ok(getUpgradeSummary(state.upgrades, "engine").nextEffect?.includes("推进"), "upgrade summaries should explain next effects");
 assert.equal(getWaveModifierFor(2, "standard"), "lumenSurge", "standard wave 2 should introduce lumen surge");
 assert.equal(getWaveModifierFor(1, "hardcore"), "shardCurrent", "hardcore should start with a combat modifier");
 assert.equal(getObjectiveHint(state).kind, "relay", "fresh runs should guide players toward a relay");
@@ -128,6 +134,7 @@ const upgraded = restartRun(state, "engine");
 assert.equal(upgraded.wave, 2, "winning and restarting should advance the wave");
 assert.equal(upgraded.waveModifier, "lumenSurge", "advancing waves should install the next wave modifier");
 assert.equal(upgraded.upgrades.engine, 1, "chosen upgrade should be installed");
+assert.equal(getUpgradeSummary(upgraded.upgrades, "engine").level, 1, "installed upgrades should update summaries");
 assert.equal(upgraded.stats.wavesCleared, 1, "campaign stats should carry into the next wave");
 
 const training = updateSimulation(restartRun(createInitialState(), undefined, { difficulty: "training" }), idle, 1);

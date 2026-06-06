@@ -5,6 +5,7 @@ import {
   getObjectiveHint,
   getStormActiveRadius,
   getUpgradeChoices,
+  getUpgradeSummaries,
   pauseRun,
   resumeRun,
   restartRun,
@@ -21,6 +22,7 @@ import {
   type Storm,
   type Upgrade,
   type UpgradeId,
+  type UpgradeSummary,
   type WaveModifier
 } from "./simulation";
 
@@ -43,6 +45,7 @@ type HudSnapshot = {
   objectiveHint: ObjectiveHint;
   status: GameState["status"];
   waveModifier: WaveModifier;
+  upgradeSummaries: UpgradeSummary[];
   upgradeChoices: Upgrade[];
 };
 
@@ -406,6 +409,7 @@ export class GameScene extends Phaser.Scene {
       objectiveHint: getObjectiveHint(this.state),
       status: this.state.status,
       waveModifier: WAVE_MODIFIERS[this.state.waveModifier],
+      upgradeSummaries: getUpgradeSummaries(this.state.upgrades),
       upgradeChoices: this.state.status === "won" ? getUpgradeChoices(this.state) : []
     };
     window.dispatchEvent(new CustomEvent("game:hud", { detail: snapshot }));

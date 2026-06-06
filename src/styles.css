@@ -234,6 +234,35 @@ button {
   background: rgba(255, 255, 255, 0.055);
 }
 
+#loadout-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 10px;
+}
+
+#loadout-strip[hidden] {
+  display: none;
+}
+
+#loadout-strip span {
+  min-height: 28px;
+  padding: 6px 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  color: #9eb3c9;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
+}
+
+#loadout-strip span.active {
+  border-color: rgba(255, 226, 122, 0.28);
+  color: #fff0a8;
+  background: rgba(255, 226, 122, 0.08);
+}
+
 #wave-event,
 #pilot-tip {
   margin-top: 10px;
@@ -567,8 +596,16 @@ h1 {
 }
 
 .upgrade-option strong {
-  display: block;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
   font-size: 14px;
+}
+
+.upgrade-option small {
+  color: #7eefff;
+  font-size: 11px;
 }
 
 .upgrade-option span {

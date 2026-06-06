@@ -82,6 +82,14 @@ export type Upgrade = {
 
 export type UpgradeState = Record<UpgradeId, number>;
 
+export type UpgradeSummary = Upgrade & {
+  level: number;
+  maxLevel: number;
+  capped: boolean;
+  currentEffect: string;
+  nextEffect?: string;
+};
+
 export type RunEndReason =
   | "none"
   | "waveCleared"
@@ -112,6 +120,7 @@ export type ObjectiveHint = {
 };
 
 export const CAMPAIGN_WAVES = 5;
+export const MAX_UPGRADE_LEVEL = 3;
 
 export const DIFFICULTY_SETTINGS: Record<DifficultyId, Difficulty> = {
   training: {
@@ -376,7 +385,7 @@ export function restartRun(state: GameState, upgradeId?: UpgradeId, options: Res
   next.elapsed = wonPreviousWave ? state.elapsed : 0;
   next.endReason = "none";
   next.stats = wonPreviousWave ? { ...state.stats } : createRunStats();
-  if (wonPreviousWave && upgradeId && next.upgrades[upgradeId] < 3) {
+  if (wonPreviousWave && upgradeId && next.upgrades[upgradeId] < MAX_UPGRADE_LEVEL) {
     next.upgrades[upgradeId] += 1;
   }
   next.player.maxHull = 100 + next.upgrades.shield * 14;
@@ -607,9 +616,26 @@ export function getUpgradeChoices(state: GameState): Upgrade[] {
   return ids
     .slice(offset)
     .concat(ids.slice(0, offset))
-    .filter((id) => state.upgrades[id] < 3)
+    .filter((id) => state.upgrades[id] < MAX_UPGRADE_LEVEL)
     .slice(0, 3)
     .map((id) => UPGRADE_CATALOG[id]);
+}
+
+export function getUpgradeSummary(upgrades: UpgradeState, id: UpgradeId): UpgradeSummary {
+  const level = clampInt(upgrades[id], 0, MAX_UPGRADE_LEVEL);
+  const capped = level >= MAX_UPGRADE_LEVEL;
+  return {
+    ...UPGRADE_CATALOG[id],
+    level,
+    maxLevel: MAX_UPGRADE_LEVEL,
+    capped,
+    currentEffect: formatUpgradeEffect(id, level),
+    nextEffect: capped ? undefined : formatUpgradeEffect(id, level + 1)
+  };
+}
+
+export function getUpgradeSummaries(upgrades: UpgradeState): UpgradeSummary[] {
+  return (Object.keys(UPGRADE_CATALOG) as UpgradeId[]).map((id) => getUpgradeSummary(upgrades, id));
 }
 
 export function getWaveModifierFor(wave: number, difficulty: DifficultyId): WaveModifierId {
@@ -771,6 +797,32 @@ function awardScore(state: GameState, base: number, comboGain: number): void {
 
 function formatCombo(combo: number): string {
   return `${combo.toFixed(1)}x`;
+}
+
+function formatUpgradeEffect(id: UpgradeId, level: number): string {
+  if (id === "engine") {
+    return level === 0
+      ? "基础推力，推进冷却 1.15 秒"
+      : `常规推力 +${level * 42}，推进推力 +${level * 90}，推进冷却 ${Math.max(0.62, 1.15 - level * 0.12).toFixed(2)} 秒`;
+  }
+  if (id === "repair") {
+    return level === 0
+      ? "基础维修速度，信标基础得分 260"
+      : `维修速度 +${level * 7}%，信标得分 +${level * 75}`;
+  }
+  if (id === "capacitor") {
+    return level === 0
+      ? "最大电量 100，流明回电 +9"
+      : `最大电量 +${level * 16}，流明额外回电 +${level * 3}`;
+  }
+  if (id === "pulse") {
+    return level === 0
+      ? "脉冲半径 210，冷却 5.50 秒"
+      : `脉冲半径 +${level * 48}，冷却 ${Math.max(2.8, 5.5 - level * 0.45).toFixed(2)} 秒`;
+  }
+  return level === 0
+    ? "最大机体 100，基础碰撞减伤"
+    : `最大机体 +${level * 14}，碰撞伤害 -${level * 12}%`;
 }
 
 function formatDistance(value: number): string {
