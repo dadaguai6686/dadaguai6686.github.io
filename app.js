@@ -494,6 +494,17 @@ function init() {
           navigateTo('game');
           setTimeout(() => document.getElementById('premium-career-open')?.click(), 220);
         }
+      },
+      {
+        id: 'director',
+        icon: 'target',
+        title: '推荐街机挑战',
+        desc: '由街机导演根据每日任务与奖牌缺口推荐下一局',
+        keywords: 'arcade director next challenge 推荐 街机 每日 挑战',
+        action: () => {
+          navigateTo('game');
+          setTimeout(() => document.getElementById('premium-director-start')?.click(), 260);
+        }
       }
     ].map(item => ({
       ...item,
@@ -3829,7 +3840,7 @@ function init() {
         <div>
           <span class="quick-card-kicker"><i data-lucide="sparkles"></i> PREMIUM ARCADE</span>
           <h2>高能街机实验室</h2>
-          <p>五个高级街机模式：生存构筑、Boss 弹幕、潜行劫取、连锁解谜、回合战术。每局都有阶段事件、局内成长、特殊道具和最佳纪录。</p>
+          <p>六个高级街机模式：生存构筑、Boss 弹幕、霓虹漂移、潜行劫取、连锁解谜、回合战术。每局都有阶段事件、局内成长、特殊道具和最佳纪录。</p>
         </div>
         <div class="mini-game-scoreboard">
           <span>当前游戏</span>
@@ -3852,6 +3863,22 @@ function init() {
           <small id="premium-daily-status">完成后解锁限定徽章</small>
         </div>
         <div class="career-achievements" id="premium-achievement-feed" aria-live="polite"></div>
+      </div>
+      <div class="arcade-director-panel" id="premium-arcade-director" data-tone="daily" aria-label="街机导演推荐">
+        <div class="arcade-director-main">
+          <span><i data-lucide="target"></i> NEXT RUN</span>
+          <strong id="premium-director-title">分析挑战路线中...</strong>
+          <small id="premium-director-reason">根据每日挑战、奖牌和成就进度推荐下一局。</small>
+        </div>
+        <div class="arcade-director-meters" aria-label="街机完成度">
+          <span>奖牌 <strong id="premium-director-medals">0/7</strong></span>
+          <span>成就 <strong id="premium-director-achievements">0/16</strong></span>
+          <span>完成度 <strong id="premium-director-completion">0%</strong></span>
+        </div>
+        <button type="button" class="arcade-director-action" id="premium-director-start" data-target-game="survivor">
+          <i data-lucide="play"></i>
+          <span>进入推荐挑战</span>
+        </button>
       </div>
       <div class="premium-career-dialog" id="premium-career-dialog" aria-hidden="true">
         <div class="premium-career-card" role="dialog" aria-modal="true" aria-labelledby="premium-career-title">
@@ -4013,6 +4040,15 @@ function init() {
       tactics: '裂隙战术 Rift Tactics',
       runner: '主线远征 Cyber Astro-Runner'
     };
+    const premiumTabLabels = {
+      survivor: '星核幸存者',
+      boss: '棱镜 Boss',
+      drift: '霓虹漂移',
+      heist: '赛博潜入',
+      chain: '连锁炼金',
+      tactics: '裂隙战术'
+    };
+    const careerGameOrder = ['runner', 'survivor', 'boss', 'drift', 'heist', 'chain', 'tactics'];
     const careerKey = 'atherix_premium_arcade_career_v2';
     const medalRank = { none: 0, bronze: 1, silver: 2, gold: 3 };
     const medalLabels = { none: '无', bronze: '铜', silver: '银', gold: '金' };
@@ -4169,6 +4205,102 @@ function init() {
       return `铜 ${bronze} · 银 ${silver} · 金 ${gold}`;
     }
 
+    function nextMedalTarget(game, score) {
+      const rules = [...(medalRules[game] || [])].sort((a, b) => a.threshold - b.threshold);
+      return rules.find(rule => score < rule.threshold) || null;
+    }
+
+    function arcadeCompletionPercent() {
+      const medalProgress = careerGameOrder.reduce((sum, game) => {
+        const score = Number(career.best?.[game] || 0);
+        const medal = medalClass(career.medals?.[game] || medalFor(game, score));
+        return sum + (medalRank[medal] || 0);
+      }, 0) / (careerGameOrder.length * medalRank.gold);
+      const achievementProgress = achievementDefs.length
+        ? career.achievements.length / achievementDefs.length
+        : 0;
+      return Math.round((medalProgress * 0.58 + achievementProgress * 0.42) * 100);
+    }
+
+    function arcadeDirective() {
+      const daily = getDailyChallenge();
+      const dailyDone = career.daily?.date === daily.date && career.daily?.id === daily.id;
+      if (!dailyDone) {
+        return {
+          game: daily.game,
+          tone: 'daily',
+          title: `今日挑战 · ${daily.label}`,
+          reason: '限定挑战尚未完成，优先拿下今日徽章与额外声望。'
+        };
+      }
+
+      const medalTarget = careerGameOrder
+        .map(game => {
+          const score = Number(career.best?.[game] || 0);
+          const medal = medalClass(career.medals?.[game] || medalFor(game, score));
+          return { game, score, medal, target: nextMedalTarget(game, score) };
+        })
+        .filter(item => item.target)
+        .sort((a, b) => (a.target.threshold - a.score) - (b.target.threshold - b.score))[0];
+      if (medalTarget) {
+        return {
+          game: medalTarget.game,
+          tone: 'medal',
+          title: `奖牌补完 · ${titles[medalTarget.game]}`,
+          reason: `距离${medalLabels[medalTarget.target.name]}牌还差 ${Math.max(0, medalTarget.target.threshold - medalTarget.score)} 分。`
+        };
+      }
+
+      const lowestBest = careerGameOrder
+        .map(game => ({ game, score: Number(career.best?.[game] || 0) }))
+        .sort((a, b) => a.score - b.score)[0];
+      return {
+        game: lowestBest?.game || 'survivor',
+        tone: 'mastery',
+        title: `大师循环 · ${titles[lowestBest?.game || 'survivor']}`,
+        reason: '全部奖牌目标已达成，继续刷新最低项目的个人纪录。'
+      };
+    }
+
+    function renderArcadeDirector() {
+      const panel = document.getElementById('premium-arcade-director');
+      if (!panel) return;
+      const directive = arcadeDirective();
+      const medalCount = careerGameOrder.filter(game => {
+        const score = Number(career.best?.[game] || 0);
+        return medalClass(career.medals?.[game] || medalFor(game, score)) !== 'none';
+      }).length;
+      const titleEl = document.getElementById('premium-director-title');
+      const reasonEl = document.getElementById('premium-director-reason');
+      const medalEl = document.getElementById('premium-director-medals');
+      const achievementEl = document.getElementById('premium-director-achievements');
+      const completionEl = document.getElementById('premium-director-completion');
+      const actionBtn = document.getElementById('premium-director-start');
+      panel.dataset.tone = directive.tone;
+      if (titleEl) titleEl.textContent = directive.title;
+      if (reasonEl) reasonEl.textContent = directive.reason;
+      if (medalEl) medalEl.textContent = `${medalCount}/${careerGameOrder.length}`;
+      if (achievementEl) achievementEl.textContent = `${career.achievements.length}/${achievementDefs.length}`;
+      if (completionEl) completionEl.textContent = `${arcadeCompletionPercent()}%`;
+      if (actionBtn) {
+        actionBtn.dataset.targetGame = directive.game;
+        actionBtn.querySelector('span').textContent = directive.game === 'runner' ? '前往主线远征' : '进入推荐挑战';
+      }
+    }
+
+    function updatePremiumTabBadges() {
+      library.querySelectorAll('[data-premium-game]').forEach(btn => {
+        const game = btn.dataset.premiumGame;
+        const score = Number(career.best?.[game] || 0);
+        const medal = medalClass(career.medals?.[game] || medalFor(game, score));
+        btn.innerHTML = `
+          <span>${escapeHTML(premiumTabLabels[game] || titles[game] || game)}</span>
+          <small class="mini-game-medal-chip medal-${escapeHTML(medal)}">${escapeHTML(medalLabels[medal] || medalLabels.none)}</small>
+        `;
+      });
+      safeCreateIcons();
+    }
+
     function renderCareerDialog() {
       const summary = document.getElementById('premium-career-summary');
       const dailyEl = document.getElementById('premium-career-dialog-daily');
@@ -4177,7 +4309,6 @@ function init() {
       const daily = getDailyChallenge();
       const completedDaily = career.daily?.date === daily.date && career.daily?.id === daily.id;
       const unlockedCount = career.achievements.length;
-      const gameOrder = ['runner', 'survivor', 'boss', 'drift', 'heist', 'chain', 'tactics'];
 
       if (summary) {
         summary.textContent = `${careerRating()} · 总声望 ${career.totalScore || 0} · 已解锁 ${unlockedCount}/${achievementDefs.length} 项成就`;
@@ -4191,7 +4322,7 @@ function init() {
         dailyEl.classList.toggle('is-complete', completedDaily);
       }
       if (medalsEl) {
-        medalsEl.innerHTML = gameOrder.map(game => {
+        medalsEl.innerHTML = careerGameOrder.map(game => {
           const score = Number(career.best?.[game] || 0);
           const medal = medalClass(career.medals?.[game] || medalFor(game, score));
           return `
@@ -4239,6 +4370,8 @@ function init() {
           : '完成后解锁限定徽章';
       }
       renderAchievementFeed();
+      renderArcadeDirector();
+      updatePremiumTabBadges();
       renderCareerDialog();
     }
 
@@ -4340,6 +4473,19 @@ function init() {
       if (name === 'drift') drawDrift();
       focusStage();
     }
+
+    function launchDirectorChallenge() {
+      const target = document.getElementById('premium-director-start')?.dataset.targetGame || arcadeDirective().game;
+      if (target === 'runner') {
+        document.querySelector('.arcade-cabinet-bezel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        showToast('已定位到主线远征，请按 Enter 或 START 开始挑战', 'info');
+        return;
+      }
+      switchPremiumGame(target);
+      showToast(`已锁定推荐挑战：${titles[target] || target}`, 'success');
+    }
+
+    document.getElementById('premium-director-start')?.addEventListener('click', launchDirectorChallenge);
 
     library.querySelectorAll('[data-premium-game]').forEach(btn => {
       btn.addEventListener('click', () => switchPremiumGame(btn.dataset.premiumGame));

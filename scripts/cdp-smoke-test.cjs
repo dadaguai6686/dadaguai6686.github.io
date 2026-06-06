@@ -504,7 +504,15 @@ async function run() {
     premium: !!document.querySelector('#premium-game-stage'),
     careerPanel: !!document.querySelector('#premium-career-rating'),
     dailyChallenge: document.querySelector('#premium-daily-challenge')?.textContent || '',
+    directorPanel: !!document.querySelector('#premium-arcade-director'),
+    directorTarget: document.querySelector('#premium-director-start')?.dataset.targetGame || '',
+    directorTitle: document.querySelector('#premium-director-title')?.textContent || '',
+    directorReason: document.querySelector('#premium-director-reason')?.textContent || '',
+    directorMedals: document.querySelector('#premium-director-medals')?.textContent || '',
+    directorAchievements: document.querySelector('#premium-director-achievements')?.textContent || '',
+    directorCompletion: document.querySelector('#premium-director-completion')?.textContent || '',
     premiumTabs: document.querySelectorAll('[data-premium-game]').length,
+    tabBadges: document.querySelectorAll('.mini-game-medal-chip').length,
     driftPanel: !!document.querySelector('#premium-drift-canvas'),
     tacticsPanel: !!document.querySelector('#premium-tactics-canvas'),
     oldPrototypeCount: document.querySelectorAll('#snake-canvas,#breakout-canvas,#tile-board,#memory-board').length,
@@ -512,6 +520,18 @@ async function run() {
     chainCells: document.querySelectorAll('#premium-chain-board .chain-cell').length,
     chainTarget: document.querySelector('#premium-chain-target')?.textContent
   }))()`);
+  await click('#premium-director-start');
+  await wait(220);
+  const directorLaunchState = await evaluate(`(() => ({
+    target: document.querySelector('#premium-director-start')?.dataset.targetGame || '',
+    active: window.__atherixDebug?.premium?.active?.() || '',
+    activeTitle: document.querySelector('#premium-active-title')?.textContent || '',
+    gameScrollY: Math.round(window.scrollY),
+    toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || '',
+    horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+  }))()`);
+  await click('[data-premium-game="survivor"]');
+  await wait(120);
 
   await click('#premium-survivor-start');
   await wait(900);
@@ -809,6 +829,8 @@ async function run() {
   assert(arcadeInitial.premium && arcadeInitial.careerPanel, 'premium arcade career panel should render');
   assert(arcadeInitial.oldPrototypeCount === 0, 'old prototype mini-games should be replaced');
   assert(arcadeInitial.premiumTabs >= 6 && arcadeInitial.driftPanel && arcadeInitial.tacticsPanel, 'premium arcade should include drift and tactics modes');
+  assert(arcadeInitial.directorPanel && arcadeInitial.directorTarget && arcadeInitial.directorTitle.length > 5 && arcadeInitial.directorReason.length > 10 && /^\d+%$/.test(arcadeInitial.directorCompletion) && arcadeInitial.tabBadges >= 6, `premium arcade director should render actionable progression guidance: ${JSON.stringify(arcadeInitial)}`);
+  assert(['runner', 'survivor', 'boss', 'drift', 'heist', 'chain', 'tactics'].includes(directorLaunchState.target) && (directorLaunchState.target === 'runner' || directorLaunchState.active === directorLaunchState.target) && !directorLaunchState.horizontalOverflow, `premium arcade director should launch the recommended target: ${JSON.stringify(directorLaunchState)}`);
   assert(arcadeInitial.touchControls >= 5, 'premium touch controls should be available');
   assert(survivorState.nonBlank && survivorState.threat, 'survivor canvas should render active state');
   assert(bossState.nonBlank && bossState.dash, 'boss canvas should render active state');
@@ -867,6 +889,7 @@ async function run() {
     runnerTouchState,
     runnerMobileState,
     arcadeInitial,
+    directorLaunchState,
     survivorState,
     bossState,
     bossPauseState,

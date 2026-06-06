@@ -1,9 +1,9 @@
-const CACHE_VERSION = 'atherix-static-v11-reader-tools';
+const CACHE_VERSION = 'atherix-static-v12-arcade-director';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/style.css?v=20260606-reader-tools-v1',
-  '/app.js?v=20260606-reader-tools-v1',
+  '/style.css?v=20260606-arcade-director-v1',
+  '/app.js?v=20260606-arcade-director-v1',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',

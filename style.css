@@ -3854,6 +3854,127 @@ body.command-open {
   background: rgba(148, 163, 184, 0.08);
 }
 
+.arcade-director-panel {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.2fr) minmax(230px, 0.85fr) auto;
+  align-items: center;
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem;
+  border: 1px solid rgba(34, 211, 238, 0.2);
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, 0.12), rgba(251, 191, 36, 0.07)),
+    rgba(3, 7, 18, 0.54);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.arcade-director-panel[data-tone="medal"] {
+  border-color: rgba(251, 191, 36, 0.26);
+  background:
+    linear-gradient(135deg, rgba(251, 191, 36, 0.12), rgba(139, 92, 246, 0.08)),
+    rgba(3, 7, 18, 0.54);
+}
+
+.arcade-director-panel[data-tone="mastery"] {
+  border-color: rgba(52, 211, 153, 0.24);
+  background:
+    linear-gradient(135deg, rgba(52, 211, 153, 0.12), rgba(6, 182, 212, 0.08)),
+    rgba(3, 7, 18, 0.54);
+}
+
+.arcade-director-main {
+  min-width: 0;
+}
+
+.arcade-director-main span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.35rem;
+  color: #bae6fd;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.arcade-director-main svg {
+  width: 14px;
+  height: 14px;
+}
+
+.arcade-director-main strong {
+  display: block;
+  color: #fff;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.05rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.arcade-director-main small {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.arcade-director-meters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.arcade-director-meters span {
+  min-height: 44px;
+  padding: 0.48rem 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.arcade-director-meters strong {
+  display: block;
+  margin-top: 0.16rem;
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82rem;
+}
+
+.arcade-director-action {
+  min-height: 42px;
+  padding: 0 0.85rem;
+  border: 1px solid rgba(34, 211, 238, 0.34);
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.18), rgba(139, 92, 246, 0.24));
+  color: #f8fafc;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 900;
+  white-space: nowrap;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.arcade-director-action:hover,
+.arcade-director-action:focus-visible {
+  border-color: rgba(52, 211, 153, 0.6);
+  box-shadow: 0 12px 28px rgba(6, 182, 212, 0.16);
+  transform: translateY(-1px);
+}
+
+.arcade-director-action svg {
+  width: 15px;
+  height: 15px;
+}
+
 .premium-career-dialog {
   position: fixed;
   inset: 0;
@@ -4087,6 +4208,9 @@ body.command-open {
   padding: 0.48rem 0.85rem;
   font-weight: 700;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
   transition: all 0.2s ease;
 }
 
@@ -4096,6 +4220,40 @@ body.command-open {
   border-color: transparent;
   background: var(--accent-gradient);
   box-shadow: 0 8px 20px rgba(139, 92, 246, 0.18);
+}
+
+.mini-game-medal-chip {
+  min-width: 22px;
+  padding: 0.08rem 0.32rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.42);
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.mini-game-tab.active .mini-game-medal-chip {
+  background: rgba(15, 23, 42, 0.58);
+  color: #fff;
+}
+
+.mini-game-medal-chip.medal-bronze {
+  border-color: rgba(251, 146, 60, 0.38);
+  color: #fed7aa;
+}
+
+.mini-game-medal-chip.medal-silver {
+  border-color: rgba(226, 232, 240, 0.38);
+  color: #e2e8f0;
+}
+
+.mini-game-medal-chip.medal-gold {
+  border-color: rgba(251, 191, 36, 0.46);
+  color: #fde68a;
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.18);
 }
 
 .mini-game-stage {
@@ -4347,6 +4505,16 @@ body.command-open {
   }
   .arcade-career-panel {
     grid-template-columns: 1fr;
+  }
+  .arcade-director-panel {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+  .arcade-director-meters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .arcade-director-action {
+    width: 100%;
   }
   .premium-career-card {
     width: min(96vw, 560px);
