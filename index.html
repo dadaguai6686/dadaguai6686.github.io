@@ -352,6 +352,21 @@
             <span id="reader-post-readtime">5 mins read</span>
           </div>
           <h1 class="reader-title" id="reader-post-title">Article Title</h1>
+          <div class="reader-toolbar" aria-label="阅读工具">
+            <div class="reader-progress-pill">
+              <span>阅读进度</span>
+              <strong id="reader-progress-percent">0%</strong>
+            </div>
+            <button type="button" class="reader-tool-btn" id="reader-copy-link-btn">
+              <i data-lucide="link-2"></i>
+              复制链接
+            </button>
+            <button type="button" class="reader-tool-btn" id="reader-bookmark-btn" aria-pressed="false">
+              <i data-lucide="bookmark"></i>
+              稍后读
+            </button>
+          </div>
+          <nav class="reader-toc" id="reader-toc" aria-label="文章目录"></nav>
         </div>
         <article class="reader-content font-rich" id="reader-post-content">
           <!-- Populated by app.js -->

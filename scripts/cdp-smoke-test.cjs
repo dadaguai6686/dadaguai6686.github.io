@@ -6,10 +6,12 @@ const path = require('path');
 const requestedAppUrl = process.env.SMOKE_URL || '';
 const managedAppPort = Number(process.env.SMOKE_PORT || (4300 + Math.floor(Math.random() * 700)));
 const appUrl = requestedAppUrl || `http://127.0.0.1:${managedAppPort}`;
-const cdpPort = Number(process.env.CDP_PORT || 9480);
+const usesExternalCdp = Boolean(process.env.CDP_PORT);
+const cdpPort = Number(process.env.CDP_PORT || (9400 + Math.floor(Math.random() * 900)));
 const edgePath = process.env.EDGE_PATH || 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 let activeAppServer = null;
 let activeAppTempDir = '';
+let activeBrowserProcess = null;
 
 function wait(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -50,15 +52,15 @@ function startHeadlessEdge() {
     `--remote-debugging-port=${cdpPort}`,
     `--user-data-dir=${profile}`,
     '--disable-gpu',
+    '--disable-dev-shm-usage',
     '--no-first-run',
     '--no-default-browser-check',
     'about:blank'
   ], {
-    detached: true,
     stdio: 'ignore',
     windowsHide: true
   });
-  child.unref();
+  activeBrowserProcess = child;
   return child;
 }
 
@@ -99,6 +101,18 @@ async function cleanupAppServer() {
   activeAppTempDir = '';
 }
 
+async function cleanupBrowserProcess() {
+  const child = activeBrowserProcess;
+  activeBrowserProcess = null;
+  if (child && !child.killed) {
+    child.kill();
+    await Promise.race([
+      new Promise(resolve => child.once('exit', resolve)),
+      wait(1500)
+    ]);
+  }
+}
+
 async function waitForAppServer() {
   const deadline = Date.now() + 15000;
   let lastError;
@@ -130,12 +144,18 @@ async function run() {
   }
 
   let ws = null;
-  try {
-    await waitForCdp();
-  } catch {
+  if (!usesExternalCdp) {
     startHeadlessEdge();
     launched = true;
     await waitForCdp();
+  } else {
+    try {
+      await waitForCdp();
+    } catch {
+      startHeadlessEdge();
+      launched = true;
+      await waitForCdp();
+    }
   }
 
   const target = await cdpJson(`/json/new?${encodeURIComponent(appUrl)}`, { method: 'PUT' });
@@ -218,21 +238,39 @@ async function run() {
 
   await send('Runtime.enable');
   await send('Page.enable');
-  await wait(1800);
+  await waitFor('.nav-item[data-target="blog"]', 12000);
 
   await click('.nav-item[data-target="blog"]');
   await waitFor('.blog-post-card');
   await click('.blog-post-card');
-  await wait(700);
+  await waitFor('#reader-post-content h2');
+  await click('#reader-bookmark-btn');
+  await wait(150);
+  await evaluate(`window.scrollTo(0, document.body.scrollHeight)`);
+  await wait(250);
   const blogState = await evaluate(`(() => ({
     hash: location.hash,
     visibleArticle: document.querySelector('#blog-reader')?.classList.contains('active') && !!document.querySelector('#reader-post-content')?.innerText.trim(),
-    articleChars: document.querySelector('#reader-post-content')?.innerText.trim().length || 0
+    articleChars: document.querySelector('#reader-post-content')?.innerText.trim().length || 0,
+    toolbar: !!document.querySelector('#reader-copy-link-btn') && !!document.querySelector('#reader-bookmark-btn'),
+    bookmarkPressed: document.querySelector('#reader-bookmark-btn')?.getAttribute('aria-pressed') === 'true',
+    progress: document.querySelector('#reader-progress-percent')?.textContent || '',
+    tocActive: document.querySelector('#reader-toc')?.classList.contains('active') || false,
+    tocLinks: document.querySelectorAll('#reader-toc a').length
   }))()`);
 
   await click('.nav-item[data-target="projects"]');
   await waitFor('.project-card');
-  await wait(300);
+  await wait(650);
+  const projectViewportState = await evaluate(`(() => {
+    const section = document.querySelector('#projects');
+    const rect = section?.getBoundingClientRect();
+    return {
+      scrollY: Math.round(window.scrollY),
+      sectionTop: rect ? Math.round(rect.top) : null,
+      sectionVisible: !!rect && rect.bottom > 0 && rect.top < window.innerHeight
+    };
+  })()`);
   await click('.modal-trigger-btn');
   await wait(250);
   const projectState = await evaluate(`(() => ({
@@ -245,6 +283,15 @@ async function run() {
 
   await click('.nav-item[data-target="game"]');
   await wait(600);
+  const gameViewportState = await evaluate(`(() => {
+    const section = document.querySelector('#game');
+    const rect = section?.getBoundingClientRect();
+    return {
+      scrollY: Math.round(window.scrollY),
+      sectionTop: rect ? Math.round(rect.top) : null,
+      sectionVisible: !!rect && rect.bottom > 0 && rect.top < window.innerHeight
+    };
+  })()`);
   const mainOverlayBeforeSpace = await evaluate(`document.querySelector('#game-overlay-screen')?.style.display || ''`);
   await key('keyDown', ' ', 'Space');
   await key('keyUp', ' ', 'Space');
@@ -350,9 +397,20 @@ async function run() {
   })()`, 10000);
 
   assert(blogState.visibleArticle && blogState.articleChars > 100, 'blog reader should open a populated article');
+  assert(blogState.toolbar && blogState.bookmarkPressed, 'blog reader toolbar should render and toggle bookmark state');
+  assert(blogState.tocActive && blogState.tocLinks >= 2, 'blog reader should build a table of contents from article headings');
+  assert(/^\d+%$/.test(blogState.progress), 'blog reader should report reading progress');
+  assert(
+    projectViewportState.scrollY <= 80 && projectViewportState.sectionVisible,
+    `project navigation should reset scroll into visible content: ${JSON.stringify(projectViewportState)}`
+  );
   assert(projectState.cards >= 1, 'project cards should render');
   assert(projectState.disabledLiveButtons >= 1 && projectState.modalLiveDisabled, 'projects without demos should render disabled live actions');
   assert(projectState.fakeHashLinks === 0, 'project cards should not convert placeholder live links into fake hash URLs');
+  assert(
+    gameViewportState.scrollY <= 80 && gameViewportState.sectionVisible,
+    `game navigation should reset scroll into visible content: ${JSON.stringify(gameViewportState)}`
+  );
   assert(mainSpaceState.overlayBefore === 'flex' && mainSpaceState.overlayAfter === 'flex', 'Space should not start/retry the main game overlay');
   assert(arcadeInitial.premium && arcadeInitial.careerPanel, 'premium arcade career panel should render');
   assert(arcadeInitial.oldPrototypeCount === 0, 'old prototype mini-games should be replaced');
@@ -365,14 +423,18 @@ async function run() {
   assert(pwaState.supported && pwaState.registered, 'service worker should register');
 
   await send('Page.close').catch(() => {});
+  if (launched) await send('Browser.close').catch(() => {});
   ws.close();
 
   return {
     launched,
     managedServer,
+    cdpPort,
     appUrl,
     blogState,
+    projectViewportState,
     projectState,
+    gameViewportState,
     mainSpaceState,
     arcadeInitial,
     survivorState,
@@ -385,9 +447,11 @@ async function run() {
 
 run().then(async result => {
   await cleanupAppServer();
+  await cleanupBrowserProcess();
   console.log(JSON.stringify(result, null, 2));
 }).catch(async error => {
   await cleanupAppServer();
+  await cleanupBrowserProcess();
   console.error(JSON.stringify({ failed: true, message: error.message, stack: error.stack }, null, 2));
   process.exit(1);
 });

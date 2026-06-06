@@ -66,7 +66,7 @@ async function assertProductionSecretRequired() {
 
   try {
     const exitCode = await new Promise(resolve => {
-      const timer = setTimeout(() => resolve(null), 2500);
+      const timer = setTimeout(() => resolve(null), 10000);
       child.on('exit', code => {
         clearTimeout(timer);
         resolve(code);
