@@ -109,6 +109,15 @@ export type RunStats = {
   wavesCleared: number;
 };
 
+export type RunRatingId = "S" | "A" | "B" | "C";
+
+export type RunRating = {
+  id: RunRatingId;
+  name: string;
+  description: string;
+  points: number;
+};
+
 export type ObjectiveHintKind = "menu" | "danger" | "repair" | "relay" | "lumen" | "gate";
 
 export type ObjectiveHint = {
@@ -636,6 +645,56 @@ export function getUpgradeSummary(upgrades: UpgradeState, id: UpgradeId): Upgrad
 
 export function getUpgradeSummaries(upgrades: UpgradeState): UpgradeSummary[] {
   return (Object.keys(UPGRADE_CATALOG) as UpgradeId[]).map((id) => getUpgradeSummary(upgrades, id));
+}
+
+export function getRunRating(state: GameState): RunRating {
+  let points = 0;
+  if (state.status === "completed") {
+    points += 56;
+  } else if (state.status === "won") {
+    points += 40;
+  } else if (state.status === "lost") {
+    points += state.stats.relaysRepaired * 6;
+  }
+
+  points += state.bestCombo >= 4.5 ? 18 : state.bestCombo >= 3 ? 12 : state.bestCombo >= 2 ? 6 : 0;
+  points += state.stats.hitsTaken === 0 ? 15 : state.stats.hitsTaken <= 1 ? 10 : state.stats.hitsTaken <= 3 ? 4 : 0;
+  points += state.stats.stormSeconds <= 1 ? 10 : state.stats.stormSeconds <= 4 ? 5 : 0;
+  points += state.elapsed <= state.wave * 42 ? 8 : state.elapsed <= state.wave * 58 ? 4 : 0;
+  points += state.stats.lumenCollected >= Math.max(3, state.wave * 2) ? 6 : 0;
+  points += state.player.charge > state.player.maxCharge * 0.45 ? 5 : 0;
+
+  const cappedPoints = clampInt(points, 0, 100);
+  if (cappedPoints >= 82) {
+    return {
+      id: "S",
+      name: "完美稳定",
+      description: "路线、连锁和风险控制都很出色。",
+      points: cappedPoints
+    };
+  }
+  if (cappedPoints >= 62) {
+    return {
+      id: "A",
+      name: "高效救援",
+      description: "节奏良好，还有少量提分空间。",
+      points: cappedPoints
+    };
+  }
+  if (cappedPoints >= 36) {
+    return {
+      id: "B",
+      name: "稳定完成",
+      description: "目标完成，但连锁、路线或受击还可优化。",
+      points: cappedPoints
+    };
+  }
+  return {
+    id: "C",
+    name: "信号不稳",
+    description: "先保证补给和生存，再追求速度与连锁。",
+    points: cappedPoints
+  };
 }
 
 export function getWaveModifierFor(wave: number, difficulty: DifficultyId): WaveModifierId {

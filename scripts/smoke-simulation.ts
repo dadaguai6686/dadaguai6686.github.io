@@ -5,6 +5,7 @@ import {
   WAVE_MODIFIERS,
   createInitialState,
   getObjectiveHint,
+  getRunRating,
   getUpgradeChoices,
   getUpgradeSummaries,
   getUpgradeSummary,
@@ -155,6 +156,12 @@ finalWave = movePlayerTo(finalWave, finalWave.gate.position.x, finalWave.gate.po
 finalWave = updateSimulation(finalWave, idle, 0.016);
 assert.equal(finalWave.status, "completed", "clearing the final wave should complete the campaign");
 assert.equal(finalWave.endReason, "campaignCompleted", "final wave completion should record the end reason");
+assert.equal(getRunRating(finalWave).id, "S", "clean final clears should earn a top run rating");
+const cappedRatingState = structuredClone(finalWave);
+cappedRatingState.bestCombo = 12;
+cappedRatingState.stats.lumenCollected = 99;
+cappedRatingState.player.charge = 999;
+assert.ok(getRunRating(cappedRatingState).points <= 100, "run rating points should be capped");
 finalWave.upgrades.engine = 2;
 const newCampaign = restartRun(finalWave);
 assert.equal(newCampaign.wave, 1, "restarting after completion should begin a new campaign");
@@ -167,6 +174,7 @@ drained.player.charge = 0.01;
 drained = updateSimulation(drained, idle, 0.5);
 assert.equal(drained.status, "lost", "empty charge should lose the run");
 assert.equal(drained.endReason, "chargeDepleted", "charge loss should record the end reason");
+assert.equal(getRunRating(drained).id, "C", "early lost runs should receive a low rating with advice");
 
 console.log("Simulation smoke checks passed.");
 

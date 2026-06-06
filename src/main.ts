@@ -7,6 +7,7 @@ import {
   type GameStatus,
   type ObjectiveHint,
   type RunEndReason,
+  type RunRating,
   type RunStats,
   type Upgrade,
   type UpgradeId,
@@ -72,6 +73,10 @@ const overlayTitle = overlay.querySelector<HTMLElement>("h1")!;
 const overlayCopy = overlay.querySelector<HTMLElement>("p")!;
 const howToPlay = document.querySelector<HTMLDivElement>("#how-to-play")!;
 const runRecap = document.querySelector<HTMLDivElement>("#run-recap")!;
+const recapRating = document.querySelector<HTMLDivElement>("#recap-rating")!;
+const recapRatingGrade = document.querySelector<HTMLElement>("#recap-rating-grade")!;
+const recapRatingName = document.querySelector<HTMLElement>("#recap-rating-name")!;
+const recapRatingDetail = document.querySelector<HTMLElement>("#recap-rating-detail")!;
 const recapMetrics = document.querySelector<HTMLDivElement>("#recap-metrics")!;
 const recapAdvice = document.querySelector<HTMLElement>("#recap-advice")!;
 const touchStick = document.querySelector<HTMLDivElement>("#touch-stick")!;
@@ -96,6 +101,7 @@ type RunEndDetail = {
   endReason: RunEndReason;
   hull: number;
   message: string;
+  rating: RunRating;
   score: number;
   stats: RunStats;
   status: "won" | "completed" | "lost";
@@ -432,6 +438,10 @@ function persistRunResult(status: "won" | "completed" | "lost"): void {
 }
 
 function renderRunRecap(detail: RunEndDetail): void {
+  recapRating.dataset.grade = detail.rating.id;
+  recapRatingGrade.textContent = detail.rating.id;
+  recapRatingName.textContent = detail.rating.name;
+  recapRatingDetail.textContent = `${detail.rating.points}/100 · ${detail.rating.description}`;
   const metrics: Array<[string, string]> = [
     ["分数", detail.score.toLocaleString()],
     ["波次", `${detail.wave}/5`],

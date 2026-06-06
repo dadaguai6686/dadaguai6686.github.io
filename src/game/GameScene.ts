@@ -3,6 +3,7 @@ import { InputMapper } from "./input";
 import {
   createInitialState,
   getObjectiveHint,
+  getRunRating,
   getStormActiveRadius,
   getUpgradeChoices,
   getUpgradeSummaries,
@@ -16,6 +17,7 @@ import {
   type Hazard,
   type Lumen,
   type ObjectiveHint,
+  type RunRating,
   type Relay,
   type RunEndReason,
   type RunStats,
@@ -49,6 +51,16 @@ type HudSnapshot = {
   upgradeChoices: Upgrade[];
 };
 
+type FeedbackKind = "boost" | "hit" | "loss" | "pickup" | "pulse" | "repair" | "win";
+
+type FeedbackCue = {
+  kind: FeedbackKind;
+  text: string;
+  position: { x: number; y: number };
+  color: number;
+  scale?: number;
+};
+
 export class GameScene extends Phaser.Scene {
   private state: GameState = createInitialState();
   private inputMapper?: InputMapper;
@@ -74,8 +86,8 @@ export class GameScene extends Phaser.Scene {
   update(_: number, deltaMs: number): void {
     if (!this.inputMapper) return;
     const previousStatus = this.state.status;
-    const previousCollected = this.state.lumen.filter((drop) => drop.collected).length;
-    const previousRepaired = this.state.relays.filter((relay) => relay.repaired).length;
+    const previousCollectedIds = new Set(this.state.lumen.filter((drop) => drop.collected).map((drop) => drop.id));
+    const previousRepairedIds = new Set(this.state.relays.filter((relay) => relay.repaired).map((relay) => relay.id));
     const previousHull = this.state.player.hull;
     const previousBoostCooldown = this.state.player.boostCooldown;
     const previousPulseCooldown = this.state.player.pulseCooldown;
@@ -85,10 +97,10 @@ export class GameScene extends Phaser.Scene {
     this.emitHud();
     this.emitFeedback({
       previousBoostCooldown,
-      previousCollected,
+      previousCollectedIds,
       previousHull,
       previousPulseCooldown,
-      previousRepaired,
+      previousRepairedIds,
       previousStatus
     });
     if (previousStatus === "playing" && this.state.status !== "playing") {
@@ -102,6 +114,7 @@ export class GameScene extends Phaser.Scene {
             endReason: this.state.endReason as RunEndReason,
             hull: this.state.player.hull,
             message: this.state.message,
+            rating: getRunRating(this.state) as RunRating,
             score: this.state.score,
             stats: this.state.stats as RunStats,
             status: this.state.status,
@@ -417,40 +430,125 @@ export class GameScene extends Phaser.Scene {
 
   private emitFeedback(previous: {
     previousBoostCooldown: number;
-    previousCollected: number;
+    previousCollectedIds: Set<number>;
     previousHull: number;
     previousPulseCooldown: number;
-    previousRepaired: number;
+    previousRepairedIds: Set<number>;
     previousStatus: GameState["status"];
   }): void {
     if (previous.previousStatus !== "playing") return;
-    const collected = this.state.lumen.filter((drop) => drop.collected).length;
-    const repaired = this.state.relays.filter((relay) => relay.repaired).length;
+    const newlyCollected = this.state.lumen.filter(
+      (drop) => drop.collected && !previous.previousCollectedIds.has(drop.id)
+    );
+    const newlyRepaired = this.state.relays.filter(
+      (relay) => relay.repaired && !previous.previousRepairedIds.has(relay.id)
+    );
     if (previous.previousBoostCooldown <= 0 && this.state.player.boostCooldown > 0) {
-      this.dispatchFeedback("boost");
+      this.dispatchFeedback({
+        kind: "boost",
+        text: "推进",
+        position: this.state.player.position,
+        color: 0x67f4ff
+      });
     }
     if (previous.previousPulseCooldown <= 0 && this.state.player.pulseCooldown > 0) {
-      this.dispatchFeedback("pulse");
+      this.dispatchFeedback({
+        kind: "pulse",
+        text: "脉冲",
+        position: this.state.player.position,
+        color: 0xb388ff,
+        scale: 1.15
+      });
     }
-    if (collected > previous.previousCollected) {
-      this.dispatchFeedback("pickup");
-    }
-    if (repaired > previous.previousRepaired) {
-      this.dispatchFeedback("repair");
-    }
+    newlyCollected.forEach((drop) => {
+      this.dispatchFeedback({
+        kind: "pickup",
+        text: "+流明",
+        position: drop.position,
+        color: 0xffd76e
+      });
+    });
+    newlyRepaired.forEach((relay) => {
+      this.dispatchFeedback({
+        kind: "repair",
+        text: "信标修复",
+        position: relay.position,
+        color: 0xffffff,
+        scale: 1.1
+      });
+    });
     if (previous.previousHull - this.state.player.hull >= 5) {
-      this.dispatchFeedback("hit");
+      this.dispatchFeedback({
+        kind: "hit",
+        text: "受击",
+        position: this.state.player.position,
+        color: 0xff5f9b,
+        scale: 1.18
+      });
     }
     if (this.state.status === "won" || this.state.status === "completed") {
-      this.dispatchFeedback("win");
+      this.dispatchFeedback({
+        kind: "win",
+        text: this.state.status === "completed" ? "全域稳定" : "撤离成功",
+        position: this.state.gate.position,
+        color: 0xffd76e,
+        scale: 1.22
+      });
     }
     if (this.state.status === "lost") {
-      this.dispatchFeedback("loss");
+      this.dispatchFeedback({
+        kind: "loss",
+        text: "信号中断",
+        position: this.state.player.position,
+        color: 0xff5f9b,
+        scale: 1.2
+      });
     }
   }
 
-  private dispatchFeedback(kind: string): void {
-    window.dispatchEvent(new CustomEvent("game:feedback", { detail: { kind } }));
+  private dispatchFeedback(cue: FeedbackCue): void {
+    window.dispatchEvent(new CustomEvent("game:feedback", { detail: { kind: cue.kind } }));
+    this.spawnFeedbackCue(cue);
+  }
+
+  private spawnFeedbackCue(cue: FeedbackCue): void {
+    if (!this.worldLayer) return;
+    const text = this.add.text(cue.position.x, cue.position.y - 34, cue.text, {
+      color: `#${cue.color.toString(16).padStart(6, "0")}`,
+      fontFamily: "Inter, Segoe UI, sans-serif",
+      fontSize: "18px",
+      fontStyle: "900",
+      stroke: "#07101a",
+      strokeThickness: 5
+    });
+    text.setOrigin(0.5);
+    text.setScale(cue.scale ?? 1);
+
+    const ring = this.add.graphics();
+    ring.setPosition(cue.position.x, cue.position.y);
+    ring.lineStyle(cue.kind === "hit" || cue.kind === "loss" ? 5 : 3, cue.color, 0.78);
+    ring.strokeCircle(0, 0, cue.kind === "pulse" ? 66 : cue.kind === "repair" || cue.kind === "win" ? 54 : 38);
+
+    this.worldLayer.add([ring, text]);
+    this.tweens.add({
+      targets: text,
+      y: text.y - 44,
+      alpha: 0,
+      scaleX: text.scaleX * 1.1,
+      scaleY: text.scaleY * 1.1,
+      duration: 820,
+      ease: "Cubic.easeOut",
+      onComplete: () => text.destroy()
+    });
+    this.tweens.add({
+      targets: ring,
+      alpha: 0,
+      scaleX: cue.kind === "pulse" ? 2.25 : 1.7,
+      scaleY: cue.kind === "pulse" ? 2.25 : 1.7,
+      duration: cue.kind === "pulse" ? 680 : 560,
+      ease: "Cubic.easeOut",
+      onComplete: () => ring.destroy()
+    });
   }
 
   private renderNavigator(): void {
