@@ -1794,6 +1794,11 @@ main {
   transform: translateY(-1px);
 }
 
+.reader-tool-btn:focus-visible {
+  outline: 2px solid rgba(34, 211, 238, 0.75);
+  outline-offset: 3px;
+}
+
 .reader-tool-btn svg {
   width: 15px;
   height: 15px;
@@ -1839,6 +1844,41 @@ main {
   color: var(--text-primary);
   max-width: 72ch;
   margin: 0 auto;
+}
+
+.blog-reader-view.reader-focus-mode {
+  max-width: min(1060px, calc(100vw - 2rem));
+  border-color: rgba(34, 211, 238, 0.26);
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, 0.08), transparent 30%),
+    linear-gradient(315deg, rgba(245, 158, 11, 0.07), transparent 34%),
+    rgba(11, 18, 32, 0.78);
+  box-shadow:
+    0 28px 90px rgba(2, 6, 23, 0.46),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.blog-reader-view.reader-focus-mode .reader-header {
+  border-bottom-color: rgba(34, 211, 238, 0.18);
+}
+
+.blog-reader-view.reader-focus-mode .reader-title {
+  max-width: 22ch;
+}
+
+.blog-reader-view.reader-focus-mode .reader-content {
+  max-width: 78ch;
+  font-size: 1.08rem;
+  line-height: 1.95;
+}
+
+.blog-reader-view.reader-focus-mode .reader-content p {
+  margin-bottom: 1.35rem;
+}
+
+.blog-reader-view.reader-focus-mode .reader-content blockquote {
+  border-left-color: #22d3ee;
+  background: rgba(34, 211, 238, 0.07);
 }
 
 .reader-content p {
@@ -2674,6 +2714,14 @@ body.command-open {
   }
   .reader-content {
     line-height: 1.75;
+  }
+  .blog-reader-view.reader-focus-mode {
+    max-width: 100%;
+    padding: 1.25rem;
+  }
+  .blog-reader-view.reader-focus-mode .reader-content {
+    font-size: 1rem;
+    line-height: 1.78;
   }
   .json-io-container {
     grid-template-columns: 1fr;

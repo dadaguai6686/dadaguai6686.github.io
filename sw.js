@@ -1,9 +1,9 @@
-const CACHE_VERSION = 'atherix-static-v10-reader-hub';
+const CACHE_VERSION = 'atherix-static-v11-reader-tools';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/style.css?v=20260606-reader-hub-v1',
-  '/app.js?v=20260606-reader-hub-v1',
+  '/style.css?v=20260606-reader-tools-v1',
+  '/app.js?v=20260606-reader-tools-v1',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',

@@ -22,7 +22,7 @@
   <link rel="canonical" href="https://dadaguai6686.github.io/">
   <link rel="alternate" type="application/rss+xml" title="Atherix Digital Space Feed" href="https://dadaguai6686.github.io/feed.xml">
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="style.css?v=20260606-reader-hub-v1">
+  <link rel="stylesheet" href="style.css?v=20260606-reader-tools-v1">
   <link rel="manifest" href="/manifest.webmanifest">
   <!-- Lucide Icons Local -->
   <script src="lucide.min.js"></script>
@@ -397,9 +397,21 @@
               <i data-lucide="link-2"></i>
               复制链接
             </button>
+            <button type="button" class="reader-tool-btn" id="reader-share-btn">
+              <i data-lucide="share-2"></i>
+              分享
+            </button>
             <button type="button" class="reader-tool-btn" id="reader-bookmark-btn" aria-pressed="false">
               <i data-lucide="bookmark"></i>
               稍后读
+            </button>
+            <button type="button" class="reader-tool-btn" id="reader-mode-btn" aria-pressed="false">
+              <i data-lucide="maximize-2"></i>
+              沉浸阅读
+            </button>
+            <button type="button" class="reader-tool-btn" id="reader-export-md-btn">
+              <i data-lucide="file-down"></i>
+              导出 MD
             </button>
           </div>
           <nav class="reader-toc" id="reader-toc" aria-label="文章目录"></nav>
@@ -1291,6 +1303,6 @@
   <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <!-- Main JavaScript File -->
-  <script src="app.js?v=20260606-reader-hub-v1"></script>
+  <script src="app.js?v=20260606-reader-tools-v1"></script>
 </body>
 </html>

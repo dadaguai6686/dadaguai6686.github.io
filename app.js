@@ -1141,7 +1141,11 @@ function init() {
   const readerToc = document.getElementById('reader-toc');
   const readerProgressPercent = document.getElementById('reader-progress-percent');
   const readerCopyLinkBtn = document.getElementById('reader-copy-link-btn');
+  const readerShareBtn = document.getElementById('reader-share-btn');
   const readerBookmarkBtn = document.getElementById('reader-bookmark-btn');
+  const readerModeBtn = document.getElementById('reader-mode-btn');
+  const readerExportMdBtn = document.getElementById('reader-export-md-btn');
+  const readerFocusModeKey = 'atherix_reader_focus_mode';
   let readerProgressFrame = 0;
 
   // Blog creation modals and controls
@@ -1263,6 +1267,114 @@ function init() {
     }
   }
 
+  function getCurrentReaderPost() {
+    return blogPosts.find(post => post.id === currentPostId) || null;
+  }
+
+  function currentArticleLink(postId = currentPostId) {
+    return `${window.location.origin}${window.location.pathname}#post/${encodeURIComponent(postId || '')}`;
+  }
+
+  function getReaderFocusMode() {
+    try {
+      return localStorage.getItem(readerFocusModeKey) === 'enabled';
+    } catch {
+      return false;
+    }
+  }
+
+  function setReaderFocusMode(enabled, { persist = true } = {}) {
+    const active = Boolean(enabled);
+    if (blogReaderCard) blogReaderCard.classList.toggle('reader-focus-mode', active);
+    if (readerModeBtn) {
+      readerModeBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
+      readerModeBtn.innerHTML = active
+        ? '<i data-lucide="minimize-2"></i> 标准阅读'
+        : '<i data-lucide="maximize-2"></i> 沉浸阅读';
+    }
+    if (persist) {
+      try {
+        localStorage.setItem(readerFocusModeKey, active ? 'enabled' : 'disabled');
+      } catch (err) {
+        console.warn('Could not save reader focus mode:', err.message);
+      }
+    }
+    safeCreateIcons();
+  }
+
+  function getArticleFilename(post) {
+    const slug = String(post?.title || post?.id || 'atherix-article')
+      .trim()
+      .replace(/[\\/:*?"<>|#%{}^~\[\]`]/g, '')
+      .replace(/\s+/g, '-')
+      .slice(0, 72);
+    return `${slug || 'atherix-article'}.md`;
+  }
+
+  function buildArticleMarkdown(post) {
+    const title = post?.title || '未命名文章';
+    const metadata = [
+      post?.tag || '未分类',
+      post?.date || '',
+      post?.readTime || ''
+    ].filter(Boolean).join(' · ');
+    const content = String(post?.content || '').replace(/^#\s+.+\n+/, '').trim();
+    return [
+      `# ${title}`,
+      '',
+      metadata ? `> ${metadata}` : '',
+      `> 原文链接: ${currentArticleLink(post?.id || currentPostId)}`,
+      '',
+      content
+    ].filter((line, index, lines) => line || lines[index - 1] !== '').join('\n');
+  }
+
+  function exportCurrentArticleMarkdown() {
+    const post = getCurrentReaderPost();
+    if (!post) {
+      showToast('没有可导出的文章', 'warning');
+      return;
+    }
+    const blob = new Blob([buildArticleMarkdown(post)], { type: 'text/markdown;charset=utf-8' });
+    const a = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    a.href = url;
+    a.download = getArticleFilename(post);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast('Markdown 已导出', 'success');
+  }
+
+  async function shareCurrentArticle() {
+    const post = getCurrentReaderPost();
+    if (!post) {
+      showToast('没有可分享的文章', 'warning');
+      return;
+    }
+    const link = currentArticleLink(post.id);
+    const shareData = {
+      title: post.title || 'Atherix 文章',
+      text: post.excerpt || `${post.tag || 'Atherix'} · ${post.readTime || '阅读'}`,
+      url: link
+    };
+
+    if (navigator.share) {
+      try {
+        if (!navigator.canShare || navigator.canShare(shareData)) {
+          await navigator.share(shareData);
+          showToast('分享面板已打开', 'success');
+          return;
+        }
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        console.warn('Native share failed, falling back to copy:', err.message);
+      }
+    }
+    copyText(link, '分享链接已复制');
+  }
+
   function updateReaderBookmarkState() {
     if (!readerBookmarkBtn || !currentPostId) return;
     const isSaved = getReaderBookmarks().includes(currentPostId);
@@ -1370,6 +1482,7 @@ function init() {
     currentPostId = post.id;
     buildReaderToc(post.id);
     updateReaderBookmarkState();
+    setReaderFocusMode(getReaderFocusMode(), { persist: false });
     navigateTo('blog-reader', { postId: post.id });
 
     if (blogReaderCard) {
@@ -1394,9 +1507,12 @@ function init() {
   if (readerCopyLinkBtn) {
     readerCopyLinkBtn.addEventListener('click', () => {
       if (!currentPostId) return;
-      const link = `${window.location.origin}${window.location.pathname}#post/${encodeURIComponent(currentPostId)}`;
-      copyText(link, '文章链接已复制');
+      copyText(currentArticleLink(), '文章链接已复制');
     });
+  }
+
+  if (readerShareBtn) {
+    readerShareBtn.addEventListener('click', shareCurrentArticle);
   }
 
   if (readerBookmarkBtn) {
@@ -1415,6 +1531,17 @@ function init() {
       updateBlogInsightPanel();
       renderBlogList();
     });
+  }
+
+  if (readerModeBtn) {
+    setReaderFocusMode(getReaderFocusMode(), { persist: false });
+    readerModeBtn.addEventListener('click', () => {
+      setReaderFocusMode(readerModeBtn.getAttribute('aria-pressed') !== 'true');
+    });
+  }
+
+  if (readerExportMdBtn) {
+    readerExportMdBtn.addEventListener('click', exportCurrentArticleMarkdown);
   }
 
   window.addEventListener('scroll', updateReaderProgress, { passive: true });

@@ -308,7 +308,13 @@ async function run() {
     hash: location.hash,
     visibleArticle: document.querySelector('#blog-reader')?.classList.contains('active') && !!document.querySelector('#reader-post-content')?.innerText.trim(),
     articleChars: document.querySelector('#reader-post-content')?.innerText.trim().length || 0,
-    toolbar: !!document.querySelector('#reader-copy-link-btn') && !!document.querySelector('#reader-bookmark-btn'),
+    toolbar: [
+      '#reader-copy-link-btn',
+      '#reader-share-btn',
+      '#reader-bookmark-btn',
+      '#reader-mode-btn',
+      '#reader-export-md-btn'
+    ].every(selector => !!document.querySelector(selector)),
     bookmarkPressed: document.querySelector('#reader-bookmark-btn')?.getAttribute('aria-pressed') === 'true',
     progress: document.querySelector('#reader-progress-percent')?.textContent || '',
     tocActive: document.querySelector('#reader-toc')?.classList.contains('active') || false,
@@ -318,6 +324,39 @@ async function run() {
     orderedItems: document.querySelectorAll('#reader-post-content ol li').length,
     unorderedItems: document.querySelectorAll('#reader-post-content ul li').length
   }))()`);
+  await click('#reader-mode-btn');
+  await wait(150);
+  const readerToolState = await evaluate(`(() => ({
+    shareButton: !!document.querySelector('#reader-share-btn'),
+    exportButton: !!document.querySelector('#reader-export-md-btn'),
+    modePressed: document.querySelector('#reader-mode-btn')?.getAttribute('aria-pressed') === 'true',
+    focusClass: document.querySelector('#blog-reader-card')?.classList.contains('reader-focus-mode') || false,
+    storedMode: localStorage.getItem('atherix_reader_focus_mode') || '',
+    label: document.querySelector('#reader-mode-btn')?.textContent.trim() || '',
+    horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+  }))()`);
+  const readerExportState = await evaluate(`(async () => {
+    const clicks = [];
+    let blobInfo = null;
+    const originalClick = HTMLAnchorElement.prototype.click;
+    const originalCreateObjectURL = URL.createObjectURL;
+    HTMLAnchorElement.prototype.click = function () {
+      clicks.push({ download: this.download || '', href: this.href || '' });
+    };
+    URL.createObjectURL = function (blob) {
+      blobInfo = { type: blob.type || '', size: blob.size || 0 };
+      return originalCreateObjectURL.call(URL, blob);
+    };
+    document.querySelector('#reader-export-md-btn')?.click();
+    await new Promise(resolve => setTimeout(resolve, 120));
+    HTMLAnchorElement.prototype.click = originalClick;
+    URL.createObjectURL = originalCreateObjectURL;
+    return {
+      clicks,
+      blobInfo,
+      toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || ''
+    };
+  })()`, 3000);
   await click('#reader-back-btn');
   await wait(220);
   await click('[data-reader-filter="bookmarked"]');
@@ -734,6 +773,8 @@ async function run() {
   assert(blogHubBefore.panel && blogHubBefore.total >= 1 && blogHubBefore.filters >= 3 && blogHubBefore.cards >= 1, `blog reading hub should render stats and filters: ${JSON.stringify(blogHubBefore)}`);
   assert(blogHubBefore.progressCards >= 1 && /42/.test(blogHubBefore.progressText) && !blogHubBefore.horizontalOverflow, `blog reading hub should show resumable progress without overflow: ${JSON.stringify(blogHubBefore)}`);
   assert(blogState.toolbar && blogState.bookmarkPressed, 'blog reader toolbar should render and toggle bookmark state');
+  assert(readerToolState.shareButton && readerToolState.exportButton && readerToolState.modePressed && readerToolState.focusClass && readerToolState.storedMode === 'enabled' && !readerToolState.horizontalOverflow, `blog reader tools should support focus mode without overflow: ${JSON.stringify(readerToolState)}`);
+  assert(readerExportState.clicks.length === 1 && /\.md$/i.test(readerExportState.clicks[0].download) && readerExportState.blobInfo?.size > 100 && /markdown/i.test(readerExportState.blobInfo.type), `blog reader should export the current article as markdown: ${JSON.stringify(readerExportState)}`);
   assert(blogState.tocActive && blogState.tocLinks >= 2, 'blog reader should build a table of contents from article headings');
   assert(/^\d+%$/.test(blogState.progress), 'blog reader should report reading progress');
   assert(blogHubAfterBookmark.activeFilter && blogHubAfterBookmark.bookmarkCount >= 1 && blogHubAfterBookmark.bookmarkedCards >= 1 && !blogHubAfterBookmark.horizontalOverflow, `blog reading hub should filter bookmarked articles: ${JSON.stringify(blogHubAfterBookmark)}`);
@@ -816,6 +857,8 @@ async function run() {
     commandState,
     blogHubBefore,
     blogState,
+    readerToolState,
+    readerExportState,
     blogHubAfterBookmark,
     projectViewportState,
     projectState,
