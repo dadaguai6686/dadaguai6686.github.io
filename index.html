@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Lumen Drift</title>
+    <title>流明漂航 Lumen Drift</title>
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23070910'/%3E%3Ccircle cx='32' cy='32' r='21' fill='none' stroke='%2367f4ff' stroke-width='6'/%3E%3Cpath d='M32 10 45 48 32 39 19 48Z' fill='%23ffe27a'/%3E%3C/svg%3E"
@@ -11,65 +11,86 @@
   </head>
   <body>
     <main id="shell">
-      <section id="game-wrap" aria-label="Lumen Drift game canvas"></section>
+      <section id="game-wrap" aria-label="流明漂航游戏画布"></section>
+      <div id="objective-strip">
+        <strong id="objective-title">目标：修复 4 座信标</strong>
+        <span id="objective-detail">收集金色流明补充电量，避开紫色风暴和粉色虚空碎片。</span>
+      </div>
       <aside id="hud" aria-live="polite">
         <div class="brand">
           <span class="mark"></span>
           <div>
-            <strong>Lumen Drift</strong>
-            <span>Relay repair run</span>
+            <strong>流明漂航</strong>
+            <span>Lumen Drift</span>
           </div>
         </div>
         <div class="meter-row">
-          <label>Charge</label>
+          <label>电量</label>
           <div class="meter"><i id="charge-fill"></i></div>
           <b id="charge-value">100</b>
         </div>
         <div class="meter-row">
-          <label>Hull</label>
+          <label>机体</label>
           <div class="meter hull"><i id="hull-fill"></i></div>
           <b id="hull-value">100</b>
         </div>
         <dl class="stats">
-          <div><dt>Relays</dt><dd id="relay-value">0/4</dd></div>
-          <div><dt>Lumen</dt><dd id="lumen-value">0</dd></div>
-          <div><dt>Wave</dt><dd id="wave-value">1</dd></div>
-          <div><dt>Score</dt><dd id="score-value">0</dd></div>
-          <div><dt>Chain</dt><dd id="combo-value">1.0x</dd></div>
-          <div><dt>Best</dt><dd id="best-combo-value">1.0x</dd></div>
+          <div><dt>信标</dt><dd id="relay-value">0/4</dd></div>
+          <div><dt>流明</dt><dd id="lumen-value">0</dd></div>
+          <div><dt>波次</dt><dd id="wave-value">1</dd></div>
+          <div><dt>分数</dt><dd id="score-value">0</dd></div>
+          <div><dt>连锁</dt><dd id="combo-value">1.0x</dd></div>
+          <div><dt>最佳</dt><dd id="best-combo-value">1.0x</dd></div>
         </dl>
         <div id="ability-bar">
-          <span id="boost-pill">Boost ready</span>
-          <span id="pulse-pill">Pulse ready</span>
+          <span id="boost-pill">推进就绪</span>
+          <span id="pulse-pill">脉冲就绪</span>
         </div>
-        <p id="mission-text">Repair every relay, harvest lumen, then slip through the gate.</p>
+        <p id="mission-text">修复全部信标，收集流明，最后从北侧光门撤离。</p>
+        <button id="help-button" type="button">玩法说明 / 暂停</button>
       </aside>
       <div id="overlay" class="show">
         <div class="panel">
-          <span class="eyebrow">browser arcade roguelite</span>
-          <h1>Lumen Drift</h1>
+          <span class="eyebrow">中文浏览器街机 Roguelite</span>
+          <h1>流明漂航</h1>
           <p>
-            Pilot a repair drone through a failing light network. Restore relays,
-            skim dangerous lumen trails, and outrun the void wave.
+            你是一台维修无人机。城市光网正在坍缩：修复蓝色信标、收集金色流明、
+            避开紫色风暴和粉色碎片，在电量耗尽前冲进北侧光门。
           </p>
-          <button id="start-button" type="button">Start Run</button>
+          <div id="how-to-play">
+            <article>
+              <strong>怎么玩</strong>
+              <span>靠近信标按 E 修复；修一半离开会慢慢掉进度。</span>
+            </article>
+            <article>
+              <strong>怎么得分</strong>
+              <span>连续捡流明、修信标、逃出光门会提高连锁倍率。</span>
+            </article>
+            <article>
+              <strong>怎么活下来</strong>
+              <span>Space 推进，Q 释放脉冲推开碎片；不要站在紫色风暴里。</span>
+            </article>
+          </div>
+          <button id="start-button" type="button">开始救援</button>
+          <button id="resume-button" type="button" hidden>继续游戏</button>
           <div id="upgrade-choices" hidden></div>
           <div class="keys">
-            <span>WASD / Arrows</span>
-            <span>Space Boost</span>
-            <span>E Repair</span>
-            <span>Q Pulse</span>
+            <span>WASD / 方向键 移动</span>
+            <span>Space 推进</span>
+            <span>E 修复</span>
+            <span>Q 脉冲</span>
+            <span>H 暂停说明</span>
           </div>
         </div>
       </div>
-      <div id="touch-controls" aria-label="Touch controls">
+      <div id="touch-controls" aria-label="触控操作">
         <div id="touch-stick" aria-hidden="true">
           <span></span>
         </div>
         <div class="touch-actions">
-          <button type="button" data-touch-action="repair">Repair</button>
-          <button type="button" data-touch-action="boost">Boost</button>
-          <button type="button" data-touch-action="pulse">Pulse</button>
+          <button type="button" data-touch-action="repair">修复</button>
+          <button type="button" data-touch-action="boost">推进</button>
+          <button type="button" data-touch-action="pulse">脉冲</button>
         </div>
       </div>
     </main>
