@@ -48,6 +48,7 @@ new Phaser.Game(config);
 
 const shell = document.querySelector<HTMLDivElement>("#shell")!;
 const overlay = document.querySelector<HTMLDivElement>("#overlay")!;
+const overlayPanel = overlay.querySelector<HTMLDivElement>(".panel")!;
 const objectiveTitle = document.querySelector<HTMLElement>("#objective-title")!;
 const objectiveDetail = document.querySelector<HTMLElement>("#objective-detail")!;
 const startButton = document.querySelector<HTMLButtonElement>("#start-button")!;
@@ -715,6 +716,7 @@ function showHelpOverlay(): void {
     setShellStatus(latestStatus);
   }
   overlay.classList.add("show");
+  overlayPanel.scrollTop = 0;
   achievementStrip.hidden = false;
   runHistory.hidden = true;
   updateAchievementUi();

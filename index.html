@@ -117,6 +117,20 @@
             你是一台维修无人机。城市光网正在坍缩：修复蓝色信标、收集金色流明、
             避开紫色风暴和粉色碎片，在电量耗尽前冲进北侧光门。
           </p>
+          <div id="tactical-scan" hidden aria-label="暂停战术扫描">
+            <div class="tactical-scan-head">
+              <strong>战术扫描</strong>
+              <span id="tactical-scan-summary">准备扫描</span>
+            </div>
+            <svg id="tactical-scan-map" viewBox="0 0 1000 700" role="img" aria-label="暂停时的战场目标与危险位置"></svg>
+            <div class="tactical-scan-legend">
+              <span data-kind="relay">信标</span>
+              <span data-kind="lumen">流明</span>
+              <span data-kind="hazard">碎片</span>
+              <span data-kind="storm">风暴</span>
+              <span data-kind="gate">光门</span>
+            </div>
+          </div>
           <div id="mission-brief" aria-label="核心循环">
             <strong>核心循环：补流明 → 修信标 → 撤离升级</strong>
             <span>开局先捡金色流明补电，靠近蓝色信标按住 E 修复；全部信标亮起后，从北侧光门撤离并选择升级。想冲高评级，就完成战术合约、少受击、保留电量和连锁。</span>
@@ -142,20 +156,6 @@
               <strong>紫色风暴</strong>
               <span>停留会快速耗电</span>
             </article>
-          </div>
-          <div id="tactical-scan" hidden aria-label="暂停战术扫描">
-            <div class="tactical-scan-head">
-              <strong>战术扫描</strong>
-              <span id="tactical-scan-summary">准备扫描</span>
-            </div>
-            <svg id="tactical-scan-map" viewBox="0 0 1000 700" role="img" aria-label="暂停时的战场目标与危险位置"></svg>
-            <div class="tactical-scan-legend">
-              <span data-kind="relay">信标</span>
-              <span data-kind="lumen">流明</span>
-              <span data-kind="hazard">碎片</span>
-              <span data-kind="storm">风暴</span>
-              <span data-kind="gate">光门</span>
-            </div>
           </div>
           <div id="menu-options">
             <div id="difficulty-picker" role="group" aria-label="选择难度">
