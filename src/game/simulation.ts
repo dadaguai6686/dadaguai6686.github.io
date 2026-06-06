@@ -118,6 +118,36 @@ export type RunRating = {
   points: number;
 };
 
+export type AchievementId =
+  | "firstRepair"
+  | "cleanWave"
+  | "lumenCollector"
+  | "stormSkipper"
+  | "perfectSignal"
+  | "fullStabilizer"
+  | "hardcoreClear";
+
+export type Achievement = {
+  id: AchievementId;
+  name: string;
+  description: string;
+  requirement: string;
+};
+
+export type AchievementSummary = Achievement & {
+  unlocked: boolean;
+};
+
+export type AchievementRunContext = {
+  bestCombo: number;
+  difficulty: DifficultyId;
+  rating: RunRating;
+  score: number;
+  stats: RunStats;
+  status: "won" | "completed" | "lost";
+  wave: number;
+};
+
 export type ObjectiveHintKind = "menu" | "danger" | "repair" | "relay" | "lumen" | "gate";
 
 export type ObjectiveHint = {
@@ -153,6 +183,51 @@ export const REPAIR_RADIUS = 76;
 export const LUMEN_PICKUP_RADIUS = 34;
 export const HAZARD_PLAYER_RADIUS = 28;
 export const HAZARD_NEAR_BUFFER = 112;
+
+export const ACHIEVEMENTS: Record<AchievementId, Achievement> = {
+  firstRepair: {
+    id: "firstRepair",
+    name: "第一束光",
+    description: "完成任意一座信标维修。",
+    requirement: "在一局中修复至少 1 座信标"
+  },
+  cleanWave: {
+    id: "cleanWave",
+    name: "无损撤离",
+    description: "稳定一波时没有被碎片击中。",
+    requirement: "胜利或通关时受击为 0"
+  },
+  lumenCollector: {
+    id: "lumenCollector",
+    name: "流明猎手",
+    description: "一局内回收大量流明。",
+    requirement: "单局回收 8 个流明"
+  },
+  stormSkipper: {
+    id: "stormSkipper",
+    name: "风暴边缘",
+    description: "稳定一波时几乎没有被风暴拖住。",
+    requirement: "胜利或通关且风暴停留不超过 1 秒"
+  },
+  perfectSignal: {
+    id: "perfectSignal",
+    name: "S 级信号",
+    description: "以 S 级评价结束一局。",
+    requirement: "获得 S 级结算"
+  },
+  fullStabilizer: {
+    id: "fullStabilizer",
+    name: "全域稳定",
+    description: "完成完整五波救援。",
+    requirement: "通关第 5 波"
+  },
+  hardcoreClear: {
+    id: "hardcoreClear",
+    name: "硬核光网",
+    description: "在硬核模式完成完整救援。",
+    requirement: "硬核模式通关"
+  }
+};
 
 export const DIFFICULTY_SETTINGS: Record<DifficultyId, Difficulty> = {
   training: {
@@ -746,6 +821,30 @@ export function getHazardThreats(state: GameState): HazardThreat[] {
       radius: hazard.radius
     };
   });
+}
+
+export function getUnlockedAchievementsForRun(context: AchievementRunContext): AchievementId[] {
+  const unlocked: AchievementId[] = [];
+  if (context.stats.relaysRepaired >= 1) unlocked.push("firstRepair");
+  if ((context.status === "won" || context.status === "completed") && context.stats.hitsTaken === 0) {
+    unlocked.push("cleanWave");
+  }
+  if (context.stats.lumenCollected >= 8) unlocked.push("lumenCollector");
+  if ((context.status === "won" || context.status === "completed") && context.stats.stormSeconds <= 1) {
+    unlocked.push("stormSkipper");
+  }
+  if (context.rating.id === "S") unlocked.push("perfectSignal");
+  if (context.status === "completed") unlocked.push("fullStabilizer");
+  if (context.status === "completed" && context.difficulty === "hardcore") unlocked.push("hardcoreClear");
+  return unlocked;
+}
+
+export function getAchievementSummaries(unlockedIds: AchievementId[]): AchievementSummary[] {
+  const unlocked = new Set(unlockedIds);
+  return (Object.keys(ACHIEVEMENTS) as AchievementId[]).map((id) => ({
+    ...ACHIEVEMENTS[id],
+    unlocked: unlocked.has(id)
+  }));
 }
 
 export function getWaveModifierFor(wave: number, difficulty: DifficultyId): WaveModifierId {

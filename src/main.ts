@@ -1,8 +1,12 @@
 import Phaser from "phaser";
 import { GameScene } from "./game/GameScene";
 import {
+  ACHIEVEMENTS,
   DIFFICULTY_SETTINGS,
   UPGRADE_CATALOG,
+  getAchievementSummaries,
+  getUnlockedAchievementsForRun,
+  type AchievementId,
   type DifficultyId,
   type GameStatus,
   type ObjectiveHint,
@@ -70,6 +74,7 @@ const resumeButton = document.querySelector<HTMLButtonElement>("#resume-button")
 const difficultyPicker = document.querySelector<HTMLDivElement>("#difficulty-picker")!;
 const difficultyButtons = document.querySelectorAll<HTMLButtonElement>("[data-difficulty]");
 const difficultyDetail = document.querySelector<HTMLElement>("#difficulty-detail")!;
+const achievementStrip = document.querySelector<HTMLDivElement>("#achievement-strip")!;
 const audioToggle = document.querySelector<HTMLButtonElement>("#audio-toggle")!;
 const overlayEyebrow = overlay.querySelector<HTMLElement>(".eyebrow")!;
 const overlayTitle = overlay.querySelector<HTMLElement>("h1")!;
@@ -81,6 +86,7 @@ const recapRatingGrade = document.querySelector<HTMLElement>("#recap-rating-grad
 const recapRatingName = document.querySelector<HTMLElement>("#recap-rating-name")!;
 const recapRatingDetail = document.querySelector<HTMLElement>("#recap-rating-detail")!;
 const recapMetrics = document.querySelector<HTMLDivElement>("#recap-metrics")!;
+const achievementUnlocks = document.querySelector<HTMLDivElement>("#achievement-unlocks")!;
 const recapAdvice = document.querySelector<HTMLElement>("#recap-advice")!;
 const touchStick = document.querySelector<HTMLDivElement>("#touch-stick")!;
 const touchStickKnob = document.querySelector<HTMLSpanElement>("#touch-stick span")!;
@@ -88,6 +94,7 @@ const touchButtons = document.querySelectorAll<HTMLButtonElement>("[data-touch-a
 const STORAGE_KEY = "lumen-drift-save-v1";
 
 type SaveData = {
+  achievements: AchievementId[];
   audioEnabled: boolean;
   bestCombo: number;
   bestScore: number;
@@ -171,6 +178,7 @@ function launchRun(upgradeId?: UpgradeId): void {
   audioBus.play("start");
   overlay.classList.remove("show");
   runRecap.hidden = true;
+  achievementUnlocks.hidden = true;
   upgradeChoices.hidden = true;
   const runDifficulty = latestStatus === "won" ? latestDifficulty : selectedDifficulty;
   window.dispatchEvent(new CustomEvent("game:start", { detail: { difficulty: runDifficulty, upgradeId } }));
@@ -245,9 +253,10 @@ window.addEventListener("game:ended", (event) => {
   latestWave = detail.wave;
   latestBestCombo = detail.bestCombo;
   latestDifficulty = detail.difficulty;
-  persistRunResult(detail.status);
+  const newlyUnlocked = persistRunResult(detail);
   overlay.classList.add("show");
   howToPlay.hidden = true;
+  achievementStrip.hidden = true;
   setDifficultyPickerVisible(detail.status !== "won");
   resumeButton.hidden = true;
   startButton.hidden = false;
@@ -256,7 +265,7 @@ window.addEventListener("game:ended", (event) => {
   overlayTitle.textContent =
     detail.status === "completed" ? "五波完成" : detail.status === "won" ? "光网稳定" : "信号中断";
   overlayCopy.textContent = detail.message;
-  renderRunRecap(detail);
+  renderRunRecap(detail, newlyUnlocked);
   startButton.textContent =
     detail.status === "completed" ? "再次救援" : detail.status === "won" ? "不升级，进入下一波" : "重新救援";
   upgradeChoices.hidden = detail.status !== "won";
@@ -322,6 +331,8 @@ function showHelpOverlay(): void {
     latestStatus = "paused";
   }
   overlay.classList.add("show");
+  achievementStrip.hidden = false;
+  updateAchievementUi();
   setDifficultyPickerVisible(latestStatus === "menu" || latestStatus === "lost" || latestStatus === "completed");
   overlayEyebrow.textContent = "玩法说明";
   overlayTitle.textContent = "维修、连锁、撤离";
@@ -432,18 +443,24 @@ function setDifficultyPickerVisible(visible: boolean): void {
   difficultyDetail.hidden = !visible;
 }
 
-function persistRunResult(status: "won" | "completed" | "lost"): void {
-  saveData.bestScore = Math.max(saveData.bestScore, latestScore);
-  saveData.bestWave = Math.max(saveData.bestWave, latestWave);
-  saveData.bestCombo = Math.max(saveData.bestCombo, latestBestCombo);
-  if (status === "completed") {
+function persistRunResult(detail: RunEndDetail): AchievementId[] {
+  saveData.bestScore = Math.max(saveData.bestScore, detail.score);
+  saveData.bestWave = Math.max(saveData.bestWave, detail.wave);
+  saveData.bestCombo = Math.max(saveData.bestCombo, detail.bestCombo);
+  if (detail.status === "completed") {
     saveData.clears += 1;
   }
+  const previous = new Set(saveData.achievements);
+  const runAchievements = getUnlockedAchievementsForRun(detail);
+  const newlyUnlocked = runAchievements.filter((id) => !previous.has(id));
+  saveData.achievements = Array.from(new Set([...saveData.achievements, ...runAchievements]));
   saveSave(saveData);
   updateRecordUi();
+  updateAchievementUi();
+  return newlyUnlocked;
 }
 
-function renderRunRecap(detail: RunEndDetail): void {
+function renderRunRecap(detail: RunEndDetail, newlyUnlocked: AchievementId[]): void {
   recapRating.dataset.grade = detail.rating.id;
   recapRatingGrade.textContent = detail.rating.id;
   recapRatingName.textContent = detail.rating.name;
@@ -469,8 +486,57 @@ function renderRunRecap(detail: RunEndDetail): void {
       return item;
     })
   );
+  renderAchievementUnlocks(newlyUnlocked);
   recapAdvice.textContent = buildRunAdvice(detail);
   runRecap.hidden = false;
+}
+
+function updateAchievementUi(): void {
+  const summaries = getAchievementSummaries(saveData.achievements);
+  const unlockedCount = summaries.filter((summary) => summary.unlocked).length;
+  const nextTargets = summaries.filter((summary) => !summary.unlocked).slice(0, 3);
+  const completedTargets = summaries.filter((summary) => summary.unlocked).slice(-2);
+  const targets = nextTargets.length > 0 ? nextTargets : completedTargets;
+
+  const header = document.createElement("div");
+  header.className = "achievement-header";
+  header.innerHTML = `<strong>成就 ${unlockedCount}/${summaries.length}</strong><span>${buildAchievementStatusText(unlockedCount, summaries.length)}</span>`;
+
+  achievementStrip.replaceChildren(
+    header,
+    ...targets.map((summary) => {
+      const item = document.createElement("article");
+      item.className = "achievement-card";
+      item.classList.toggle("unlocked", summary.unlocked);
+      item.innerHTML = `
+        <strong>${summary.unlocked ? "已完成" : "挑战"} · ${summary.name}</strong>
+        <span>${summary.unlocked ? summary.description : summary.requirement}</span>
+      `;
+      return item;
+    })
+  );
+}
+
+function renderAchievementUnlocks(newlyUnlocked: AchievementId[]): void {
+  achievementUnlocks.hidden = newlyUnlocked.length === 0;
+  if (achievementUnlocks.hidden) {
+    achievementUnlocks.replaceChildren();
+    return;
+  }
+  achievementUnlocks.replaceChildren(
+    ...newlyUnlocked.map((id) => {
+      const achievement = ACHIEVEMENTS[id];
+      const item = document.createElement("span");
+      item.innerHTML = `<b>新成就：${achievement.name}</b>${achievement.description}`;
+      return item;
+    })
+  );
+}
+
+function buildAchievementStatusText(unlockedCount: number, total: number): string {
+  if (unlockedCount === 0) return "先完成第一座信标，建立救援节奏。";
+  if (unlockedCount < total) return "继续挑战无损、S 级和完整通关。";
+  return "成就全解锁，下一步冲击硬核高分。";
 }
 
 function buildRunAdvice(detail: RunEndDetail): string {
@@ -520,6 +586,7 @@ function formatSeconds(seconds: number): string {
 
 function loadSave(): SaveData {
   const fallback: SaveData = {
+    achievements: [],
     audioEnabled: true,
     bestCombo: 1,
     bestScore: 0,
@@ -537,6 +604,7 @@ function loadSave(): SaveData {
         : fallback.selectedDifficulty;
     return {
       audioEnabled: parsed.audioEnabled ?? fallback.audioEnabled,
+      achievements: parseAchievements(parsed.achievements),
       bestCombo: finiteNumber(parsed.bestCombo, fallback.bestCombo),
       bestScore: finiteNumber(parsed.bestScore, fallback.bestScore),
       bestWave: finiteNumber(parsed.bestWave, fallback.bestWave),
@@ -559,6 +627,11 @@ function saveSave(next: SaveData): void {
 function finiteNumber(value: unknown, fallback: number): number {
   const numberValue = Number(value ?? fallback);
   return Number.isFinite(numberValue) ? numberValue : fallback;
+}
+
+function parseAchievements(value: unknown): AchievementId[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((id): id is AchievementId => typeof id === "string" && id in ACHIEVEMENTS);
 }
 
 type SoundKind = "boost" | "button" | "hit" | "loss" | "pickup" | "pulse" | "repair" | "start" | "win";
@@ -615,3 +688,4 @@ audioBus = new AudioBus(() => saveData.audioEnabled);
 updateDifficultyUi();
 updateAudioUi();
 updateRecordUi();
+updateAchievementUi();

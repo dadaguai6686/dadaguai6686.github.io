@@ -1,14 +1,17 @@
 import assert from "node:assert/strict";
 import {
+  ACHIEVEMENTS,
   CAMPAIGN_WAVES,
   MAX_UPGRADE_LEVEL,
   WAVE_MODIFIERS,
   createInitialState,
   getActiveRepairTarget,
+  getAchievementSummaries,
   getHazardThreats,
   getObjectiveHint,
   getResourceAlerts,
   getRunRating,
+  getUnlockedAchievementsForRun,
   getUpgradeChoices,
   getUpgradeSummaries,
   getUpgradeSummary,
@@ -143,6 +146,11 @@ assert.equal(state.status, "won", "entering the open gate should win the wave");
 assert.equal(state.endReason, "waveCleared", "winning a non-final wave should record the end reason");
 assert.equal(state.stats.wavesCleared, 1, "cleared waves should be counted");
 assert.ok(getUpgradeChoices(state).length > 0, "winning should offer upgrade choices");
+const waveAchievements = achievementIdsFor(state);
+assert.ok(waveAchievements.includes("firstRepair"), "repairing a relay should unlock the first repair achievement");
+assert.ok(waveAchievements.includes("cleanWave"), "clean wave clears should unlock the no-hit achievement");
+assert.equal(getAchievementSummaries(["cleanWave"]).filter((summary) => summary.unlocked).length, 1);
+assert.equal(getAchievementSummaries(["cleanWave"]).length, Object.keys(ACHIEVEMENTS).length);
 
 const upgraded = restartRun(state, "engine");
 assert.equal(upgraded.wave, 2, "winning and restarting should advance the wave");
@@ -170,6 +178,12 @@ finalWave = updateSimulation(finalWave, idle, 0.016);
 assert.equal(finalWave.status, "completed", "clearing the final wave should complete the campaign");
 assert.equal(finalWave.endReason, "campaignCompleted", "final wave completion should record the end reason");
 assert.equal(getRunRating(finalWave).id, "S", "clean final clears should earn a top run rating");
+const finalAchievements = achievementIdsFor(finalWave);
+assert.ok(finalAchievements.includes("perfectSignal"), "S ratings should unlock the S-grade achievement");
+assert.ok(finalAchievements.includes("fullStabilizer"), "campaign completion should unlock the full clear achievement");
+const hardcoreFinal = structuredClone(finalWave);
+hardcoreFinal.difficulty = "hardcore";
+assert.ok(achievementIdsFor(hardcoreFinal).includes("hardcoreClear"), "hardcore clears should unlock the hardcore achievement");
 const cappedRatingState = structuredClone(finalWave);
 cappedRatingState.bestCombo = 12;
 cappedRatingState.stats.lumenCollected = 99;
@@ -198,4 +212,16 @@ function movePlayerTo(state: GameState, x: number, y: number): GameState {
   next.player.invulnerable = 0;
   next.player.charge = Math.max(next.player.charge, 55);
   return next;
+}
+
+function achievementIdsFor(state: GameState) {
+  return getUnlockedAchievementsForRun({
+    bestCombo: state.bestCombo,
+    difficulty: state.difficulty,
+    rating: getRunRating(state),
+    score: state.score,
+    stats: state.stats,
+    status: state.status as "won" | "completed" | "lost",
+    wave: state.wave
+  });
 }

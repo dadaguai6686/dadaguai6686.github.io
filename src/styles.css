@@ -465,6 +465,59 @@ h1 {
   margin: 0 auto 18px;
 }
 
+#achievement-strip {
+  display: grid;
+  grid-template-columns: 1.15fr repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  max-width: 660px;
+  margin: 0 auto 16px;
+  text-align: left;
+}
+
+#achievement-strip[hidden] {
+  display: none;
+}
+
+.achievement-header,
+.achievement-card {
+  min-height: 68px;
+  padding: 10px;
+  border: 1px solid rgba(126, 239, 255, 0.15);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.achievement-header {
+  background: linear-gradient(120deg, rgba(103, 244, 255, 0.12), rgba(255, 226, 122, 0.07));
+}
+
+.achievement-header strong,
+.achievement-header span,
+.achievement-card strong,
+.achievement-card span {
+  display: block;
+}
+
+.achievement-header strong,
+.achievement-card strong {
+  color: #fff3ad;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.achievement-header span,
+.achievement-card span {
+  margin-top: 5px;
+  color: #c3d7e7;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.achievement-card.unlocked {
+  border-color: rgba(255, 226, 122, 0.28);
+  background: rgba(255, 226, 122, 0.075);
+}
+
 #run-recap[hidden] {
   display: none;
 }
@@ -553,6 +606,35 @@ h1 {
   margin-top: 4px;
   color: #fff3ad;
   font-size: 16px;
+}
+
+#achievement-unlocks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+#achievement-unlocks[hidden] {
+  display: none;
+}
+
+#achievement-unlocks span {
+  min-height: 54px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 226, 122, 0.24);
+  border-radius: 8px;
+  color: #dbeefa;
+  background: linear-gradient(90deg, rgba(255, 226, 122, 0.13), rgba(103, 244, 255, 0.08));
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+}
+
+#achievement-unlocks b {
+  display: block;
+  margin-bottom: 3px;
+  color: #fff3ad;
 }
 
 .panel #recap-advice {
@@ -839,6 +921,10 @@ h1 {
     grid-template-columns: 1fr;
   }
 
+  #achievement-strip {
+    grid-template-columns: 1fr;
+  }
+
   #recap-rating {
     grid-template-columns: 62px minmax(0, 1fr);
     padding: 9px;
@@ -851,6 +937,10 @@ h1 {
 
   #recap-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #achievement-unlocks {
+    grid-template-columns: 1fr;
   }
 
   #difficulty-picker {
