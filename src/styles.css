@@ -1039,6 +1039,47 @@ h1 {
   line-height: 1.55;
 }
 
+#game-dossier {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  max-width: 660px;
+  margin: -8px auto 16px;
+  text-align: left;
+}
+
+#game-dossier[hidden] {
+  display: none;
+}
+
+#game-dossier article {
+  min-height: 72px;
+  padding: 10px 11px;
+  border: 1px solid rgba(255, 226, 122, 0.14);
+  border-radius: 8px;
+  background:
+    linear-gradient(140deg, rgba(255, 226, 122, 0.08), rgba(103, 244, 255, 0.04)),
+    rgba(255, 255, 255, 0.035);
+}
+
+#game-dossier strong,
+#game-dossier span {
+  display: block;
+}
+
+#game-dossier strong {
+  color: #ffe27a;
+  font-size: 11px;
+  font-weight: 1000;
+}
+
+#game-dossier span {
+  margin-top: 5px;
+  color: #e4f8ff;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 #mission-brief {
   display: grid;
   gap: 5px;
@@ -2020,6 +2061,21 @@ h1 {
     line-height: 1.42;
   }
 
+  #game-dossier {
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  #game-dossier article {
+    min-height: 58px;
+    padding: 8px;
+  }
+
+  #game-dossier span {
+    font-size: 10px;
+    line-height: 1.28;
+  }
+
   #mission-brief {
     margin-bottom: 10px;
     padding: 8px 10px;
@@ -2302,6 +2358,21 @@ h1 {
   .panel p {
     margin-bottom: 14px;
     font-size: 14px;
+  }
+
+  #game-dossier {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  #game-dossier article {
+    min-height: 58px;
+    padding: 8px;
+  }
+
+  #game-dossier span {
+    font-size: 10px;
   }
 
   #mission-brief {

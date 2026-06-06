@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>流明漂航 Lumen Drift</title>
+    <title>流明漂航</title>
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23070910'/%3E%3Ccircle cx='32' cy='32' r='21' fill='none' stroke='%2367f4ff' stroke-width='6'/%3E%3Cpath d='M32 10 45 48 32 39 19 48Z' fill='%23ffe27a'/%3E%3C/svg%3E"
@@ -26,7 +26,7 @@
           <span class="mark"></span>
           <div>
             <strong>流明漂航</strong>
-            <span>Lumen Drift</span>
+            <span>五波救援街机</span>
           </div>
         </div>
         <div id="record-strip">
@@ -116,12 +116,30 @@
       </div>
       <div id="overlay" class="show">
         <div class="panel" tabindex="-1">
-          <span class="eyebrow">中文浏览器街机 Roguelite</span>
+          <span class="eyebrow">中文 2D 太空救援轻度肉鸽</span>
           <h1>流明漂航</h1>
           <p>
             你是一台维修无人机。城市光网正在坍缩：修复蓝色信标、收集金色流明、
             避开紫色风暴和粉色碎片，在电量耗尽前冲进北侧光门。
           </p>
+          <div id="game-dossier" aria-label="任务档案">
+            <article>
+              <strong>玩法类型</strong>
+              <span>单局五波的漂移维修街机</span>
+            </article>
+            <article>
+              <strong>胜利条件</strong>
+              <span>修好 4 座信标后进北侧光门</span>
+            </article>
+            <article>
+              <strong>失败条件</strong>
+              <span>电量归零或机体被碎片击毁</span>
+            </article>
+            <article>
+              <strong>成长循环</strong>
+              <span>过波选升级，代号路线可复盘</span>
+            </article>
+          </div>
           <div id="tactical-scan" hidden aria-label="暂停战术扫描">
             <div class="tactical-scan-head">
               <strong>战术扫描</strong>
@@ -136,6 +154,19 @@
               <span data-kind="gate">光门</span>
             </div>
           </div>
+          <div id="menu-options">
+            <div id="difficulty-picker" role="group" aria-label="选择难度">
+              <button type="button" data-difficulty="training">练习</button>
+              <button type="button" data-difficulty="standard">标准</button>
+              <button type="button" data-difficulty="hardcore">硬核</button>
+            </div>
+            <button id="audio-toggle" type="button" aria-pressed="true">音效 开</button>
+            <button id="daily-route-button" type="button">今日挑战</button>
+          </div>
+          <p id="difficulty-detail">标准模式：推荐第一次游玩，完整体验风险、连锁和升级。</p>
+          <p id="daily-detail">今日挑战会使用当天固定救援代号。</p>
+          <button id="start-button" type="button">开始标准救援</button>
+          <button id="resume-button" type="button" hidden>继续游戏</button>
           <div id="mission-brief" aria-label="核心循环">
             <strong>核心循环：补流明 → 修信标 → 撤离升级</strong>
             <span>开局先捡金色流明补电，靠近蓝色信标按住 E 修复；全部信标亮起后，从北侧光门撤离并选择升级。想冲高评级，就完成战术合约、少受击、保留电量和连锁。</span>
@@ -162,17 +193,6 @@
               <span>停留会快速耗电</span>
             </article>
           </div>
-          <div id="menu-options">
-            <div id="difficulty-picker" role="group" aria-label="选择难度">
-              <button type="button" data-difficulty="training">练习</button>
-              <button type="button" data-difficulty="standard">标准</button>
-              <button type="button" data-difficulty="hardcore">硬核</button>
-            </div>
-            <button id="audio-toggle" type="button" aria-pressed="true">音效 开</button>
-            <button id="daily-route-button" type="button">今日挑战</button>
-          </div>
-          <p id="difficulty-detail">标准模式：推荐第一次游玩，完整体验风险、连锁和升级。</p>
-          <p id="daily-detail">今日挑战会使用当天固定救援代号。</p>
           <div id="next-run-panel" aria-label="下一局目标">
             <div class="next-run-head">
               <strong id="next-run-title">下一局目标</strong>
@@ -194,8 +214,6 @@
             <div id="achievement-unlocks" hidden></div>
             <p id="recap-advice"></p>
           </div>
-          <button id="start-button" type="button">开始救援</button>
-          <button id="resume-button" type="button" hidden>继续游戏</button>
           <div id="session-tools" hidden>
             <button id="copy-route-button" type="button" hidden>复制路线链接</button>
             <button id="restart-route-button" type="button" hidden>重开当前代号</button>

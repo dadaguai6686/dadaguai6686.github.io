@@ -125,6 +125,7 @@ const dailyDetail = document.querySelector<HTMLElement>("#daily-detail")!;
 const overlayEyebrow = overlay.querySelector<HTMLElement>(".eyebrow")!;
 const overlayTitle = overlay.querySelector<HTMLElement>("h1")!;
 const overlayCopy = overlay.querySelector<HTMLElement>("p")!;
+const gameDossier = document.querySelector<HTMLDivElement>("#game-dossier")!;
 const missionBrief = document.querySelector<HTMLDivElement>("#mission-brief")!;
 const fieldGuide = document.querySelector<HTMLDivElement>("#field-guide")!;
 const tacticalScan = document.querySelector<HTMLDivElement>("#tactical-scan")!;
@@ -481,8 +482,8 @@ window.addEventListener("game:hud", (event) => {
   pilotTipTitle.textContent = detail.objectiveHint.title;
   pilotTipDetail.textContent = detail.objectiveHint.detail;
   missionText.textContent = detail.message;
-  objectiveTitle.textContent = `目标：第 ${detail.wave}/${detail.campaignWaves} 波，修复 ${detail.relays} 座信标`;
-  objectiveDetail.textContent = `${DIFFICULTY_SETTINGS[detail.difficulty].name}模式 / 救援代号 ${detail.routePlan.name} / ${detail.sector.name} / ${detail.waveModifier.name}：${detail.sector.briefing} ${detail.waveModifier.briefing}`;
+  objectiveTitle.textContent = buildObjectiveStripTitle(detail.objectiveHint);
+  objectiveDetail.textContent = buildObjectiveStripDetail(detail);
   updateWaveIntro(detail);
   latestUpgradeChoices = detail.upgradeChoices;
 });
@@ -511,6 +512,7 @@ window.addEventListener("game:ended", (event) => {
   overlayTitle.textContent =
     detail.status === "completed" ? "五波完成" : detail.status === "won" ? "光网稳定" : "信号中断";
   overlayCopy.textContent = detail.message;
+  gameDossier.hidden = true;
   missionBrief.hidden = true;
   fieldGuide.hidden = true;
   renderRunRecap(detail, newlyUnlocked);
@@ -539,7 +541,7 @@ function renderUpgradeChoices(): void {
       button.type = "button";
       button.className = "upgrade-option";
       button.innerHTML = `
-        <strong>${choice.name} <small>Lv ${summary?.level ?? 0}/${summary?.maxLevel ?? 3}</small></strong>
+        <strong>${choice.name} <small>等级 ${summary?.level ?? 0}/${summary?.maxLevel ?? 3}</small></strong>
         <span>${choice.description}</span>
         <em>当前：${summary?.currentEffect ?? "基础配置"}</em>
         <em>升级后：${summary?.nextEffect ?? "已满级"}</em>
@@ -592,6 +594,31 @@ function renderCoachDirective(directive: CoachDirective, status: GameStatus): vo
   coachStep.textContent = `${directive.step}/${directive.totalSteps}`;
   coachDetail.textContent = directive.detail;
   coachProgress.textContent = directive.progress;
+}
+
+function buildObjectiveStripTitle(hint: ObjectiveHint): string {
+  if (hint.urgent) return `紧急任务：${hint.title}`;
+  if (hint.kind === "gate") return `撤离任务：${hint.title}`;
+  if (hint.kind === "repair") return `维修任务：${hint.title}`;
+  return `当前任务：${hint.title}`;
+}
+
+function buildObjectiveStripDetail(detail: {
+  campaignWaves: number;
+  contract: ContractSnapshot;
+  difficulty: DifficultyId;
+  objectiveHint: ObjectiveHint;
+  relays: string;
+  routePlan: RoutePlan;
+  sector: SectorLayout;
+  wave: number;
+  waveModifier: WaveModifier;
+}): string {
+  const contractStatus =
+    detail.contract.status === "active"
+      ? `${detail.contract.name}：${detail.contract.progress}`
+      : `${detail.contract.name}：${getContractStatusLabel(detail.contract.status)}`;
+  return `${detail.objectiveHint.detail} · 第 ${detail.wave}/${detail.campaignWaves} 波 · 信标 ${detail.relays} · ${DIFFICULTY_SETTINGS[detail.difficulty].name} / ${detail.routePlan.name} / ${detail.sector.name} / 合约 ${contractStatus}`;
 }
 
 function renderRadar(radar: RadarSnapshot, status: GameStatus): void {
@@ -795,6 +822,7 @@ function showHelpOverlay(): void {
   overlayCopy.textContent =
     "目标不是乱飞，而是在电量压力下规划路线：先补流明，再修信标，最后从北侧光门撤离。";
   runRecap.hidden = true;
+  gameDossier.hidden = false;
   missionBrief.hidden = false;
   fieldGuide.hidden = false;
   renderTacticalScan();
@@ -805,7 +833,7 @@ function showHelpOverlay(): void {
   resumeButton.hidden = latestStatus !== "paused";
   updateSessionTools();
   if (latestStatus !== "paused") {
-    startButton.textContent = "开始救援";
+    startButton.textContent = getMenuStartLabel();
   }
   resetOverlayPanelScroll();
 }
@@ -900,8 +928,18 @@ function updateDifficultyUi(): void {
   });
   const difficulty = DIFFICULTY_SETTINGS[selectedDifficulty];
   difficultyDetail.textContent = `${difficulty.name}模式：${difficulty.description}`;
+  if (latestStatus === "menu" || latestStatus === "lost" || latestStatus === "completed") {
+    startButton.textContent = getMenuStartLabel();
+  }
   updateDailyChallengeUi();
   updateNextRunPanel();
+}
+
+function getMenuStartLabel(): string {
+  const difficultyName = DIFFICULTY_SETTINGS[selectedDifficulty].name;
+  if (latestStatus === "lost") return `重新开始${difficultyName}救援`;
+  if (latestStatus === "completed") return `再次挑战${difficultyName}救援`;
+  return `开始${difficultyName}救援`;
 }
 
 function updateAudioUi(): void {

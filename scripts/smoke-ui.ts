@@ -9,9 +9,21 @@ const styles = readFileSync("src/styles.css", "utf8");
 assert.ok(html.includes('id="radar-panel"'), "desktop radar panel should exist in HTML");
 assert.ok(html.includes('id="tactical-scan"'), "pause tactical scan should exist in HTML");
 assert.ok(html.includes('id="wave-intro"'), "wave intro briefing should exist in HTML");
+assert.ok(html.includes('id="game-dossier"'), "menu should explain the game fantasy and win/loss loop");
+assert.ok(!html.includes("Roguelite"), "visible genre copy should be localized to Chinese");
+assert.ok(
+  html.indexOf('id="start-button"') < html.indexOf('id="mission-brief"'),
+  "primary start action should appear before long mission copy on mobile"
+);
+assert.ok(
+  html.indexOf('id="start-button"') < html.indexOf('id="field-guide"'),
+  "primary start action should appear before detailed field guide on mobile"
+);
 assert.ok(main.includes("renderRadar(detail.radar"), "HUD updates should render the live radar");
 assert.ok(main.includes("renderTacticalScan()"), "pause overlay should render the tactical scan");
 assert.ok(main.includes("updateWaveIntro(detail)"), "HUD updates should render wave intro briefing");
+assert.ok(main.includes("buildObjectiveStripTitle"), "HUD objective strip should use contextual mission copy");
+assert.ok(!main.includes("<small>Lv "), "upgrade cards should use localized level labels");
 assert.ok(main.includes("createRadarNodes"), "radar and scan should share SVG node construction");
 assert.ok(gameScene.includes("SECTOR_VISUALS"), "Phaser scene should define sector-specific visual styles");
 assert.ok(gameScene.includes("drawSectorField"), "Phaser scene should render sector-specific backdrops");
@@ -21,5 +33,6 @@ assert.ok(main.includes('"data-kind": "player"'), "radar nodes should expose pla
 assert.ok(styles.includes("#radar-panel"), "desktop radar should have CSS");
 assert.ok(styles.includes("#tactical-scan"), "pause tactical scan should have CSS");
 assert.ok(styles.includes(".tactical-scan-legend"), "pause tactical scan should have a legend style");
+assert.ok(styles.includes("#game-dossier"), "mission dossier should have CSS");
 
 console.log("UI static smoke checks passed.");

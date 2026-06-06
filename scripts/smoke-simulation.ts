@@ -88,6 +88,8 @@ state = updateSimulation(state, { ...idle, move: { x: 1, y: 0 } }, 0.016);
 assert.equal(state.briefingActive, false, "the first movement should end the opening briefing");
 assert.ok(state.elapsed > 0, "the run timer should start after player input");
 assert.ok(state.message.includes("正式开始"), "the first input should replace the briefing copy");
+assert.equal(getObjectiveHint(state).kind, "lumen", "first-run objective strip should match the lumen tutorial");
+assert.equal(getObjectiveHint(state).title, "先捡 2 个流明", "first-run objective strip should not send players to relays too early");
 
 const seededA = restartRun(createInitialState(), undefined, { routeSeed: 4660 });
 const seededB = restartRun(createInitialState(), undefined, { routeSeed: 4660 });

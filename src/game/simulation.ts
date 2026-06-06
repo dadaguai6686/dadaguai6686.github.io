@@ -1662,6 +1662,16 @@ export function getObjectiveHint(state: GameState): ObjectiveHint {
     };
   }
 
+  if (state.wave === 1 && state.stats.lumenCollected < 2 && nearestLumen) {
+    return {
+      kind: "lumen",
+      title: "先捡 2 个流明",
+      detail: `金色流明会补电并建立连锁，最近流明距离 ${formatDistance(nearestLumen.distance)}。`,
+      target: nearestLumen.item.position,
+      urgent: false
+    };
+  }
+
   const nearestRelay = nearest(state.relays.filter((relay) => !relay.repaired), player.position);
   if (nearestRelay) {
     return {
