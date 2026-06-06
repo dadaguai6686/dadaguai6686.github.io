@@ -159,6 +159,28 @@ async function run() {
     assert(sanitizedBody.comment.avatar === '👤', 'unsupported avatar should be normalized');
     assert(sanitizedBody.comment.website === 'https://example.com/profile', 'https website should be preserved');
 
+    const login = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'api-smoke-password' })
+    });
+    assert(login.status === 200, 'admin login should succeed in smoke test');
+    const loginBody = await login.json();
+    assert(typeof loginBody.token === 'string' && loginBody.token.length > 20, 'login should return a JWT');
+
+    const uploadDir = path.resolve(__dirname, '..', 'uploads');
+    const beforeUploads = new Set(fs.readdirSync(uploadDir));
+    const fakeImageForm = new FormData();
+    fakeImageForm.append('image', new Blob([Buffer.from('not really a png')], { type: 'image/png' }), 'fake.png');
+    const fakeImageUpload = await fetch(`${baseUrl}/api/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${loginBody.token}` },
+      body: fakeImageForm
+    });
+    assert(fakeImageUpload.status === 400, 'forged image upload should be rejected');
+    const afterUploads = fs.readdirSync(uploadDir).filter(name => !beforeUploads.has(name));
+    assert(afterUploads.length === 0, 'rejected forged upload should be removed from uploads directory');
+
     return {
       ok: true,
       port,
@@ -167,7 +189,8 @@ async function run() {
       corsAllowed: health.headers.get('access-control-allow-origin'),
       corsBlockedHeader: blockedCors.headers.get('access-control-allow-origin') || null,
       sensitiveResults,
-      sanitizedAvatar: sanitizedBody.comment.avatar
+      sanitizedAvatar: sanitizedBody.comment.avatar,
+      forgedUploadStatus: fakeImageUpload.status
     };
   } finally {
     child.kill();

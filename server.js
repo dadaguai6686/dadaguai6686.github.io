@@ -100,6 +100,43 @@ function normalizeTags(tags) {
     .map(tag => tag.slice(0, 40));
 }
 
+function hasImageSignature(filePath, mimeType) {
+  const header = fs.readFileSync(filePath).subarray(0, 16);
+  if (mimeType === 'image/png') {
+    return header.length >= 8 &&
+      header[0] === 0x89 &&
+      header[1] === 0x50 &&
+      header[2] === 0x4e &&
+      header[3] === 0x47 &&
+      header[4] === 0x0d &&
+      header[5] === 0x0a &&
+      header[6] === 0x1a &&
+      header[7] === 0x0a;
+  }
+  if (mimeType === 'image/jpeg') {
+    return header.length >= 3 && header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff;
+  }
+  if (mimeType === 'image/gif') {
+    const signature = header.subarray(0, 6).toString('ascii');
+    return signature === 'GIF87a' || signature === 'GIF89a';
+  }
+  if (mimeType === 'image/webp') {
+    return header.length >= 12 &&
+      header.subarray(0, 4).toString('ascii') === 'RIFF' &&
+      header.subarray(8, 12).toString('ascii') === 'WEBP';
+  }
+  return false;
+}
+
+function removeUploadedFile(file) {
+  if (!file?.path) return;
+  try {
+    fs.unlinkSync(file.path);
+  } catch (err) {
+    console.warn(`Failed to remove rejected upload ${file.path}:`, err.message);
+  }
+}
+
 // Enable CORS, baseline hardening & JSON Parsing middleware
 app.disable('x-powered-by');
 app.use(cors({
@@ -520,11 +557,15 @@ app.post('/api/upload', authenticateToken, writeLimiter, (req, res) => {
       return res.status(400).json({ error: err.message });
     }
 
-  if (!req.file) {
-    return res.status(400).json({ error: 'No file uploaded.' });
-  }
-  const relativePath = `/uploads/${req.file.filename}`;
-  res.json({ success: true, url: relativePath });
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded.' });
+    }
+    if (!hasImageSignature(req.file.path, req.file.mimetype)) {
+      removeUploadedFile(req.file);
+      return res.status(400).json({ error: 'Uploaded file content does not match the declared image type.' });
+    }
+    const relativePath = `/uploads/${req.file.filename}`;
+    res.json({ success: true, url: relativePath });
   });
 });
 
