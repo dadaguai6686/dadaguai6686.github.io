@@ -95,6 +95,20 @@
         <p id="mission-text">修复全部信标，收集流明，最后从北侧光门撤离。</p>
         <button id="help-button" type="button">玩法说明 / 暂停</button>
       </aside>
+      <div id="radar-panel" hidden aria-label="战术雷达">
+        <div class="radar-head">
+          <strong>战术雷达</strong>
+          <span id="radar-summary">准备读图</span>
+        </div>
+        <svg id="radar-map" viewBox="0 0 1000 700" role="img" aria-label="战场目标与危险位置"></svg>
+        <div id="radar-legend">
+          <span data-kind="relay">信标</span>
+          <span data-kind="lumen">流明</span>
+          <span data-kind="hazard">碎片</span>
+          <span data-kind="storm">风暴</span>
+          <span data-kind="gate">光门</span>
+        </div>
+      </div>
       <div id="overlay" class="show">
         <div class="panel">
           <span class="eyebrow">中文浏览器街机 Roguelite</span>

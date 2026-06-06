@@ -70,8 +70,19 @@ type HudSnapshot = {
   sector: SectorLayout;
   contract: ContractSnapshot;
   performance: RunPerformance;
+  radar: RadarSnapshot;
   upgradeSummaries: UpgradeSummary[];
   upgradeChoices: Upgrade[];
+};
+
+type RadarSnapshot = {
+  arena: { width: number; height: number };
+  gate: { open: boolean; position: { x: number; y: number } };
+  hazards: Array<{ id: number; position: { x: number; y: number }; radius: number }>;
+  lumen: Array<{ collected: boolean; id: number; position: { x: number; y: number } }>;
+  player: { position: { x: number; y: number } };
+  relays: Array<{ id: number; position: { x: number; y: number }; progress: number; repaired: boolean }>;
+  storms: Array<{ activeRadius: number; id: number; position: { x: number; y: number }; radius: number }>;
 };
 
 type FeedbackKind = "boost" | "contract" | "hit" | "loss" | "pickup" | "pulse" | "repair" | "win";
@@ -499,10 +510,41 @@ export class GameScene extends Phaser.Scene {
       sector: SECTOR_LAYOUTS[this.state.sector],
       contract: getContractSnapshot(this.state),
       performance: getRunPerformance(this.state),
+      radar: this.createRadarSnapshot(),
       upgradeSummaries: getUpgradeSummaries(this.state.upgrades),
       upgradeChoices: this.state.status === "won" ? getUpgradeChoices(this.state) : []
     };
     window.dispatchEvent(new CustomEvent("game:hud", { detail: snapshot }));
+  }
+
+  private createRadarSnapshot(): RadarSnapshot {
+    return {
+      arena: { ...this.state.arena },
+      gate: { open: this.state.gate.open, position: { ...this.state.gate.position } },
+      hazards: this.state.hazards.map((hazard) => ({
+        id: hazard.id,
+        position: { ...hazard.position },
+        radius: hazard.radius
+      })),
+      lumen: this.state.lumen.map((drop) => ({
+        collected: drop.collected,
+        id: drop.id,
+        position: { ...drop.position }
+      })),
+      player: { position: { ...this.state.player.position } },
+      relays: this.state.relays.map((relay) => ({
+        id: relay.id,
+        position: { ...relay.position },
+        progress: relay.progress,
+        repaired: relay.repaired
+      })),
+      storms: this.state.storms.map((storm) => ({
+        activeRadius: getStormActiveRadius(storm),
+        id: storm.id,
+        position: { ...storm.position },
+        radius: storm.radius
+      }))
+    };
   }
 
   private emitFeedback(previous: {

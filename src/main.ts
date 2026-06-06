@@ -102,6 +102,9 @@ const pilotTip = document.querySelector<HTMLDivElement>("#pilot-tip")!;
 const pilotTipTitle = document.querySelector<HTMLElement>("#pilot-tip-title")!;
 const pilotTipDetail = document.querySelector<HTMLElement>("#pilot-tip-detail")!;
 const missionText = document.querySelector<HTMLElement>("#mission-text")!;
+const radarPanel = document.querySelector<HTMLDivElement>("#radar-panel")!;
+const radarSummary = document.querySelector<HTMLElement>("#radar-summary")!;
+const radarMap = document.querySelector<SVGSVGElement>("#radar-map")!;
 const upgradeChoices = document.querySelector<HTMLDivElement>("#upgrade-choices")!;
 const helpButton = document.querySelector<HTMLButtonElement>("#help-button")!;
 const mobilePauseButton = document.querySelector<HTMLButtonElement>("#mobile-pause-button")!;
@@ -190,6 +193,16 @@ type NextRunGoal = {
   label: string;
   text: string;
   tone: "primary" | "steady" | "warning" | "complete";
+};
+
+type RadarSnapshot = {
+  arena: { width: number; height: number };
+  gate: { open: boolean; position: { x: number; y: number } };
+  hazards: Array<{ id: number; position: { x: number; y: number }; radius: number }>;
+  lumen: Array<{ collected: boolean; id: number; position: { x: number; y: number } }>;
+  player: { position: { x: number; y: number } };
+  relays: Array<{ id: number; position: { x: number; y: number }; progress: number; repaired: boolean }>;
+  storms: Array<{ activeRadius: number; id: number; position: { x: number; y: number }; radius: number }>;
 };
 
 type RunEndDetail = {
@@ -391,6 +404,7 @@ window.addEventListener("game:hud", (event) => {
     coachDirective: CoachDirective;
     objectiveHint: ObjectiveHint;
     resourceAlerts: ResourceAlerts;
+    radar: RadarSnapshot;
     routePlan: RoutePlan;
     difficulty: DifficultyId;
     campaignWaves: number;
@@ -438,6 +452,7 @@ window.addEventListener("game:hud", (event) => {
   contractProgress.textContent = detail.contract.progress;
   contractReward.textContent = `奖励 ${detail.contract.rewardScore.toLocaleString()} 分`;
   renderCoachDirective(detail.coachDirective, detail.status);
+  renderRadar(detail.radar, detail.status);
   const showPilotTip = detail.status === "playing" && detail.coachDirective.id === "readContract";
   pilotTip.hidden = !showPilotTip;
   pilotTip.classList.toggle("urgent", detail.objectiveHint.urgent);
@@ -553,6 +568,98 @@ function renderCoachDirective(directive: CoachDirective, status: GameStatus): vo
   coachStep.textContent = `${directive.step}/${directive.totalSteps}`;
   coachDetail.textContent = directive.detail;
   coachProgress.textContent = directive.progress;
+}
+
+function renderRadar(radar: RadarSnapshot, status: GameStatus): void {
+  radarPanel.hidden = status !== "playing";
+  if (radarPanel.hidden) {
+    radarMap.replaceChildren();
+    return;
+  }
+
+  radarMap.setAttribute("viewBox", `0 0 ${radar.arena.width} ${radar.arena.height}`);
+  const repairedRelays = radar.relays.filter((relay) => relay.repaired).length;
+  const remainingLumen = radar.lumen.filter((drop) => !drop.collected).length;
+  radarSummary.textContent = `${repairedRelays}/${radar.relays.length} 信标 · ${remainingLumen} 流明 · ${radar.storms.length} 风暴`;
+
+  const nodes: SVGElement[] = [
+    createSvgNode("rect", {
+      class: "radar-bg",
+      x: 0,
+      y: 0,
+      width: radar.arena.width,
+      height: radar.arena.height,
+      rx: 24
+    }),
+    ...radar.relays.flatMap((relay, index) => {
+      const nextRelay = radar.relays[(index + 1) % radar.relays.length];
+      return nextRelay
+        ? [
+            createSvgNode("line", {
+              class: relay.repaired && nextRelay.repaired ? "radar-link repaired" : "radar-link",
+              x1: relay.position.x,
+              y1: relay.position.y,
+              x2: nextRelay.position.x,
+              y2: nextRelay.position.y
+            })
+          ]
+        : [];
+    }),
+    ...radar.storms.map((storm) =>
+      createSvgNode("circle", {
+        class: "radar-storm",
+        cx: storm.position.x,
+        cy: storm.position.y,
+        r: Math.max(storm.radius, storm.activeRadius)
+      })
+    ),
+    ...radar.lumen
+      .filter((drop) => !drop.collected)
+      .map((drop) =>
+        createSvgNode("circle", {
+          class: "radar-lumen",
+          cx: drop.position.x,
+          cy: drop.position.y,
+          r: 18
+        })
+      ),
+    ...radar.hazards.map((hazard) =>
+      createSvgNode("circle", {
+        class: "radar-hazard",
+        cx: hazard.position.x,
+        cy: hazard.position.y,
+        r: hazard.radius + 12
+      })
+    ),
+    ...radar.relays.map((relay) =>
+      createSvgNode("circle", {
+        class: relay.repaired ? "radar-relay repaired" : "radar-relay",
+        cx: relay.position.x,
+        cy: relay.position.y,
+        r: relay.repaired ? 34 : 30
+      })
+    ),
+    createSvgNode("circle", {
+      class: radar.gate.open ? "radar-gate open" : "radar-gate",
+      cx: radar.gate.position.x,
+      cy: radar.gate.position.y,
+      r: radar.gate.open ? 34 : 26
+    }),
+    createSvgNode("polygon", {
+      class: "radar-player",
+      points: `${radar.player.position.x},${radar.player.position.y - 28} ${radar.player.position.x + 24},${radar.player.position.y + 22} ${radar.player.position.x - 24},${radar.player.position.y + 22}`
+    })
+  ];
+
+  radarMap.replaceChildren(...nodes);
+}
+
+function createSvgNode(tag: string, attributes: Record<string, string | number>): SVGElement {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  Object.entries(attributes).forEach(([key, value]) => {
+    node.setAttribute(key, String(value));
+  });
+  return node;
 }
 
 function shortUpgradeName(id: UpgradeId): string {
