@@ -1,9 +1,16 @@
 // db.js - SQLite Database Initialization and Configuration
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const fs = require('fs');
 const bcrypt = require('bcryptjs');
 
-const dbPath = path.resolve(__dirname, 'blog.db');
+const dbPath = path.resolve(process.env.DB_PATH || path.join(__dirname, 'blog.db'));
+const dbDir = path.dirname(dbPath);
+
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
+
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error('Error connecting to SQLite database:', err.message);

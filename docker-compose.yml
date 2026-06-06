@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   blog-space:
     build: .
@@ -9,9 +7,11 @@ services:
       - "3000:3000"
     volumes:
       # Mount SQLite DB and uploads folder to persist user posts, projects, and uploaded images
-      - ./blog.db:/usr/src/app/blog.db
+      - ./data:/usr/src/app/data
       - ./uploads:/usr/src/app/uploads
+    env_file:
+      - .env
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - JWT_SECRET=atherix_prod_jwt_secret_key_change_me
+      - DB_PATH=/usr/src/app/data/blog.db
