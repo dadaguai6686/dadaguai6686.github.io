@@ -691,6 +691,102 @@ h1 {
   display: none;
 }
 
+#run-history {
+  display: grid;
+  grid-template-columns: 1.05fr repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  max-width: 660px;
+  margin: 0 auto 16px;
+  text-align: left;
+}
+
+#run-history[hidden] {
+  display: none;
+}
+
+.run-history-header,
+.run-history-card,
+.run-history-empty {
+  min-height: 64px;
+  padding: 10px;
+  border: 1px solid rgba(126, 239, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.run-history-header {
+  background: linear-gradient(120deg, rgba(179, 136, 255, 0.13), rgba(103, 244, 255, 0.07));
+}
+
+.run-history-header strong,
+.run-history-header span,
+.run-history-card strong,
+.run-history-card span,
+.run-history-card em {
+  display: block;
+}
+
+.run-history-header strong,
+.run-history-card strong {
+  color: #fff3ad;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.run-history-header span,
+.run-history-card span,
+.run-history-card em,
+.run-history-empty {
+  color: #c3d7e7;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.run-history-header span {
+  margin-top: 5px;
+}
+
+.run-history-card {
+  position: relative;
+  padding-left: 43px;
+}
+
+.run-history-card b {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  color: #061018;
+  background: linear-gradient(135deg, var(--ui-cyan), var(--ui-gold));
+  font-size: 13px;
+  font-weight: 1000;
+}
+
+.run-history-card[data-grade="C"] b {
+  color: #fff7fb;
+  background: linear-gradient(135deg, var(--ui-rose), #7b4dff);
+}
+
+.run-history-card span {
+  margin-top: 5px;
+}
+
+.run-history-card em {
+  margin-top: 3px;
+  color: #98afc5;
+  font-style: normal;
+}
+
+.run-history-empty {
+  grid-column: span 3;
+  display: grid;
+  align-items: center;
+}
+
 .achievement-header,
 .achievement-card {
   min-height: 68px;
@@ -1289,6 +1385,15 @@ h1 {
   #achievement-strip {
     grid-template-columns: 1fr;
     margin-bottom: 10px;
+  }
+
+  #run-history {
+    grid-template-columns: 1fr;
+    margin-bottom: 10px;
+  }
+
+  .run-history-empty {
+    grid-column: auto;
   }
 
   #recap-rating {

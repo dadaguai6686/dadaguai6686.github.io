@@ -98,6 +98,7 @@ const difficultyPicker = document.querySelector<HTMLDivElement>("#difficulty-pic
 const difficultyButtons = document.querySelectorAll<HTMLButtonElement>("[data-difficulty]");
 const difficultyDetail = document.querySelector<HTMLElement>("#difficulty-detail")!;
 const achievementStrip = document.querySelector<HTMLDivElement>("#achievement-strip")!;
+const runHistory = document.querySelector<HTMLDivElement>("#run-history")!;
 const audioToggle = document.querySelector<HTMLButtonElement>("#audio-toggle")!;
 const overlayEyebrow = overlay.querySelector<HTMLElement>(".eyebrow")!;
 const overlayTitle = overlay.querySelector<HTMLElement>("h1")!;
@@ -127,8 +128,25 @@ type SaveData = {
   bestScore: number;
   bestWave: number;
   clears: number;
+  runHistory: RunHistoryEntry[];
   selectedDifficulty: DifficultyId;
   totalContracts: number;
+};
+
+type RunHistoryEntry = {
+  id: string;
+  bestCombo: number;
+  contractStatus: ContractSnapshot["status"];
+  contractsCompleted: number;
+  difficulty: DifficultyId;
+  elapsed: number;
+  ratingId: RunRating["id"];
+  ratingName: string;
+  routeName: string;
+  score: number;
+  status: RunEndDetail["status"];
+  timestamp: number;
+  wave: number;
 };
 
 type RunEndDetail = {
@@ -246,6 +264,7 @@ resetSaveButton.addEventListener("click", () => {
   updateDifficultyUi();
   updateRecordUi();
   updateAchievementUi();
+  updateRunHistoryUi();
   disarmResetSave();
   setSessionFeedback("本地存档已清空。");
 });
@@ -352,6 +371,7 @@ window.addEventListener("game:ended", (event) => {
   overlay.classList.add("show");
   howToPlay.hidden = true;
   achievementStrip.hidden = true;
+  runHistory.hidden = false;
   setDifficultyPickerVisible(detail.status !== "won");
   resumeButton.hidden = true;
   startButton.hidden = false;
@@ -439,6 +459,7 @@ function showHelpOverlay(): void {
   }
   overlay.classList.add("show");
   achievementStrip.hidden = false;
+  runHistory.hidden = true;
   updateAchievementUi();
   setDifficultyPickerVisible(latestStatus === "menu" || latestStatus === "lost" || latestStatus === "completed");
   overlayEyebrow.textContent = "玩法说明";
@@ -637,9 +658,11 @@ function persistRunResult(detail: RunEndDetail): AchievementId[] {
   const runAchievements = getUnlockedAchievementsForRun(detail);
   const newlyUnlocked = runAchievements.filter((id) => !previous.has(id));
   saveData.achievements = Array.from(new Set([...saveData.achievements, ...runAchievements]));
+  saveData.runHistory = [createRunHistoryEntry(detail), ...saveData.runHistory].slice(0, 5);
   saveSave(saveData);
   updateRecordUi();
   updateAchievementUi();
+  updateRunHistoryUi();
   return newlyUnlocked;
 }
 
@@ -713,6 +736,48 @@ function updateAchievementUi(): void {
       return item;
     })
   );
+}
+
+function updateRunHistoryUi(): void {
+  const header = document.createElement("div");
+  header.className = "run-history-header";
+  const headerTitle = document.createElement("strong");
+  headerTitle.textContent = "航行日志";
+  const headerDetail = document.createElement("span");
+  headerDetail.textContent =
+    saveData.runHistory.length > 0 ? "最近路线、评级和合约表现。" : "完成一局后会记录最近路线。";
+  header.append(headerTitle, headerDetail);
+
+  if (saveData.runHistory.length === 0) {
+    const empty = document.createElement("article");
+    empty.className = "run-history-empty";
+    empty.textContent = "暂无记录。先完成或失败一局，日志会保留最近 5 次救援。";
+    runHistory.replaceChildren(header, empty);
+    return;
+  }
+
+  runHistory.replaceChildren(header, ...saveData.runHistory.slice(0, 3).map(createRunHistoryCard));
+}
+
+function createRunHistoryCard(entry: RunHistoryEntry): HTMLElement {
+  const card = document.createElement("article");
+  card.className = "run-history-card";
+  card.dataset.grade = entry.ratingId;
+
+  const grade = document.createElement("b");
+  grade.textContent = entry.ratingId;
+
+  const title = document.createElement("strong");
+  title.textContent = `${entry.routeName} · ${getRunStatusLabel(entry.status)}`;
+
+  const score = document.createElement("span");
+  score.textContent = `${DIFFICULTY_SETTINGS[entry.difficulty].name} / ${entry.score.toLocaleString()} 分 / 第 ${entry.wave}/5 波`;
+
+  const detail = document.createElement("em");
+  detail.textContent = `${entry.ratingName} · 合约 ${entry.contractsCompleted}/5 · ${getContractStatusLabel(entry.contractStatus)} · ${formatDuration(entry.elapsed)}`;
+
+  card.append(grade, title, score, detail);
+  return card;
 }
 
 function renderAchievementUnlocks(newlyUnlocked: AchievementId[]): void {
@@ -804,6 +869,7 @@ function createDefaultSave(): SaveData {
     bestScore: 0,
     bestWave: 1,
     clears: 0,
+    runHistory: [],
     selectedDifficulty: "standard",
     totalContracts: 0
   };
@@ -827,6 +893,7 @@ function loadSave(): SaveData {
       bestScore: finiteNumber(parsed.bestScore, fallback.bestScore),
       bestWave: finiteNumber(parsed.bestWave, fallback.bestWave),
       clears: finiteNumber(parsed.clears, fallback.clears),
+      runHistory: parseRunHistory(parsed.runHistory),
       selectedDifficulty: selected,
       totalContracts: finiteNumber(parsed.totalContracts, fallback.totalContracts)
     };
@@ -851,6 +918,80 @@ function finiteNumber(value: unknown, fallback: number): number {
 function parseAchievements(value: unknown): AchievementId[] {
   if (!Array.isArray(value)) return [];
   return value.filter((id): id is AchievementId => typeof id === "string" && id in ACHIEVEMENTS);
+}
+
+function parseRunHistory(value: unknown): RunHistoryEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => normalizeRunHistoryEntry(entry))
+    .filter((entry): entry is RunHistoryEntry => Boolean(entry))
+    .slice(0, 5);
+}
+
+function normalizeRunHistoryEntry(value: unknown): RunHistoryEntry | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const entry = value as Partial<RunHistoryEntry>;
+  const difficulty = entry.difficulty && entry.difficulty in DIFFICULTY_SETTINGS ? entry.difficulty : "standard";
+  const status = isRunHistoryStatus(entry.status) ? entry.status : "lost";
+  const contractStatus = isContractStatus(entry.contractStatus) ? entry.contractStatus : "failed";
+  const ratingId = isRatingId(entry.ratingId) ? entry.ratingId : "C";
+  return {
+    id: typeof entry.id === "string" ? entry.id : `legacy-${Date.now()}`,
+    bestCombo: finiteNumber(entry.bestCombo, 1),
+    contractStatus,
+    contractsCompleted: Math.max(0, Math.min(5, Math.round(finiteNumber(entry.contractsCompleted, 0)))),
+    difficulty,
+    elapsed: Math.max(0, finiteNumber(entry.elapsed, 0)),
+    ratingId,
+    ratingName: typeof entry.ratingName === "string" ? entry.ratingName : "信号残缺",
+    routeName: typeof entry.routeName === "string" ? entry.routeName.slice(0, 24) : "星桥-0000",
+    score: Math.max(0, Math.round(finiteNumber(entry.score, 0))),
+    status,
+    timestamp: finiteNumber(entry.timestamp, Date.now()),
+    wave: Math.max(1, Math.min(5, Math.round(finiteNumber(entry.wave, 1))))
+  };
+}
+
+function createRunHistoryEntry(detail: RunEndDetail): RunHistoryEntry {
+  return {
+    id: `${Date.now()}-${detail.routePlan.code}-${detail.wave}`,
+    bestCombo: detail.bestCombo,
+    contractStatus: detail.contract.status,
+    contractsCompleted: detail.stats.contractsCompleted,
+    difficulty: detail.difficulty,
+    elapsed: detail.elapsed,
+    ratingId: detail.rating.id,
+    ratingName: detail.rating.name,
+    routeName: detail.routePlan.name,
+    score: detail.score,
+    status: detail.status,
+    timestamp: Date.now(),
+    wave: detail.wave
+  };
+}
+
+function getRunStatusLabel(status: RunEndDetail["status"]): string {
+  if (status === "completed") return "全域稳定";
+  if (status === "won") return "救援成功";
+  return "信号中断";
+}
+
+function getContractStatusLabel(status: ContractSnapshot["status"]): string {
+  if (status === "completed") return "合约完成";
+  if (status === "failed") return "合约失败";
+  return "合约进行中";
+}
+
+function isRunHistoryStatus(value: unknown): value is RunEndDetail["status"] {
+  return value === "won" || value === "completed" || value === "lost";
+}
+
+function isContractStatus(value: unknown): value is ContractSnapshot["status"] {
+  return value === "active" || value === "completed" || value === "failed";
+}
+
+function isRatingId(value: unknown): value is RunRating["id"] {
+  return value === "S" || value === "A" || value === "B" || value === "C";
 }
 
 type SoundKind =
@@ -920,4 +1061,5 @@ updateDifficultyUi();
 updateAudioUi();
 updateRecordUi();
 updateAchievementUi();
+updateRunHistoryUi();
 updateSessionTools();
