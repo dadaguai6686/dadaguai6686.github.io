@@ -51,6 +51,27 @@ export type Difficulty = {
   stormBonus: number;
 };
 
+export type WaveModifierId =
+  | "steadySignal"
+  | "lumenSurge"
+  | "shardCurrent"
+  | "stormFront"
+  | "overclockedGrid";
+
+export type WaveModifier = {
+  id: WaveModifierId;
+  name: string;
+  description: string;
+  briefing: string;
+  drainBonus: number;
+  repairBonus: number;
+  scoreBonus: number;
+  lumenChargeBonus: number;
+  hazardSpeedBonus: number;
+  stormDrainBonus: number;
+  stormPhaseBonus: number;
+};
+
 export type UpgradeId = "engine" | "repair" | "capacitor" | "pulse" | "shield";
 
 export type Upgrade = {
@@ -128,6 +149,74 @@ export const DIFFICULTY_SETTINGS: Record<DifficultyId, Difficulty> = {
   }
 };
 
+export const WAVE_MODIFIERS: Record<WaveModifierId, WaveModifier> = {
+  steadySignal: {
+    id: "steadySignal",
+    name: "稳定信号",
+    description: "基础战场，没有额外异常。",
+    briefing: "第一波先建立节奏：补流明、修信标、撤离。",
+    drainBonus: 0,
+    repairBonus: 0,
+    scoreBonus: 0,
+    lumenChargeBonus: 0,
+    hazardSpeedBonus: 0,
+    stormDrainBonus: 0,
+    stormPhaseBonus: 0
+  },
+  lumenSurge: {
+    id: "lumenSurge",
+    name: "流明潮汐",
+    description: "流明回复更多电量，适合冲连锁。",
+    briefing: "金色流明更活跃，敢于绕路收集会换来更高续航。",
+    drainBonus: 0.04,
+    repairBonus: 0,
+    scoreBonus: 0.06,
+    lumenChargeBonus: 5,
+    hazardSpeedBonus: 0,
+    stormDrainBonus: 0,
+    stormPhaseBonus: 0
+  },
+  shardCurrent: {
+    id: "shardCurrent",
+    name: "碎片回潮",
+    description: "虚空碎片移动更快，分数倍率略高。",
+    briefing: "粉色碎片流速上升，保留脉冲来保护修复窗口。",
+    drainBonus: 0,
+    repairBonus: 0,
+    scoreBonus: 0.12,
+    lumenChargeBonus: 0,
+    hazardSpeedBonus: 0.18,
+    stormDrainBonus: 0,
+    stormPhaseBonus: 0
+  },
+  stormFront: {
+    id: "stormFront",
+    name: "风暴前线",
+    description: "风暴更活跃，停留会快速掉电。",
+    briefing: "紫色风暴会更频繁扩张，先规划安全路线再修复。",
+    drainBonus: 0.06,
+    repairBonus: 0,
+    scoreBonus: 0.14,
+    lumenChargeBonus: 0,
+    hazardSpeedBonus: 0,
+    stormDrainBonus: 0.24,
+    stormPhaseBonus: 0.22
+  },
+  overclockedGrid: {
+    id: "overclockedGrid",
+    name: "超频光网",
+    description: "维修更快，但基础耗电和奖励都更高。",
+    briefing: "信标响应变快，抓准时机可以高速清波，但电量会更紧。",
+    drainBonus: 0.12,
+    repairBonus: 0.18,
+    scoreBonus: 0.16,
+    lumenChargeBonus: 2,
+    hazardSpeedBonus: 0.08,
+    stormDrainBonus: 0.08,
+    stormPhaseBonus: 0.08
+  }
+};
+
 export const UPGRADE_CATALOG: Record<UpgradeId, Upgrade> = {
   engine: {
     id: "engine",
@@ -179,6 +268,7 @@ export type GameState = {
   gate: Gate;
   upgrades: UpgradeState;
   wave: number;
+  waveModifier: WaveModifierId;
   campaignWaves: number;
   score: number;
   combo: number;
@@ -261,6 +351,7 @@ export function createInitialState(): GameState {
     gate: { position: { x: 500, y: 55 }, open: false },
     upgrades: createUpgradeState(),
     wave: 1,
+    waveModifier: "steadySignal",
     campaignWaves: CAMPAIGN_WAVES,
     score: 0,
     combo: 1,
@@ -280,6 +371,7 @@ export function restartRun(state: GameState, upgradeId?: UpgradeId, options: Res
   next.difficulty = options.difficulty ?? state.difficulty ?? "standard";
   next.status = "playing";
   next.wave = wonPreviousWave ? state.wave + 1 : 1;
+  next.waveModifier = getWaveModifierFor(next.wave, next.difficulty);
   next.upgrades = wonPreviousWave ? { ...state.upgrades } : createUpgradeState();
   next.elapsed = wonPreviousWave ? state.elapsed : 0;
   next.endReason = "none";
@@ -305,9 +397,10 @@ export function restartRun(state: GameState, upgradeId?: UpgradeId, options: Res
     }))
   );
   next.storms = createStorms(next.wave, next.difficulty);
+  const modifier = WAVE_MODIFIERS[next.waveModifier];
   next.message = wonPreviousWave
-    ? `升级已安装。第 ${next.wave}/${next.campaignWaves} 波：光网反抗更猛烈。`
-    : `${DIFFICULTY_SETTINGS[next.difficulty].name}模式，第 ${next.wave}/${next.campaignWaves} 波：保持连锁，修复信标。`;
+    ? `升级已安装。第 ${next.wave}/${next.campaignWaves} 波，${modifier.name}：${modifier.briefing}`
+    : `${DIFFICULTY_SETTINGS[next.difficulty].name}模式，第 ${next.wave}/${next.campaignWaves} 波，${modifier.name}：${modifier.briefing}`;
   return next;
 }
 
@@ -319,6 +412,7 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
   const next = structuredClone(state);
   const player = next.player;
   const difficulty = DIFFICULTY_SETTINGS[next.difficulty];
+  const modifier = WAVE_MODIFIERS[next.waveModifier];
   const previousPosition = { ...player.position };
   next.elapsed += dt;
   next.comboTimer = Math.max(0, next.comboTimer - dt);
@@ -363,7 +457,10 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
     (relay) => !relay.repaired && distance(relay.position, player.position) < 76
   );
   if (repairTarget && input.repair) {
-    const repairSpeed = (0.26 + next.upgrades.repair * 0.07 + player.lumen * 0.005) * difficulty.repairScale;
+    const repairSpeed =
+      (0.26 + next.upgrades.repair * 0.07 + player.lumen * 0.005) *
+      difficulty.repairScale *
+      (1 + modifier.repairBonus);
     repairTarget.progress = Math.min(1, repairTarget.progress + dt * repairSpeed);
     player.charge = Math.max(0, player.charge - dt * 3.2);
     next.stats.repairSeconds += dt;
@@ -406,15 +503,16 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
       drop.collected = true;
       player.lumen += 1;
       next.stats.lumenCollected += 1;
-      player.charge = Math.min(player.maxCharge, player.charge + 9 + next.upgrades.capacitor * 3);
+      player.charge = Math.min(player.maxCharge, player.charge + 9 + next.upgrades.capacitor * 3 + modifier.lumenChargeBonus);
       awardScore(next, 70, 0.25);
       next.message = `流明回收，${formatCombo(next.combo)} 连锁。`;
     }
   });
 
   next.hazards.forEach((hazard) => {
-    hazard.position.x += hazard.velocity.x * dt;
-    hazard.position.y += hazard.velocity.y * dt;
+    const hazardSpeed = 1 + modifier.hazardSpeedBonus;
+    hazard.position.x += hazard.velocity.x * dt * hazardSpeed;
+    hazard.position.y += hazard.velocity.y * dt * hazardSpeed;
     if (hazard.position.x < 70 || hazard.position.x > next.arena.width - 70) {
       hazard.velocity.x *= -1;
     }
@@ -441,11 +539,14 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
 
   let insideStorm = false;
   next.storms.forEach((storm) => {
-    storm.phase += dt * (0.8 + next.wave * 0.04);
+    storm.phase += dt * (0.8 + next.wave * 0.04 + modifier.stormPhaseBonus);
     const activeRadius = getStormActiveRadius(storm);
     if (distance(storm.position, player.position) < activeRadius) {
       insideStorm = true;
-      player.charge = Math.max(0, player.charge - dt * (9 + next.wave * 0.7) * difficulty.drainScale);
+      player.charge = Math.max(
+        0,
+        player.charge - dt * (9 + next.wave * 0.7) * difficulty.drainScale * (1 + modifier.stormDrainBonus)
+      );
       if (player.invulnerable <= 0 && storm.phase % (Math.PI * 2) > Math.PI * 1.35) {
         player.hull = Math.max(0, player.hull - dt * (5.5 - next.upgrades.shield) * difficulty.damageScale);
       }
@@ -457,7 +558,10 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
     next.stats.stormSeconds += dt;
   }
 
-  player.charge = Math.max(0, player.charge - dt * (2.05 + next.wave * 0.22) * difficulty.drainScale);
+  player.charge = Math.max(
+    0,
+    player.charge - dt * (2.05 + next.wave * 0.22) * difficulty.drainScale * (1 + modifier.drainBonus)
+  );
   next.gate.open = next.relays.every((relay) => relay.repaired);
 
   if (next.gate.open) {
@@ -506,6 +610,27 @@ export function getUpgradeChoices(state: GameState): Upgrade[] {
     .filter((id) => state.upgrades[id] < 3)
     .slice(0, 3)
     .map((id) => UPGRADE_CATALOG[id]);
+}
+
+export function getWaveModifierFor(wave: number, difficulty: DifficultyId): WaveModifierId {
+  const standardOrder: WaveModifierId[] = [
+    "steadySignal",
+    "lumenSurge",
+    "shardCurrent",
+    "stormFront",
+    "overclockedGrid"
+  ];
+  if (difficulty === "hardcore") {
+    const hardcoreOrder: WaveModifierId[] = [
+      "shardCurrent",
+      "stormFront",
+      "overclockedGrid",
+      "lumenSurge",
+      "stormFront"
+    ];
+    return hardcoreOrder[clampInt(wave - 1, 0, hardcoreOrder.length - 1)];
+  }
+  return standardOrder[clampInt(wave - 1, 0, standardOrder.length - 1)];
 }
 
 export function getObjectiveHint(state: GameState): ObjectiveHint {
@@ -636,7 +761,12 @@ function awardScore(state: GameState, base: number, comboGain: number): void {
   state.combo = Math.min(5, state.combo + comboGain);
   state.comboTimer = 3.4;
   state.bestCombo = Math.max(state.bestCombo, state.combo);
-  state.score += Math.round(base * state.combo * DIFFICULTY_SETTINGS[state.difficulty].scoreScale);
+  state.score += Math.round(
+    base *
+      state.combo *
+      DIFFICULTY_SETTINGS[state.difficulty].scoreScale *
+      (1 + WAVE_MODIFIERS[state.waveModifier].scoreBonus)
+  );
 }
 
 function formatCombo(combo: number): string {

@@ -9,7 +9,8 @@ import {
   type RunEndReason,
   type RunStats,
   type Upgrade,
-  type UpgradeId
+  type UpgradeId,
+  type WaveModifier
 } from "./game/simulation";
 import "./styles.css";
 
@@ -50,6 +51,9 @@ const recordWave = document.querySelector<HTMLElement>("#record-wave")!;
 const recordCombo = document.querySelector<HTMLElement>("#record-combo")!;
 const boostPill = document.querySelector<HTMLElement>("#boost-pill")!;
 const pulsePill = document.querySelector<HTMLElement>("#pulse-pill")!;
+const waveEvent = document.querySelector<HTMLDivElement>("#wave-event")!;
+const waveEventTitle = document.querySelector<HTMLElement>("#wave-event-title")!;
+const waveEventDetail = document.querySelector<HTMLElement>("#wave-event-detail")!;
 const pilotTip = document.querySelector<HTMLDivElement>("#pilot-tip")!;
 const pilotTipTitle = document.querySelector<HTMLElement>("#pilot-tip-title")!;
 const pilotTipDetail = document.querySelector<HTMLElement>("#pilot-tip-detail")!;
@@ -94,6 +98,7 @@ type RunEndDetail = {
   stats: RunStats;
   status: "won" | "completed" | "lost";
   wave: number;
+  waveModifier: WaveModifier;
 };
 
 let latestUpgradeChoices: Upgrade[] = [];
@@ -178,6 +183,7 @@ window.addEventListener("game:hud", (event) => {
     difficulty: DifficultyId;
     campaignWaves: number;
     status: GameStatus;
+    waveModifier: WaveModifier;
     upgradeChoices: Upgrade[];
   };
 
@@ -200,6 +206,9 @@ window.addEventListener("game:hud", (event) => {
   pulsePill.textContent = detail.pulseReady ? "脉冲就绪" : "脉冲冷却中";
   boostPill.classList.toggle("cooling", !detail.boostReady);
   pulsePill.classList.toggle("cooling", !detail.pulseReady);
+  waveEvent.hidden = detail.status !== "playing";
+  waveEventTitle.textContent = `本波事件：${detail.waveModifier.name}`;
+  waveEventDetail.textContent = detail.waveModifier.description;
   pilotTip.hidden = detail.status !== "playing";
   pilotTip.classList.toggle("urgent", detail.objectiveHint.urgent);
   pilotTip.dataset.kind = detail.objectiveHint.kind;
@@ -207,7 +216,7 @@ window.addEventListener("game:hud", (event) => {
   pilotTipDetail.textContent = detail.objectiveHint.detail;
   missionText.textContent = detail.message;
   objectiveTitle.textContent = `目标：第 ${detail.wave}/${detail.campaignWaves} 波，修复 ${detail.relays} 座信标`;
-  objectiveDetail.textContent = `${DIFFICULTY_SETTINGS[detail.difficulty].name}模式：收集流明补电，避开风暴和虚空碎片。`;
+  objectiveDetail.textContent = `${DIFFICULTY_SETTINGS[detail.difficulty].name}模式 / ${detail.waveModifier.name}：${detail.waveModifier.briefing}`;
   latestUpgradeChoices = detail.upgradeChoices;
 });
 
@@ -390,6 +399,7 @@ function renderRunRecap(detail: RunEndDetail): void {
     ["波次", `${detail.wave}/5`],
     ["用时", formatDuration(detail.elapsed)],
     ["最佳连锁", `${detail.bestCombo.toFixed(1)}x`],
+    ["事件", detail.waveModifier.name],
     ["流明", String(detail.stats.lumenCollected)],
     ["信标", String(detail.stats.relaysRepaired)],
     ["受击", String(detail.stats.hitsTaken)],

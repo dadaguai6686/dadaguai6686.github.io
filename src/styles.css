@@ -234,6 +234,7 @@ button {
   background: rgba(255, 255, 255, 0.055);
 }
 
+#wave-event,
 #pilot-tip {
   margin-top: 10px;
   padding: 9px 10px;
@@ -242,6 +243,7 @@ button {
   background: linear-gradient(90deg, rgba(103, 244, 255, 0.1), rgba(255, 226, 122, 0.045));
 }
 
+#wave-event[hidden],
 #pilot-tip[hidden] {
   display: none;
 }
@@ -252,15 +254,19 @@ button {
 }
 
 #pilot-tip strong,
+#wave-event strong,
+#wave-event span,
 #pilot-tip span {
   display: block;
 }
 
+#wave-event strong,
 #pilot-tip strong {
   color: #fff3ad;
   font-size: 12px;
 }
 
+#wave-event span,
 #pilot-tip span {
   margin-top: 3px;
   color: #c9ddec;
@@ -727,6 +733,7 @@ h1 {
     margin-top: 8px;
   }
 
+  #wave-event span,
   #pilot-tip span {
     font-size: 11px;
   }

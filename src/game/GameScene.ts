@@ -9,6 +9,7 @@ import {
   resumeRun,
   restartRun,
   updateSimulation,
+  WAVE_MODIFIERS,
   type DifficultyId,
   type GameState,
   type Hazard,
@@ -19,7 +20,8 @@ import {
   type RunStats,
   type Storm,
   type Upgrade,
-  type UpgradeId
+  type UpgradeId,
+  type WaveModifier
 } from "./simulation";
 
 type HudSnapshot = {
@@ -40,6 +42,7 @@ type HudSnapshot = {
   message: string;
   objectiveHint: ObjectiveHint;
   status: GameState["status"];
+  waveModifier: WaveModifier;
   upgradeChoices: Upgrade[];
 };
 
@@ -99,7 +102,8 @@ export class GameScene extends Phaser.Scene {
             score: this.state.score,
             stats: this.state.stats as RunStats,
             status: this.state.status,
-            wave: this.state.wave
+            wave: this.state.wave,
+            waveModifier: WAVE_MODIFIERS[this.state.waveModifier] as WaveModifier
           }
         })
       );
@@ -401,6 +405,7 @@ export class GameScene extends Phaser.Scene {
       message: this.state.message,
       objectiveHint: getObjectiveHint(this.state),
       status: this.state.status,
+      waveModifier: WAVE_MODIFIERS[this.state.waveModifier],
       upgradeChoices: this.state.status === "won" ? getUpgradeChoices(this.state) : []
     };
     window.dispatchEvent(new CustomEvent("game:hud", { detail: snapshot }));
