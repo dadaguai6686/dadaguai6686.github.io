@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import {
   createInitialState,
   getUpgradeChoices,
+  pauseRun,
+  resumeRun,
   restartRun,
   updateSimulation,
   type GameState,
@@ -59,6 +61,10 @@ assert.ok(getUpgradeChoices(state).length > 0, "winning should offer upgrade cho
 const upgraded = restartRun(state, "engine");
 assert.equal(upgraded.wave, 2, "winning and restarting should advance the wave");
 assert.equal(upgraded.upgrades.engine, 1, "chosen upgrade should be installed");
+
+const paused = pauseRun(upgraded);
+assert.equal(paused.status, "paused", "pause should freeze an active run");
+assert.equal(resumeRun(paused).status, "playing", "resume should return to active play");
 
 let drained = restartRun(createInitialState());
 drained.player.charge = 0.01;

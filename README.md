@@ -1,59 +1,53 @@
-# Lumen Drift
+# 流明漂航 Lumen Drift
 
-A polished browser arcade roguelite prototype built with Phaser, TypeScript, and Vite.
+一个中文浏览器街机 Roguelite 原型，使用 Phaser、TypeScript 和 Vite 制作。
 
-Pilot a fragile repair drone through a collapsing light network. Restore every relay, collect risky lumen crystals, push away void shards, and escape through the gate before charge or hull runs out.
+你驾驶一台维修无人机进入坍缩的城市光网：修复蓝色信标、收集金色流明、避开紫色风暴和粉色虚空碎片，在电量归零前冲进北侧光门。
 
-## Play
+试玩地址：[https://dadaguai6686.github.io/](https://dadaguai6686.github.io/)
+
+## 怎么玩
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open the local Vite URL, usually `http://127.0.0.1:5173`.
+打开本地 Vite 地址，通常是 `http://127.0.0.1:5173`。
 
-## Controls
+## 操作
 
-- `WASD` or arrow keys: drift
-- `Space`: boost
-- `E`: repair nearby relay
-- `Q`: pulse nearby hazards away
+- `WASD` 或方向键：漂移移动
+- `Space`：短推进
+- `E`：靠近蓝色信标时修复
+- `Q`：释放脉冲，推开附近碎片
+- `H`：打开中文玩法说明并暂停
+- 小屏幕会自动显示触控摇杆和修复、推进、脉冲按钮
 
-On small screens, touch controls appear automatically with a virtual stick and repair, boost, and pulse buttons.
-
-## Core Loop
+## 核心循环
 
 ```text
-scan route -> chain lumen -> repair relay -> dodge void shard and storm -> choose upgrade -> harder wave
+规划路线 -> 收集流明补电 -> 靠近信标修复 -> 避开风暴和碎片 -> 保持连锁 -> 进光门 -> 选择升级 -> 更难波次
 ```
 
-## Game Features
+## 游戏系统
 
-- Score and combo chain for fast, risky routing.
-- Pulsing storm fields that siphon charge and force movement decisions.
-- Five upgrade lines: engine, repair, capacitor, pulse, and shield.
-- Relay progress slowly decays if the player abandons a partial repair.
-- Wave escalation with more hazards and persistent upgrade pressure.
-- DOM HUD and upgrade menu layered over a Phaser canvas playfield.
+- 中文主菜单和局内玩法说明。
+- 分数和连锁倍率，鼓励连续收集、修复和撤离。
+- 紫色风暴会吸走电量，迫使玩家移动。
+- 粉色虚空碎片会碰撞扣机体和打断连锁。
+- 五条升级线：矢量引擎、信标织机、深层电容、棱镜脉冲、曜盾机体。
+- 局内 DOM HUD 负责中文信息、暂停说明和升级选择，Phaser canvas 负责游戏画面。
 
-## Project Shape
+## 项目结构
 
-- `src/game/simulation.ts`: saveable game state and gameplay rules
-- `src/game/GameScene.ts`: Phaser rendering and input bridge
-- `src/main.ts`: browser shell and DOM HUD bridge
-- `docs/design.md`: concept, loop, and prototype acceptance notes
+- `src/game/simulation.ts`：可测试的游戏状态、规则、计分、升级和暂停逻辑
+- `src/game/GameScene.ts`：Phaser 场景、程序化视觉、输入桥接
+- `src/main.ts`：中文 HUD、菜单、触控、暂停和升级 UI
+- `docs/design.md`：Game Studio 设计说明
+- `scripts/smoke-simulation.ts`：核心循环 smoke test
 
-## Visual Direction
-
-Neon sci-fi, high contrast, readable action silhouettes. The first build uses procedural Phaser shapes and particles for reliable local playback.
-
-Canva concept art:
-
-- Edit: https://www.canva.com/d/qHccXjuo_7U4z-2
-- View: https://www.canva.com/d/25oTs6X9QueIqoP
-
-## Validation
+## 验证
 
 ```bash
 npm test

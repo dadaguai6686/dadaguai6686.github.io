@@ -35,7 +35,7 @@ export type Gate = {
   open: boolean;
 };
 
-export type GameStatus = "menu" | "playing" | "won" | "lost";
+export type GameStatus = "menu" | "playing" | "paused" | "won" | "lost";
 
 export type UpgradeId = "engine" | "repair" | "capacitor" | "pulse" | "shield";
 
@@ -50,28 +50,28 @@ export type UpgradeState = Record<UpgradeId, number>;
 export const UPGRADE_CATALOG: Record<UpgradeId, Upgrade> = {
   engine: {
     id: "engine",
-    name: "Vector Engine",
-    description: "Higher thrust, faster boost recovery."
+    name: "矢量引擎",
+    description: "提高推力，并缩短推进冷却。"
   },
   repair: {
     id: "repair",
-    name: "Relay Weaver",
-    description: "Repair relays faster and earn bigger relay bonuses."
+    name: "信标织机",
+    description: "更快修复信标，并提高信标得分。"
   },
   capacitor: {
     id: "capacitor",
-    name: "Deep Capacitor",
-    description: "Start waves with more charge and collect more from lumen."
+    name: "深层电容",
+    description: "提高最大电量，流明回复更多电量。"
   },
   pulse: {
     id: "pulse",
-    name: "Prism Pulse",
-    description: "Push hazards farther with a wider pulse field."
+    name: "棱镜脉冲",
+    description: "脉冲范围更大，推开碎片更远。"
   },
   shield: {
     id: "shield",
-    name: "Aegis Hull",
-    description: "Gain more hull and reduce collision damage."
+    name: "曜盾机体",
+    description: "提高机体上限，并降低碰撞伤害。"
   }
 };
 
@@ -175,7 +175,7 @@ export function createInitialState(): GameState {
     combo: 1,
     comboTimer: 0,
     bestCombo: 1,
-    message: "Repair every relay, harvest lumen, then slip through the gate.",
+    message: "修复全部信标，收集流明，最后从北侧光门撤离。",
     elapsed: 0,
     shake: 0
   };
@@ -207,8 +207,8 @@ export function restartRun(state: GameState, upgradeId?: UpgradeId): GameState {
   );
   next.storms = createStorms(next.wave);
   next.message = wonPreviousWave
-    ? `Upgrade installed. Wave ${next.wave}: the network fights harder.`
-    : `Wave ${next.wave}: chain lumen and relays for a higher score.`;
+    ? `升级已安装。第 ${next.wave} 波：光网反抗更猛烈。`
+    : `第 ${next.wave} 波：连续收集流明和修信标，提高连锁倍率。`;
   return next;
 }
 
@@ -263,13 +263,13 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
     const repairSpeed = 0.26 + next.upgrades.repair * 0.07 + player.lumen * 0.005;
     repairTarget.progress = Math.min(1, repairTarget.progress + dt * repairSpeed);
     player.charge = Math.max(0, player.charge - dt * 3.2);
-    next.message = "Hold steady. The relay is drinking light.";
+    next.message = "保持在信标旁，维修光束正在充能。";
     if (repairTarget.progress >= 1) {
       repairTarget.repaired = true;
       player.lumen += 2;
       awardScore(next, 260 + next.upgrades.repair * 75, 0.48);
       next.shake = 0.1;
-      next.message = `Relay restored. ${formatCombo(next.combo)} chain alive.`;
+      next.message = `信标修复完成，${formatCombo(next.combo)} 连锁保持中。`;
     }
   } else {
     next.relays.forEach((relay) => {
@@ -292,7 +292,7 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
         hazard.velocity.y += (toHazard.y / len) * (215 + pulseLevel * 60);
       }
     });
-    next.message = "Pulse fired. Nearby void shards scatter.";
+    next.message = "脉冲释放，附近虚空碎片被推开。";
   }
 
   next.lumen.forEach((drop) => {
@@ -301,7 +301,7 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
       player.lumen += 1;
       player.charge = Math.min(player.maxCharge, player.charge + 9 + next.upgrades.capacitor * 3);
       awardScore(next, 70, 0.25);
-      next.message = `Lumen recovered. ${formatCombo(next.combo)} chain.`;
+      next.message = `流明回收，${formatCombo(next.combo)} 连锁。`;
     }
   });
 
@@ -327,7 +327,7 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
       const len = Math.hypot(away.x, away.y) || 1;
       player.velocity.x += (away.x / len) * 250;
       player.velocity.y += (away.y / len) * 250;
-      next.message = "Void impact. Hull integrity falling.";
+      next.message = "被虚空碎片击中，机体完整度下降。";
     }
   });
 
@@ -340,7 +340,7 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
         player.hull = Math.max(0, player.hull - dt * (5.5 - next.upgrades.shield));
       }
       next.shake = Math.max(next.shake, 0.08);
-      next.message = "Storm field siphoning charge. Break line or pulse away.";
+      next.message = "风暴场正在吸走电量，立刻脱离范围。";
     }
   });
 
@@ -348,20 +348,34 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
   next.gate.open = next.relays.every((relay) => relay.repaired);
 
   if (next.gate.open) {
-    next.message = "Gate open. Fly through the north aperture.";
+    next.message = "光门已开启，飞向北侧出口。";
     if (distance(next.gate.position, player.position) < 58) {
       awardScore(next, 900 + player.lumen * 45 + Math.ceil(player.charge) * 8, 0.35);
       next.status = "won";
-      next.message = `Network restored. Score ${next.score.toLocaleString()}. Choose an upgrade.`;
+      next.message = `光网稳定，得分 ${next.score.toLocaleString()}。请选择一项升级。`;
     }
   }
 
   if (player.hull <= 0 || player.charge <= 0) {
     next.status = "lost";
-    next.message = player.hull <= 0 ? "Drone shattered. Reboot the run." : "Charge collapsed. The void took the grid.";
+    next.message = player.hull <= 0 ? "无人机损毁，重新启动救援。" : "电量归零，光网被虚空吞没。";
   }
 
   return next;
+}
+
+export function pauseRun(state: GameState): GameState {
+  if (state.status !== "playing") {
+    return state;
+  }
+  return { ...structuredClone(state), status: "paused", message: "已暂停。查看目标、操作和得分规则。" };
+}
+
+export function resumeRun(state: GameState): GameState {
+  if (state.status !== "paused") {
+    return state;
+  }
+  return { ...structuredClone(state), status: "playing", message: "继续救援：修复信标并保持电量。" };
 }
 
 export function getUpgradeChoices(state: GameState): Upgrade[] {

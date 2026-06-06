@@ -1,76 +1,56 @@
-# Lumen Drift Design Plan
+# 《流明漂航》Game Studio 设计说明
 
-## Fantasy
+## 玩家幻想
 
-Pilot a tiny repair drone inside a collapsing light network. The player is not a warrior; they are a fast, fragile engineer who survives by routing, timing, and controlled greed.
+玩家不是战斗机驾驶员，而是一台脆弱但灵活的维修无人机。爽点来自“边躲危险边抢修系统”：路线规划、手感漂移、风险收集、连锁得分和波次升级。
 
-## Core Loop
+## 玩家动词
 
-1. Read the sector layout and identify unrepaired relays.
-2. Drift through lumen lanes while avoiding roaming void shards.
-3. Hold `E` near a relay to repair it, spending charge and exposing the drone.
-4. Decide whether optional lumen pickups are worth the route risk.
-5. Keep the score chain alive by collecting, repairing, and escaping quickly.
-6. Open the north gate by repairing every relay.
-7. Choose a wave-complete upgrade, then begin a harder wave.
+- 漂移移动
+- 短推进穿过危险区
+- 靠近信标并持续修复
+- 释放脉冲推开碎片
+- 收集流明补电并续连锁
+- 从北侧光门撤离
+- 波次结束后选择升级
 
-## Player Verbs
+## 核心循环
 
-- Move with inertia
-- Boost through danger
-- Repair while stationary enough to commit
-- Pulse nearby hazards away
-- Collect lumen for charge and future advantage
-- Chain score events for multiplier pressure
-- Choose upgrades between completed waves
-- Escape through the gate
+1. 读图：看信标、流明、风暴和碎片的位置。
+2. 补给：先捡金色流明，为修复保留电量。
+3. 修复：靠近蓝色信标按 `E`，持续修复。
+4. 决策：修一半离开会掉进度，继续修则可能被风暴或碎片压住。
+5. 连锁：连续捡流明、修信标、撤离会提高倍率。
+6. 撤离：全部信标修好后，冲进北侧光门。
+7. 成长：选择升级并进入更难波次。
 
-## Failure And Success
+## 失败和胜利
 
-- Loss: hull reaches zero or charge drains to zero.
-- Win: every relay is repaired and the drone reaches the open gate.
-- Run pressure: repairing consumes charge, so the player has to collect lumen without overextending.
-- Quality pressure: partial relay repairs decay, storms siphon charge, and hits reset the score chain.
+- 机体归零：失败。
+- 电量归零：失败。
+- 全部信标修复并进入光门：胜利。
+- 被碎片击中：扣机体、扣电量、重置连锁。
+- 进入风暴：持续扣电量，强迫玩家走位。
 
-## Progression
+## 升级
 
-Wave-complete upgrades are capped at three levels each:
+- 矢量引擎：提高推力，缩短推进冷却。
+- 信标织机：加快修复，提高信标得分。
+- 深层电容：提高最大电量，流明回复更多。
+- 棱镜脉冲：扩大脉冲范围，推开碎片更远。
+- 曜盾机体：提高机体上限，降低碰撞伤害。
 
-- Vector Engine: stronger thrust and faster boost recovery.
-- Relay Weaver: faster repairs and larger relay score bonuses.
-- Deep Capacitor: more max charge and better lumen charge recovery.
-- Prism Pulse: wider, stronger hazard pushback.
-- Aegis Hull: more max hull and less collision damage.
+## UI 设计
 
-## Scoring
+- Phaser canvas：游戏世界、无人机、信标、流明、碎片、风暴和光门。
+- DOM HUD：中文状态、目标、分数、连锁、技能状态。
+- DOM overlay：中文主菜单、玩法说明、暂停、胜负复盘、升级选择。
+- 移动端：显示触控摇杆和三个动作按钮。
 
-- Lumen pickups increase score and extend the chain.
-- Completed relays award larger score bursts.
-- Escaping through the gate awards a wave-end bonus.
-- Taking a hit resets the chain and subtracts a small score penalty.
+## 验收标准
 
-## Implementation Track
-
-- Phaser 3 for the canvas playfield.
-- TypeScript and Vite for the browser build.
-- DOM overlay for HUD, menu, and run-end states.
-- Simulation state lives in `src/game/simulation.ts`; Phaser scene adapts state into visuals.
-- Touch input is represented as a virtual input state and merged with keyboard input in `src/game/input.ts`.
-
-## Visual Direction
-
-The game uses premium neon sci-fi: cyan repair light, amber lumen crystals, magenta void hazards, and a dark layered space-grid background. Assets are generated procedurally in Phaser so the first playable version has no external asset pipeline risk.
-
-Canva key art concept:
-
-- Editable design: https://www.canva.com/d/qHccXjuo_7U4z-2
-- View link: https://www.canva.com/d/25oTs6X9QueIqoP
-
-## Prototype Acceptance
-
-- Start screen appears and can launch a run.
-- Player can move, boost, pulse, collect lumen, repair relays, avoid storms, win, upgrade, and retry.
-- HUD reflects hull, charge, lumen, relays, wave, score, combo, and ability readiness.
-- Desktop and mobile viewports remain readable.
-- Simulation smoke tests cover boost, repair, score, combo, storm drain, win, upgrade, and loss.
-- Build succeeds with `npm run build`.
+- 玩家打开页面能立刻知道“这是什么游戏、目标是什么、怎么操作”。
+- UI 文案为中文，英文只作为副标题或技术名保留。
+- 游戏支持开始、暂停说明、继续、失败重试、胜利升级。
+- smoke test 覆盖推进、修复、计分、连锁、风暴扣电、胜利、升级、暂停和失败。
+- `npm test` 与 `npm run build` 通过。

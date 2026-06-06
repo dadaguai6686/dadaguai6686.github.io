@@ -4,6 +4,8 @@ import {
   createInitialState,
   getStormActiveRadius,
   getUpgradeChoices,
+  pauseRun,
+  resumeRun,
   restartRun,
   updateSimulation,
   type GameState,
@@ -84,6 +86,14 @@ export class GameScene extends Phaser.Scene {
     window.addEventListener("game:start", (event) => {
       const detail = (event as CustomEvent<{ upgradeId?: UpgradeId }>).detail;
       this.startRunWithUpgrade(detail?.upgradeId);
+    });
+    window.addEventListener("game:pause", () => {
+      this.state = pauseRun(this.state);
+      this.emitHud();
+    });
+    window.addEventListener("game:resume", () => {
+      this.state = resumeRun(this.state);
+      this.emitHud();
     });
   }
 
