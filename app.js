@@ -4336,6 +4336,14 @@ function init() {
         </div>
         <div class="arcade-contract-grid" id="premium-contract-list"></div>
       </div>
+      <div class="arcade-difficulty-panel" id="premium-difficulty-panel" aria-label="街机难度矩阵">
+        <div class="arcade-difficulty-heading">
+          <span><i data-lucide="sliders-horizontal"></i> DIFFICULTY MATRIX</span>
+          <strong id="premium-difficulty-active">标准协议</strong>
+          <small id="premium-difficulty-summary">标准敌压与完整声望结算，适合日常推进。</small>
+        </div>
+        <div class="arcade-difficulty-grid" id="premium-difficulty-list"></div>
+      </div>
       <div class="arcade-loadout-panel" id="premium-loadout-panel" aria-label="街机战术芯片">
         <div class="arcade-loadout-heading">
           <span><i data-lucide="cpu"></i> TACTICAL LOADOUT</span>
@@ -4631,6 +4639,52 @@ function init() {
         bonuses: { scoreBoost: 0.07, tacticsAp: 1, tacticsShield: 16, chainMoves: 3, heistCloaks: 1 }
       }
     ];
+    const difficultyDefs = [
+      {
+        id: 'training',
+        label: '训练协议',
+        short: '训练',
+        tone: 'training',
+        scoreBoost: -0.08,
+        pressure: 0.82,
+        summary: '降低敌压并提供额外容错，适合练习路线与熟悉新模式。',
+        perks: ['敌压 -18%', '生命/护盾 +14', '声望 -8%'],
+        tuning: { hp: 14, shield: 14, enemyHp: 0.9, bossHp: 0.9, guardCone: -1, chainTarget: 0.86, chainMoves: 2, tacticsHp: 12 }
+      },
+      {
+        id: 'standard',
+        label: '标准协议',
+        short: '标准',
+        tone: 'standard',
+        scoreBoost: 0,
+        pressure: 1,
+        summary: '标准敌压与完整声望结算，适合日常推进。',
+        perks: ['标准敌压', '标准目标', '声望 x1.00'],
+        tuning: { hp: 0, shield: 0, enemyHp: 1, bossHp: 1, guardCone: 0, chainTarget: 1, chainMoves: 0, tacticsHp: 0 }
+      },
+      {
+        id: 'elite',
+        label: '精英协议',
+        short: '精英',
+        tone: 'elite',
+        scoreBoost: 0.18,
+        pressure: 1.18,
+        summary: '提高敌压和目标门槛，适合冲击奖牌与高分。',
+        perks: ['敌压 +18%', '目标 +15%', '声望 +18%'],
+        tuning: { hp: -6, shield: -8, enemyHp: 1.14, bossHp: 1.12, guardCone: 1, chainTarget: 1.15, chainMoves: -1, tacticsHp: -6 }
+      },
+      {
+        id: 'nightmare',
+        label: '梦魇协议',
+        short: '梦魇',
+        tone: 'nightmare',
+        scoreBoost: 0.36,
+        pressure: 1.36,
+        summary: '高压挑战，敌人更强、资源更紧，专为熟练玩家冲榜。',
+        perks: ['敌压 +36%', '目标 +28%', '声望 +36%'],
+        tuning: { hp: -14, shield: -16, enemyHp: 1.28, bossHp: 1.26, guardCone: 1, chainTarget: 1.28, chainMoves: -2, tacticsHp: -12 }
+      }
+    ];
 
     function todayKey() {
       const d = new Date();
@@ -4678,7 +4732,8 @@ function init() {
         achievements: [],
         daily: {},
         contracts: createDefaultContractState(),
-        loadout: { active: 'pulse' }
+        loadout: { active: 'pulse' },
+        difficulty: 'standard'
       };
     }
 
@@ -4693,6 +4748,7 @@ function init() {
         merged.contracts = merged.contracts && typeof merged.contracts === 'object' ? merged.contracts : createDefaultContractState();
         merged.loadout = merged.loadout && typeof merged.loadout === 'object' ? merged.loadout : { active: 'pulse' };
         if (!loadoutDefs.some(def => def.id === merged.loadout.active)) merged.loadout.active = 'pulse';
+        if (!difficultyDefs.some(def => def.id === merged.difficulty)) merged.difficulty = 'standard';
         if (!Array.isArray(merged.contracts.claimed)) merged.contracts.claimed = [];
         if (!merged.contracts.progress || typeof merged.contracts.progress !== 'object') merged.contracts.progress = {};
         merged.totalScore = Number.isFinite(Number(merged.totalScore)) ? Number(merged.totalScore) : 0;
@@ -4854,6 +4910,55 @@ function init() {
       }).join('');
       list.querySelectorAll('[data-loadout-id]').forEach(btn => {
         btn.addEventListener('click', () => setActiveLoadout(btn.dataset.loadoutId));
+      });
+    }
+
+    function activeDifficultyDef() {
+      return difficultyDefs.find(def => def.id === career.difficulty) || difficultyDefs.find(def => def.id === 'standard') || difficultyDefs[0];
+    }
+
+    function difficultyTuning() {
+      return { ...(activeDifficultyDef().tuning || {}) };
+    }
+
+    function setArcadeDifficulty(id) {
+      const target = difficultyDefs.find(def => def.id === id);
+      if (!target) return;
+      career.difficulty = target.id;
+      saveCareer();
+      updateCareerPanel();
+      showToast(`已切换难度：${target.label}`, 'success');
+    }
+
+    function renderArcadeDifficulty() {
+      const panel = document.getElementById('premium-difficulty-panel');
+      const list = document.getElementById('premium-difficulty-list');
+      const activeEl = document.getElementById('premium-difficulty-active');
+      const summaryEl = document.getElementById('premium-difficulty-summary');
+      if (!panel || !list) return;
+      const active = activeDifficultyDef();
+      if (career.difficulty !== active.id) {
+        career.difficulty = active.id;
+        saveCareer();
+      }
+      panel.dataset.tone = active.tone;
+      if (activeEl) activeEl.textContent = active.label;
+      if (summaryEl) summaryEl.textContent = active.summary;
+      list.innerHTML = difficultyDefs.map(def => {
+        const selected = active.id === def.id;
+        const scorePercent = Math.round(def.scoreBoost * 100);
+        const scoreLabel = scorePercent > 0 ? `+${scorePercent}%` : `${scorePercent}%`;
+        return `
+          <button type="button" class="arcade-difficulty-card ${selected ? 'is-selected' : ''}" data-difficulty-id="${escapeHTML(def.id)}" data-tone="${escapeHTML(def.tone)}" aria-pressed="${selected ? 'true' : 'false'}">
+            <span>${selected ? '当前协议' : '切换协议'}</span>
+            <strong>${escapeHTML(def.short)}</strong>
+            <small>${escapeHTML(def.summary)}</small>
+            <em>敌压 x${def.pressure.toFixed(2)} · 声望 ${scoreLabel}</em>
+          </button>
+        `;
+      }).join('');
+      list.querySelectorAll('[data-difficulty-id]').forEach(btn => {
+        btn.addEventListener('click', () => setArcadeDifficulty(btn.dataset.difficultyId));
       });
     }
 
@@ -5023,9 +5128,10 @@ function init() {
       const daily = getDailyChallenge();
       const completedDaily = career.daily?.date === daily.date && career.daily?.id === daily.id;
       const unlockedCount = career.achievements.length;
+      const difficulty = activeDifficultyDef();
 
       if (summary) {
-        summary.textContent = `${careerRating()} · 总声望 ${career.totalScore || 0} · 已解锁 ${unlockedCount}/${achievementDefs.length} 项成就`;
+        summary.textContent = `${careerRating()} · 总声望 ${career.totalScore || 0} · 难度 ${difficulty.short} · 已解锁 ${unlockedCount}/${achievementDefs.length} 项成就`;
       }
       if (dailyEl) {
         dailyEl.innerHTML = `
@@ -5075,7 +5181,7 @@ function init() {
         const medals = Object.entries(career.medals || {})
           .map(([game, medal]) => `${titles[game] || game}: ${medalLabels[medal] || medal}`)
           .join(' · ');
-        totalEl.textContent = `总声望 ${career.totalScore || 0}${medals ? ` · ${medals}` : ''}`;
+        totalEl.textContent = `总声望 ${career.totalScore || 0} · 难度 ${activeDifficultyDef().short}${medals ? ` · ${medals}` : ''}`;
       }
       if (challengeEl) challengeEl.textContent = daily.label;
       if (dailyStatusEl) {
@@ -5086,6 +5192,7 @@ function init() {
       renderAchievementFeed();
       renderArcadeDirector();
       renderArcadeContracts();
+      renderArcadeDifficulty();
       renderArcadeLoadouts();
       updatePremiumTabBadges();
       renderCareerDialog();
@@ -5101,7 +5208,8 @@ function init() {
 
     function recordPremiumResult(game, score, details = {}) {
       const rawValue = Math.max(0, Math.floor(score || 0));
-      const scoreBoost = Number(loadoutBonuses().scoreBoost || 0);
+      const difficulty = activeDifficultyDef();
+      const scoreBoost = Number(loadoutBonuses().scoreBoost || 0) + Number(difficulty.scoreBoost || 0);
       const value = Math.max(0, Math.floor(rawValue * (1 + scoreBoost)));
       career.totalScore = Math.max(0, (career.totalScore || 0) + value);
       career.plays = (career.plays || 0) + 1;
@@ -5111,11 +5219,11 @@ function init() {
         career.medals[game] = medal;
       }
       const daily = getDailyChallenge();
-      if ((!career.daily || career.daily.date !== daily.date || career.daily.id !== daily.id) && daily.check(game, value, { ...details, rawScore: rawValue, loadout: activeLoadoutDef().id })) {
+      if ((!career.daily || career.daily.date !== daily.date || career.daily.id !== daily.id) && daily.check(game, value, { ...details, rawScore: rawValue, loadout: activeLoadoutDef().id, difficulty: difficulty.id })) {
         career.daily = { date: daily.date, id: daily.id, done: true };
         unlockAchievement('daily_clear');
       }
-      updateArcadeContracts(game, value, { ...details, rawScore: rawValue, loadout: activeLoadoutDef().id });
+      updateArcadeContracts(game, value, { ...details, rawScore: rawValue, loadout: activeLoadoutDef().id, difficulty: difficulty.id });
       saveCareer();
       updateCareerPanel();
     }
@@ -5131,6 +5239,14 @@ function init() {
         unlocked: loadoutDefs.filter(loadoutUnlocked).map(def => def.id)
       }),
       equipLoadout: setActiveLoadout,
+      difficulty: () => ({
+        active: activeDifficultyDef().id,
+        label: activeDifficultyDef().label,
+        scoreBoost: activeDifficultyDef().scoreBoost,
+        pressure: activeDifficultyDef().pressure,
+        tuning: difficultyTuning()
+      }),
+      setDifficulty: setArcadeDifficulty,
       contracts: () => getDailyContracts().map(contract => ({
         id: contract.id,
         title: contract.title,
@@ -5335,6 +5451,7 @@ function init() {
 
     function startSurvivor() {
       const bonuses = loadoutBonuses();
+      const tuning = difficultyTuning();
       survivor.running = true;
       survivor.paused = false;
       survivor.last = performance.now();
@@ -5346,7 +5463,7 @@ function init() {
         x: 280,
         y: 180,
         r: 12,
-        hp: 100 + Number(bonuses.survivorHp || 0),
+        hp: 100 + Number(bonuses.survivorHp || 0) + Number(tuning.hp || 0),
         xp: 0,
         level: 1,
         fireRate: 240,
@@ -5374,6 +5491,11 @@ function init() {
 
     function spawnSurvivorEnemy() {
       const c = survivor.canvas;
+      const difficulty = activeDifficultyDef();
+      const tuning = difficultyTuning();
+      const pressure = Number(difficulty.pressure || 1);
+      const enemyHpScale = Number(tuning.enemyHp || 1);
+      const enemySpeedScale = 0.92 + pressure * 0.08;
       const side = Math.floor(Math.random() * 4);
       const p = [
         { x: Math.random() * c.width, y: -24 },
@@ -5383,7 +5505,7 @@ function init() {
       ][side];
       const wave = Math.floor(survivor.elapsed / 18000);
       const type = pick(wave > 3 ? ['swarm', 'swarm', 'brute', 'charger', 'warden'] : wave > 1 ? ['swarm', 'swarm', 'brute', 'charger'] : ['swarm', 'swarm', 'brute']);
-      const elite = Math.random() < Math.min(0.34, 0.08 + survivor.elapsed / 125000);
+      const elite = Math.random() < Math.min(0.44, (0.08 + survivor.elapsed / 125000) * pressure);
       const stats = {
         swarm: { r: 10, hp: 30 + wave * 6, speed: 108 + wave * 4, value: 14, color: '#EC4899' },
         brute: { r: 17, hp: 82 + wave * 16, speed: 70 + wave * 3, value: 38, color: '#F97316' },
@@ -5394,8 +5516,9 @@ function init() {
         ...p,
         ...stats,
         type,
-        hp: stats.hp * (elite ? 1.55 : 1),
-        maxHp: stats.hp * (elite ? 1.55 : 1),
+        hp: stats.hp * enemyHpScale * (elite ? 1.55 : 1),
+        maxHp: stats.hp * enemyHpScale * (elite ? 1.55 : 1),
+        speed: stats.speed * enemySpeedScale,
         value: stats.value * (elite ? 2 : 1),
         elite,
         pulse: Math.random() * Math.PI * 2
@@ -5514,7 +5637,7 @@ function init() {
       const len = Math.hypot(mx, my) || 1;
       p.x = Math.max(16, Math.min(c.width - 16, p.x + mx / len * p.speed * dt / 1000));
       p.y = Math.max(16, Math.min(c.height - 16, p.y + my / len * p.speed * dt / 1000));
-      while (survivor.spawn > Math.max(210, 700 - survivor.elapsed / 130)) {
+      while (survivor.spawn > Math.max(180, (700 - survivor.elapsed / 130) / Number(activeDifficultyDef().pressure || 1))) {
         survivor.spawn = 0;
         spawnSurvivorEnemy();
       }
@@ -5711,13 +5834,15 @@ function init() {
 
     function startBoss() {
       const bonuses = loadoutBonuses();
+      const tuning = difficultyTuning();
+      const maxHp = Math.round(1000 * Number(tuning.bossHp || 1));
       bossMode.running = true;
       bossMode.paused = false;
       bossMode.last = performance.now();
       bossMode.t = 0;
       bossMode.score = 0;
       bossMode.player = { x: 280, y: 300, r: 12, lives: 3 + Number(bonuses.bossLives || 0), invuln: 1000, dash: 0, dashCooldown: 0, graze: 0 };
-      bossMode.boss = { x: 280, y: 92, r: 38, hp: 1000, maxHp: 1000, phase: 1 };
+      bossMode.boss = { x: 280, y: 92, r: 38, hp: maxHp, maxHp, phase: 1 };
       bossMode.shots = [];
       bossMode.bullets = [];
       bossMode.particles = [];
@@ -5767,7 +5892,8 @@ function init() {
 
     function spawnBossPattern() {
       const b = bossMode.boss;
-      const phase = b.hp < 330 ? 3 : (b.hp < 660 ? 2 : 1);
+      const hpRatio = b.maxHp > 0 ? b.hp / b.maxHp : 0;
+      const phase = hpRatio < 0.33 ? 3 : (hpRatio < 0.66 ? 2 : 1);
       b.phase = phase;
       if (phase >= 2) unlockAchievement('boss_phase_2');
       const pattern = pick(phase === 1 ? ['ring', 'snipe'] : phase === 2 ? ['ring', 'snipe', 'rain'] : ['ring', 'snipe', 'rain', 'sweep']);
@@ -5829,7 +5955,7 @@ function init() {
         bossMode.shotTimer = 0;
         bossMode.shots.push({ x: p.x, y: p.y - 16, vy: -470, r: 4, damage: 9 + Math.floor(p.graze / 9) });
       }
-      if (bossMode.patternTimer > Math.max(520, 1150 - b.phase * 170)) {
+      if (bossMode.patternTimer > Math.max(430, (1150 - b.phase * 170) / Number(activeDifficultyDef().pressure || 1))) {
         bossMode.patternTimer = 0;
         spawnBossPattern();
       }
@@ -5985,6 +6111,8 @@ function init() {
 
     function resetDriftState() {
       const bonuses = loadoutBonuses();
+      const tuning = difficultyTuning();
+      const pressure = Number(activeDifficultyDef().pressure || 1);
       drift.running = true;
       drift.paused = false;
       drift.last = performance.now();
@@ -5995,11 +6123,11 @@ function init() {
       drift.maxBoost = 100 + Number(bonuses.driftBoost || 0);
       drift.boost = drift.maxBoost;
       drift.hitCooldown = 0;
-      drift.player = { x: 70, y: 276, vx: 0, vy: 0, angle: -0.62, r: 12, shield: 100 + Number(bonuses.driftShield || 0), trail: [] };
+      drift.player = { x: 70, y: 276, vx: 0, vy: 0, angle: -0.62, r: 12, shield: 100 + Number(bonuses.driftShield || 0) + Number(tuning.shield || 0), trail: [] };
       drift.drones = [
-        { x: 278, y: 66, baseX: 278, baseY: 66, ampX: 110, ampY: 34, phase: 0, speed: 0.0016, r: 13 },
-        { x: 430, y: 228, baseX: 430, baseY: 228, ampX: 52, ampY: 78, phase: 1.7, speed: 0.002, r: 12 },
-        { x: 218, y: 286, baseX: 218, baseY: 286, ampX: 56, ampY: 26, phase: 3.1, speed: 0.0018, r: 11 }
+        { x: 278, y: 66, baseX: 278, baseY: 66, ampX: 110, ampY: 34, phase: 0, speed: 0.0016 * pressure, r: 13 },
+        { x: 430, y: 228, baseX: 430, baseY: 228, ampX: 52, ampY: 78, phase: 1.7, speed: 0.002 * pressure, r: 12 },
+        { x: 218, y: 286, baseX: 218, baseY: 286, ampX: 56, ampY: 26, phase: 3.1, speed: 0.0018 * pressure, r: 11 }
       ];
       drift.particles = [];
     }
@@ -6319,21 +6447,23 @@ function init() {
 
     function newHeist() {
       const bonuses = loadoutBonuses();
+      const tuning = difficultyTuning();
+      const coneDelta = Number(tuning.guardCone || 0);
       heist.grid = Array.from({ length: 13 }, (_, y) => Array.from({ length: 20 }, (_, x) => (x === 0 || y === 0 || x === 19 || y === 12 || (x % 4 === 0 && y % 3 !== 1)) ? 1 : 0));
       heist.player = { x: 1, y: 1 };
       heist.keys = [{ x: 5, y: 2 }, { x: 10, y: 5 }, { x: 15, y: 3 }, { x: 13, y: 10 }];
       heist.exit = { x: 18, y: 11 };
       heist.guards = [
-        { x: 7, y: 8, dir: 1, axis: 'x', min: 5, max: 11, cone: 3 },
-        { x: 16, y: 7, dir: -1, axis: 'y', min: 3, max: 10, cone: 4 },
-        { x: 2, y: 10, dir: 1, axis: 'x', min: 2, max: 8, cone: 3 },
-        { x: 11, y: 2, dir: 1, axis: 'y', min: 2, max: 7, cone: 2 }
+        { x: 7, y: 8, dir: 1, axis: 'x', min: 5, max: 11, cone: Math.max(2, 3 + coneDelta) },
+        { x: 16, y: 7, dir: -1, axis: 'y', min: 3, max: 10, cone: Math.max(2, 4 + coneDelta) },
+        { x: 2, y: 10, dir: 1, axis: 'x', min: 2, max: 8, cone: Math.max(2, 3 + coneDelta) },
+        { x: 11, y: 2, dir: 1, axis: 'y', min: 2, max: 7, cone: Math.max(2, 2 + coneDelta) }
       ];
       heist.terminals = [{ x: 3, y: 5, used: false }, { x: 17, y: 9, used: false }];
       heist.doors = [{ x: 9, y: 8, open: false }, { x: 12, y: 4, open: false }];
       heist.collected = 0;
       heist.steps = 0;
-      heist.cloaks = 2 + Number(bonuses.heistCloaks || 0);
+      heist.cloaks = Math.max(1, 2 + Number(bonuses.heistCloaks || 0) + (activeDifficultyDef().id === 'training' ? 1 : 0));
       heist.cloakTurns = 0;
       heist.alert = 'LOW';
       heist.won = false;
@@ -6503,9 +6633,11 @@ function init() {
 
     function newChain() {
       const bonuses = loadoutBonuses();
+      const tuning = difficultyTuning();
       chain.score = 0;
-      chain.moves = 30 + Number(bonuses.chainMoves || 0);
+      chain.moves = Math.max(20, 30 + Number(bonuses.chainMoves || 0) + Number(tuning.chainMoves || 0));
       chain.combo = 0;
+      chain.target = Math.round(9000 * Number(tuning.chainTarget || 1));
       chain.finished = false;
       chain.recorded = false;
       chain.grid = Array.from({ length: 7 }, () => Array.from({ length: 7 }, randomChainCell));
@@ -6642,6 +6774,8 @@ function init() {
 
     function newTactics({ shouldFocus = false } = {}) {
       const bonuses = loadoutBonuses();
+      const tuning = difficultyTuning();
+      const enemyHpScale = Number(tuning.enemyHp || 1);
       tactics.walls = new Set([
         tacticsKey(2, 2), tacticsKey(3, 2), tacticsKey(7, 2),
         tacticsKey(5, 3), tacticsKey(1, 4), tacticsKey(8, 4),
@@ -6657,12 +6791,15 @@ function init() {
         { id: 'turret-a', type: 'turret', x: 8, y: 1, hp: 60, maxHp: 60 },
         { id: 'hunter-a', type: 'hunter', x: 6, y: 5, hp: 70, maxHp: 70 },
         { id: 'warden-a', type: 'warden', x: 3, y: 6, hp: 95, maxHp: 95 }
-      ];
+      ].map(enemy => {
+        const maxHp = Math.max(24, Math.round(enemy.maxHp * enemyHpScale));
+        return { ...enemy, hp: maxHp, maxHp };
+      });
       tactics.exit = { x: 9, y: 0 };
       tactics.player = {
         x: 1,
         y: 6,
-        hp: 100 + Number(bonuses.tacticsHp || 0),
+        hp: 100 + Number(bonuses.tacticsHp || 0) + Number(tuning.tacticsHp || tuning.hp || 0),
         shield: Number(bonuses.tacticsShield || 0),
         ap: 3 + Number(bonuses.tacticsAp || 0),
         baseAp: 3 + Number(bonuses.tacticsAp || 0),
@@ -6998,7 +7135,8 @@ function init() {
           heistSteps: () => heist.steps,
           tacticsTurn: () => tactics.turn,
           contracts: () => window.atherixArcadeCareer?.contracts?.() || [],
-          loadout: () => window.atherixArcadeCareer?.loadout?.() || {}
+          loadout: () => window.atherixArcadeCareer?.loadout?.() || {},
+          difficulty: () => window.atherixArcadeCareer?.difficulty?.() || {}
         }
       };
     }

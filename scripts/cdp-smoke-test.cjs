@@ -689,6 +689,9 @@ async function run() {
     contractCards: document.querySelectorAll('.arcade-contract-card').length,
     debugContracts: window.__atherixDebug?.premium?.contracts?.().length || 0,
     firstContractProgress: window.__atherixDebug?.premium?.contracts?.()[0]?.progress ?? -1,
+    difficultyPanel: !!document.querySelector('#premium-difficulty-panel'),
+    difficultyCards: document.querySelectorAll('.arcade-difficulty-card').length,
+    activeDifficulty: window.__atherixDebug?.premium?.difficulty?.().active || '',
     loadoutPanel: !!document.querySelector('#premium-loadout-panel'),
     loadoutCards: document.querySelectorAll('.arcade-loadout-card').length,
     activeLoadout: window.__atherixDebug?.premium?.loadout?.().active || '',
@@ -726,6 +729,27 @@ async function run() {
       equippedCards: document.querySelectorAll('.arcade-loadout-card.is-equipped').length,
       activeLabel: document.querySelector('#premium-loadout-active')?.textContent || '',
       summary: document.querySelector('#premium-loadout-summary')?.textContent || '',
+      toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || ''
+    };
+  })()`);
+  const difficultyProgressState = await evaluate(`(() => {
+    const readCareer = () => JSON.parse(localStorage.getItem('atherix_premium_arcade_career_v2') || '{}');
+    const beforeTotal = Number(readCareer().totalScore || 0);
+    window.atherixArcadeCareer?.setDifficulty?.('elite');
+    const difficulty = window.__atherixDebug?.premium?.difficulty?.() || {};
+    window.atherixArcadeCareer?.recordResult?.('boss', 1000, { smoke: true });
+    const afterCareer = readCareer();
+    return {
+      active: difficulty.active || '',
+      label: difficulty.label || '',
+      pressure: Number(difficulty.pressure || 0),
+      scoreBoost: Number(difficulty.scoreBoost || 0),
+      selectedCards: document.querySelectorAll('.arcade-difficulty-card.is-selected').length,
+      activeLabel: document.querySelector('#premium-difficulty-active')?.textContent || '',
+      summary: document.querySelector('#premium-difficulty-summary')?.textContent || '',
+      totalDelta: Number(afterCareer.totalScore || 0) - beforeTotal,
+      bossBest: Number(afterCareer.best?.boss || 0),
+      totalText: document.querySelector('#premium-career-total')?.textContent || '',
       toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || ''
     };
   })()`);
@@ -1057,9 +1081,12 @@ async function run() {
   assert(arcadeInitial.premiumTabs >= 6 && arcadeInitial.driftPanel && arcadeInitial.tacticsPanel, 'premium arcade should include drift and tactics modes');
   assert(arcadeInitial.directorPanel && arcadeInitial.directorTarget && arcadeInitial.directorTitle.length > 5 && arcadeInitial.directorReason.length > 10 && /^\d+%$/.test(arcadeInitial.directorCompletion) && arcadeInitial.tabBadges >= 6, `premium arcade director should render actionable progression guidance: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.contractBoard && arcadeInitial.contractCards === 3 && arcadeInitial.debugContracts === 3 && arcadeInitial.firstContractProgress === 0, `premium arcade contracts should render as daily progression goals: ${JSON.stringify(arcadeInitial)}`);
+  assert(arcadeInitial.difficultyPanel && arcadeInitial.difficultyCards === 4 && arcadeInitial.activeDifficulty === 'standard', `premium arcade difficulty matrix should render with standard default: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.loadoutPanel && arcadeInitial.loadoutCards === 4 && arcadeInitial.activeLoadout === 'pulse' && arcadeInitial.loadoutUnlocked >= 1, `premium arcade loadout chips should render with a default build: ${JSON.stringify(arcadeInitial)}`);
   assert(contractProgressState.afterContracts === 3 && contractProgressState.cards === 3 && contractProgressState.afterFirst > contractProgressState.beforeFirst && /总声望/.test(contractProgressState.total), `premium arcade contracts should advance after a scored run: ${JSON.stringify(contractProgressState)}`);
   assert(loadoutProgressState.active === 'aegis' && loadoutProgressState.equippedCards === 1 && loadoutProgressState.unlocked.includes('aegis') && /棱镜护盾/.test(loadoutProgressState.activeLabel), `premium arcade loadouts should unlock and equip after career progress: ${JSON.stringify(loadoutProgressState)}`);
+  assert(difficultyProgressState.active === 'elite' && difficultyProgressState.selectedCards === 1 && /精英/.test(difficultyProgressState.activeLabel) && difficultyProgressState.pressure > 1 && difficultyProgressState.scoreBoost > 0.15, `premium arcade difficulty should switch to elite with visible pressure and score boost: ${JSON.stringify(difficultyProgressState)}`);
+  assert(difficultyProgressState.totalDelta >= 1180 && difficultyProgressState.bossBest >= 1180 && /难度 精英/.test(difficultyProgressState.totalText), `premium arcade difficulty should affect scoring and career summary: ${JSON.stringify(difficultyProgressState)}`);
   assert(['runner', 'survivor', 'boss', 'drift', 'heist', 'chain', 'tactics'].includes(directorLaunchState.target) && (directorLaunchState.target === 'runner' || directorLaunchState.active === directorLaunchState.target) && !directorLaunchState.horizontalOverflow, `premium arcade director should launch the recommended target: ${JSON.stringify(directorLaunchState)}`);
   assert(arcadeInitial.touchControls >= 5, 'premium touch controls should be available');
   assert(survivorState.nonBlank && survivorState.threat, 'survivor canvas should render active state');
@@ -1131,6 +1158,7 @@ async function run() {
     arcadeInitial,
     contractProgressState,
     loadoutProgressState,
+    difficultyProgressState,
     directorLaunchState,
     survivorState,
     bossState,

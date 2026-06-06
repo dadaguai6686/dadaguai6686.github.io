@@ -4302,6 +4302,160 @@ body.command-open {
   font-size: 0.7rem;
 }
 
+.arcade-difficulty-panel {
+  margin-bottom: 1rem;
+  padding: 0.85rem;
+  border: 1px solid rgba(251, 191, 36, 0.22);
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(236, 72, 153, 0.06)),
+    rgba(3, 7, 18, 0.48);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.arcade-difficulty-panel[data-tone="training"] {
+  border-color: rgba(52, 211, 153, 0.24);
+  background:
+    linear-gradient(135deg, rgba(52, 211, 153, 0.1), rgba(34, 211, 238, 0.06)),
+    rgba(3, 7, 18, 0.48);
+}
+
+.arcade-difficulty-panel[data-tone="elite"] {
+  border-color: rgba(251, 146, 60, 0.28);
+  background:
+    linear-gradient(135deg, rgba(251, 146, 60, 0.12), rgba(236, 72, 153, 0.06)),
+    rgba(3, 7, 18, 0.48);
+}
+
+.arcade-difficulty-panel[data-tone="nightmare"] {
+  border-color: rgba(248, 113, 113, 0.3);
+  background:
+    linear-gradient(135deg, rgba(248, 113, 113, 0.12), rgba(167, 139, 250, 0.08)),
+    rgba(3, 7, 18, 0.5);
+}
+
+.arcade-difficulty-heading {
+  display: grid;
+  grid-template-columns: minmax(145px, auto) minmax(120px, 0.65fr) minmax(220px, 1.4fr);
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.75rem;
+}
+
+.arcade-difficulty-heading span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #fde68a;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.arcade-difficulty-heading svg {
+  width: 14px;
+  height: 14px;
+}
+
+.arcade-difficulty-heading strong {
+  color: #fff;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1rem;
+}
+
+.arcade-difficulty-heading small {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.arcade-difficulty-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.arcade-difficulty-card {
+  min-height: 122px;
+  padding: 0.68rem;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.48);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.38rem;
+  text-align: left;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.arcade-difficulty-card[data-tone="training"] {
+  border-color: rgba(52, 211, 153, 0.22);
+}
+
+.arcade-difficulty-card[data-tone="standard"] {
+  border-color: rgba(34, 211, 238, 0.22);
+}
+
+.arcade-difficulty-card[data-tone="elite"] {
+  border-color: rgba(251, 146, 60, 0.25);
+}
+
+.arcade-difficulty-card[data-tone="nightmare"] {
+  border-color: rgba(248, 113, 113, 0.28);
+}
+
+.arcade-difficulty-card:hover,
+.arcade-difficulty-card:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(251, 191, 36, 0.5);
+  box-shadow: 0 12px 26px rgba(251, 146, 60, 0.13);
+}
+
+.arcade-difficulty-card.is-selected {
+  border-color: rgba(251, 191, 36, 0.5);
+  background:
+    linear-gradient(135deg, rgba(251, 191, 36, 0.12), rgba(236, 72, 153, 0.08)),
+    rgba(15, 23, 42, 0.55);
+}
+
+.arcade-difficulty-card span {
+  align-self: flex-start;
+  border-radius: 999px;
+  padding: 0.12rem 0.42rem;
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-muted);
+  font-size: 0.64rem;
+  font-weight: 900;
+}
+
+.arcade-difficulty-card.is-selected span {
+  background: rgba(251, 191, 36, 0.14);
+  color: #fde68a;
+}
+
+.arcade-difficulty-card strong {
+  color: #fff;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.94rem;
+  line-height: 1.22;
+}
+
+.arcade-difficulty-card small {
+  color: var(--text-secondary);
+  font-size: 0.69rem;
+  line-height: 1.34;
+  flex: 1;
+}
+
+.arcade-difficulty-card em {
+  color: #fff7ed;
+  font-style: normal;
+  font-size: 0.66rem;
+  line-height: 1.35;
+}
+
 .arcade-loadout-panel {
   margin-bottom: 1rem;
   padding: 0.85rem;
@@ -4985,6 +5139,7 @@ body.command-open {
 }
 
 @media (max-width: 1100px) {
+  .arcade-difficulty-grid,
   .arcade-loadout-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -5015,10 +5170,13 @@ body.command-open {
   .arcade-contract-grid {
     grid-template-columns: 1fr;
   }
+  .arcade-difficulty-heading,
+  .arcade-difficulty-grid,
   .arcade-loadout-heading,
   .arcade-loadout-grid {
     grid-template-columns: 1fr;
   }
+  .arcade-difficulty-card,
   .arcade-loadout-card {
     min-height: auto;
   }
