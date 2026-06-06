@@ -4,7 +4,10 @@ import {
   MAX_UPGRADE_LEVEL,
   WAVE_MODIFIERS,
   createInitialState,
+  getActiveRepairTarget,
+  getHazardThreats,
   getObjectiveHint,
+  getResourceAlerts,
   getRunRating,
   getUpgradeChoices,
   getUpgradeSummaries,
@@ -60,6 +63,9 @@ assert.equal(state.stats.lumenCollected, 1, "collected lumen should be counted")
 let lowCharge = movePlayerTo(state, 500, 350);
 lowCharge.player.charge = 24;
 assert.equal(getObjectiveHint(lowCharge).kind, "lumen", "low charge should prioritize nearby lumen");
+assert.equal(getResourceAlerts(lowCharge).charge, "low", "low charge should be surfaced as a HUD alert");
+lowCharge.player.charge = 12;
+assert.equal(getResourceAlerts(lowCharge).charge, "critical", "critical charge should be distinguished from low charge");
 
 const steadyPickup = movePlayerTo(restartRun(createInitialState()), nearbyLumen.position.x, nearbyLumen.position.y);
 steadyPickup.player.charge = 40;
@@ -71,6 +77,7 @@ assert.ok(surgeAfterPickup.player.charge > steadyAfterPickup.player.charge, "lum
 
 state = movePlayerTo(state, state.relays[0].position.x, state.relays[0].position.y);
 assert.equal(getObjectiveHint(state).kind, "repair", "standing near a relay should prompt repair");
+assert.equal(getActiveRepairTarget(state)?.id, state.relays[0].id, "standing near a relay should expose a repair target for rendering");
 for (let i = 0; i < 260; i += 1) {
   state = updateSimulation(state, { ...idle, repair: true }, 0.016);
 }
@@ -91,6 +98,12 @@ let hitState = restartRun(createInitialState());
 hitState.hazards[0].position = { ...hitState.player.position };
 hitState = updateSimulation(hitState, idle, 0.016);
 assert.equal(hitState.stats.hitsTaken, 1, "hazard impacts should be counted");
+assert.equal(getResourceAlerts(hitState).hull, "stable", "one standard hit should not overstate hull danger");
+const hazardThreatState = restartRun(createInitialState());
+hazardThreatState.hazards[0].position = { x: hazardThreatState.player.position.x + 42, y: hazardThreatState.player.position.y };
+assert.equal(getHazardThreats(hazardThreatState)[0].level, "danger", "close hazards should be flagged for danger rendering");
+hazardThreatState.hazards[0].position = { x: hazardThreatState.player.position.x + 118, y: hazardThreatState.player.position.y };
+assert.equal(getHazardThreats(hazardThreatState)[0].level, "near", "near hazards should be flagged before collision");
 
 const steadyHazards = restartRun(createInitialState());
 const fastHazards = structuredClone(steadyHazards);

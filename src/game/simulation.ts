@@ -128,8 +128,31 @@ export type ObjectiveHint = {
   urgent: boolean;
 };
 
+export type ResourceAlertLevel = "stable" | "low" | "critical";
+
+export type ResourceAlerts = {
+  charge: ResourceAlertLevel;
+  hull: ResourceAlertLevel;
+};
+
+export type HazardThreatLevel = "safe" | "near" | "danger";
+
+export type HazardThreat = {
+  id: number;
+  level: HazardThreatLevel;
+  distance: number;
+  collisionRadius: number;
+  warningRadius: number;
+  position: Vec2;
+  radius: number;
+};
+
 export const CAMPAIGN_WAVES = 5;
 export const MAX_UPGRADE_LEVEL = 3;
+export const REPAIR_RADIUS = 76;
+export const LUMEN_PICKUP_RADIUS = 34;
+export const HAZARD_PLAYER_RADIUS = 28;
+export const HAZARD_NEAR_BUFFER = 112;
 
 export const DIFFICULTY_SETTINGS: Record<DifficultyId, Difficulty> = {
   training: {
@@ -471,9 +494,7 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
   player.position.y = clamp(player.position.y + player.velocity.y * dt, 44, next.arena.height - 44);
   next.stats.distanceTraveled += distance(previousPosition, player.position);
 
-  const repairTarget = next.relays.find(
-    (relay) => !relay.repaired && distance(relay.position, player.position) < 76
-  );
+  const repairTarget = getActiveRepairTarget(next);
   if (repairTarget && input.repair) {
     const repairSpeed =
       (0.26 + next.upgrades.repair * 0.07 + player.lumen * 0.005) *
@@ -517,7 +538,7 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
   }
 
   next.lumen.forEach((drop) => {
-    if (!drop.collected && distance(drop.position, player.position) < 34) {
+    if (!drop.collected && distance(drop.position, player.position) < LUMEN_PICKUP_RADIUS) {
       drop.collected = true;
       player.lumen += 1;
       next.stats.lumenCollected += 1;
@@ -537,7 +558,7 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
     if (hazard.position.y < 84 || hazard.position.y > next.arena.height - 70) {
       hazard.velocity.y *= -1;
     }
-    if (distance(hazard.position, player.position) < hazard.radius + 28 && player.invulnerable <= 0) {
+    if (distance(hazard.position, player.position) < hazard.radius + HAZARD_PLAYER_RADIUS && player.invulnerable <= 0) {
       const damageScale = 1 - next.upgrades.shield * 0.12;
       player.hull = Math.max(0, player.hull - 16 * damageScale * difficulty.damageScale);
       player.charge = Math.max(0, player.charge - 7);
@@ -697,6 +718,36 @@ export function getRunRating(state: GameState): RunRating {
   };
 }
 
+export function getResourceAlerts(state: GameState): ResourceAlerts {
+  return {
+    charge: getResourceAlertLevel(state.player.charge, state.player.maxCharge, 0.34, 0.18),
+    hull: getResourceAlertLevel(state.player.hull, state.player.maxHull, 0.42, 0.24)
+  };
+}
+
+export function getActiveRepairTarget(state: GameState): Relay | undefined {
+  return state.relays.find(
+    (relay) => !relay.repaired && distance(relay.position, state.player.position) < REPAIR_RADIUS
+  );
+}
+
+export function getHazardThreats(state: GameState): HazardThreat[] {
+  return state.hazards.map((hazard) => {
+    const collisionRadius = hazard.radius + HAZARD_PLAYER_RADIUS;
+    const warningRadius = collisionRadius + HAZARD_NEAR_BUFFER;
+    const hazardDistance = distance(hazard.position, state.player.position);
+    return {
+      id: hazard.id,
+      level: hazardDistance <= collisionRadius + 18 ? "danger" : hazardDistance <= warningRadius ? "near" : "safe",
+      distance: hazardDistance,
+      collisionRadius,
+      warningRadius,
+      position: { ...hazard.position },
+      radius: hazard.radius
+    };
+  });
+}
+
 export function getWaveModifierFor(wave: number, difficulty: DifficultyId): WaveModifierId {
   const standardOrder: WaveModifierId[] = [
     "steadySignal",
@@ -750,9 +801,7 @@ export function getObjectiveHint(state: GameState): ObjectiveHint {
     };
   }
 
-  const repairTarget = state.relays.find(
-    (relay) => !relay.repaired && distance(relay.position, player.position) < 76
-  );
+  const repairTarget = getActiveRepairTarget(state);
   if (repairTarget) {
     return {
       kind: "repair",
@@ -896,6 +945,18 @@ function nearest<T extends { position: Vec2 }>(items: T[], origin: Vec2): { item
     }
     return best;
   }, undefined);
+}
+
+function getResourceAlertLevel(
+  value: number,
+  max: number,
+  lowThreshold: number,
+  criticalThreshold: number
+): ResourceAlertLevel {
+  const ratio = value / Math.max(1, max);
+  if (ratio <= criticalThreshold) return "critical";
+  if (ratio <= lowThreshold) return "low";
+  return "stable";
 }
 
 function distance(a: Vec2, b: Vec2): number {

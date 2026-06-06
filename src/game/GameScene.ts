@@ -2,7 +2,10 @@ import Phaser from "phaser";
 import { InputMapper } from "./input";
 import {
   createInitialState,
+  getActiveRepairTarget,
+  getHazardThreats,
   getObjectiveHint,
+  getResourceAlerts,
   getRunRating,
   getStormActiveRadius,
   getUpgradeChoices,
@@ -17,6 +20,7 @@ import {
   type Hazard,
   type Lumen,
   type ObjectiveHint,
+  type ResourceAlerts,
   type RunRating,
   type Relay,
   type RunEndReason,
@@ -45,6 +49,7 @@ type HudSnapshot = {
   pulseReady: boolean;
   message: string;
   objectiveHint: ObjectiveHint;
+  resourceAlerts: ResourceAlerts;
   status: GameState["status"];
   waveModifier: WaveModifier;
   upgradeSummaries: UpgradeSummary[];
@@ -72,6 +77,7 @@ export class GameScene extends Phaser.Scene {
   private playerView?: Phaser.GameObjects.Container;
   private gateView?: Phaser.GameObjects.Container;
   private navigatorView?: Phaser.GameObjects.Graphics;
+  private readabilityView?: Phaser.GameObjects.Graphics;
   private starLayer?: Phaser.GameObjects.Graphics;
   private trail?: Phaser.GameObjects.Particles.ParticleEmitter;
 
@@ -193,6 +199,9 @@ export class GameScene extends Phaser.Scene {
       this.hazardViews.set(hazard.id, view);
       this.worldLayer?.add(view);
     });
+
+    this.readabilityView = this.add.graphics();
+    this.worldLayer.add(this.readabilityView);
 
     this.playerView = this.createPlayer();
     this.worldLayer.add(this.playerView);
@@ -353,6 +362,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.renderNavigator();
+    this.renderReadability();
     this.playerView?.setPosition(this.state.player.position.x, this.state.player.position.y);
     const angle = Math.atan2(this.state.player.velocity.y, this.state.player.velocity.x) + Math.PI / 2;
     this.playerView?.setRotation(Number.isFinite(angle) ? angle : 0);
@@ -420,6 +430,7 @@ export class GameScene extends Phaser.Scene {
       pulseReady: this.state.player.pulseCooldown <= 0,
       message: this.state.message,
       objectiveHint: getObjectiveHint(this.state),
+      resourceAlerts: getResourceAlerts(this.state),
       status: this.state.status,
       waveModifier: WAVE_MODIFIERS[this.state.waveModifier],
       upgradeSummaries: getUpgradeSummaries(this.state.upgrades),
@@ -587,6 +598,67 @@ export class GameScene extends Phaser.Scene {
       arrowX + Math.cos(angle - 2.45) * 11,
       arrowY + Math.sin(angle - 2.45) * 11
     );
+  }
+
+  private renderReadability(): void {
+    const graphics = this.readabilityView;
+    if (!graphics) return;
+    graphics.clear();
+    if (this.state.status !== "playing") return;
+
+    const player = this.state.player.position;
+    const pulse = Math.sin(this.time.now * 0.008) * 0.5 + 0.5;
+
+    this.renderRepairReadability(graphics, player, pulse);
+    this.renderHazardReadability(graphics, player, pulse);
+    this.renderResourceReadability(graphics, player, pulse);
+  }
+
+  private renderRepairReadability(graphics: Phaser.GameObjects.Graphics, player: { x: number; y: number }, pulse: number): void {
+    const repairTarget = getActiveRepairTarget(this.state);
+    if (!repairTarget) return;
+
+    const isCharging = repairTarget.progress > 0;
+    const alpha = isCharging ? 0.52 + pulse * 0.24 : 0.28 + pulse * 0.12;
+    graphics.lineStyle(isCharging ? 5 : 3, 0xf7fbff, alpha);
+    graphics.lineBetween(player.x, player.y, repairTarget.position.x, repairTarget.position.y);
+    graphics.lineStyle(2, 0xffd76e, 0.3 + pulse * 0.22);
+    graphics.strokeCircle(repairTarget.position.x, repairTarget.position.y, 58 + pulse * 10);
+    graphics.lineStyle(2, 0x67f4ff, 0.22 + pulse * 0.18);
+    graphics.strokeCircle(player.x, player.y, 34 + pulse * 7);
+  }
+
+  private renderHazardReadability(graphics: Phaser.GameObjects.Graphics, player: { x: number; y: number }, pulse: number): void {
+    getHazardThreats(this.state)
+      .filter((threat) => threat.level !== "safe")
+      .forEach((threat) => {
+        const danger = threat.level === "danger";
+        const proximity = 1 - Math.min(1, Math.max(0, (threat.distance - threat.collisionRadius) / (threat.warningRadius - threat.collisionRadius)));
+        const alpha = danger ? 0.54 + pulse * 0.24 : 0.16 + proximity * 0.28;
+        const color = danger ? 0xff5f9b : 0xb388ff;
+        graphics.lineStyle(danger ? 4 : 2, color, alpha);
+        graphics.strokeCircle(threat.position.x, threat.position.y, threat.collisionRadius + 16 + pulse * (danger ? 14 : 8));
+        if (danger) {
+          graphics.lineStyle(2, color, 0.32 + pulse * 0.22);
+          graphics.lineBetween(player.x, player.y, threat.position.x, threat.position.y);
+        }
+      });
+  }
+
+  private renderResourceReadability(graphics: Phaser.GameObjects.Graphics, player: { x: number; y: number }, pulse: number): void {
+    const alerts = getResourceAlerts(this.state);
+    if (alerts.charge === "stable" && alerts.hull === "stable") return;
+
+    if (alerts.charge !== "stable") {
+      const critical = alerts.charge === "critical";
+      graphics.lineStyle(critical ? 5 : 3, 0xffd76e, critical ? 0.44 + pulse * 0.26 : 0.24 + pulse * 0.18);
+      graphics.strokeCircle(player.x, player.y, critical ? 48 + pulse * 13 : 42 + pulse * 8);
+    }
+    if (alerts.hull !== "stable") {
+      const critical = alerts.hull === "critical";
+      graphics.lineStyle(critical ? 5 : 3, 0xff5f9b, critical ? 0.5 + pulse * 0.3 : 0.28 + pulse * 0.18);
+      graphics.strokeCircle(player.x, player.y, critical ? 59 + pulse * 16 : 52 + pulse * 10);
+    }
   }
 
   private onResize(): void {

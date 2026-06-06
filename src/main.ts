@@ -6,6 +6,7 @@ import {
   type DifficultyId,
   type GameStatus,
   type ObjectiveHint,
+  type ResourceAlerts,
   type RunEndReason,
   type RunRating,
   type RunStats,
@@ -42,6 +43,8 @@ const chargeFill = document.querySelector<HTMLElement>("#charge-fill")!;
 const hullFill = document.querySelector<HTMLElement>("#hull-fill")!;
 const chargeValue = document.querySelector<HTMLElement>("#charge-value")!;
 const hullValue = document.querySelector<HTMLElement>("#hull-value")!;
+const chargeMeter = chargeFill.parentElement as HTMLDivElement;
+const hullMeter = hullFill.parentElement as HTMLDivElement;
 const relayValue = document.querySelector<HTMLElement>("#relay-value")!;
 const lumenValue = document.querySelector<HTMLElement>("#lumen-value")!;
 const waveValue = document.querySelector<HTMLElement>("#wave-value")!;
@@ -189,6 +192,7 @@ window.addEventListener("game:hud", (event) => {
     pulseReady: boolean;
     message: string;
     objectiveHint: ObjectiveHint;
+    resourceAlerts: ResourceAlerts;
     difficulty: DifficultyId;
     campaignWaves: number;
     status: GameStatus;
@@ -204,6 +208,8 @@ window.addEventListener("game:hud", (event) => {
   latestDifficulty = detail.difficulty;
   chargeFill.style.width = `${ratio(detail.charge, detail.maxCharge)}%`;
   hullFill.style.width = `${ratio(detail.hull, detail.maxHull)}%`;
+  chargeMeter.dataset.alert = detail.resourceAlerts.charge;
+  hullMeter.dataset.alert = detail.resourceAlerts.hull;
   chargeValue.textContent = String(Math.ceil(detail.charge));
   hullValue.textContent = String(Math.ceil(detail.hull));
   relayValue.textContent = detail.relays;
