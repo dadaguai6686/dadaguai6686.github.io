@@ -125,6 +125,25 @@ async function run() {
     const serviceWorkerScript = await fetch(`${baseUrl}/sw.js`);
     assert(serviceWorkerScript.status === 200, 'service worker should be publicly served');
     assert((serviceWorkerScript.headers.get('content-type') || '').includes('javascript'), 'service worker should be served as javascript');
+    const serviceWorkerText = await serviceWorkerScript.text();
+    assert(serviceWorkerText.includes('/feed.xml') && serviceWorkerText.includes('/sitemap.xml'), 'service worker should precache discovery metadata');
+
+    const indexHtml = await fetch(`${baseUrl}/`);
+    const indexText = await indexHtml.text();
+    assert(indexText.includes('rel="canonical" href="https://dadaguai6686.github.io/"'), 'index should expose an absolute canonical URL');
+    assert(indexText.includes('type="application/rss+xml"'), 'index should link the RSS feed');
+
+    const sitemap = await fetch(`${baseUrl}/sitemap.xml`);
+    const sitemapText = await sitemap.text();
+    assert(sitemap.status === 200 && sitemapText.includes('<loc>https://dadaguai6686.github.io/</loc>'), 'sitemap should expose an absolute public URL');
+
+    const robots = await fetch(`${baseUrl}/robots.txt`);
+    const robotsText = await robots.text();
+    assert(robots.status === 200 && robotsText.includes('Sitemap: https://dadaguai6686.github.io/sitemap.xml'), 'robots.txt should point at the absolute sitemap URL');
+
+    const feed = await fetch(`${baseUrl}/feed.xml`);
+    const feedText = await feed.text();
+    assert(feed.status === 200 && feedText.includes('<rss version="2.0"') && feedText.includes('atherix-post-1'), 'RSS feed should be publicly served with seeded posts');
 
     const sensitivePaths = [
       '/server.js',
@@ -224,6 +243,8 @@ async function run() {
       corsAllowed: health.headers.get('access-control-allow-origin'),
       corsBlockedHeader: blockedCors.headers.get('access-control-allow-origin') || null,
       serviceWorkerStatus: serviceWorkerScript.status,
+      sitemapStatus: sitemap.status,
+      feedStatus: feed.status,
       sensitiveResults,
       sanitizedAvatar: sanitizedBody.comment.avatar,
       spamTrapStatus: spamTrap.status,

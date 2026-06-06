@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'atherix-static-v4-command';
+const CACHE_VERSION = 'atherix-static-v5-discovery';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -6,6 +6,8 @@ const STATIC_ASSETS = [
   '/app.js?v=20260606-command-v1',
   '/lucide.min.js',
   '/manifest.webmanifest',
+  '/sitemap.xml',
+  '/feed.xml',
   '/assets/atherix-icon.svg'
 ];
 

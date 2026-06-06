@@ -50,7 +50,8 @@ const publicRootFiles = new Set([
   '/manifest.webmanifest',
   '/sw.js',
   '/robots.txt',
-  '/sitemap.xml'
+  '/sitemap.xml',
+  '/feed.xml'
 ]);
 const publicPathPrefixes = ['/assets/', '/uploads/'];
 const blockedPathPrefixes = [
