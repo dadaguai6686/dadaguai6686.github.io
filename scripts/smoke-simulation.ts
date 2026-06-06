@@ -12,6 +12,7 @@ import {
   getAchievementSummaries,
   getCoachDirective,
   getContractFor,
+  getContractFocus,
   getContractSnapshot,
   getHazardThreats,
   getObjectiveHint,
@@ -63,6 +64,8 @@ assert.equal(getContractFor(1, "standard"), "lumenRoute", "standard wave 1 shoul
 assert.equal(getContractFor(1, "hardcore"), "cleanWave", "hardcore should start with a precision contract");
 assert.equal(state.contract.id, "lumenRoute", "new standard runs should include the first tactical contract");
 assert.equal(getContractSnapshot(state).status, "active", "contract snapshots should expose the active status");
+assert.equal(getContractFocus(state).kind, "lumen", "lumen route contracts should mark lumen as the battlefield focus");
+assert.ok(getContractFocus(state).targets.length > 0, "active contracts should expose battlefield focus targets");
 assert.equal(getObjectiveHint(state).kind, "relay", "fresh runs should guide players toward a relay");
 assert.equal(getCoachDirective(state).id, "collectLumen", "fresh runs should onboard players through lumen first");
 assert.ok(WAVE_MODIFIERS.lumenSurge.lumenChargeBonus > 0, "lumen surge should define a resource effect");
@@ -100,6 +103,7 @@ for (const drop of lumenContract.lumen.slice(0, 4)) {
   lumenContract = updateSimulation(lumenContract, idle, 0.016);
 }
 assert.equal(lumenContract.contract.status, "completed", "collecting four lumen should complete the route contract");
+assert.equal(getContractFocus(lumenContract).active, false, "completed contracts should stop drawing battlefield focus markers");
 assert.equal(lumenContract.stats.contractsCompleted, 1, "completed contracts should be counted");
 assert.equal(getCoachDirective(lumenContract).id, "reachRelay", "after first lumen route, the coach should send players to relays");
 assert.ok(lumenContract.score > lumenContractScore, "completed contracts should award score");
@@ -111,11 +115,14 @@ assert.ok(lumenContract.score >= afterContractReward, "later updates should keep
 
 let rushContract = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
 rushContract.contract = createContractState("relayRush", rushContract.elapsed, rushContract.stats);
+assert.equal(getContractFocus(rushContract).kind, "relay", "relay rush should focus an unrepaired relay");
+assert.ok(getContractFocus(rushContract).targets.length > 0, "relay rush should expose a relay target");
 rushContract = updateSimulation(rushContract, idle, 38.1);
 assert.equal(rushContract.contract.status, "failed", "relay rush should fail after the time limit without a repair");
 
 let cleanContract = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
 cleanContract.contract = createContractState("cleanWave", cleanContract.elapsed, cleanContract.stats);
+assert.equal(getContractFocus(cleanContract).kind, "avoidHazard", "clean wave should focus hazard avoidance");
 cleanContract.hazards[0].position = { ...cleanContract.player.position };
 cleanContract = updateSimulation(cleanContract, idle, 0.016);
 assert.equal(cleanContract.contract.status, "failed", "no-hit contracts should fail on hazard impact");
@@ -184,6 +191,8 @@ assert.ok(repairState.combo > 1, "scoring actions should raise combo");
 state = repairState;
 
 const stormState = movePlayerTo(state, state.storms[0].position.x, state.storms[0].position.y);
+stormState.contract = createContractState("stormSkipper", stormState.elapsed, stormState.stats);
+assert.equal(getContractFocus(stormState).kind, "avoidStorm", "storm skipper should focus storm avoidance");
 const stormCharge = stormState.player.charge;
 const stormed = updateSimulation(stormState, idle, 0.5);
 assert.ok(stormed.player.charge < stormCharge, "standing in a storm should siphon charge");
@@ -198,7 +207,9 @@ assert.equal(hitState.stats.hitsTaken, 1, "hazard impacts should be counted");
 assert.equal(getResourceAlerts(hitState).hull, "stable", "one standard hit should not overstate hull danger");
 assert.ok(getRunPerformance(hitState).points < getRunPerformance(restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED })).points, "hits should lower live rating pressure");
 const hazardThreatState = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
+hazardThreatState.contract = createContractState("pulseDiscipline", hazardThreatState.elapsed, hazardThreatState.stats);
 hazardThreatState.hazards[0].position = { x: hazardThreatState.player.position.x + 42, y: hazardThreatState.player.position.y };
+assert.equal(getContractFocus(hazardThreatState).kind, "conservePulse", "pulse discipline should focus controlled hazard handling");
 assert.equal(getHazardThreats(hazardThreatState)[0].level, "danger", "close hazards should be flagged for danger rendering");
 assert.equal(getCoachDirective(hazardThreatState).id, "pulseDanger", "dangerous hazards should override normal coaching");
 hazardThreatState.hazards[0].position = { x: hazardThreatState.player.position.x + 118, y: hazardThreatState.player.position.y };

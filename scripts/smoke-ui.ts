@@ -15,6 +15,7 @@ assert.ok(main.includes("updateWaveIntro(detail)"), "HUD updates should render w
 assert.ok(main.includes("createRadarNodes"), "radar and scan should share SVG node construction");
 assert.ok(gameScene.includes("SECTOR_VISUALS"), "Phaser scene should define sector-specific visual styles");
 assert.ok(gameScene.includes("drawSectorField"), "Phaser scene should render sector-specific backdrops");
+assert.ok(gameScene.includes("renderContractFocus"), "Phaser scene should render contract focus markers");
 assert.ok(main.includes('"data-kind": "relay"'), "radar nodes should expose stable data-kind markers");
 assert.ok(main.includes('"data-kind": "player"'), "radar nodes should expose player marker for QA");
 assert.ok(styles.includes("#radar-panel"), "desktop radar should have CSS");

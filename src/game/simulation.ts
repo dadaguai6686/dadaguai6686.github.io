@@ -201,6 +201,18 @@ export type ContractSnapshot = TacticalContract & {
   status: ContractStatus;
 };
 
+export type ContractFocusKind = "avoidHazard" | "avoidStorm" | "conservePulse" | "lumen" | "relay";
+
+export type ContractFocus = {
+  active: boolean;
+  detail: string;
+  kind: ContractFocusKind;
+  progress: string;
+  targets: Vec2[];
+  title: string;
+  urgent: boolean;
+};
+
 export type ObjectiveHintKind = "menu" | "danger" | "repair" | "relay" | "lumen" | "gate";
 
 export type ObjectiveHint = {
@@ -1188,6 +1200,101 @@ export function getContractSnapshot(state: GameState): ContractSnapshot {
     rewardClaimed: state.contract.rewardClaimed,
     status: state.contract.status
   };
+}
+
+export function getContractFocus(state: GameState): ContractFocus {
+  const contract = CONTRACTS[state.contract.id];
+  const progress = getContractProgressText(state);
+  const inactiveFocus: ContractFocus = {
+    active: false,
+    detail: contract.requirement,
+    kind: "lumen",
+    progress,
+    targets: [],
+    title: `战术合约：${contract.name}`,
+    urgent: false
+  };
+
+  if (state.status !== "playing" || state.contract.status !== "active") {
+    return inactiveFocus;
+  }
+
+  const deltas = getContractDeltas(state);
+  const player = state.player.position;
+  const threats = getHazardThreats(state).sort((a, b) => a.distance - b.distance);
+
+  switch (state.contract.id) {
+    case "lumenRoute": {
+      const remaining = Math.max(0, 4 - deltas.lumenCollected);
+      const targets = state.lumen
+        .filter((drop) => !drop.collected)
+        .map((drop) => ({ drop, distance: distance(drop.position, player) }))
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, Math.max(1, remaining))
+        .map(({ drop }) => drop.position);
+      return {
+        active: targets.length > 0,
+        detail: "优先回收标出的金色流明，先把电量节奏建立起来。",
+        kind: "lumen",
+        progress,
+        targets,
+        title: "合约目标：流明航线",
+        urgent: remaining <= 1
+      };
+    }
+    case "relayRush": {
+      const elapsed = state.elapsed - state.contract.startElapsed;
+      const target = nearest(state.relays.filter((relay) => !relay.repaired), player)?.item.position;
+      return {
+        active: Boolean(target),
+        detail: "直奔最近蓝色信标，先完成第一座维修。",
+        kind: "relay",
+        progress,
+        targets: target ? [target] : [],
+        title: "合约目标：速修信标",
+        urgent: elapsed > 28
+      };
+    }
+    case "cleanWave": {
+      const nearTargets = threats.filter((threat) => threat.level !== "safe").map((threat) => threat.position);
+      const fallbackTargets = threats.slice(0, 2).map((threat) => threat.position);
+      return {
+        active: true,
+        detail: "粉色碎片会让无损合约失败，先读危险线再切入。",
+        kind: "avoidHazard",
+        progress,
+        targets: nearTargets.length > 0 ? nearTargets : fallbackTargets,
+        title: "合约目标：无损救援",
+        urgent: nearTargets.length > 0
+      };
+    }
+    case "stormSkipper": {
+      const stormTargets = state.storms.map((storm) => storm.position);
+      const inStorm = state.storms.some((storm) => distance(storm.position, player) < getStormActiveRadius(storm));
+      return {
+        active: stormTargets.length > 0,
+        detail: "紫色风暴会计入停留时间，绕开后再修复。",
+        kind: "avoidStorm",
+        progress,
+        targets: stormTargets,
+        title: "合约目标：风暴掠行",
+        urgent: inStorm || deltas.stormSeconds > 0.55
+      };
+    }
+    case "pulseDiscipline": {
+      const targetThreats = threats.filter((threat) => threat.level !== "safe").slice(0, 2);
+      const fallbackTargets = threats.slice(0, 2);
+      return {
+        active: true,
+        detail: "把脉冲留给最后关头，用走位和推进处理碎片。",
+        kind: "conservePulse",
+        progress,
+        targets: (targetThreats.length > 0 ? targetThreats : fallbackTargets).map((threat) => threat.position),
+        title: "合约目标：脉冲节律",
+        urgent: deltas.pulseUses >= 1 || targetThreats.some((threat) => threat.level === "danger")
+      };
+    }
+  }
 }
 
 export function getResourceAlerts(state: GameState): ResourceAlerts {

@@ -5,6 +5,7 @@ import {
   createInitialState,
   getActiveRepairTarget,
   getCoachDirective,
+  getContractFocus,
   getContractSnapshot,
   getHazardThreats,
   getObjectiveHint,
@@ -22,6 +23,7 @@ import {
   updateSimulation,
   WAVE_MODIFIERS,
   type CoachDirective,
+  type ContractFocus,
   type ContractSnapshot,
   type DifficultyId,
   type GameState,
@@ -892,8 +894,38 @@ export class GameScene extends Phaser.Scene {
     const pulse = Math.sin(this.time.now * 0.008) * 0.5 + 0.5;
 
     this.renderRepairReadability(graphics, player, pulse);
+    this.renderContractFocus(graphics, pulse);
     this.renderHazardReadability(graphics, player, pulse);
     this.renderResourceReadability(graphics, player, pulse);
+  }
+
+  private renderContractFocus(graphics: Phaser.GameObjects.Graphics, pulse: number): void {
+    const focus = getContractFocus(this.state);
+    if (!focus.active || focus.targets.length === 0) return;
+
+    const color = getContractFocusColor(focus.kind);
+    const alpha = focus.urgent ? 0.46 + pulse * 0.24 : 0.24 + pulse * 0.18;
+    const baseRadius = getContractFocusRadius(focus.kind);
+    focus.targets.slice(0, 4).forEach((target, index) => {
+      const radius = baseRadius + pulse * (focus.urgent ? 14 : 9) + index * 2;
+      graphics.lineStyle(focus.urgent ? 4 : 3, color, Math.max(0.12, alpha - index * 0.05));
+      graphics.strokeCircle(target.x, target.y, radius);
+      graphics.lineStyle(1, 0xffffff, 0.16 + pulse * 0.12);
+      graphics.strokeCircle(target.x, target.y, Math.max(18, radius * 0.52));
+
+      if (focus.kind === "avoidHazard" || focus.kind === "avoidStorm" || focus.kind === "conservePulse") {
+        graphics.lineStyle(focus.urgent ? 3 : 2, color, Math.max(0.16, alpha - 0.08));
+        graphics.lineBetween(target.x - radius * 0.55, target.y - radius * 0.55, target.x + radius * 0.55, target.y + radius * 0.55);
+        graphics.lineBetween(target.x + radius * 0.55, target.y - radius * 0.55, target.x - radius * 0.55, target.y + radius * 0.55);
+      }
+    });
+
+    const primaryTarget = focus.targets[0];
+    if (primaryTarget && (focus.kind === "lumen" || focus.kind === "relay")) {
+      const player = this.state.player.position;
+      graphics.lineStyle(2, color, 0.16 + pulse * 0.14);
+      graphics.lineBetween(player.x, player.y, primaryTarget.x, primaryTarget.y);
+    }
   }
 
   private renderRepairReadability(graphics: Phaser.GameObjects.Graphics, player: { x: number; y: number }, pulse: number): void {
@@ -970,4 +1002,18 @@ function getCoachColor(id: CoachDirective["id"]): number {
   if (id === "collectLumen" || id === "recoverCharge" || id === "exitGate") return 0xffd76e;
   if (id === "repairRelay") return 0xffffff;
   return 0x67f4ff;
+}
+
+function getContractFocusColor(kind: ContractFocus["kind"]): number {
+  if (kind === "lumen") return 0xffd76e;
+  if (kind === "relay") return 0xffffff;
+  if (kind === "avoidStorm") return 0xb388ff;
+  return 0xff5f9b;
+}
+
+function getContractFocusRadius(kind: ContractFocus["kind"]): number {
+  if (kind === "lumen") return 36;
+  if (kind === "relay") return 72;
+  if (kind === "avoidStorm") return 96;
+  return 56;
 }
