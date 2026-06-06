@@ -481,7 +481,7 @@ window.addEventListener("game:hud", (event) => {
   pilotTip.dataset.kind = detail.objectiveHint.kind;
   pilotTipTitle.textContent = detail.objectiveHint.title;
   pilotTipDetail.textContent = detail.objectiveHint.detail;
-  missionText.textContent = detail.message;
+  missionText.textContent = buildMissionStatusText(detail.message, detail.objectiveHint);
   objectiveTitle.textContent = buildObjectiveStripTitle(detail.objectiveHint);
   objectiveDetail.textContent = buildObjectiveStripDetail(detail);
   updateWaveIntro(detail);
@@ -619,6 +619,16 @@ function buildObjectiveStripDetail(detail: {
       ? `${detail.contract.name}：${detail.contract.progress}`
       : `${detail.contract.name}：${getContractStatusLabel(detail.contract.status)}`;
   return `${detail.objectiveHint.detail} · 第 ${detail.wave}/${detail.campaignWaves} 波 · 信标 ${detail.relays} · ${DIFFICULTY_SETTINGS[detail.difficulty].name} / ${detail.routePlan.name} / ${detail.sector.name} / 合约 ${contractStatus}`;
+}
+
+function buildMissionStatusText(message: string, hint: ObjectiveHint): string {
+  if (hint.urgent || hint.kind === "danger" || hint.kind === "repair" || hint.kind === "gate") {
+    return `${hint.title}：${hint.detail}`;
+  }
+  if (hint.kind === "lumen" || hint.kind === "relay") {
+    return `${hint.title}：${hint.detail}`;
+  }
+  return message;
 }
 
 function renderRadar(radar: RadarSnapshot, status: GameStatus): void {
