@@ -4,6 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
@@ -167,6 +168,15 @@ function removeUploadedFile(file) {
   }
 }
 
+function sendDatabaseError(res, err, fallback = 'Database operation failed.') {
+  console.error('[db]', err?.message || err);
+  return res.status(500).json({ error: fallback });
+}
+
+function sendApiError(res, status, message) {
+  return res.status(status).json({ error: message });
+}
+
 // Enable CORS, baseline hardening & JSON Parsing middleware
 app.disable('x-powered-by');
 app.use(cors({
@@ -191,6 +201,12 @@ app.use((req, res, next) => {
 });
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && 'body' in err) {
+    return sendApiError(res, 400, 'Malformed JSON request body.');
+  }
+  next(err);
+});
 
 function createRateLimit({ windowMs, max, message, maxKeys = 5000 }) {
   const hits = new Map();
@@ -244,7 +260,7 @@ const storage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const uniqueSuffix = `${Date.now()}-${crypto.randomBytes(12).toString('hex')}`;
     const ext = allowedImageMimeTypes.get(file.mimetype) || path.extname(file.originalname).toLowerCase();
     cb(null, `${uniqueSuffix}${ext}`);
   }
@@ -311,6 +327,11 @@ app.use(express.static(__dirname, {
   }
 })); // Host index.html, style.css, app.js directly
 
+app.use('/api', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
+
 app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
@@ -365,7 +386,7 @@ app.get('/api/auth/verify', authenticateToken, (req, res) => {
 app.get('/api/posts', (req, res) => {
   db.all('SELECT * FROM posts ORDER BY pinned DESC, date DESC', [], (err, rows) => {
     if (err) {
-      return res.status(500).json({ error: err.message });
+      return sendDatabaseError(res, err);
     }
     res.json(rows);
   });
@@ -393,7 +414,7 @@ app.post('/api/posts', authenticateToken, writeLimiter, (req, res) => {
     [postId, title, excerpt, content, tag, postDate, readTime, postPinned],
     function(err) {
       if (err) {
-        return res.status(500).json({ error: err.message });
+        return sendDatabaseError(res, err);
       }
       res.json({ success: true, postId });
     }
@@ -417,7 +438,7 @@ app.put('/api/posts/:id', authenticateToken, writeLimiter, (req, res) => {
     [title, excerpt, content, tag, date, readTime, postPinned, postId],
     function(err) {
       if (err) {
-        return res.status(500).json({ error: err.message });
+        return sendDatabaseError(res, err);
       }
       if (this.changes === 0) {
         return res.status(404).json({ error: 'Post not found.' });
@@ -433,7 +454,7 @@ app.delete('/api/posts/:id', authenticateToken, writeLimiter, (req, res) => {
 
   db.run('DELETE FROM posts WHERE id = ?', [postId], function(err) {
     if (err) {
-      return res.status(500).json({ error: err.message });
+      return sendDatabaseError(res, err);
     }
     if (this.changes === 0) {
       return res.status(404).json({ error: 'Post not found.' });
@@ -450,7 +471,7 @@ app.delete('/api/posts/:id', authenticateToken, writeLimiter, (req, res) => {
 app.get('/api/projects', (req, res) => {
   db.all('SELECT * FROM projects', [], (err, rows) => {
     if (err) {
-      return res.status(500).json({ error: err.message });
+      return sendDatabaseError(res, err);
     }
     // Parse JSON tags string to array
     const projects = rows.map(row => {
@@ -486,7 +507,7 @@ app.post('/api/projects', authenticateToken, writeLimiter, (req, res) => {
     [projId, title, desc, tag, tagsStr, img, pain, solution, github, live],
     function(err) {
       if (err) {
-        return res.status(500).json({ error: err.message });
+        return sendDatabaseError(res, err);
       }
       res.json({ success: true, projId });
     }
@@ -512,7 +533,7 @@ app.put('/api/projects/:id', authenticateToken, writeLimiter, (req, res) => {
     [title, desc, tag, tagsStr, img, pain, solution, github, live, projId],
     function(err) {
       if (err) {
-        return res.status(500).json({ error: err.message });
+        return sendDatabaseError(res, err);
       }
       if (this.changes === 0) {
         return res.status(404).json({ error: 'Project not found.' });
@@ -528,7 +549,7 @@ app.delete('/api/projects/:id', authenticateToken, writeLimiter, (req, res) => {
 
   db.run('DELETE FROM projects WHERE id = ?', [projId], function(err) {
     if (err) {
-      return res.status(500).json({ error: err.message });
+      return sendDatabaseError(res, err);
     }
     if (this.changes === 0) {
       return res.status(404).json({ error: 'Project not found.' });
@@ -545,7 +566,7 @@ app.delete('/api/projects/:id', authenticateToken, writeLimiter, (req, res) => {
 app.get('/api/comments', (req, res) => {
   db.all('SELECT * FROM comments ORDER BY date DESC', [], (err, rows) => {
     if (err) {
-      return res.status(500).json({ error: err.message });
+      return sendDatabaseError(res, err);
     }
     res.json(rows);
   });
@@ -578,7 +599,7 @@ app.post('/api/comments', writeLimiter, (req, res) => {
     [nickname, avatar, website, content, dateStr],
     function(err) {
       if (err) {
-        return res.status(500).json({ error: err.message });
+        return sendDatabaseError(res, err);
       }
       res.json({
         success: true,
@@ -601,7 +622,7 @@ app.delete('/api/comments/:id', authenticateToken, writeLimiter, (req, res) => {
 
   db.run('DELETE FROM comments WHERE id = ?', [commentId], function(err) {
     if (err) {
-      return res.status(500).json({ error: err.message });
+      return sendDatabaseError(res, err);
     }
     if (this.changes === 0) {
       return res.status(404).json({ error: 'Comment not found.' });
@@ -631,6 +652,16 @@ app.post('/api/upload', authenticateToken, writeLimiter, (req, res) => {
     const relativePath = `/uploads/${req.file.filename}`;
     res.json({ success: true, url: relativePath });
   });
+});
+
+app.use('/api', (req, res) => {
+  sendApiError(res, 404, 'API endpoint not found.');
+});
+
+app.use((err, req, res, next) => {
+  console.error('[server]', err?.message || err);
+  if (res.headersSent) return next(err);
+  sendApiError(res, 500, 'Internal server error.');
 });
 
 // Global Fallback for Spa client routing

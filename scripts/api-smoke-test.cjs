@@ -115,6 +115,7 @@ async function run() {
     assert(health.headers.get('content-security-policy')?.includes('https://fonts.gstatic.com'), 'CSP should allow configured web font files');
     assert(health.headers.get('strict-transport-security')?.includes('max-age=31536000'), 'HSTS header missing in production');
     assert(health.headers.get('access-control-allow-origin') === allowedOrigin, 'allowed CORS origin not echoed');
+    assert(health.headers.get('cache-control') === 'no-store', 'API responses should not be cached');
 
     const blockedCors = await fetch(`${baseUrl}/api/health`, {
       headers: { Origin: 'https://evil.example' }
@@ -133,9 +134,27 @@ async function run() {
     const indexText = await indexHtml.text();
     assert(indexText.includes('rel="canonical" href="https://dadaguai6686.github.io/"'), 'index should expose an absolute canonical URL');
     assert(indexText.includes('type="application/rss+xml"'), 'index should link the RSS feed');
+    assert(indexText.includes('href="/style.css') && indexText.includes('src="/app.js') && indexText.includes('src="/lucide.min.js"'), 'local app assets should use root-absolute URLs for deep links');
     assert(indexText.includes('property="og:image" content="https://dadaguai6686.github.io/assets/atherix-og-card.png"'), 'index should expose the local branded Open Graph image');
     assert(indexText.includes('name="twitter:image" content="https://dadaguai6686.github.io/assets/atherix-og-card.png"'), 'index should expose the local Twitter card image');
     assert(indexText.includes('rel="apple-touch-icon" href="/assets/atherix-icon-192.png"'), 'index should expose an Apple touch icon');
+
+    const spaRoute = await fetch(`${baseUrl}/blog/deep-link`);
+    const spaRouteText = await spaRoute.text();
+    assert(spaRoute.status === 200 && spaRouteText.includes('id="main-content"'), 'SPA fallback should serve index.html for client routes');
+    assert(spaRouteText.includes('href="/style.css') && spaRouteText.includes('src="/app.js'), 'SPA fallback should preserve root-absolute app assets');
+
+    const unknownApi = await fetch(`${baseUrl}/api/does-not-exist`);
+    const unknownApiBody = await unknownApi.json();
+    assert(unknownApi.status === 404 && unknownApiBody.error === 'API endpoint not found.', 'unknown API routes should return a JSON 404');
+
+    const malformedJson = await fetch(`${baseUrl}/api/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{"nickname":'
+    });
+    const malformedJsonBody = await malformedJson.json();
+    assert(malformedJson.status === 400 && /Malformed JSON/.test(malformedJsonBody.error), 'malformed JSON should return a JSON 400');
 
     const manifest = await fetch(`${baseUrl}/manifest.webmanifest`);
     const manifestBody = await manifest.json();
@@ -293,6 +312,9 @@ async function run() {
       ogImageBytes: Number(ogImage.headers.get('content-length') || 0),
       sitemapStatus: sitemap.status,
       feedStatus: feed.status,
+      unknownApiStatus: unknownApi.status,
+      malformedJsonStatus: malformedJson.status,
+      apiCacheControl: health.headers.get('cache-control'),
       sensitiveResults,
       sanitizedAvatar: sanitizedBody.comment.avatar,
       spamTrapStatus: spamTrap.status,
