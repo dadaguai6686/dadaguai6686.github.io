@@ -623,6 +623,7 @@ function createRadarNodes(radar: RadarSnapshot): SVGElement[] {
   return [
     createSvgNode("rect", {
       class: "radar-bg",
+      "data-kind": "arena",
       x: 0,
       y: 0,
       width: radar.arena.width,
@@ -635,6 +636,7 @@ function createRadarNodes(radar: RadarSnapshot): SVGElement[] {
         ? [
             createSvgNode("line", {
               class: relay.repaired && nextRelay.repaired ? "radar-link repaired" : "radar-link",
+              "data-kind": "route",
               x1: relay.position.x,
               y1: relay.position.y,
               x2: nextRelay.position.x,
@@ -646,6 +648,7 @@ function createRadarNodes(radar: RadarSnapshot): SVGElement[] {
     ...radar.storms.map((storm) =>
       createSvgNode("circle", {
         class: "radar-storm",
+        "data-kind": "storm",
         cx: storm.position.x,
         cy: storm.position.y,
         r: Math.max(storm.radius, storm.activeRadius)
@@ -656,6 +659,7 @@ function createRadarNodes(radar: RadarSnapshot): SVGElement[] {
       .map((drop) =>
         createSvgNode("circle", {
           class: "radar-lumen",
+          "data-kind": "lumen",
           cx: drop.position.x,
           cy: drop.position.y,
           r: 18
@@ -664,6 +668,7 @@ function createRadarNodes(radar: RadarSnapshot): SVGElement[] {
     ...radar.hazards.map((hazard) =>
       createSvgNode("circle", {
         class: "radar-hazard",
+        "data-kind": "hazard",
         cx: hazard.position.x,
         cy: hazard.position.y,
         r: hazard.radius + 12
@@ -672,6 +677,7 @@ function createRadarNodes(radar: RadarSnapshot): SVGElement[] {
     ...radar.relays.map((relay) =>
       createSvgNode("circle", {
         class: relay.repaired ? "radar-relay repaired" : "radar-relay",
+        "data-kind": "relay",
         cx: relay.position.x,
         cy: relay.position.y,
         r: relay.repaired ? 34 : 30
@@ -679,12 +685,14 @@ function createRadarNodes(radar: RadarSnapshot): SVGElement[] {
     ),
     createSvgNode("circle", {
       class: radar.gate.open ? "radar-gate open" : "radar-gate",
+      "data-kind": "gate",
       cx: radar.gate.position.x,
       cy: radar.gate.position.y,
       r: radar.gate.open ? 34 : 26
     }),
     createSvgNode("polygon", {
       class: "radar-player",
+      "data-kind": "player",
       points: `${radar.player.position.x},${radar.player.position.y - 28} ${radar.player.position.x + 24},${radar.player.position.y + 22} ${radar.player.position.x - 24},${radar.player.position.y + 22}`
     })
   ];
