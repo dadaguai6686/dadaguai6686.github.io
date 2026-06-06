@@ -45,6 +45,7 @@ const TEST_ROUTE_SEED = 1001;
 
 let state = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
 assert.equal(state.status, "playing");
+assert.equal(state.briefingActive, true, "new waves should begin in a safe briefing state");
 assert.equal(state.difficulty, "standard");
 assert.equal(state.campaignWaves, CAMPAIGN_WAVES);
 assert.equal(state.relays.length, 4);
@@ -66,15 +67,26 @@ assert.equal(state.contract.id, "lumenRoute", "new standard runs should include 
 assert.equal(getContractSnapshot(state).status, "active", "contract snapshots should expose the active status");
 assert.equal(getContractFocus(state).kind, "lumen", "lumen route contracts should mark lumen as the battlefield focus");
 assert.ok(getContractFocus(state).targets.length > 0, "active contracts should expose battlefield focus targets");
-assert.equal(getObjectiveHint(state).kind, "relay", "fresh runs should guide players toward a relay");
-assert.equal(getCoachDirective(state).id, "collectLumen", "fresh runs should onboard players through lumen first");
+assert.equal(getObjectiveHint(state).title, "先读图再出发", "fresh runs should first tell players they can read the map");
+assert.equal(getCoachDirective(state).id, "readContract", "fresh runs should first expose the briefing and contract");
 assert.ok(WAVE_MODIFIERS.lumenSurge.lumenChargeBonus > 0, "lumen surge should define a resource effect");
 assert.ok(state.routeSeed > 0, "fresh runs should create a visible route seed");
 assert.equal(parseRouteSeed(getRoutePlan(state.routeSeed).code), state.routeSeed, "route codes should parse back to the same seed");
 assert.equal(parseRouteSeed(getRoutePlan(state.routeSeed).name), state.routeSeed, "full route names should parse back to the same seed");
 assert.equal(getRunPerformance(state).id, "B", "fresh active runs should start with a modest live rating");
 assert.ok(getRunPerformance(state).points < 62, "fresh active runs should not start at a high live rating");
-assert.ok(getRunPerformance(state).detail.includes("合约"), "live rating should point players at the active contract");
+assert.ok(getRunPerformance(state).detail.includes("读图"), "live rating should explain the opening briefing state");
+
+const protectedStart = updateSimulation(state, idle, 12);
+assert.equal(protectedStart.briefingActive, true, "idle briefing should stay active until the first input");
+assert.equal(protectedStart.elapsed, state.elapsed, "idle briefing should not start the run timer");
+assert.equal(protectedStart.player.charge, state.player.charge, "idle briefing should not drain charge");
+assert.equal(protectedStart.player.hull, state.player.hull, "idle briefing should prevent opening hazard damage");
+assert.equal(protectedStart.stats.hitsTaken, 0, "idle briefing should not count hazard hits");
+assert.ok(protectedStart.message.includes("读图缓冲"), "idle briefing should tell players why nothing is draining");
+state = updateSimulation(state, { ...idle, move: { x: 1, y: 0 } }, 0.016);
+assert.equal(state.briefingActive, false, "the first movement should end the opening briefing");
+assert.ok(state.elapsed > 0, "the run timer should start after player input");
 
 const seededA = restartRun(createInitialState(), undefined, { routeSeed: 4660 });
 const seededB = restartRun(createInitialState(), undefined, { routeSeed: 4660 });
@@ -114,6 +126,7 @@ assert.equal(lumenContract.stats.contractsCompleted, 1, "completed contract rewa
 assert.ok(lumenContract.score >= afterContractReward, "later updates should keep the claimed contract score");
 
 let rushContract = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
+rushContract.briefingActive = false;
 rushContract.contract = createContractState("relayRush", rushContract.elapsed, rushContract.stats);
 assert.equal(getContractFocus(rushContract).kind, "relay", "relay rush should focus an unrepaired relay");
 assert.ok(getContractFocus(rushContract).targets.length > 0, "relay rush should expose a relay target");
@@ -121,6 +134,7 @@ rushContract = updateSimulation(rushContract, idle, 38.1);
 assert.equal(rushContract.contract.status, "failed", "relay rush should fail after the time limit without a repair");
 
 let cleanContract = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
+cleanContract.briefingActive = false;
 cleanContract.contract = createContractState("cleanWave", cleanContract.elapsed, cleanContract.stats);
 assert.equal(getContractFocus(cleanContract).kind, "avoidHazard", "clean wave should focus hazard avoidance");
 cleanContract.hazards[0].position = { ...cleanContract.player.position };
@@ -201,12 +215,14 @@ assert.equal(getObjectiveHint(stormed).kind, "danger", "storm exposure should be
 assert.equal(getCoachDirective(stormed).id, "escapeStorm", "storm exposure should override normal coaching");
 
 let hitState = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
+hitState.briefingActive = false;
 hitState.hazards[0].position = { ...hitState.player.position };
 hitState = updateSimulation(hitState, idle, 0.016);
 assert.equal(hitState.stats.hitsTaken, 1, "hazard impacts should be counted");
 assert.equal(getResourceAlerts(hitState).hull, "stable", "one standard hit should not overstate hull danger");
 assert.ok(getRunPerformance(hitState).points < getRunPerformance(restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED })).points, "hits should lower live rating pressure");
 const hazardThreatState = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
+hazardThreatState.briefingActive = false;
 hazardThreatState.contract = createContractState("pulseDiscipline", hazardThreatState.elapsed, hazardThreatState.stats);
 hazardThreatState.hazards[0].position = { x: hazardThreatState.player.position.x + 42, y: hazardThreatState.player.position.y };
 assert.equal(getContractFocus(hazardThreatState).kind, "conservePulse", "pulse discipline should focus controlled hazard handling");
@@ -216,6 +232,7 @@ hazardThreatState.hazards[0].position = { x: hazardThreatState.player.position.x
 assert.equal(getHazardThreats(hazardThreatState)[0].level, "near", "near hazards should be flagged before collision");
 
 const steadyHazards = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
+steadyHazards.briefingActive = false;
 const fastHazards = structuredClone(steadyHazards);
 fastHazards.waveModifier = "shardCurrent";
 const steadyHazardX = steadyHazards.hazards[0].position.x;
@@ -273,8 +290,12 @@ assert.equal(upgraded.upgrades.engine, 1, "chosen upgrade should be installed");
 assert.equal(getUpgradeSummary(upgraded.upgrades, "engine").level, 1, "installed upgrades should update summaries");
 assert.equal(upgraded.stats.wavesCleared, 1, "campaign stats should carry into the next wave");
 
-const training = updateSimulation(restartRun(createInitialState(), undefined, { difficulty: "training", routeSeed: TEST_ROUTE_SEED }), idle, 1);
-const hardcore = updateSimulation(restartRun(createInitialState(), undefined, { difficulty: "hardcore", routeSeed: TEST_ROUTE_SEED }), idle, 1);
+const trainingStart = restartRun(createInitialState(), undefined, { difficulty: "training", routeSeed: TEST_ROUTE_SEED });
+const hardcoreStart = restartRun(createInitialState(), undefined, { difficulty: "hardcore", routeSeed: TEST_ROUTE_SEED });
+trainingStart.briefingActive = false;
+hardcoreStart.briefingActive = false;
+const training = updateSimulation(trainingStart, idle, 1);
+const hardcore = updateSimulation(hardcoreStart, idle, 1);
 assert.ok(training.player.charge > hardcore.player.charge, "training should drain less charge than hardcore");
 
 const paused = pauseRun(upgraded);
@@ -311,6 +332,7 @@ assert.equal(newCampaign.upgrades.engine, 0, "a new campaign should not keep old
 assert.equal(newCampaign.stats.wavesCleared, 0, "a new campaign should reset campaign stats");
 
 let drained = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
+drained.briefingActive = false;
 drained.player.charge = 0.01;
 drained = updateSimulation(drained, idle, 0.5);
 assert.equal(drained.status, "lost", "empty charge should lose the run");
@@ -321,6 +343,7 @@ console.log("Simulation smoke checks passed.");
 
 function movePlayerTo(state: GameState, x: number, y: number): GameState {
   const next = structuredClone(state);
+  next.briefingActive = false;
   next.player.position = { x, y };
   next.player.velocity = { x: 0, y: 0 };
   next.player.invulnerable = 0;

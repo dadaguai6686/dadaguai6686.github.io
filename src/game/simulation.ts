@@ -691,6 +691,7 @@ export type GameState = {
   upgrades: UpgradeState;
   wave: number;
   waveModifier: WaveModifierId;
+  briefingActive: boolean;
   campaignWaves: number;
   score: number;
   combo: number;
@@ -747,6 +748,7 @@ export function createInitialState(): GameState {
     upgrades: createUpgradeState(),
     wave: 1,
     waveModifier: "steadySignal",
+    briefingActive: false,
     campaignWaves: CAMPAIGN_WAVES,
     score: 0,
     combo: 1,
@@ -767,6 +769,7 @@ export function restartRun(state: GameState, upgradeId?: UpgradeId, options: Res
   next.status = "playing";
   next.wave = wonPreviousWave ? state.wave + 1 : 1;
   next.waveModifier = getWaveModifierFor(next.wave, next.difficulty);
+  next.briefingActive = true;
   next.sector = getSectorFor(next.wave, next.difficulty);
   next.routeSeed = wonPreviousWave ? state.routeSeed : normalizeRouteSeed(options.routeSeed ?? createRouteSeed());
   applySectorLayout(next);
@@ -815,6 +818,15 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
   const difficulty = DIFFICULTY_SETTINGS[next.difficulty];
   const modifier = WAVE_MODIFIERS[next.waveModifier];
   const previousPosition = { ...player.position };
+  const playerActed = input.move.x !== 0 || input.move.y !== 0 || input.boost || input.repair || input.pulse;
+  if (next.briefingActive && !playerActed) {
+    next.shake = Math.max(0, next.shake - dt * 1.8);
+    next.message = "开局读图缓冲：先看区域、事件和合约；移动后正式开始计时、耗电和危险。";
+    return next;
+  }
+  if (playerActed) {
+    next.briefingActive = false;
+  }
   next.elapsed += dt;
   next.comboTimer = Math.max(0, next.comboTimer - dt);
   if (next.comboTimer <= 0) {
@@ -1146,6 +1158,9 @@ function getPerformanceDetail(state: GameState): string {
   if (state.status !== "playing") {
     return "开始后会实时显示评级压力和下一步提分目标。";
   }
+  if (state.briefingActive) {
+    return "读图缓冲：先看区域、合约和第一条流明路线，移动后正式计时。";
+  }
   if (state.player.charge <= state.player.maxCharge * 0.28) {
     return "电量偏低：先回收流明，别硬修。";
   }
@@ -1433,6 +1448,18 @@ export function getCoachDirective(state: GameState): CoachDirective {
 
   const player = state.player;
   const nearestLumen = nearest(state.lumen.filter((drop) => !drop.collected), player.position);
+  if (state.briefingActive) {
+    return {
+      id: "readContract",
+      step: 1,
+      totalSteps,
+      title: "开局读图缓冲",
+      detail: "先看本波区域、事件和战术合约；移动、修复、推进或脉冲后正式开始计时。",
+      progress: "移动后正式开始",
+      target: nearestLumen?.item.position ?? nearest(state.relays.filter((relay) => !relay.repaired), player.position)?.item.position,
+      urgent: false
+    };
+  }
   const activeStorm = state.storms.find((storm) => distance(storm.position, player.position) < getStormActiveRadius(storm));
   if (activeStorm) {
     return {
@@ -1579,6 +1606,18 @@ export function getObjectiveHint(state: GameState): ObjectiveHint {
   }
 
   const player = state.player;
+  if (state.briefingActive) {
+    const firstTarget =
+      nearest(state.lumen.filter((drop) => !drop.collected), player.position)?.item.position ??
+      nearest(state.relays.filter((relay) => !relay.repaired), player.position)?.item.position;
+    return {
+      kind: "lumen",
+      title: "先读图再出发",
+      detail: "安全缓冲中：确认合约和第一条流明路线后再移动。",
+      target: firstTarget,
+      urgent: false
+    };
+  }
   const activeStorm = state.storms.find((storm) => distance(storm.position, player.position) < getStormActiveRadius(storm));
   if (activeStorm) {
     return {
