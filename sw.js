@@ -1,9 +1,9 @@
-const CACHE_VERSION = 'atherix-static-v8-career';
+const CACHE_VERSION = 'atherix-static-v9-drift';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/style.css?v=20260606-career-v1',
-  '/app.js?v=20260606-career-v1',
+  '/style.css?v=20260606-drift-v1',
+  '/app.js?v=20260606-drift-v1',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',

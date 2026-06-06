@@ -458,6 +458,7 @@ function init() {
       { id: 'runner', icon: 'rocket', title: 'Cyber Astro-Runner', desc: '8 关主线街机远征', keywords: 'runner platform main astro 跑酷 主线', action: () => navigateTo('game') },
       { id: 'survivor', icon: 'sparkles', title: 'Starcore Survivor', desc: '生存构筑与自动射击', keywords: 'survivor starcore roguelite 生存' },
       { id: 'boss', icon: 'crosshair', title: 'Prism Boss Rush', desc: '三阶段 Boss 弹幕战', keywords: 'boss bullet prism 弹幕' },
+      { id: 'drift', icon: 'route', title: 'Neon Drift', desc: '检查点漂移、加速与无人机追逐', keywords: 'drift neon racing boost checkpoint 漂移 竞速' },
       { id: 'heist', icon: 'scan-eye', title: 'Cyber Heist', desc: '潜入、隐身、终端与撤离', keywords: 'heist stealth cloak 潜入' },
       { id: 'chain', icon: 'gem', title: 'Alchemy Chain', desc: '大连锁消除与特殊核心', keywords: 'chain alchemy puzzle 消除 连锁' },
       { id: 'tactics', icon: 'shield', title: 'Rift Tactics', desc: '行动点、敌人 AI 与核心撤离', keywords: 'tactics rift strategy turn 战术 回合' },
@@ -3647,6 +3648,7 @@ function init() {
       <div class="mini-game-tabs" role="tablist" aria-label="精品小游戏选择">
         <button type="button" class="mini-game-tab active" data-premium-game="survivor">星核幸存者</button>
         <button type="button" class="mini-game-tab" data-premium-game="boss">棱镜 Boss</button>
+        <button type="button" class="mini-game-tab" data-premium-game="drift">霓虹漂移</button>
         <button type="button" class="mini-game-tab" data-premium-game="heist">赛博潜入</button>
         <button type="button" class="mini-game-tab" data-premium-game="chain">连锁炼金</button>
         <button type="button" class="mini-game-tab" data-premium-game="tactics">裂隙战术</button>
@@ -3689,6 +3691,25 @@ function init() {
             </div>
           </div>
           <canvas class="mini-canvas mini-canvas-wide" id="premium-boss-canvas" width="560" height="340"></canvas>
+        </div>
+        <div class="mini-game-panel" id="premium-drift">
+          <div class="mini-game-copy">
+            <h3>Neon Drift</h3>
+            <p>WASD / 方向键推进，Space 量子加速。穿越连续检查点、保持高速倍率，避开巡逻无人机与能量路障。</p>
+            <div class="mini-stats">
+              <span>分数 <strong id="premium-drift-score">0</strong></span>
+              <span>检查点 <strong id="premium-drift-gates">0</strong>/8</span>
+              <span>最佳 <strong id="premium-drift-best">0</strong></span>
+              <span>护盾 <strong id="premium-drift-shield">100</strong></span>
+              <span>倍率 <strong id="premium-drift-mult">x1.0</strong></span>
+              <span>加速 <strong id="premium-drift-boost">READY</strong></span>
+            </div>
+            <div class="mini-actions">
+              <button type="button" class="action-btn action-btn-primary" id="premium-drift-start">点火 / 重开</button>
+              <button type="button" class="action-btn" id="premium-drift-pause">暂停</button>
+            </div>
+          </div>
+          <canvas class="mini-canvas mini-canvas-wide" id="premium-drift-canvas" width="560" height="340" aria-label="霓虹漂移赛道"></canvas>
         </div>
         <div class="mini-game-panel" id="premium-heist">
           <div class="mini-game-copy">
@@ -3763,6 +3784,7 @@ function init() {
     const titles = {
       survivor: '星核幸存者 Starcore Survivor',
       boss: '棱镜 Boss Rush',
+      drift: '霓虹漂移 Neon Drift',
       heist: '赛博潜入 Cyber Heist',
       chain: '连锁炼金 Alchemy Chain',
       tactics: '裂隙战术 Rift Tactics',
@@ -3781,6 +3803,11 @@ function init() {
         { name: 'gold', threshold: 2500 },
         { name: 'silver', threshold: 1400 },
         { name: 'bronze', threshold: 700 }
+      ],
+      drift: [
+        { name: 'gold', threshold: 2400 },
+        { name: 'silver', threshold: 1500 },
+        { name: 'bronze', threshold: 850 }
       ],
       heist: [
         { name: 'gold', threshold: 1000 },
@@ -3808,6 +3835,9 @@ function init() {
       { id: 'survivor_90', label: '深空存活', desc: '坚持完整 90 秒' },
       { id: 'boss_phase_2', label: '棱镜破相', desc: 'Boss 进入第二阶段' },
       { id: 'boss_clear', label: '碎光终结', desc: '击破棱镜核心' },
+      { id: 'drift_clear', label: '霓虹完赛', desc: 'Neon Drift 穿越全部检查点' },
+      { id: 'drift_clean', label: '零损漂移', desc: '高护盾完成 Neon Drift' },
+      { id: 'drift_combo', label: '量子倍率', desc: 'Neon Drift 倍率达到 x3.0' },
       { id: 'heist_ghost', label: '幽影协议', desc: '成功启动隐身装置' },
       { id: 'heist_clean', label: '无声撤离', desc: '低步数完成潜入' },
       { id: 'chain_combo_9', label: '九连炼成', desc: '一次连锁爆破 9 格以上' },
@@ -3821,6 +3851,7 @@ function init() {
     const dailyChallenges = [
       { id: 'survivor_1200', label: '星核幸存者得分 1200+', game: 'survivor', check: (game, score) => game === 'survivor' && score >= 1200 },
       { id: 'boss_900', label: '棱镜 Boss 得分 900+', game: 'boss', check: (game, score) => game === 'boss' && score >= 900 },
+      { id: 'drift_1200', label: '霓虹漂移评分 1200+', game: 'drift', check: (game, score) => game === 'drift' && score >= 1200 },
       { id: 'heist_700', label: '赛博潜入评分 700+', game: 'heist', check: (game, score) => game === 'heist' && score >= 700 },
       { id: 'chain_6000', label: '连锁炼金得分 6000+', game: 'chain', check: (game, score) => game === 'chain' && score >= 6000 },
       { id: 'tactics_1100', label: '裂隙战术评分 1100+', game: 'tactics', check: (game, score) => game === 'tactics' && score >= 1100 },
@@ -3923,7 +3954,7 @@ function init() {
       const daily = getDailyChallenge();
       const completedDaily = career.daily?.date === daily.date && career.daily?.id === daily.id;
       const unlockedCount = career.achievements.length;
-      const gameOrder = ['runner', 'survivor', 'boss', 'heist', 'chain', 'tactics'];
+      const gameOrder = ['runner', 'survivor', 'boss', 'drift', 'heist', 'chain', 'tactics'];
 
       if (summary) {
         summary.textContent = `${careerRating()} · 总声望 ${career.totalScore || 0} · 已解锁 ${unlockedCount}/${achievementDefs.length} 项成就`;
@@ -4068,6 +4099,7 @@ function init() {
     function pauseRealtimePremiumGamesExcept(name) {
       if (name !== 'survivor' && survivor.running && !survivor.paused) toggleSurvivorPause(true);
       if (name !== 'boss' && bossMode.running && !bossMode.paused) toggleBossPause(true);
+      if (name !== 'drift' && drift.running && !drift.paused) toggleDriftPause(true);
     }
 
     function switchPremiumGame(name) {
@@ -4082,6 +4114,7 @@ function init() {
       });
       if (title) title.textContent = titles[name];
       if (name === 'tactics') drawTactics();
+      if (name === 'drift') drawDrift();
       focusStage();
     }
 
@@ -4794,6 +4827,352 @@ function init() {
     drawBoss();
     overlay(bossMode.ctx, bossMode.canvas.width, bossMode.canvas.height, '棱镜核心等待挑战', 'A/D 移动 · Space 冲刺无敌 · 自动射击');
 
+    const drift = {
+      canvas: document.getElementById('premium-drift-canvas'),
+      ctx: document.getElementById('premium-drift-canvas')?.getContext('2d'),
+      bestKey: 'atherix_premium_drift_best',
+      running: false,
+      paused: false,
+      raf: null,
+      last: 0,
+      elapsed: 0,
+      score: 0,
+      gateIndex: 0,
+      multiplier: 1,
+      boost: 100,
+      hitCooldown: 0,
+      player: { x: 70, y: 276, vx: 0, vy: 0, angle: -0.62, r: 12, shield: 100, trail: [] },
+      gates: [
+        { x: 132, y: 238, r: 27 },
+        { x: 220, y: 126, r: 27 },
+        { x: 356, y: 86, r: 27 },
+        { x: 488, y: 142, r: 27 },
+        { x: 462, y: 282, r: 27 },
+        { x: 310, y: 294, r: 27 },
+        { x: 166, y: 176, r: 27 },
+        { x: 74, y: 82, r: 27 }
+      ],
+      barriers: [
+        { x: 190, y: 188, w: 88, h: 22 },
+        { x: 326, y: 152, w: 24, h: 92 },
+        { x: 410, y: 42, w: 24, h: 72 },
+        { x: 74, y: 130, w: 26, h: 86 }
+      ],
+      drones: [],
+      particles: []
+    };
+
+    function setDriftUi() {
+      document.getElementById('premium-drift-score').textContent = Math.floor(drift.score);
+      document.getElementById('premium-drift-gates').textContent = drift.gateIndex;
+      document.getElementById('premium-drift-best').textContent = localStorage.getItem(drift.bestKey) || '0';
+      document.getElementById('premium-drift-shield').textContent = Math.max(0, Math.ceil(drift.player.shield));
+      document.getElementById('premium-drift-mult').textContent = `x${drift.multiplier.toFixed(1)}`;
+      document.getElementById('premium-drift-boost').textContent = drift.boost >= 96 ? 'READY' : `${Math.ceil(drift.boost)}%`;
+    }
+
+    function resetDriftState() {
+      drift.running = true;
+      drift.paused = false;
+      drift.last = performance.now();
+      drift.elapsed = 0;
+      drift.score = 0;
+      drift.gateIndex = 0;
+      drift.multiplier = 1;
+      drift.boost = 100;
+      drift.hitCooldown = 0;
+      drift.player = { x: 70, y: 276, vx: 0, vy: 0, angle: -0.62, r: 12, shield: 100, trail: [] };
+      drift.drones = [
+        { x: 278, y: 66, baseX: 278, baseY: 66, ampX: 110, ampY: 34, phase: 0, speed: 0.0016, r: 13 },
+        { x: 430, y: 228, baseX: 430, baseY: 228, ampX: 52, ampY: 78, phase: 1.7, speed: 0.002, r: 12 },
+        { x: 218, y: 286, baseX: 218, baseY: 286, ampX: 56, ampY: 26, phase: 3.1, speed: 0.0018, r: 11 }
+      ];
+      drift.particles = [];
+    }
+
+    function startDrift() {
+      resetDriftState();
+      setDriftUi();
+      updateDriftPauseButton();
+      cancelAnimationFrame(drift.raf);
+      focusStage();
+      drift.raf = requestAnimationFrame(runDrift);
+    }
+
+    function updateDriftPauseButton() {
+      const btn = document.getElementById('premium-drift-pause');
+      if (btn) btn.textContent = drift.paused ? '继续' : '暂停';
+    }
+
+    function toggleDriftPause(force) {
+      if (!drift.running) return false;
+      drift.paused = typeof force === 'boolean' ? force : !drift.paused;
+      drift.last = performance.now();
+      clearPremiumKeys();
+      updateDriftPauseButton();
+      focusStage();
+      return true;
+    }
+
+    function driftSpark(x, y, color, count = 10) {
+      for (let i = 0; i < count; i++) {
+        drift.particles.push({
+          x,
+          y,
+          vx: (Math.random() - 0.5) * 150,
+          vy: (Math.random() - 0.5) * 150,
+          life: 440,
+          r: Math.random() * 2.6 + 1,
+          color
+        });
+      }
+    }
+
+    function damageDrift(amount, x, y) {
+      if (drift.hitCooldown > 0) return;
+      drift.player.shield -= amount;
+      drift.multiplier = Math.max(1, drift.multiplier * 0.72);
+      drift.hitCooldown = 760;
+      drift.player.vx *= -0.36;
+      drift.player.vy *= -0.36;
+      driftSpark(x, y, '#EF4444', 28);
+    }
+
+    function driftRectCollision(rect) {
+      const p = drift.player;
+      const nearestX = clamp(p.x, rect.x, rect.x + rect.w);
+      const nearestY = clamp(p.y, rect.y, rect.y + rect.h);
+      return Math.hypot(p.x - nearestX, p.y - nearestY) < p.r + 2;
+    }
+
+    function passDriftGate(speed) {
+      const gate = drift.gates[drift.gateIndex];
+      if (!gate) return;
+      drift.gateIndex++;
+      drift.multiplier = Math.min(4, drift.multiplier + 0.28);
+      if (drift.multiplier >= 3) unlockAchievement('drift_combo');
+      drift.boost = Math.min(100, drift.boost + 24);
+      drift.score += Math.floor((210 + speed * 0.72) * drift.multiplier);
+      driftSpark(gate.x, gate.y, '#34D399', 34);
+      if (drift.gateIndex >= drift.gates.length) finishDrift('NEON ROUTE CLEARED');
+    }
+
+    function finishDrift(text) {
+      if (!drift.running) return;
+      drift.running = false;
+      drift.paused = false;
+      cancelAnimationFrame(drift.raf);
+      const complete = drift.gateIndex >= drift.gates.length;
+      const timeBonus = complete ? Math.max(0, 76000 - drift.elapsed) / 42 : 0;
+      const finalScore = Math.floor(drift.score + drift.gateIndex * 120 + drift.player.shield * 7 + timeBonus);
+      localStorage.setItem(drift.bestKey, String(Math.max(Number(localStorage.getItem(drift.bestKey) || 0), finalScore)));
+      if (complete) unlockAchievement('drift_clear');
+      if (complete && drift.player.shield >= 75) unlockAchievement('drift_clean');
+      recordPremiumResult('drift', finalScore, { gates: drift.gateIndex, shield: drift.player.shield, elapsed: drift.elapsed });
+      setDriftUi();
+      updateDriftPauseButton();
+      drawDrift();
+      overlay(drift.ctx, drift.canvas.width, drift.canvas.height, text, `Score ${finalScore} · 点击点火再来一局`);
+    }
+
+    function runDrift(now) {
+      if (!drift.running) return;
+      const dt = Math.min(34, now - drift.last);
+      drift.last = now;
+      if (drift.paused) {
+        drawDrift();
+        overlay(drift.ctx, drift.canvas.width, drift.canvas.height, 'PAUSED', 'P / Esc 或按钮继续漂移');
+        drift.raf = requestAnimationFrame(runDrift);
+        return;
+      }
+
+      const p = drift.player;
+      const turn = (premiumKeys.right ? 1 : 0) - (premiumKeys.left ? 1 : 0);
+      const thrust = (premiumKeys.up ? 1 : 0) - (premiumKeys.down ? 0.55 : 0);
+      const boostActive = premiumKeys.action && drift.boost > 2;
+      const turnRate = 0.0044 * dt * (boostActive ? 1.08 : 1);
+      p.angle += turn * turnRate;
+      if (thrust !== 0 || boostActive) {
+        const accel = (boostActive ? 520 : 285) * (thrust >= 0 ? 1 : 0.72);
+        const dir = thrust >= 0 ? p.angle : p.angle + Math.PI;
+        p.vx += Math.cos(dir) * accel * dt / 1000;
+        p.vy += Math.sin(dir) * accel * dt / 1000;
+      }
+      if (boostActive) {
+        drift.boost = Math.max(0, drift.boost - dt * 0.08);
+        drift.score += dt * 0.075 * drift.multiplier;
+        driftSpark(p.x - Math.cos(p.angle) * 12, p.y - Math.sin(p.angle) * 12, '#BAE6FD', 2);
+      } else {
+        drift.boost = Math.min(100, drift.boost + dt * 0.018);
+      }
+
+      drift.elapsed += dt;
+      drift.hitCooldown = Math.max(0, drift.hitCooldown - dt);
+      const drag = Math.pow(premiumKeys.down ? 0.955 : 0.982, dt / 16.67);
+      p.vx *= drag;
+      p.vy *= drag;
+      const speed = Math.hypot(p.vx, p.vy);
+      if (speed > 360) {
+        p.vx = p.vx / speed * 360;
+        p.vy = p.vy / speed * 360;
+      }
+      p.x += p.vx * dt / 1000;
+      p.y += p.vy * dt / 1000;
+
+      if (p.x < 20 || p.x > drift.canvas.width - 20 || p.y < 20 || p.y > drift.canvas.height - 20) {
+        p.x = clamp(p.x, 20, drift.canvas.width - 20);
+        p.y = clamp(p.y, 20, drift.canvas.height - 20);
+        damageDrift(6, p.x, p.y);
+      }
+      drift.barriers.forEach(rect => {
+        if (driftRectCollision(rect)) damageDrift(8, p.x, p.y);
+      });
+
+      drift.drones.forEach(drone => {
+        drone.x = drone.baseX + Math.sin(drift.elapsed * drone.speed + drone.phase) * drone.ampX;
+        drone.y = drone.baseY + Math.cos(drift.elapsed * drone.speed * 0.86 + drone.phase) * drone.ampY;
+        if (Math.hypot(drone.x - p.x, drone.y - p.y) < drone.r + p.r) damageDrift(12, drone.x, drone.y);
+      });
+
+      const currentGate = drift.gates[drift.gateIndex];
+      if (currentGate && Math.hypot(currentGate.x - p.x, currentGate.y - p.y) < currentGate.r + p.r) {
+        passDriftGate(speed);
+        if (!drift.running) return;
+      }
+
+      if (speed > 64) {
+        drift.score += speed * dt / 1000 * 0.18 * drift.multiplier;
+      }
+      if (Math.abs(turn) > 0 && speed > 130) {
+        drift.score += speed * dt / 1000 * 0.34 * drift.multiplier;
+        drift.multiplier = Math.min(4, drift.multiplier + dt * 0.00018);
+      } else {
+        drift.multiplier = Math.max(1, drift.multiplier - dt * 0.00023);
+      }
+      p.trail.push({ x: p.x, y: p.y, life: 520, boost: boostActive });
+      if (p.trail.length > 42) p.trail.shift();
+      p.trail.forEach(item => { item.life -= dt; });
+      p.trail = p.trail.filter(item => item.life > 0);
+      drift.particles.forEach(pt => {
+        pt.x += pt.vx * dt / 1000;
+        pt.y += pt.vy * dt / 1000;
+        pt.life -= dt;
+      });
+      drift.particles = drift.particles.filter(pt => pt.life > 0);
+
+      setDriftUi();
+      drawDrift();
+      if (p.shield <= 0) return finishDrift('DRIVE BROKEN');
+      if (drift.elapsed >= 76000) return finishDrift('TIME OUT');
+      drift.raf = requestAnimationFrame(runDrift);
+    }
+
+    function drawDrift() {
+      const { ctx, canvas: c } = drift;
+      if (!ctx || !c) return;
+      const p = drift.player;
+      ctx.fillStyle = '#040711';
+      ctx.fillRect(0, 0, c.width, c.height);
+      drawGrid(ctx, c.width, c.height, 'rgba(6, 182, 212, 0.055)', 24);
+
+      ctx.strokeStyle = 'rgba(52, 211, 153, 0.22)';
+      ctx.lineWidth = 18;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      drift.gates.forEach((gate, index) => {
+        if (index === 0) ctx.moveTo(gate.x, gate.y);
+        else ctx.lineTo(gate.x, gate.y);
+      });
+      ctx.stroke();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(186, 230, 253, 0.36)';
+      ctx.stroke();
+
+      drift.barriers.forEach(rect => {
+        ctx.fillStyle = 'rgba(236, 72, 153, 0.22)';
+        ctx.strokeStyle = '#EC4899';
+        ctx.lineWidth = 1.5;
+        ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+        ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w - 1, rect.h - 1);
+      });
+
+      drift.gates.forEach((gate, index) => {
+        const active = index === drift.gateIndex;
+        const passed = index < drift.gateIndex;
+        ctx.strokeStyle = active ? '#FBBF24' : passed ? '#34D399' : 'rgba(148, 163, 184, 0.24)';
+        ctx.lineWidth = active ? 4 : 2;
+        ctx.beginPath();
+        ctx.arc(gate.x, gate.y, gate.r + (active ? Math.sin(drift.elapsed / 140) * 3 : 0), 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = active ? '#FDE68A' : passed ? '#D1FAE5' : '#94A3B8';
+        ctx.font = '800 12px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(String(index + 1), gate.x, gate.y + 4);
+      });
+
+      drift.drones.forEach(drone => {
+        ctx.fillStyle = '#EF4444';
+        ctx.shadowColor = '#EF4444';
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(drone.x, drone.y, drone.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = 'rgba(239, 68, 68, 0.22)';
+        ctx.beginPath();
+        ctx.arc(drone.x, drone.y, drone.r + 18, 0, Math.PI * 2);
+        ctx.stroke();
+      });
+
+      p.trail.forEach(item => {
+        ctx.globalAlpha = Math.max(0, item.life / 520) * 0.62;
+        ctx.fillStyle = item.boost ? '#BAE6FD' : '#A78BFA';
+        ctx.beginPath();
+        ctx.arc(item.x, item.y, item.boost ? 5 : 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      });
+      drift.particles.forEach(pt => {
+        ctx.globalAlpha = Math.max(0, pt.life / 440);
+        ctx.fillStyle = pt.color;
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, pt.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      });
+
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.angle);
+      ctx.shadowColor = drift.hitCooldown > 0 ? '#EF4444' : '#06B6D4';
+      ctx.shadowBlur = 16;
+      ctx.fillStyle = drift.hitCooldown > 0 ? '#FDE68A' : '#06B6D4';
+      ctx.beginPath();
+      ctx.moveTo(17, 0);
+      ctx.lineTo(-12, 12);
+      ctx.lineTo(-8, 0);
+      ctx.lineTo(-12, -12);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#DFFAFF';
+      ctx.fillRect(-4, -4, 11, 8);
+      ctx.restore();
+
+      ctx.fillStyle = '#fff';
+      ctx.font = '700 12px JetBrains Mono, monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(`${Math.max(0, 76 - drift.elapsed / 1000).toFixed(0)}s · BOOST ${Math.ceil(drift.boost)}%`, 16, 24);
+    }
+
+    document.getElementById('premium-drift-start').addEventListener('click', startDrift);
+    document.getElementById('premium-drift-pause').addEventListener('click', () => {
+      toggleDriftPause();
+    });
+    setDriftUi();
+    updateDriftPauseButton();
+    drawDrift();
+    overlay(drift.ctx, drift.canvas.width, drift.canvas.height, '霓虹航线待点火', 'WASD 转向推进 · Space 加速 · 穿越 8 个检查点');
+
     const heist = {
       canvas: document.getElementById('premium-heist-canvas'),
       ctx: document.getElementById('premium-heist-canvas')?.getContext('2d'),
@@ -5486,6 +5865,10 @@ function init() {
           bossRunning: () => bossMode.running,
           bossPaused: () => bossMode.paused,
           bossPhase: () => bossMode.boss.phase,
+          driftRunning: () => drift.running,
+          driftPaused: () => drift.paused,
+          driftGates: () => drift.gateIndex,
+          driftShield: () => drift.player.shield,
           heistSteps: () => heist.steps,
           tacticsTurn: () => tactics.turn
         }
@@ -5500,6 +5883,7 @@ function init() {
       if (e.code === 'KeyP' || e.code === 'Escape') {
         if (premiumActive === 'survivor') toggleSurvivorPause();
         if (premiumActive === 'boss') toggleBossPause();
+        if (premiumActive === 'drift') toggleDriftPause();
         return;
       }
       if (e.code === 'ArrowUp' || e.code === 'KeyW') premiumKeys.up = true;

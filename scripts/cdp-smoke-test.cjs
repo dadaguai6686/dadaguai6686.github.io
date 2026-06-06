@@ -435,6 +435,7 @@ async function run() {
     careerPanel: !!document.querySelector('#premium-career-rating'),
     dailyChallenge: document.querySelector('#premium-daily-challenge')?.textContent || '',
     premiumTabs: document.querySelectorAll('[data-premium-game]').length,
+    driftPanel: !!document.querySelector('#premium-drift-canvas'),
     tacticsPanel: !!document.querySelector('#premium-tactics-canvas'),
     oldPrototypeCount: document.querySelectorAll('#snake-canvas,#breakout-canvas,#tile-board,#memory-board').length,
     touchControls: document.querySelectorAll('[data-premium-control]').length,
@@ -515,6 +516,69 @@ async function run() {
     running: !!window.__atherixDebug?.premium?.bossRunning?.(),
     paused: !!window.__atherixDebug?.premium?.bossPaused?.(),
     pauseButton: document.querySelector('#premium-boss-pause')?.textContent || ''
+  }))()`);
+
+  await click('[data-premium-game="drift"]');
+  await wait(220);
+  await click('#premium-drift-start');
+  await wait(250);
+  await key('keyDown', 'ArrowUp', 'ArrowUp');
+  await key('keyDown', 'ArrowRight', 'ArrowRight');
+  await key('keyDown', ' ', 'Space');
+  await wait(820);
+  await key('keyUp', 'ArrowUp', 'ArrowUp');
+  await key('keyUp', 'ArrowRight', 'ArrowRight');
+  await key('keyUp', ' ', 'Space');
+  await wait(220);
+  const driftState = await evaluate(`(() => {
+    const c = document.querySelector('#premium-drift-canvas');
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let colored = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] || d[i + 1] || d[i + 2]) colored++;
+    return {
+      nonBlank: colored > 1000,
+      running: !!window.__atherixDebug?.premium?.driftRunning?.(),
+      paused: !!window.__atherixDebug?.premium?.driftPaused?.(),
+      gates: Number(document.querySelector('#premium-drift-gates')?.textContent || 0),
+      shield: Number(document.querySelector('#premium-drift-shield')?.textContent || 0),
+      score: Number(document.querySelector('#premium-drift-score')?.textContent || 0),
+      boost: document.querySelector('#premium-drift-boost')?.textContent || '',
+      mult: document.querySelector('#premium-drift-mult')?.textContent || '',
+      activeTitle: document.querySelector('#premium-active-title')?.textContent || ''
+    };
+  })()`);
+  await key('keyDown', 'p', 'KeyP');
+  await key('keyUp', 'p', 'KeyP');
+  await wait(180);
+  const driftPauseState = await evaluate(`(() => ({
+    running: !!window.__atherixDebug?.premium?.driftRunning?.(),
+    paused: !!window.__atherixDebug?.premium?.driftPaused?.(),
+    pauseButton: document.querySelector('#premium-drift-pause')?.textContent || '',
+    scoreBefore: document.querySelector('#premium-drift-score')?.textContent || '',
+    gatesBefore: document.querySelector('#premium-drift-gates')?.textContent || '',
+    shieldBefore: document.querySelector('#premium-drift-shield')?.textContent || '',
+    boostBefore: document.querySelector('#premium-drift-boost')?.textContent || ''
+  }))()`);
+  await key('keyDown', 'ArrowUp', 'ArrowUp');
+  await key('keyDown', ' ', 'Space');
+  await wait(360);
+  await key('keyUp', 'ArrowUp', 'ArrowUp');
+  await key('keyUp', ' ', 'Space');
+  const driftPauseFreezeState = await evaluate(`(() => ({
+    running: !!window.__atherixDebug?.premium?.driftRunning?.(),
+    paused: !!window.__atherixDebug?.premium?.driftPaused?.(),
+    scoreAfter: document.querySelector('#premium-drift-score')?.textContent || '',
+    gatesAfter: document.querySelector('#premium-drift-gates')?.textContent || '',
+    shieldAfter: document.querySelector('#premium-drift-shield')?.textContent || '',
+    boostAfter: document.querySelector('#premium-drift-boost')?.textContent || ''
+  }))()`);
+  await key('keyDown', 'Escape', 'Escape');
+  await key('keyUp', 'Escape', 'Escape');
+  await wait(180);
+  const driftResumeState = await evaluate(`(() => ({
+    running: !!window.__atherixDebug?.premium?.driftRunning?.(),
+    paused: !!window.__atherixDebug?.premium?.driftPaused?.(),
+    pauseButton: document.querySelector('#premium-drift-pause')?.textContent || ''
   }))()`);
 
   await click('[data-premium-game="heist"]');
@@ -669,7 +733,7 @@ async function run() {
   assert(runnerMobileState.controls >= 7 && runnerMobileState.visibleInFirstViewport && !runnerMobileState.horizontalOverflow, `runner touch controls should be reachable on mobile: ${JSON.stringify(runnerMobileState)}`);
   assert(arcadeInitial.premium && arcadeInitial.careerPanel, 'premium arcade career panel should render');
   assert(arcadeInitial.oldPrototypeCount === 0, 'old prototype mini-games should be replaced');
-  assert(arcadeInitial.premiumTabs >= 5 && arcadeInitial.tacticsPanel, 'premium arcade should include the tactics mode');
+  assert(arcadeInitial.premiumTabs >= 6 && arcadeInitial.driftPanel && arcadeInitial.tacticsPanel, 'premium arcade should include drift and tactics modes');
   assert(arcadeInitial.touchControls >= 5, 'premium touch controls should be available');
   assert(survivorState.nonBlank && survivorState.threat, 'survivor canvas should render active state');
   assert(bossState.nonBlank && bossState.dash, 'boss canvas should render active state');
@@ -683,10 +747,21 @@ async function run() {
     `boss mode should freeze while paused: ${JSON.stringify({ bossPauseState, bossPauseFreezeState })}`
   );
   assert(bossResumeState.running && !bossResumeState.paused && bossResumeState.pauseButton === '暂停', `boss mode should resume from keyboard pause: ${JSON.stringify(bossResumeState)}`);
+  assert(driftState.nonBlank && driftState.running && !driftState.paused && driftState.score > 0 && /Neon Drift/.test(driftState.activeTitle) && driftState.boost !== 'READY', `drift mode should render, move, score, and spend boost: ${JSON.stringify(driftState)}`);
+  assert(driftPauseState.running && driftPauseState.paused && driftPauseState.pauseButton === '继续', `drift mode should enter pause with keyboard: ${JSON.stringify(driftPauseState)}`);
+  assert(
+    driftPauseFreezeState.paused &&
+    driftPauseFreezeState.scoreAfter === driftPauseState.scoreBefore &&
+    driftPauseFreezeState.gatesAfter === driftPauseState.gatesBefore &&
+    driftPauseFreezeState.shieldAfter === driftPauseState.shieldBefore &&
+    driftPauseFreezeState.boostAfter === driftPauseState.boostBefore,
+    `drift mode should freeze while paused: ${JSON.stringify({ driftPauseState, driftPauseFreezeState })}`
+  );
+  assert(driftResumeState.running && !driftResumeState.paused && driftResumeState.pauseButton === '暂停', `drift mode should resume from keyboard pause: ${JSON.stringify(driftResumeState)}`);
   assert(heistState.nonBlank && Number(heistState.steps) >= 1, 'heist should accept keyboard movement');
   assert(heistState.achievementBadges >= 1, 'heist cloak should unlock at least one achievement badge');
   assert(careerDialogState.open && careerDialogState.ariaHidden === 'false', `career dialog should open: ${JSON.stringify(careerDialogState)}`);
-  assert(careerDialogState.medalCards >= 6 && careerDialogState.achievements >= 13 && careerDialogState.unlocked >= 1, `career dialog should show medals and achievements: ${JSON.stringify(careerDialogState)}`);
+  assert(careerDialogState.medalCards >= 7 && careerDialogState.achievements >= 16 && careerDialogState.unlocked >= 1, `career dialog should show medals and achievements: ${JSON.stringify(careerDialogState)}`);
   assert(/RANK/.test(careerDialogState.summary) && careerDialogState.daily.length > 10 && careerDialogState.visibleInViewport && !careerDialogState.horizontalOverflow, `career dialog should show readable summary and daily challenge: ${JSON.stringify(careerDialogState)}`);
   assert(!careerDialogClosed.open && careerDialogClosed.ariaHidden === 'true', `career dialog should close cleanly: ${JSON.stringify(careerDialogClosed)}`);
   assert(chainState.cells === 49 && Number(chainState.specials) >= 1, 'chain board should render with special cells');
@@ -718,6 +793,10 @@ async function run() {
     bossPauseState,
     bossPauseFreezeState,
     bossResumeState,
+    driftState,
+    driftPauseState,
+    driftPauseFreezeState,
+    driftResumeState,
     heistState,
     careerDialogState,
     careerDialogClosed,
