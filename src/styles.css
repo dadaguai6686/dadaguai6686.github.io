@@ -1538,7 +1538,7 @@ h1 {
     width: calc(100vw - 16px);
     max-height: calc(100vh - 176px);
     overflow: hidden;
-    padding: 8px 64px 8px 8px;
+    padding: 7px 64px 7px 7px;
   }
 
   #shell[data-status="playing"] .brand,
@@ -1549,7 +1549,114 @@ h1 {
   }
 
   #shell[data-status="playing"] #signal-panel {
+    margin-top: 5px;
+    padding: 5px 6px;
+  }
+
+  #shell[data-status="playing"] .signal-head strong,
+  #shell[data-status="playing"] .signal-head span {
+    font-size: 10px;
+  }
+
+  #shell[data-status="playing"] .signal-head b {
+    min-width: 18px;
+    min-height: 18px;
+    font-size: 11px;
+  }
+
+  #shell[data-status="playing"] .signal-meter {
+    height: 5px;
+    margin-top: 4px;
+  }
+
+  #shell[data-status="playing"] #signal-panel em {
+    display: none;
+  }
+
+  #shell[data-status="playing"] .meter-row {
+    grid-template-columns: 34px 1fr 30px;
+    gap: 5px;
+    margin-top: 4px;
+    font-size: 10px;
+  }
+
+  #shell[data-status="playing"] .meter {
+    height: 7px;
+  }
+
+  #shell[data-status="playing"] .stats {
+    gap: 4px;
     margin-top: 6px;
+  }
+
+  #shell[data-status="playing"] .stats div {
+    min-height: 30px;
+    padding: 3px 2px;
+  }
+
+  #shell[data-status="playing"] .stats dt {
+    font-size: 9px;
+  }
+
+  #shell[data-status="playing"] .stats dd {
+    margin-top: 1px;
+    font-size: 10px;
+  }
+
+  #shell[data-status="playing"] #ability-bar {
+    gap: 5px;
+    margin-top: 5px;
+  }
+
+  #shell[data-status="playing"] #ability-bar span {
+    padding: 4px 6px;
+    font-size: 9px;
+  }
+
+  #shell[data-status="playing"] #contract-panel,
+  #shell[data-status="playing"] #coach-panel,
+  #shell[data-status="playing"] #pilot-tip {
+    margin-top: 5px;
+    padding: 5px 6px;
+  }
+
+  #shell[data-status="playing"] #contract-requirement,
+  #shell[data-status="playing"] #coach-detail,
+  #shell[data-status="playing"] #pilot-tip-detail {
+    display: none;
+  }
+
+  #shell[data-status="playing"] #contract-panel strong,
+  #shell[data-status="playing"] #coach-panel strong,
+  #shell[data-status="playing"] #pilot-tip strong {
+    font-size: 10px;
+  }
+
+  #shell[data-status="playing"] .contract-progress {
+    align-items: center;
+    flex-direction: row;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  #shell[data-status="playing"] .contract-progress b,
+  #shell[data-status="playing"] .contract-progress em,
+  #shell[data-status="playing"] #coach-panel em {
+    font-size: 9px;
+  }
+
+  #shell[data-status="playing"] .contract-progress em {
+    white-space: nowrap;
+  }
+
+  #shell[data-status="playing"] #coach-panel em {
+    margin-top: 4px;
+  }
+
+  #shell[data-status="playing"] .coach-head b {
+    min-width: 31px;
+    padding: 2px 5px;
+    font-size: 9px;
   }
 
   .stats {
