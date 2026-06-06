@@ -1,0 +1,19 @@
+{
+  "name": "Atherix Digital Space",
+  "short_name": "Atherix",
+  "description": "个人博客、开发者工具箱、项目展示与互动游戏组成的数字空间。",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#07070a",
+  "theme_color": "#0b0b12",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/assets/atherix-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

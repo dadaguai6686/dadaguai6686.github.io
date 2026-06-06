@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Atherix Digital Space</title>
+  <desc id="desc">A luminous A monogram over a dark glassmorphic field.</desc>
+  <defs>
+    <linearGradient id="bg" x1="64" y1="48" x2="448" y2="464" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0f172a"/>
+      <stop offset="0.46" stop-color="#111827"/>
+      <stop offset="1" stop-color="#052e2b"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="134" y1="112" x2="388" y2="404" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#a78bfa"/>
+      <stop offset="0.5" stop-color="#ec4899"/>
+      <stop offset="1" stop-color="#34d399"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="16" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="108" fill="url(#bg)"/>
+  <circle cx="118" cy="116" r="86" fill="#a78bfa" opacity="0.18"/>
+  <circle cx="400" cy="386" r="118" fill="#34d399" opacity="0.14"/>
+  <path d="M148 374 238 128c6-17 30-17 36 0l90 246h-62l-17-52h-94l-17 52h-26Zm60-104h60l-30-92-30 92Z" fill="url(#mark)" filter="url(#glow)"/>
+  <path d="M170 407h172" stroke="#f8fafc" stroke-width="18" stroke-linecap="round" opacity="0.85"/>
+</svg>

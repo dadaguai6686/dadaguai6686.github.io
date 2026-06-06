@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  blog-space:
+    build: .
+    container_name: atherix-digital-space
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount SQLite DB and uploads folder to persist user posts, projects, and uploaded images
+      - ./blog.db:/usr/src/app/blog.db
+      - ./uploads:/usr/src/app/uploads
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - JWT_SECRET=atherix_prod_jwt_secret_key_change_me

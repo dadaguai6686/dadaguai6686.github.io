@@ -1,0 +1,9 @@
+node_modules
+npm-debug.log
+blog.db
+blog.db-journal
+uploads/*
+.git
+.gitignore
+.gemini
+.vscode
