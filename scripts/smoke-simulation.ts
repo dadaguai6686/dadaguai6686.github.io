@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   CAMPAIGN_WAVES,
   createInitialState,
+  getObjectiveHint,
   getUpgradeChoices,
   pauseRun,
   resumeRun,
@@ -24,6 +25,7 @@ assert.equal(state.difficulty, "standard");
 assert.equal(state.campaignWaves, CAMPAIGN_WAVES);
 assert.equal(state.relays.length, 4);
 assert.equal(state.gate.open, false);
+assert.equal(getObjectiveHint(state).kind, "relay", "fresh runs should guide players toward a relay");
 
 state = updateSimulation(
   state,
@@ -42,7 +44,12 @@ state = movePlayerTo(state, nearbyLumen.position.x, nearbyLumen.position.y);
 state = updateSimulation(state, idle, 0.016);
 assert.equal(state.stats.lumenCollected, 1, "collected lumen should be counted");
 
+let lowCharge = movePlayerTo(state, 500, 350);
+lowCharge.player.charge = 24;
+assert.equal(getObjectiveHint(lowCharge).kind, "lumen", "low charge should prioritize nearby lumen");
+
 state = movePlayerTo(state, state.relays[0].position.x, state.relays[0].position.y);
+assert.equal(getObjectiveHint(state).kind, "repair", "standing near a relay should prompt repair");
 for (let i = 0; i < 260; i += 1) {
   state = updateSimulation(state, { ...idle, repair: true }, 0.016);
 }
@@ -57,6 +64,7 @@ const stormCharge = stormState.player.charge;
 const stormed = updateSimulation(stormState, idle, 0.5);
 assert.ok(stormed.player.charge < stormCharge, "standing in a storm should siphon charge");
 assert.ok(stormed.stats.stormSeconds >= 0.5, "storm exposure should be counted once per tick");
+assert.equal(getObjectiveHint(stormed).kind, "danger", "storm exposure should become the urgent hint");
 
 let hitState = restartRun(createInitialState());
 hitState.hazards[0].position = { ...hitState.player.position };
@@ -72,6 +80,7 @@ state = state.relays.reduce((current, relay) => {
   return repaired;
 }, state);
 assert.equal(state.gate.open, true, "all repaired relays should open the gate");
+assert.equal(getObjectiveHint(state).kind, "gate", "an open gate should become the next objective");
 
 state = movePlayerTo(state, state.gate.position.x, state.gate.position.y);
 state = updateSimulation(state, idle, 0.016);

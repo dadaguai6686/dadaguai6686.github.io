@@ -80,6 +80,16 @@ export type RunStats = {
   wavesCleared: number;
 };
 
+export type ObjectiveHintKind = "menu" | "danger" | "repair" | "relay" | "lumen" | "gate";
+
+export type ObjectiveHint = {
+  kind: ObjectiveHintKind;
+  title: string;
+  detail: string;
+  target?: Vec2;
+  urgent: boolean;
+};
+
 export const CAMPAIGN_WAVES = 5;
 
 export const DIFFICULTY_SETTINGS: Record<DifficultyId, Difficulty> = {
@@ -498,6 +508,92 @@ export function getUpgradeChoices(state: GameState): Upgrade[] {
     .map((id) => UPGRADE_CATALOG[id]);
 }
 
+export function getObjectiveHint(state: GameState): ObjectiveHint {
+  if (state.status !== "playing") {
+    return {
+      kind: "menu",
+      title: "准备救援",
+      detail: "选择难度后开始，目标是修复信标并从北侧光门撤离。",
+      urgent: false
+    };
+  }
+
+  const player = state.player;
+  const activeStorm = state.storms.find((storm) => distance(storm.position, player.position) < getStormActiveRadius(storm));
+  if (activeStorm) {
+    return {
+      kind: "danger",
+      title: "立刻脱离风暴",
+      detail: "紫色风暴正在吸走电量，先推进离开范围再继续修复。",
+      target: player.position,
+      urgent: true
+    };
+  }
+
+  if (state.gate.open) {
+    return {
+      kind: "gate",
+      title: "光门已开启",
+      detail: `向北侧光门撤离，距离 ${formatDistance(distance(player.position, state.gate.position))}。`,
+      target: state.gate.position,
+      urgent: false
+    };
+  }
+
+  const repairTarget = state.relays.find(
+    (relay) => !relay.repaired && distance(relay.position, player.position) < 76
+  );
+  if (repairTarget) {
+    return {
+      kind: "repair",
+      title: "按住 E 修复",
+      detail: `信标已锁定，当前进度 ${Math.round(repairTarget.progress * 100)}%。离开会慢慢掉进度。`,
+      target: repairTarget.position,
+      urgent: true
+    };
+  }
+
+  const nearestLumen = nearest(state.lumen.filter((drop) => !drop.collected), player.position);
+  if (player.charge < 38 && nearestLumen) {
+    return {
+      kind: "lumen",
+      title: "先补充流明",
+      detail: `电量偏低，最近流明距离 ${formatDistance(nearestLumen.distance)}。`,
+      target: nearestLumen.item.position,
+      urgent: true
+    };
+  }
+
+  const nearestRelay = nearest(state.relays.filter((relay) => !relay.repaired), player.position);
+  if (nearestRelay) {
+    return {
+      kind: "relay",
+      title: "前往最近信标",
+      detail: `靠近后按 E 修复，距离 ${formatDistance(nearestRelay.distance)}。`,
+      target: nearestRelay.item.position,
+      urgent: false
+    };
+  }
+
+  if (nearestLumen) {
+    return {
+      kind: "lumen",
+      title: "回收剩余流明",
+      detail: `补满电量并保持连锁，距离 ${formatDistance(nearestLumen.distance)}。`,
+      target: nearestLumen.item.position,
+      urgent: false
+    };
+  }
+
+  return {
+    kind: "gate",
+    title: "寻找光门",
+    detail: "全部目标已完成，向北侧撤离。",
+    target: state.gate.position,
+    urgent: false
+  };
+}
+
 export function getStormActiveRadius(storm: Storm): number {
   return storm.radius + Math.sin(storm.phase * 1.7) * 18;
 }
@@ -545,6 +641,20 @@ function awardScore(state: GameState, base: number, comboGain: number): void {
 
 function formatCombo(combo: number): string {
   return `${combo.toFixed(1)}x`;
+}
+
+function formatDistance(value: number): string {
+  return `${Math.max(0, Math.round(value))}m`;
+}
+
+function nearest<T extends { position: Vec2 }>(items: T[], origin: Vec2): { item: T; distance: number } | undefined {
+  return items.reduce<{ item: T; distance: number } | undefined>((best, item) => {
+    const itemDistance = distance(item.position, origin);
+    if (!best || itemDistance < best.distance) {
+      return { item, distance: itemDistance };
+    }
+    return best;
+  }, undefined);
 }
 
 function distance(a: Vec2, b: Vec2): number {

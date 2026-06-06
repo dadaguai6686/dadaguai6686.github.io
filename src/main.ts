@@ -5,6 +5,7 @@ import {
   UPGRADE_CATALOG,
   type DifficultyId,
   type GameStatus,
+  type ObjectiveHint,
   type RunEndReason,
   type RunStats,
   type Upgrade,
@@ -49,6 +50,9 @@ const recordWave = document.querySelector<HTMLElement>("#record-wave")!;
 const recordCombo = document.querySelector<HTMLElement>("#record-combo")!;
 const boostPill = document.querySelector<HTMLElement>("#boost-pill")!;
 const pulsePill = document.querySelector<HTMLElement>("#pulse-pill")!;
+const pilotTip = document.querySelector<HTMLDivElement>("#pilot-tip")!;
+const pilotTipTitle = document.querySelector<HTMLElement>("#pilot-tip-title")!;
+const pilotTipDetail = document.querySelector<HTMLElement>("#pilot-tip-detail")!;
 const missionText = document.querySelector<HTMLElement>("#mission-text")!;
 const upgradeChoices = document.querySelector<HTMLDivElement>("#upgrade-choices")!;
 const helpButton = document.querySelector<HTMLButtonElement>("#help-button")!;
@@ -170,6 +174,7 @@ window.addEventListener("game:hud", (event) => {
     boostReady: boolean;
     pulseReady: boolean;
     message: string;
+    objectiveHint: ObjectiveHint;
     difficulty: DifficultyId;
     campaignWaves: number;
     status: GameStatus;
@@ -195,6 +200,11 @@ window.addEventListener("game:hud", (event) => {
   pulsePill.textContent = detail.pulseReady ? "脉冲就绪" : "脉冲冷却中";
   boostPill.classList.toggle("cooling", !detail.boostReady);
   pulsePill.classList.toggle("cooling", !detail.pulseReady);
+  pilotTip.hidden = detail.status !== "playing";
+  pilotTip.classList.toggle("urgent", detail.objectiveHint.urgent);
+  pilotTip.dataset.kind = detail.objectiveHint.kind;
+  pilotTipTitle.textContent = detail.objectiveHint.title;
+  pilotTipDetail.textContent = detail.objectiveHint.detail;
   missionText.textContent = detail.message;
   objectiveTitle.textContent = `目标：第 ${detail.wave}/${detail.campaignWaves} 波，修复 ${detail.relays} 座信标`;
   objectiveDetail.textContent = `${DIFFICULTY_SETTINGS[detail.difficulty].name}模式：收集流明补电，避开风暴和虚空碎片。`;

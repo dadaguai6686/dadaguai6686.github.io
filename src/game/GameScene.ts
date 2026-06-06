@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { InputMapper } from "./input";
 import {
   createInitialState,
+  getObjectiveHint,
   getStormActiveRadius,
   getUpgradeChoices,
   pauseRun,
@@ -12,6 +13,7 @@ import {
   type GameState,
   type Hazard,
   type Lumen,
+  type ObjectiveHint,
   type Relay,
   type RunEndReason,
   type RunStats,
@@ -36,6 +38,7 @@ type HudSnapshot = {
   boostReady: boolean;
   pulseReady: boolean;
   message: string;
+  objectiveHint: ObjectiveHint;
   status: GameState["status"];
   upgradeChoices: Upgrade[];
 };
@@ -50,6 +53,7 @@ export class GameScene extends Phaser.Scene {
   private stormViews = new Map<number, Phaser.GameObjects.Container>();
   private playerView?: Phaser.GameObjects.Container;
   private gateView?: Phaser.GameObjects.Container;
+  private navigatorView?: Phaser.GameObjects.Graphics;
   private starLayer?: Phaser.GameObjects.Graphics;
   private trail?: Phaser.GameObjects.Particles.ParticleEmitter;
 
@@ -139,6 +143,9 @@ export class GameScene extends Phaser.Scene {
     this.starLayer = this.add.graphics();
     this.worldLayer.add(this.starLayer);
     this.drawBackdrop();
+
+    this.navigatorView = this.add.graphics();
+    this.worldLayer.add(this.navigatorView);
 
     this.gateView = this.createGate();
     this.worldLayer.add(this.gateView);
@@ -325,6 +332,7 @@ export class GameScene extends Phaser.Scene {
       camera.setScroll(0, 0);
     }
 
+    this.renderNavigator();
     this.playerView?.setPosition(this.state.player.position.x, this.state.player.position.y);
     const angle = Math.atan2(this.state.player.velocity.y, this.state.player.velocity.x) + Math.PI / 2;
     this.playerView?.setRotation(Number.isFinite(angle) ? angle : 0);
@@ -391,6 +399,7 @@ export class GameScene extends Phaser.Scene {
       boostReady: this.state.player.boostCooldown <= 0,
       pulseReady: this.state.player.pulseCooldown <= 0,
       message: this.state.message,
+      objectiveHint: getObjectiveHint(this.state),
       status: this.state.status,
       upgradeChoices: this.state.status === "won" ? getUpgradeChoices(this.state) : []
     };
@@ -435,6 +444,44 @@ export class GameScene extends Phaser.Scene {
     window.dispatchEvent(new CustomEvent("game:feedback", { detail: { kind } }));
   }
 
+  private renderNavigator(): void {
+    const graphics = this.navigatorView;
+    if (!graphics) return;
+    graphics.clear();
+    const hint = getObjectiveHint(this.state);
+    if (this.state.status !== "playing" || !hint.target) return;
+
+    const color = getHintColor(hint.kind);
+    const player = this.state.player.position;
+    const target = hint.target;
+    const dx = target.x - player.x;
+    const dy = target.y - player.y;
+    const angle = Math.atan2(dy, dx);
+    const markerRadius = hint.urgent ? 56 : 46;
+    const pulse = Math.sin(this.time.now * 0.006) * 0.5 + 0.5;
+    const alpha = hint.urgent ? 0.5 + pulse * 0.24 : 0.26 + pulse * 0.12;
+
+    graphics.lineStyle(hint.urgent ? 3 : 2, color, alpha);
+    graphics.lineBetween(player.x, player.y, target.x, target.y);
+    graphics.lineStyle(3, color, 0.72);
+    graphics.strokeCircle(target.x, target.y, markerRadius + pulse * 8);
+    graphics.lineStyle(1, 0xffffff, 0.34);
+    graphics.strokeCircle(target.x, target.y, Math.max(18, markerRadius * 0.5));
+
+    const arrowDistance = Math.min(Math.hypot(dx, dy) * 0.5, 92);
+    const arrowX = player.x + Math.cos(angle) * arrowDistance;
+    const arrowY = player.y + Math.sin(angle) * arrowDistance;
+    graphics.fillStyle(color, hint.urgent ? 0.78 : 0.58);
+    graphics.fillTriangle(
+      arrowX + Math.cos(angle) * 16,
+      arrowY + Math.sin(angle) * 16,
+      arrowX + Math.cos(angle + 2.45) * 11,
+      arrowY + Math.sin(angle + 2.45) * 11,
+      arrowX + Math.cos(angle - 2.45) * 11,
+      arrowY + Math.sin(angle - 2.45) * 11
+    );
+  }
+
   private onResize(): void {
     const scale = Math.min(window.innerWidth / this.state.arena.width, window.innerHeight / this.state.arena.height);
     const offsetX = (window.innerWidth - this.state.arena.width * scale) / 2;
@@ -443,4 +490,11 @@ export class GameScene extends Phaser.Scene {
     this.worldLayer?.setPosition(offsetX, offsetY);
     this.renderer.resize(window.innerWidth, window.innerHeight);
   }
+}
+
+function getHintColor(kind: ObjectiveHint["kind"]): number {
+  if (kind === "danger") return 0xff5f9b;
+  if (kind === "lumen" || kind === "gate") return 0xffd76e;
+  if (kind === "repair") return 0xffffff;
+  return 0x67f4ff;
 }

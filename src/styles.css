@@ -234,6 +234,40 @@ button {
   background: rgba(255, 255, 255, 0.055);
 }
 
+#pilot-tip {
+  margin-top: 10px;
+  padding: 9px 10px;
+  border: 1px solid rgba(103, 244, 255, 0.18);
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgba(103, 244, 255, 0.1), rgba(255, 226, 122, 0.045));
+}
+
+#pilot-tip[hidden] {
+  display: none;
+}
+
+#pilot-tip.urgent {
+  border-color: rgba(255, 95, 155, 0.42);
+  background: linear-gradient(90deg, rgba(255, 95, 155, 0.12), rgba(255, 226, 122, 0.07));
+}
+
+#pilot-tip strong,
+#pilot-tip span {
+  display: block;
+}
+
+#pilot-tip strong {
+  color: #fff3ad;
+  font-size: 12px;
+}
+
+#pilot-tip span {
+  margin-top: 3px;
+  color: #c9ddec;
+  font-size: 12px;
+  line-height: 1.38;
+}
+
 #mission-text {
   margin: 12px 0 0;
   color: #bdd0e1;
@@ -691,5 +725,9 @@ h1 {
 
   #ability-bar {
     margin-top: 8px;
+  }
+
+  #pilot-tip span {
+    font-size: 11px;
   }
 }
