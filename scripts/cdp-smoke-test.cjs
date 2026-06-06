@@ -1027,22 +1027,31 @@ async function run() {
 
   await click('[data-premium-game="heist"]');
   await wait(300);
+  const heistIntelBefore = await evaluate(`(() => window.__atherixDebug?.premium?.heistIntel?.() || {})()`);
   await key('keyDown', ' ', 'Space');
   await key('keyUp', ' ', 'Space');
   await wait(120);
   await key('keyDown', 'ArrowRight', 'ArrowRight');
   await key('keyUp', 'ArrowRight', 'ArrowRight');
+  await wait(160);
+  const heistRouteStepState = await evaluate(`(() => window.__atherixDebug?.premium?.stepHeistRoute?.() || {})()`);
   await wait(260);
   const heistState = await evaluate(`(() => {
     const c = document.querySelector('#premium-heist-canvas');
     const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
     let colored = 0;
     for (let i = 0; i < d.length; i += 4) if (d[i] || d[i + 1] || d[i + 2]) colored++;
+    const debug = window.__atherixDebug?.premium?.heistIntel?.() || {};
     return {
       nonBlank: colored > 1000,
       tools: document.querySelector('#premium-heist-tools')?.textContent,
       steps: document.querySelector('#premium-heist-steps')?.textContent,
       alert: document.querySelector('#premium-heist-alert')?.textContent,
+      route: document.querySelector('#premium-heist-route')?.textContent,
+      chain: document.querySelector('#premium-heist-chain')?.textContent,
+      debug,
+      before: ${JSON.stringify(heistIntelBefore)},
+      routeStep: ${JSON.stringify(heistRouteStepState)},
       achievementBadges: document.querySelectorAll('#premium-achievement-feed .career-badge').length,
       rating: document.querySelector('#premium-career-rating')?.textContent
     };
@@ -1246,8 +1255,12 @@ async function run() {
     `drift mode should freeze while paused: ${JSON.stringify({ driftPauseState, driftPauseFreezeState })}`
   );
   assert(driftResumeState.running && !driftResumeState.paused && driftResumeState.pauseButton === '暂停', `drift mode should resume from keyboard pause: ${JSON.stringify(driftResumeState)}`);
-  assert(heistState.nonBlank && Number(heistState.steps) >= 1, 'heist should accept keyboard movement');
+  assert(heistState.nonBlank && Number(heistState.steps) >= 2, 'heist should accept keyboard movement and debug route stepping');
   assert(heistState.achievementBadges >= 1, 'heist cloak should unlock at least one achievement badge');
+  assert(/^(KEY|EXIT|TERMINAL)\s+\d+\s+(SAFE|R\d+)$/.test(heistState.route), `heist route HUD should expose a readable objective and risk: ${JSON.stringify(heistState)}`);
+  assert(Array.isArray(heistState.before.route) && heistState.before.route.length > 0 && Array.isArray(heistState.before.heatCells) && heistState.before.heatCells.length > 0, `heist debug intel should expose route and heat map: ${JSON.stringify(heistState.before)}`);
+  assert(heistState.routeStep.steps >= 2 && heistState.routeStep.chain > heistState.before.chain && Array.isArray(heistState.routeStep.route), `heist route stepping should advance chain and refresh route: ${JSON.stringify(heistState.routeStep)}`);
+  assert(/^\d+x$/.test(heistState.chain) && heistState.debug.chainHud === heistState.chain && heistState.debug.routeHud === heistState.route, `heist HUD should stay in sync with debug state: ${JSON.stringify(heistState)}`);
   assert(careerDialogState.open && careerDialogState.ariaHidden === 'false', `career dialog should open: ${JSON.stringify(careerDialogState)}`);
   assert(careerDialogState.medalCards >= 7 && careerDialogState.achievements >= 16 && careerDialogState.unlocked >= 1, `career dialog should show medals and achievements: ${JSON.stringify(careerDialogState)}`);
   assert(/RANK/.test(careerDialogState.summary) && careerDialogState.daily.length > 10 && careerDialogState.visibleInViewport && !careerDialogState.horizontalOverflow, `career dialog should show readable summary and daily challenge: ${JSON.stringify(careerDialogState)}`);

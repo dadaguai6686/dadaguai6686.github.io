@@ -4479,6 +4479,8 @@ function init() {
               <span>最佳 <strong id="premium-heist-best">0</strong></span>
               <span>警戒 <strong id="premium-heist-alert">LOW</strong></span>
               <span>步数 <strong id="premium-heist-steps">0</strong></span>
+              <span>路线 <strong id="premium-heist-route">SCAN</strong></span>
+              <span>连段 <strong id="premium-heist-chain">0x</strong></span>
               <span>工具 <strong id="premium-heist-tools">CLOAK 2</strong></span>
             </div>
             <div class="mini-actions">
@@ -6999,6 +7001,12 @@ function init() {
       cloaks: 2,
       cloakTurns: 0,
       alert: 'LOW',
+      routeLabel: 'SCAN',
+      routeRisk: 0,
+      chain: 0,
+      bestChain: 0,
+      heatCells: [],
+      routeCells: [],
       won: false
     };
 
@@ -7007,6 +7015,21 @@ function init() {
       document.getElementById('premium-heist-best').textContent = localStorage.getItem(heist.bestKey) || '0';
       document.getElementById('premium-heist-steps').textContent = heist.steps;
       document.getElementById('premium-heist-tools').textContent = heist.cloakTurns > 0 ? `GHOST ${heist.cloakTurns}` : `CLOAK ${heist.cloaks}`;
+      const intel = heistIntel();
+      heist.routeLabel = intel.label;
+      heist.routeRisk = intel.risk;
+      heist.heatCells = intel.heatCells;
+      heist.routeCells = intel.route;
+      const routeEl = document.getElementById('premium-heist-route');
+      if (routeEl) {
+        routeEl.textContent = intel.label;
+        routeEl.style.color = intel.risk >= 3 ? '#EF4444' : intel.risk > 0 ? '#FBBF24' : '#34D399';
+      }
+      const chainEl = document.getElementById('premium-heist-chain');
+      if (chainEl) {
+        chainEl.textContent = `${heist.chain}x`;
+        chainEl.style.color = heist.chain >= 8 ? '#FDE68A' : heist.chain >= 4 ? '#A7F3D0' : '#fff';
+      }
       const alertEl = document.getElementById('premium-heist-alert');
       alertEl.textContent = heist.alert;
       alertEl.style.color = heist.alert === 'HIGH' ? '#EF4444' : (heist.alert === 'MID' ? '#FBBF24' : '#34D399');
@@ -7033,6 +7056,12 @@ function init() {
       heist.cloaks = Math.max(1, 2 + Number(bonuses.heistCloaks || 0) + (activeDifficultyDef().id === 'training' ? 1 : 0));
       heist.cloakTurns = 0;
       heist.alert = 'LOW';
+      heist.routeLabel = 'SCAN';
+      heist.routeRisk = 0;
+      heist.chain = 0;
+      heist.bestChain = 0;
+      heist.heatCells = [];
+      heist.routeCells = [];
       heist.won = false;
       setHeistUi();
       focusStage();
@@ -7041,8 +7070,13 @@ function init() {
 
     function heistTileBlocked(x, y) {
       return !heist.grid[y] ||
+        typeof heist.grid[y][x] === 'undefined' ||
         heist.grid[y][x] === 1 ||
         heist.doors.some(door => !door.open && door.x === x && door.y === y);
+    }
+
+    function heistKey(x, y) {
+      return `${x},${y}`;
     }
 
     function heistVisionReach(g) {
@@ -7066,6 +7100,123 @@ function init() {
       const forwardDistance = dy * g.dir;
       if (forwardDistance <= 0 || forwardDistance > g.cone || Math.abs(dx) > 1) return false;
       return forwardDistance <= heistVisionReach(g);
+    }
+
+    function heistHeatMap() {
+      const heat = new Map();
+      const add = (x, y, risk) => {
+        if (heistTileBlocked(x, y)) return;
+        const key = heistKey(x, y);
+        heat.set(key, Math.max(heat.get(key) || 0, risk));
+      };
+      heist.guards.forEach(g => {
+        add(g.x, g.y, 4);
+        const reach = heistVisionReach(g);
+        for (let i = 1; i <= reach; i++) {
+          const cx = g.axis === 'x' ? g.x + g.dir * i : g.x;
+          const cy = g.axis === 'y' ? g.y + g.dir * i : g.y;
+          add(cx, cy, 3);
+          if (g.axis === 'x') {
+            add(cx, cy - 1, 2);
+            add(cx, cy + 1, 2);
+          } else {
+            add(cx - 1, cy, 2);
+            add(cx + 1, cy, 2);
+          }
+        }
+      });
+      return heat;
+    }
+
+    function heistRouteTo(target, heat) {
+      const start = heist.player;
+      const startKey = heistKey(start.x, start.y);
+      const targetKey = heistKey(target.x, target.y);
+      const queue = [{ x: start.x, y: start.y, cost: 0, path: [] }];
+      const best = new Map([[startKey, 0]]);
+      const dirs = [[1, 0], [0, 1], [0, -1], [-1, 0]];
+      while (queue.length) {
+        queue.sort((a, b) => a.cost - b.cost);
+        const node = queue.shift();
+        if (heistKey(node.x, node.y) === targetKey) return node.path;
+        dirs.forEach(([dx, dy]) => {
+          const nx = node.x + dx;
+          const ny = node.y + dy;
+          if (heistTileBlocked(nx, ny) && heistKey(nx, ny) !== targetKey) return;
+          const key = heistKey(nx, ny);
+          const risk = heat.get(key) || 0;
+          const nextCost = node.cost + 1 + risk * 2;
+          if (best.has(key) && best.get(key) <= nextCost) return;
+          best.set(key, nextCost);
+          queue.push({ x: nx, y: ny, cost: nextCost, path: [...node.path, { x: nx, y: ny, risk }] });
+        });
+      }
+      return [];
+    }
+
+    function heistObjectiveCandidates() {
+      if (heist.collected >= 4) return [{ ...heist.exit, kind: 'EXIT' }];
+      const keyTargets = heist.keys.map(key => ({ ...key, kind: 'KEY' }));
+      if (keyTargets.length) return keyTargets;
+      const terminals = heist.terminals.filter(t => !t.used).map(t => ({ ...t, kind: 'TERMINAL' }));
+      return terminals.length ? terminals : [{ ...heist.exit, kind: 'EXIT' }];
+    }
+
+    function heistIntel() {
+      const heat = heistHeatMap();
+      const candidates = heistObjectiveCandidates()
+        .map(target => ({ target, route: heistRouteTo(target, heat) }))
+        .filter(item => item.route.length || (item.target.x === heist.player.x && item.target.y === heist.player.y))
+        .sort((a, b) => {
+          const ar = a.route.reduce((sum, cell) => sum + (cell.risk || 0), 0);
+          const br = b.route.reduce((sum, cell) => sum + (cell.risk || 0), 0);
+          return (a.route.length + ar * 2) - (b.route.length + br * 2);
+        });
+      const best = candidates[0] || { target: { kind: 'NO ROUTE' }, route: [] };
+      const risk = best.route.reduce((sum, cell) => sum + (cell.risk || 0), 0);
+      const label = best.target.kind === 'NO ROUTE'
+        ? 'NO ROUTE'
+        : `${best.target.kind} ${best.route.length || 0} ${risk > 0 ? `R${risk}` : 'SAFE'}`;
+      return {
+        label,
+        risk,
+        target: best.target,
+        route: best.route.slice(0, 18),
+        heatCells: [...heat.entries()].map(([key, value]) => {
+          const [x, y] = key.split(',').map(Number);
+          return { x, y, risk: value };
+        })
+      };
+    }
+
+    function heistDebugState() {
+      const intel = heistIntel();
+      return {
+        label: intel.label,
+        risk: intel.risk,
+        target: intel.target,
+        route: intel.route,
+        heatCells: intel.heatCells,
+        chain: heist.chain,
+        bestChain: heist.bestChain,
+        routeHud: document.getElementById('premium-heist-route')?.textContent || '',
+        chainHud: document.getElementById('premium-heist-chain')?.textContent || '',
+        alert: heist.alert,
+        steps: heist.steps,
+        tools: document.getElementById('premium-heist-tools')?.textContent || '',
+        player: { ...heist.player },
+        keys: heist.collected,
+        remainingKeys: heist.keys.length,
+        cloaks: heist.cloaks,
+        cloakTurns: heist.cloakTurns,
+        won: heist.won
+      };
+    }
+
+    function stepHeistRoute() {
+      const next = heistIntel().route[0];
+      if (next) moveHeist(next.x - heist.player.x, next.y - heist.player.y);
+      return heistDebugState();
     }
 
     function triggerHeistCloak() {
@@ -7094,33 +7245,38 @@ function init() {
           g[g.axis] += g.dir * 2;
         }
       });
-      heist.keys = heist.keys.filter(k => {
-        const got = k.x === heist.player.x && k.y === heist.player.y;
-        if (got) heist.collected++;
-        return !got;
-      });
-      heist.terminals.forEach(t => {
-        if (!t.used && t.x === heist.player.x && t.y === heist.player.y) {
-          t.used = true;
-          const door = heist.doors.find(d => !d.open);
-          if (door) door.open = true;
-          heist.cloaks = Math.min(3, heist.cloaks + 1);
-        }
-      });
       const seen = heist.guards.some(guardSeesPlayer);
       heist.alert = heist.cloakTurns > 0 ? 'GHOST' : seen ? 'HIGH' : (heist.guards.some(g => Math.abs(g.x - heist.player.x) + Math.abs(g.y - heist.player.y) <= 4) ? 'MID' : 'LOW');
       if (heist.guards.some(g => g.x === heist.player.x && g.y === heist.player.y) || seen) {
-        heist.collected = Math.max(0, heist.collected - 1);
         heist.player = { x: 1, y: 1 };
         heist.cloakTurns = 0;
         heist.alert = 'HIGH';
+        heist.chain = 0;
+      } else {
+        const risk = heistHeatMap().get(heistKey(heist.player.x, heist.player.y)) || 0;
+        heist.chain += heist.cloakTurns > 0 ? 2 : 1;
+        if (risk === 0) heist.chain++;
+        heist.bestChain = Math.max(heist.bestChain, heist.chain);
+        heist.keys = heist.keys.filter(k => {
+          const got = k.x === heist.player.x && k.y === heist.player.y;
+          if (got) heist.collected++;
+          return !got;
+        });
+        heist.terminals.forEach(t => {
+          if (!t.used && t.x === heist.player.x && t.y === heist.player.y) {
+            t.used = true;
+            const door = heist.doors.find(d => !d.open);
+            if (door) door.open = true;
+            heist.cloaks = Math.min(3, heist.cloaks + 1);
+          }
+        });
       }
       if (heist.collected >= 4 && heist.player.x === heist.exit.x && heist.player.y === heist.exit.y) {
         heist.won = true;
-        const score = Math.max(100, 1200 - heist.steps * 18);
+        const score = Math.max(100, 1200 - heist.steps * 18 + heist.bestChain * 28 + heist.cloaks * 35);
         localStorage.setItem(heist.bestKey, String(Math.max(Number(localStorage.getItem(heist.bestKey) || 0), score)));
         if (heist.steps <= 42) unlockAchievement('heist_clean');
-        recordPremiumResult('heist', score, { steps: heist.steps });
+        recordPremiumResult('heist', score, { steps: heist.steps, bestChain: heist.bestChain, route: heist.routeLabel });
         heist.alert = 'CLEAR';
       }
       setHeistUi();
@@ -7137,6 +7293,32 @@ function init() {
           ctx.fillStyle = heist.grid[y][x] ? '#0f172a' : 'rgba(6, 182, 212, 0.08)';
           ctx.fillRect(x * tile, y * tile, tile - 1, tile - 1);
         }
+      }
+      heist.heatCells.forEach(cell => {
+        const alpha = clamp(0.08 + cell.risk * 0.04, 0.1, 0.26);
+        ctx.fillStyle = cell.risk >= 4 ? `rgba(239, 68, 68, ${alpha})` : `rgba(251, 191, 36, ${alpha})`;
+        ctx.fillRect(cell.x * tile + 2, cell.y * tile + 2, tile - 5, tile - 5);
+      });
+      if (heist.routeCells.length) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(34, 211, 238, 0.55)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 6]);
+        ctx.beginPath();
+        ctx.moveTo(heist.player.x * tile + tile / 2, heist.player.y * tile + tile / 2);
+        heist.routeCells.forEach(cell => {
+          ctx.lineTo(cell.x * tile + tile / 2, cell.y * tile + tile / 2);
+        });
+        ctx.stroke();
+        ctx.setLineDash([]);
+        heist.routeCells.forEach((cell, index) => {
+          ctx.fillStyle = cell.risk > 0 ? '#FDE68A' : '#67E8F9';
+          ctx.globalAlpha = index === 0 ? 0.95 : 0.64;
+          ctx.beginPath();
+          ctx.arc(cell.x * tile + tile / 2, cell.y * tile + tile / 2, index === 0 ? 4 : 3, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.restore();
       }
       ctx.fillStyle = heist.collected >= 4 ? '#34D399' : '#475569';
       ctx.fillRect(heist.exit.x * tile + 4, heist.exit.y * tile + 4, tile - 8, tile - 8);
@@ -7172,6 +7354,17 @@ function init() {
       });
       ctx.fillStyle = heist.cloakTurns > 0 ? '#A78BFA' : '#06B6D4';
       ctx.fillRect(heist.player.x * tile + 5, heist.player.y * tile + 5, 18, 18);
+      ctx.save();
+      const hudX = c.width - 252;
+      ctx.fillStyle = 'rgba(5, 8, 22, 0.68)';
+      ctx.fillRect(hudX, 10, 238, 39);
+      ctx.fillStyle = heist.routeRisk >= 3 ? '#FCA5A5' : heist.routeRisk > 0 ? '#FDE68A' : '#A7F3D0';
+      ctx.font = '800 11px JetBrains Mono, monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(`ROUTE ${heist.routeLabel}`, hudX + 10, 26);
+      ctx.fillStyle = heist.chain >= 8 ? '#FDE68A' : heist.chain >= 4 ? '#A7F3D0' : '#BAE6FD';
+      ctx.fillText(`CHAIN ${heist.chain}x · BEST ${heist.bestChain}x`, hudX + 10, 42);
+      ctx.restore();
       if (heist.won) overlay(ctx, c.width, c.height, 'VAULT CLEAR', '高分已保存 · 点击生成任务再来一局');
     }
 
@@ -7938,6 +8131,8 @@ function init() {
             return window.__atherixDebug.premium.driftLineState();
           },
           heistSteps: () => heist.steps,
+          heistIntel: () => heistDebugState(),
+          stepHeistRoute: () => stepHeistRoute(),
           tacticsTurn: () => tactics.turn,
           tacticsForecast: () => {
             const forecast = tacticsForecast();
