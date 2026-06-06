@@ -108,10 +108,12 @@ const achievementStrip = document.querySelector<HTMLDivElement>("#achievement-st
 const runHistory = document.querySelector<HTMLDivElement>("#run-history")!;
 const audioToggle = document.querySelector<HTMLButtonElement>("#audio-toggle")!;
 const dailyRouteButton = document.querySelector<HTMLButtonElement>("#daily-route-button")!;
+const dailyDetail = document.querySelector<HTMLElement>("#daily-detail")!;
 const overlayEyebrow = overlay.querySelector<HTMLElement>(".eyebrow")!;
 const overlayTitle = overlay.querySelector<HTMLElement>("h1")!;
 const overlayCopy = overlay.querySelector<HTMLElement>("p")!;
 const missionBrief = document.querySelector<HTMLDivElement>("#mission-brief")!;
+const fieldGuide = document.querySelector<HTMLDivElement>("#field-guide")!;
 const howToPlay = document.querySelector<HTMLDivElement>("#how-to-play")!;
 const runRecap = document.querySelector<HTMLDivElement>("#run-recap")!;
 const recapRating = document.querySelector<HTMLDivElement>("#recap-rating")!;
@@ -137,9 +139,23 @@ type SaveData = {
   bestScore: number;
   bestWave: number;
   clears: number;
+  dailyBest?: DailyBestEntry;
   runHistory: RunHistoryEntry[];
   selectedDifficulty: DifficultyId;
   totalContracts: number;
+};
+
+type DailyBestEntry = {
+  key: string;
+  difficulty: DifficultyId;
+  elapsed: number;
+  ratingId: RunRating["id"];
+  ratingName: string;
+  routeName: string;
+  routeSeed: number;
+  score: number;
+  timestamp: number;
+  wave: number;
 };
 
 type RunHistoryEntry = {
@@ -417,6 +433,7 @@ window.addEventListener("game:ended", (event) => {
     detail.status === "completed" ? "五波完成" : detail.status === "won" ? "光网稳定" : "信号中断";
   overlayCopy.textContent = detail.message;
   missionBrief.hidden = true;
+  fieldGuide.hidden = true;
   renderRunRecap(detail, newlyUnlocked);
   updateSessionTools();
   startButton.textContent =
@@ -515,6 +532,7 @@ function showHelpOverlay(): void {
     "目标不是乱飞，而是在电量压力下规划路线：先补流明，再修信标，最后从北侧光门撤离。";
   runRecap.hidden = true;
   missionBrief.hidden = false;
+  fieldGuide.hidden = false;
   howToPlay.hidden = false;
   upgradeChoices.hidden = true;
   startButton.hidden = latestStatus === "paused";
@@ -616,6 +634,7 @@ function updateDailyChallengeUi(): void {
   const difficulty = DIFFICULTY_SETTINGS[selectedDifficulty];
   dailyRouteButton.textContent = `今日挑战 · ${daily.routeName}`;
   dailyRouteButton.title = `${daily.label}，${difficulty.name}模式，固定救援代号 ${daily.routeName}`;
+  dailyDetail.textContent = buildDailyChallengeDetail(daily);
 }
 
 function updateRecordUi(): void {
@@ -632,6 +651,7 @@ function setShellStatus(status: GameStatus): void {
 function setDifficultyPickerVisible(visible: boolean): void {
   difficultyPicker.hidden = !visible;
   difficultyDetail.hidden = !visible;
+  dailyDetail.hidden = !visible;
 }
 
 function updateSessionTools(message?: string): void {
@@ -715,8 +735,10 @@ function persistRunResult(detail: RunEndDetail): AchievementId[] {
   const newlyUnlocked = runAchievements.filter((id) => !previous.has(id));
   saveData.achievements = Array.from(new Set([...saveData.achievements, ...runAchievements]));
   saveData.runHistory = [createRunHistoryEntry(detail), ...saveData.runHistory].slice(0, 5);
+  persistDailyBest(detail);
   saveSave(saveData);
   updateRecordUi();
+  updateDailyChallengeUi();
   updateAchievementUi();
   updateRunHistoryUi();
   return newlyUnlocked;
@@ -954,6 +976,53 @@ function getDailyChallenge(date = new Date()): { key: string; label: string; rou
   };
 }
 
+function buildDailyChallengeDetail(daily: ReturnType<typeof getDailyChallenge>): string {
+  const best = saveData.dailyBest;
+  if (!best || best.key !== daily.key || best.routeSeed !== daily.seed) {
+    return `${daily.label}固定代号 ${daily.routeName}。完成一局后会记录今日最佳。`;
+  }
+  return `今日最佳：${DIFFICULTY_SETTINGS[best.difficulty].name} / ${best.score.toLocaleString()} 分 / ${best.ratingId} ${best.ratingName} / 第 ${best.wave}/5 波 / ${formatDuration(best.elapsed)}。`;
+}
+
+function persistDailyBest(detail: RunEndDetail): void {
+  const daily = getDailyChallenge();
+  if (detail.routePlan.seed !== daily.seed) return;
+  const next = createDailyBestEntry(detail, daily.key);
+  const previous = saveData.dailyBest;
+  if (!previous || previous.key !== daily.key || previous.routeSeed !== daily.seed || isBetterDailyBest(next, previous)) {
+    saveData.dailyBest = next;
+  }
+}
+
+function createDailyBestEntry(detail: RunEndDetail, key: string): DailyBestEntry {
+  return {
+    key,
+    difficulty: detail.difficulty,
+    elapsed: detail.elapsed,
+    ratingId: detail.rating.id,
+    ratingName: detail.rating.name,
+    routeName: detail.routePlan.name,
+    routeSeed: detail.routePlan.seed,
+    score: detail.score,
+    timestamp: Date.now(),
+    wave: detail.wave
+  };
+}
+
+function isBetterDailyBest(next: DailyBestEntry, previous: DailyBestEntry): boolean {
+  if (next.score !== previous.score) return next.score > previous.score;
+  if (next.wave !== previous.wave) return next.wave > previous.wave;
+  if (ratingValue(next.ratingId) !== ratingValue(previous.ratingId)) {
+    return ratingValue(next.ratingId) > ratingValue(previous.ratingId);
+  }
+  return next.elapsed < previous.elapsed;
+}
+
+function ratingValue(id: RunRating["id"]): number {
+  const values: Record<RunRating["id"], number> = { S: 4, A: 3, B: 2, C: 1 };
+  return values[id];
+}
+
 function hashDailyChallengeKey(key: string): number {
   let hash = 0x811c9dc5;
   for (let index = 0; index < key.length; index += 1) {
@@ -972,6 +1041,7 @@ function createDefaultSave(): SaveData {
     bestScore: 0,
     bestWave: 1,
     clears: 0,
+    dailyBest: undefined,
     runHistory: [],
     selectedDifficulty: "standard",
     totalContracts: 0
@@ -996,6 +1066,7 @@ function loadSave(): SaveData {
       bestScore: finiteNumber(parsed.bestScore, fallback.bestScore),
       bestWave: finiteNumber(parsed.bestWave, fallback.bestWave),
       clears: finiteNumber(parsed.clears, fallback.clears),
+      dailyBest: parseDailyBest(parsed.dailyBest),
       runHistory: parseRunHistory(parsed.runHistory),
       selectedDifficulty: selected,
       totalContracts: finiteNumber(parsed.totalContracts, fallback.totalContracts)
@@ -1029,6 +1100,29 @@ function parseRunHistory(value: unknown): RunHistoryEntry[] {
     .map((entry) => normalizeRunHistoryEntry(entry))
     .filter((entry): entry is RunHistoryEntry => Boolean(entry))
     .slice(0, 5);
+}
+
+function parseDailyBest(value: unknown): DailyBestEntry | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const entry = value as Partial<DailyBestEntry>;
+  const difficulty = entry.difficulty && entry.difficulty in DIFFICULTY_SETTINGS ? entry.difficulty : "standard";
+  const ratingId = isRatingId(entry.ratingId) ? entry.ratingId : "C";
+  const routeSeed = Number(entry.routeSeed);
+  if (!Number.isFinite(routeSeed) || routeSeed <= 0 || typeof entry.key !== "string") {
+    return undefined;
+  }
+  return {
+    key: entry.key.slice(0, 16),
+    difficulty,
+    elapsed: Math.max(0, finiteNumber(entry.elapsed, 0)),
+    ratingId,
+    ratingName: typeof entry.ratingName === "string" ? entry.ratingName.slice(0, 16) : "信号残缺",
+    routeName: typeof entry.routeName === "string" ? entry.routeName.slice(0, 24) : getRoutePlan(routeSeed).name,
+    routeSeed,
+    score: Math.max(0, Math.round(finiteNumber(entry.score, 0))),
+    timestamp: finiteNumber(entry.timestamp, Date.now()),
+    wave: Math.max(1, Math.min(5, Math.round(finiteNumber(entry.wave, 1))))
+  };
 }
 
 function normalizeRunHistoryEntry(value: unknown): RunHistoryEntry | undefined {

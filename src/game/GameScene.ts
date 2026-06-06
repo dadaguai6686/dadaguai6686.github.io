@@ -304,6 +304,21 @@ export class GameScene extends Phaser.Scene {
     return this.add.container(this.state.player.position.x, this.state.player.position.y, [body]);
   }
 
+  private createWorldLabel(text: string, color: string, y: number): Phaser.GameObjects.Text {
+    const label = this.add.text(0, y, text, {
+      align: "center",
+      color,
+      fontFamily: "Inter, Segoe UI, sans-serif",
+      fontSize: "12px",
+      fontStyle: "bold",
+      stroke: "#061018",
+      strokeThickness: 4
+    });
+    label.setOrigin(0.5);
+    label.setAlpha(0.82);
+    return label;
+  }
+
   private createRelay(relay: Relay): Phaser.GameObjects.Container {
     const glow = this.add.graphics();
     glow.fillStyle(0x66f2ff, 0.1);
@@ -316,7 +331,8 @@ export class GameScene extends Phaser.Scene {
     core.fillStyle(0xffffff, 0.92);
     core.fillCircle(0, 0, 7);
     const progress = this.add.graphics();
-    return this.add.container(relay.position.x, relay.position.y, [glow, core, progress]);
+    const label = this.createWorldLabel("信标", "#dffcff", 52);
+    return this.add.container(relay.position.x, relay.position.y, [glow, core, progress, label]);
   }
 
   private createLumen(drop: Lumen): Phaser.GameObjects.Container {
@@ -326,7 +342,9 @@ export class GameScene extends Phaser.Scene {
     gem.fillTriangle(0, -13, -12, 0, 0, 13);
     gem.lineStyle(2, 0xffffff, 0.65);
     gem.strokeCircle(0, 0, 14);
-    return this.add.container(drop.position.x, drop.position.y, [gem]);
+    const label = this.createWorldLabel("流明", "#fff0a8", 27);
+    label.setAlpha(0.7);
+    return this.add.container(drop.position.x, drop.position.y, [gem, label]);
   }
 
   private createHazard(hazard: Hazard): Phaser.GameObjects.Container {
@@ -347,7 +365,8 @@ export class GameScene extends Phaser.Scene {
     }
     shard.closePath();
     shard.strokePath();
-    return this.add.container(hazard.position.x, hazard.position.y, [shard]);
+    const label = this.createWorldLabel("碎片", "#ffd4e5", hazard.radius + 33);
+    return this.add.container(hazard.position.x, hazard.position.y, [shard, label]);
   }
 
   private createStorm(storm: Storm): Phaser.GameObjects.Container {
@@ -358,7 +377,9 @@ export class GameScene extends Phaser.Scene {
     field.strokeCircle(0, 0, storm.radius);
     field.lineStyle(1, 0xff5f9b, 0.28);
     field.strokeCircle(0, 0, storm.radius + 22);
-    return this.add.container(storm.position.x, storm.position.y, [field]);
+    const label = this.createWorldLabel("风暴", "#d9c8ff", 0);
+    label.setAlpha(0.68);
+    return this.add.container(storm.position.x, storm.position.y, [field, label]);
   }
 
   private createGate(): Phaser.GameObjects.Container {
@@ -367,7 +388,8 @@ export class GameScene extends Phaser.Scene {
     ring.strokeCircle(0, 0, 40);
     ring.lineStyle(2, 0x67f4ff, 0.35);
     ring.strokeCircle(0, 0, 56);
-    return this.add.container(this.state.gate.position.x, this.state.gate.position.y, [ring]);
+    const label = this.createWorldLabel("北侧光门", "#fff0a8", 56);
+    return this.add.container(this.state.gate.position.x, this.state.gate.position.y, [ring, label]);
   }
 
   private renderState(): void {
@@ -401,15 +423,17 @@ export class GameScene extends Phaser.Scene {
 
     this.state.lumen.forEach((drop) => {
       const view = this.lumenViews.get(drop.id);
+      const gem = view?.getAt(0) as Phaser.GameObjects.Graphics | undefined;
       view?.setVisible(!drop.collected);
-      view?.setRotation(this.time.now * 0.002 + drop.id);
+      gem?.setRotation(this.time.now * 0.002 + drop.id);
       view?.setScale(1 + Math.sin(this.time.now * 0.004 + drop.id) * 0.08);
     });
 
     this.state.hazards.forEach((hazard) => {
       const view = this.hazardViews.get(hazard.id);
+      const shard = view?.getAt(0) as Phaser.GameObjects.Graphics | undefined;
       view?.setPosition(hazard.position.x, hazard.position.y);
-      view?.setRotation(this.time.now * 0.0015 * (hazard.id % 2 === 0 ? 1 : -1));
+      shard?.setRotation(this.time.now * 0.0015 * (hazard.id % 2 === 0 ? 1 : -1));
     });
 
     this.state.storms.forEach((storm) => {
@@ -417,7 +441,7 @@ export class GameScene extends Phaser.Scene {
       const graphic = view?.getAt(0) as Phaser.GameObjects.Graphics | undefined;
       const activeRadius = getStormActiveRadius(storm);
       view?.setPosition(storm.position.x, storm.position.y);
-      view?.setRotation(this.time.now * 0.0006);
+      graphic?.setRotation(this.time.now * 0.0006);
       graphic?.clear();
       graphic?.fillStyle(0x7d4cff, 0.06 + Math.sin(storm.phase * 1.7) * 0.025);
       graphic?.fillCircle(0, 0, activeRadius);
