@@ -51,6 +51,10 @@ const overlay = document.querySelector<HTMLDivElement>("#overlay")!;
 const overlayPanel = overlay.querySelector<HTMLDivElement>(".panel")!;
 const objectiveTitle = document.querySelector<HTMLElement>("#objective-title")!;
 const objectiveDetail = document.querySelector<HTMLElement>("#objective-detail")!;
+const waveIntro = document.querySelector<HTMLDivElement>("#wave-intro")!;
+const waveIntroTitle = document.querySelector<HTMLElement>("#wave-intro-title")!;
+const waveIntroDetail = document.querySelector<HTMLElement>("#wave-intro-detail")!;
+const waveIntroContract = document.querySelector<HTMLElement>("#wave-intro-contract")!;
 const startButton = document.querySelector<HTMLButtonElement>("#start-button")!;
 const sessionTools = document.querySelector<HTMLDivElement>("#session-tools")!;
 const copyRouteButton = document.querySelector<HTMLButtonElement>("#copy-route-button")!;
@@ -242,6 +246,9 @@ let selectedDifficulty: DifficultyId = saveData.selectedDifficulty;
 let audioBus: AudioBus;
 let resetSaveArmed = false;
 let resetSaveTimer: number | undefined;
+let latestWaveIntroKey = "";
+let waveIntroExpiresAt = 0;
+let waveIntroTimer: number | undefined;
 
 window.__lumenVirtualInput = {
   move: { x: 0, y: 0 },
@@ -361,6 +368,8 @@ function launchRun(upgradeId?: UpgradeId): void {
   audioBus.play("start");
   overlay.classList.remove("show");
   hideTacticalScan();
+  latestWaveIntroKey = "";
+  hideWaveIntro(true);
   disarmResetSave();
   runRecap.hidden = true;
   achievementUnlocks.hidden = true;
@@ -380,6 +389,8 @@ function launchDailyChallenge(): void {
   updateDifficultyUi();
   overlay.classList.remove("show");
   hideTacticalScan();
+  latestWaveIntroKey = "";
+  hideWaveIntro(true);
   disarmResetSave();
   runRecap.hidden = true;
   achievementUnlocks.hidden = true;
@@ -472,6 +483,7 @@ window.addEventListener("game:hud", (event) => {
   missionText.textContent = detail.message;
   objectiveTitle.textContent = `目标：第 ${detail.wave}/${detail.campaignWaves} 波，修复 ${detail.relays} 座信标`;
   objectiveDetail.textContent = `${DIFFICULTY_SETTINGS[detail.difficulty].name}模式 / 救援代号 ${detail.routePlan.name} / ${detail.sector.name} / ${detail.waveModifier.name}：${detail.sector.briefing} ${detail.waveModifier.briefing}`;
+  updateWaveIntro(detail);
   latestUpgradeChoices = detail.upgradeChoices;
 });
 
@@ -487,6 +499,7 @@ window.addEventListener("game:ended", (event) => {
   const newlyUnlocked = persistRunResult(detail);
   overlay.classList.add("show");
   hideTacticalScan();
+  hideWaveIntro(true);
   howToPlay.hidden = true;
   achievementStrip.hidden = true;
   runHistory.hidden = false;
@@ -606,6 +619,55 @@ function renderTacticalScan(): void {
     ? `${latestRoutePlan.name} · ${buildRadarSummary(latestRadarSnapshot)}`
     : buildRadarSummary(latestRadarSnapshot);
   tacticalScanMap.replaceChildren(...createRadarNodes(latestRadarSnapshot));
+}
+
+function updateWaveIntro(detail: {
+  campaignWaves: number;
+  contract: ContractSnapshot;
+  routePlan: RoutePlan;
+  sector: SectorLayout;
+  status: GameStatus;
+  wave: number;
+  waveModifier: WaveModifier;
+}): void {
+  if (detail.status !== "playing") {
+    hideWaveIntro();
+    return;
+  }
+
+  const introKey = `${detail.routePlan.seed}-${detail.wave}-${detail.sector.id}-${detail.waveModifier.id}`;
+  if (introKey === latestWaveIntroKey) {
+    if (!waveIntro.hidden && Date.now() >= waveIntroExpiresAt) {
+      hideWaveIntro(true);
+    }
+    return;
+  }
+
+  latestWaveIntroKey = introKey;
+  waveIntroExpiresAt = Date.now() + 3600;
+  waveIntroTitle.textContent = `第 ${detail.wave}/${detail.campaignWaves} 波 · ${detail.sector.name}`;
+  waveIntroDetail.textContent = `${detail.waveModifier.name}：${detail.sector.briefing} ${detail.waveModifier.briefing}`;
+  waveIntroContract.textContent = `战术合约：${detail.contract.name} · ${detail.contract.requirement}`;
+  waveIntro.hidden = false;
+  window.clearTimeout(waveIntroTimer);
+  waveIntro.classList.add("show");
+  waveIntroTimer = window.setTimeout(() => hideWaveIntro(true), 3600);
+}
+
+function hideWaveIntro(immediate = false): void {
+  window.clearTimeout(waveIntroTimer);
+  waveIntroExpiresAt = 0;
+  if (waveIntro.hidden) return;
+  waveIntro.classList.remove("show");
+  if (immediate) {
+    waveIntro.hidden = true;
+    return;
+  }
+  waveIntroTimer = window.setTimeout(() => {
+    if (!waveIntro.classList.contains("show")) {
+      waveIntro.hidden = true;
+    }
+  }, 260);
 }
 
 function hideTacticalScan(): void {
@@ -1251,6 +1313,8 @@ function replayRunHistory(entry: RunHistoryEntry): void {
   disarmResetSave();
   overlay.classList.remove("show");
   hideTacticalScan();
+  latestWaveIntroKey = "";
+  hideWaveIntro(true);
   runRecap.hidden = true;
   achievementUnlocks.hidden = true;
   upgradeChoices.hidden = true;

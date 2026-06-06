@@ -85,6 +85,66 @@ button {
   line-height: 1.35;
 }
 
+#wave-intro {
+  position: absolute;
+  top: 106px;
+  left: 50%;
+  z-index: 5;
+  width: min(440px, calc(100vw - 420px));
+  min-width: 280px;
+  padding: 11px 13px;
+  border: 1px solid rgba(103, 244, 255, 0.24);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(103, 244, 255, 0.18), rgba(255, 226, 122, 0.1)),
+    rgba(6, 11, 19, 0.68);
+  box-shadow: 0 18px 56px rgba(0, 0, 0, 0.32);
+  opacity: 0;
+  transform: translate(-50%, -8px);
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease;
+  backdrop-filter: blur(12px);
+  pointer-events: none;
+}
+
+#wave-intro[hidden] {
+  display: none;
+}
+
+#wave-intro.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+#wave-intro strong,
+#wave-intro span,
+#wave-intro em {
+  display: block;
+}
+
+#wave-intro strong {
+  color: #fff7c7;
+  font-size: 13px;
+  font-weight: 1000;
+}
+
+#wave-intro span {
+  margin-top: 4px;
+  color: #e4f8ff;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+#wave-intro em {
+  margin-top: 5px;
+  color: #ffe27a;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
 #hud {
   position: absolute;
   top: 18px;
@@ -2028,6 +2088,29 @@ h1 {
     left: 8px;
     width: calc(100vw - 16px);
     padding: 8px 10px;
+  }
+
+  #shell[data-status="playing"] #wave-intro {
+    top: auto;
+    bottom: 306px;
+    left: 8px;
+    width: calc(100vw - 16px);
+    min-width: 0;
+    padding: 8px 10px;
+    transform: translateY(8px);
+  }
+
+  #shell[data-status="playing"] #wave-intro.show {
+    transform: translateY(0);
+  }
+
+  #shell[data-status="playing"] #wave-intro strong {
+    font-size: 11px;
+  }
+
+  #shell[data-status="playing"] #wave-intro span,
+  #shell[data-status="playing"] #wave-intro em {
+    font-size: 10px;
   }
 
   #shell[data-status="playing"] #hud {
