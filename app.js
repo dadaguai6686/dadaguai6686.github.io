@@ -203,9 +203,25 @@ function init() {
       return Promise.resolve(false);
     }
 
-    if (!navigator.clipboard) {
-      showToast('当前浏览器不支持剪贴板 API', 'error');
-      return Promise.resolve(false);
+    if (!navigator.clipboard?.writeText) {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      textarea.style.top = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      let copied = false;
+      try {
+        copied = document.execCommand('copy');
+      } catch (err) {
+        copied = false;
+      } finally {
+        textarea.remove();
+      }
+      showToast(copied ? successMessage : '复制失败，请手动选择文本复制', copied ? 'success' : 'error');
+      return Promise.resolve(copied);
     }
 
     return navigator.clipboard.writeText(text)
@@ -508,8 +524,8 @@ function init() {
         setAdminMode(false);
       }
     } catch (e) {
-      // Optimistic offline check
-      setAdminMode(true);
+      localStorage.removeItem('admin_token');
+      setAdminMode(false);
     }
   }
 
@@ -887,41 +903,60 @@ function init() {
     suppressHashSync = false;
   }
 
-  // Simple Markdown Parser regex logic
   function renderMarkdown(mdText) {
-    let html = escapeHTML(mdText);
+    const codeBlocks = [];
+    const source = String(mdText ?? '')
+      .replace(/\r\n?/g, '\n')
+      .replace(/```([a-zA-Z0-9_-]*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+        const language = String(lang || '').trim().replace(/[^\w-]/g, '').slice(0, 32);
+        const className = language ? ` class="language-${escapeHTML(language)}"` : '';
+        const normalizedCode = String(code || '').replace(/^\n|\n$/g, '');
+        const token = `@@ATHERIX_CODE_BLOCK_${codeBlocks.length}@@`;
+        codeBlocks.push(`<pre><code${className}>${escapeHTML(normalizedCode)}</code></pre>`);
+        return `\n\n${token}\n\n`;
+      });
 
-    // Bold
-    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    
-    // Inline Code
-    html = html.replace(/`(.*?)`/g, '<code>$1</code>');
-    
-    // Headings
-    html = html.replace(/^# (.*?)$/gm, '<h1>$1</h1>');
-    html = html.replace(/^## (.*?)$/gm, '<h2>$1</h2>');
-    html = html.replace(/^### (.*?)$/gm, '<h3>$1</h3>');
-    
-    // Blockquotes
-    html = html.replace(/^&gt; (.*?)$/gm, '<blockquote>$1</blockquote>');
-    
-    // Code blocks
-    html = html.replace(/```javascript([\s\S]*?)```/g, '<pre><code class="language-js">$1</code></pre>');
-    html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
-    
-    // Lists
-    html = html.replace(/^- (.*?)$/gm, '<li>$1</li>');
-    html = html.replace(/(<li>.*?<\/li>)+/g, '<ul>$&</ul>');
-    
-    // Paragraphs split
-    html = html.split(/\n{2,}/).map(para => {
-      if (para.startsWith('<h') || para.startsWith('<ul') || para.startsWith('<ol') || para.startsWith('<pre') || para.startsWith('<blockquote')) {
-        return para;
-      }
-      return `<p>${para.replace(/\n/g, '<br>')}</p>`;
-    }).join('');
+    function formatInline(text) {
+      return escapeHTML(text)
+        .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (match, label, href) => {
+          const safeHref = normalizeUrl(href);
+          return safeHref
+            ? `<a href="${escapeHTML(safeHref)}" target="_blank" rel="noopener noreferrer">${label}</a>`
+            : label;
+        });
+    }
 
-    return html;
+    return source
+      .split(/\n{2,}/)
+      .map(block => block.trim())
+      .filter(Boolean)
+      .map(block => {
+        const codeMatch = block.match(/^@@ATHERIX_CODE_BLOCK_(\d+)@@$/);
+        if (codeMatch) return codeBlocks[Number(codeMatch[1])] || '';
+
+        const headingMatch = block.match(/^(#{1,3})\s+(.+)$/);
+        if (headingMatch) {
+          const level = headingMatch[1].length;
+          return `<h${level}>${formatInline(headingMatch[2])}</h${level}>`;
+        }
+
+        const lines = block.split('\n').map(line => line.trim()).filter(Boolean);
+        if (lines.length && lines.every(line => /^[-*]\s+/.test(line))) {
+          return `<ul>${lines.map(line => `<li>${formatInline(line.replace(/^[-*]\s+/, ''))}</li>`).join('')}</ul>`;
+        }
+        if (lines.length && lines.every(line => /^\d+\.\s+/.test(line))) {
+          return `<ol>${lines.map(line => `<li>${formatInline(line.replace(/^\d+\.\s+/, ''))}</li>`).join('')}</ol>`;
+        }
+        if (lines.length && lines.every(line => /^>\s?/.test(line))) {
+          const quote = lines.map(line => formatInline(line.replace(/^>\s?/, ''))).join('<br>');
+          return `<blockquote>${quote}</blockquote>`;
+        }
+
+        return `<p>${lines.map(formatInline).join('<br>')}</p>`;
+      })
+      .join('');
   }
 
   function readerProgressKey(postId) {

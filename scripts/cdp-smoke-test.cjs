@@ -239,6 +239,19 @@ async function run() {
   await send('Runtime.enable');
   await send('Page.enable');
   await waitFor('.nav-item[data-target="blog"]', 12000);
+  await evaluate(`localStorage.setItem('admin_token', 'fake-token-for-smoke')`);
+  await send('Page.reload');
+  await waitFor('.nav-item[data-target="blog"]', 12000);
+  await wait(800);
+  const adminStartupState = await evaluate(`(() => {
+    const blogActions = document.querySelector('#blog-admin-actions');
+    const projectActions = document.querySelector('#project-admin-actions');
+    return {
+      token: localStorage.getItem('admin_token'),
+      blogActionsVisible: !!blogActions && getComputedStyle(blogActions).display !== 'none',
+      projectActionsVisible: !!projectActions && getComputedStyle(projectActions).display !== 'none'
+    };
+  })()`);
 
   await click('.nav-item[data-target="blog"]');
   await waitFor('.blog-post-card');
@@ -256,7 +269,11 @@ async function run() {
     bookmarkPressed: document.querySelector('#reader-bookmark-btn')?.getAttribute('aria-pressed') === 'true',
     progress: document.querySelector('#reader-progress-percent')?.textContent || '',
     tocActive: document.querySelector('#reader-toc')?.classList.contains('active') || false,
-    tocLinks: document.querySelectorAll('#reader-toc a').length
+    tocLinks: document.querySelectorAll('#reader-toc a').length,
+    codeBlocks: document.querySelectorAll('#reader-post-content pre code').length,
+    inlineCode: document.querySelectorAll('#reader-post-content p code, #reader-post-content li code').length,
+    orderedItems: document.querySelectorAll('#reader-post-content ol li').length,
+    unorderedItems: document.querySelectorAll('#reader-post-content ul li').length
   }))()`);
 
   await click('.nav-item[data-target="projects"]');
@@ -397,9 +414,18 @@ async function run() {
   })()`, 10000);
 
   assert(blogState.visibleArticle && blogState.articleChars > 100, 'blog reader should open a populated article');
+  assert(!adminStartupState.token && !adminStartupState.blogActionsVisible && !adminStartupState.projectActionsVisible, 'invalid cached admin token should be cleared on startup');
   assert(blogState.toolbar && blogState.bookmarkPressed, 'blog reader toolbar should render and toggle bookmark state');
   assert(blogState.tocActive && blogState.tocLinks >= 2, 'blog reader should build a table of contents from article headings');
   assert(/^\d+%$/.test(blogState.progress), 'blog reader should report reading progress');
+  assert(
+    blogState.codeBlocks >= 1,
+    `blog markdown should preserve fenced code blocks: ${JSON.stringify(blogState)}`
+  );
+  assert(
+    blogState.orderedItems >= 3 && blogState.unorderedItems >= 3,
+    `blog markdown should render ordered and unordered lists: ${JSON.stringify(blogState)}`
+  );
   assert(
     projectViewportState.scrollY <= 80 && projectViewportState.sectionVisible,
     `project navigation should reset scroll into visible content: ${JSON.stringify(projectViewportState)}`
@@ -431,6 +457,7 @@ async function run() {
     managedServer,
     cdpPort,
     appUrl,
+    adminStartupState,
     blogState,
     projectViewportState,
     projectState,

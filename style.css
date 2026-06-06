@@ -1710,10 +1710,35 @@ main {
   margin-bottom: 1.2rem;
 }
 
+.reader-content a {
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(139, 92, 246, 0.45);
+}
+
+.reader-content a:hover {
+  color: #fff;
+  border-bottom-color: #fff;
+}
+
 .reader-content h2, .reader-content h3 {
   font-family: 'Outfit', sans-serif;
   margin: 1.8rem 0 0.8rem 0;
   letter-spacing: 0;
+}
+
+.reader-content ul,
+.reader-content ol {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.8rem 0 1.35rem 1.35rem;
+  color: var(--text-secondary);
+}
+
+.reader-content li::marker {
+  color: var(--accent);
+  font-weight: 800;
 }
 
 .reader-content blockquote {
@@ -1741,11 +1766,20 @@ main {
   border: 1px solid var(--border-color);
   background: rgba(0, 0, 0, 0.22);
   margin: 1.25rem 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .reader-content code {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.92em;
+}
+
+.reader-content pre code {
+  display: block;
+  min-width: max-content;
+  color: #dbeafe;
+  line-height: 1.7;
+  white-space: pre;
 }
 
 .reader-content p code,
