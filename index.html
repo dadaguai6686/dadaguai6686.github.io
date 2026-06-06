@@ -143,6 +143,20 @@
               <span>停留会快速耗电</span>
             </article>
           </div>
+          <div id="tactical-scan" hidden aria-label="暂停战术扫描">
+            <div class="tactical-scan-head">
+              <strong>战术扫描</strong>
+              <span id="tactical-scan-summary">准备扫描</span>
+            </div>
+            <svg id="tactical-scan-map" viewBox="0 0 1000 700" role="img" aria-label="暂停时的战场目标与危险位置"></svg>
+            <div class="tactical-scan-legend">
+              <span data-kind="relay">信标</span>
+              <span data-kind="lumen">流明</span>
+              <span data-kind="hazard">碎片</span>
+              <span data-kind="storm">风暴</span>
+              <span data-kind="gate">光门</span>
+            </div>
+          </div>
           <div id="menu-options">
             <div id="difficulty-picker" role="group" aria-label="选择难度">
               <button type="button" data-difficulty="training">练习</button>

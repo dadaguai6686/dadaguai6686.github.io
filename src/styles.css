@@ -617,7 +617,8 @@ button {
   text-align: right;
 }
 
-#radar-map {
+#radar-map,
+#tactical-scan-map {
   display: block;
   width: 100%;
   aspect-ratio: 10 / 7;
@@ -631,14 +632,16 @@ button {
   background-size: 20% 20%;
 }
 
-#radar-legend {
+#radar-legend,
+.tactical-scan-legend {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 4px;
   margin-top: 7px;
 }
 
-#radar-legend span {
+#radar-legend span,
+.tactical-scan-legend span {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -649,7 +652,8 @@ button {
   white-space: nowrap;
 }
 
-#radar-legend span::before {
+#radar-legend span::before,
+.tactical-scan-legend span::before {
   content: "";
   width: 7px;
   height: 7px;
@@ -659,24 +663,28 @@ button {
   box-shadow: 0 0 10px rgba(103, 244, 255, 0.48);
 }
 
-#radar-legend span[data-kind="lumen"]::before {
+#radar-legend span[data-kind="lumen"]::before,
+.tactical-scan-legend span[data-kind="lumen"]::before {
   border-radius: 2px;
   background: var(--ui-gold);
   box-shadow: 0 0 10px rgba(255, 226, 122, 0.48);
   transform: rotate(45deg);
 }
 
-#radar-legend span[data-kind="hazard"]::before {
+#radar-legend span[data-kind="hazard"]::before,
+.tactical-scan-legend span[data-kind="hazard"]::before {
   background: var(--ui-rose);
   box-shadow: 0 0 10px rgba(255, 95, 155, 0.5);
 }
 
-#radar-legend span[data-kind="storm"]::before {
+#radar-legend span[data-kind="storm"]::before,
+.tactical-scan-legend span[data-kind="storm"]::before {
   background: var(--ui-violet);
   box-shadow: 0 0 10px rgba(179, 136, 255, 0.48);
 }
 
-#radar-legend span[data-kind="gate"]::before {
+#radar-legend span[data-kind="gate"]::before,
+.tactical-scan-legend span[data-kind="gate"]::before {
   background: #86ffbd;
   box-shadow: 0 0 10px rgba(134, 255, 189, 0.48);
 }
@@ -1065,6 +1073,54 @@ h1 {
 
 #field-guide article[data-kind="storm"] i {
   background: radial-gradient(circle, #efe5ff 0 16%, var(--ui-violet) 32% 70%, rgba(179, 136, 255, 0.2) 74%);
+}
+
+#tactical-scan {
+  max-width: 660px;
+  margin: 0 auto 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(103, 244, 255, 0.18);
+  border-radius: 8px;
+  background: linear-gradient(120deg, rgba(103, 244, 255, 0.1), rgba(255, 226, 122, 0.045));
+  text-align: left;
+}
+
+#tactical-scan[hidden] {
+  display: none;
+}
+
+.tactical-scan-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.tactical-scan-head strong,
+.tactical-scan-head span {
+  display: block;
+}
+
+.tactical-scan-head strong {
+  color: #fff3ad;
+  font-size: 13px;
+  font-weight: 1000;
+}
+
+.tactical-scan-head span {
+  color: #c8d9e8;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: right;
+}
+
+#tactical-scan-map {
+  max-height: 220px;
+}
+
+.tactical-scan-legend {
+  max-width: 380px;
 }
 
 #menu-options {
@@ -1919,6 +1975,15 @@ h1 {
     padding: 8px;
   }
 
+  #tactical-scan {
+    margin-bottom: 10px;
+    padding: 8px 10px;
+  }
+
+  #tactical-scan-map {
+    max-height: 176px;
+  }
+
   #menu-options {
     margin-bottom: 8px;
   }
@@ -2173,6 +2238,36 @@ h1 {
   }
 
   #field-guide span {
+    font-size: 9px;
+  }
+
+  #tactical-scan {
+    margin-bottom: 10px;
+    padding: 9px 10px;
+  }
+
+  .tactical-scan-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+    margin-bottom: 6px;
+  }
+
+  .tactical-scan-head span {
+    text-align: left;
+  }
+
+  #tactical-scan-map {
+    max-height: 148px;
+  }
+
+  .tactical-scan-legend {
+    grid-template-columns: repeat(5, minmax(0, auto));
+    justify-content: start;
+    gap: 7px;
+  }
+
+  .tactical-scan-legend span {
     font-size: 9px;
   }
 

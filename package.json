@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "tsx scripts/smoke-simulation.ts"
+    "test": "tsx scripts/smoke-simulation.ts && tsx scripts/smoke-ui.ts"
   },
   "dependencies": {
     "phaser": "^3.90.0"

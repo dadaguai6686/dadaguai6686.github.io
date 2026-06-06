@@ -122,6 +122,9 @@ const overlayTitle = overlay.querySelector<HTMLElement>("h1")!;
 const overlayCopy = overlay.querySelector<HTMLElement>("p")!;
 const missionBrief = document.querySelector<HTMLDivElement>("#mission-brief")!;
 const fieldGuide = document.querySelector<HTMLDivElement>("#field-guide")!;
+const tacticalScan = document.querySelector<HTMLDivElement>("#tactical-scan")!;
+const tacticalScanSummary = document.querySelector<HTMLElement>("#tactical-scan-summary")!;
+const tacticalScanMap = document.querySelector<SVGSVGElement>("#tactical-scan-map")!;
 const howToPlay = document.querySelector<HTMLDivElement>("#how-to-play")!;
 const nextRunPanel = document.querySelector<HTMLDivElement>("#next-run-panel")!;
 const nextRunTitle = document.querySelector<HTMLElement>("#next-run-title")!;
@@ -231,6 +234,7 @@ let latestScore = 0;
 let latestWave = 1;
 let latestBestCombo = 1;
 let latestDifficulty: DifficultyId = "standard";
+let latestRadarSnapshot: RadarSnapshot | undefined;
 let latestRoutePlan: RoutePlan | undefined;
 let saveData = loadSave();
 let selectedDifficulty: DifficultyId = saveData.selectedDifficulty;
@@ -256,6 +260,7 @@ startButton.addEventListener("click", () => {
 resumeButton.addEventListener("click", () => {
   audioBus.play("button");
   overlay.classList.remove("show");
+  hideTacticalScan();
   disarmResetSave();
   window.dispatchEvent(new CustomEvent("game:resume"));
 });
@@ -319,6 +324,7 @@ restartRouteButton.addEventListener("click", () => {
   audioBus.play("start");
   disarmResetSave();
   overlay.classList.remove("show");
+  hideTacticalScan();
   runRecap.hidden = true;
   achievementUnlocks.hidden = true;
   upgradeChoices.hidden = true;
@@ -353,6 +359,7 @@ function launchRun(upgradeId?: UpgradeId): void {
   void audioBus.unlock();
   audioBus.play("start");
   overlay.classList.remove("show");
+  hideTacticalScan();
   disarmResetSave();
   runRecap.hidden = true;
   achievementUnlocks.hidden = true;
@@ -371,6 +378,7 @@ function launchDailyChallenge(): void {
   saveSave(saveData);
   updateDifficultyUi();
   overlay.classList.remove("show");
+  hideTacticalScan();
   disarmResetSave();
   runRecap.hidden = true;
   achievementUnlocks.hidden = true;
@@ -422,6 +430,7 @@ window.addEventListener("game:hud", (event) => {
   latestBestCombo = detail.bestCombo;
   latestDifficulty = detail.difficulty;
   latestRoutePlan = detail.routePlan;
+  latestRadarSnapshot = detail.radar;
   chargeFill.style.width = `${ratio(detail.charge, detail.maxCharge)}%`;
   hullFill.style.width = `${ratio(detail.hull, detail.maxHull)}%`;
   chargeMeter.dataset.alert = detail.resourceAlerts.charge;
@@ -476,6 +485,7 @@ window.addEventListener("game:ended", (event) => {
   latestRoutePlan = detail.routePlan;
   const newlyUnlocked = persistRunResult(detail);
   overlay.classList.add("show");
+  hideTacticalScan();
   howToPlay.hidden = true;
   achievementStrip.hidden = true;
   runHistory.hidden = false;
@@ -578,11 +588,38 @@ function renderRadar(radar: RadarSnapshot, status: GameStatus): void {
   }
 
   radarMap.setAttribute("viewBox", `0 0 ${radar.arena.width} ${radar.arena.height}`);
+  radarSummary.textContent = buildRadarSummary(radar);
+  radarMap.replaceChildren(...createRadarNodes(radar));
+}
+
+function renderTacticalScan(): void {
+  const shouldShow = latestStatus === "paused" && Boolean(latestRadarSnapshot);
+  tacticalScan.hidden = !shouldShow;
+  if (!shouldShow || !latestRadarSnapshot) {
+    tacticalScanMap.replaceChildren();
+    return;
+  }
+
+  tacticalScanMap.setAttribute("viewBox", `0 0 ${latestRadarSnapshot.arena.width} ${latestRadarSnapshot.arena.height}`);
+  tacticalScanSummary.textContent = latestRoutePlan
+    ? `${latestRoutePlan.name} · ${buildRadarSummary(latestRadarSnapshot)}`
+    : buildRadarSummary(latestRadarSnapshot);
+  tacticalScanMap.replaceChildren(...createRadarNodes(latestRadarSnapshot));
+}
+
+function hideTacticalScan(): void {
+  tacticalScan.hidden = true;
+  tacticalScanMap.replaceChildren();
+}
+
+function buildRadarSummary(radar: RadarSnapshot): string {
   const repairedRelays = radar.relays.filter((relay) => relay.repaired).length;
   const remainingLumen = radar.lumen.filter((drop) => !drop.collected).length;
-  radarSummary.textContent = `${repairedRelays}/${radar.relays.length} 信标 · ${remainingLumen} 流明 · ${radar.storms.length} 风暴`;
+  return `${repairedRelays}/${radar.relays.length} 信标 · ${remainingLumen} 流明 · ${radar.storms.length} 风暴`;
+}
 
-  const nodes: SVGElement[] = [
+function createRadarNodes(radar: RadarSnapshot): SVGElement[] {
+  return [
     createSvgNode("rect", {
       class: "radar-bg",
       x: 0,
@@ -650,8 +687,6 @@ function renderRadar(radar: RadarSnapshot, status: GameStatus): void {
       points: `${radar.player.position.x},${radar.player.position.y - 28} ${radar.player.position.x + 24},${radar.player.position.y + 22} ${radar.player.position.x - 24},${radar.player.position.y + 22}`
     })
   ];
-
-  radarMap.replaceChildren(...nodes);
 }
 
 function createSvgNode(tag: string, attributes: Record<string, string | number>): SVGElement {
@@ -691,6 +726,7 @@ function showHelpOverlay(): void {
   runRecap.hidden = true;
   missionBrief.hidden = false;
   fieldGuide.hidden = false;
+  renderTacticalScan();
   howToPlay.hidden = false;
   updateNextRunPanel();
   upgradeChoices.hidden = true;
@@ -708,6 +744,7 @@ window.addEventListener("keydown", (event) => {
   }
   if (event.key === "Escape" && latestStatus === "paused") {
     overlay.classList.remove("show");
+    hideTacticalScan();
     disarmResetSave();
     window.dispatchEvent(new CustomEvent("game:resume"));
   }
@@ -1192,6 +1229,7 @@ function replayRunHistory(entry: RunHistoryEntry): void {
   updateDifficultyUi();
   disarmResetSave();
   overlay.classList.remove("show");
+  hideTacticalScan();
   runRecap.hidden = true;
   achievementUnlocks.hidden = true;
   upgradeChoices.hidden = true;
