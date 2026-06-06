@@ -1071,12 +1071,14 @@ async function run() {
   await wait(250);
   await click('#premium-tactics-start');
   await wait(200);
+  const tacticsForecastStart = await evaluate(`(() => window.__atherixDebug?.premium?.tacticsForecast?.() || {})()`);
   await key('keyDown', 'ArrowRight', 'ArrowRight');
   await key('keyUp', 'ArrowRight', 'ArrowRight');
   await wait(160);
   await key('keyDown', ' ', 'Space');
   await key('keyUp', ' ', 'Space');
   await wait(240);
+  const tacticsForecastAfterAction = await evaluate(`(() => window.__atherixDebug?.premium?.tacticsForecast?.() || {})()`);
   const tacticsState = await evaluate(`(() => {
     const c = document.querySelector('#premium-tactics-canvas');
     const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
@@ -1088,6 +1090,8 @@ async function run() {
       turn: document.querySelector('#premium-tactics-turn')?.textContent,
       hp: document.querySelector('#premium-tactics-hp')?.textContent,
       threat: document.querySelector('#premium-tactics-threat')?.textContent,
+      intel: document.querySelector('#premium-tactics-intel')?.textContent,
+      danger: document.querySelector('#premium-tactics-danger')?.textContent,
       action: document.querySelector('#premium-tactics-action')?.textContent
     };
   })()`);
@@ -1234,7 +1238,10 @@ async function run() {
   assert(/RANK/.test(careerDialogState.summary) && careerDialogState.daily.length > 10 && careerDialogState.visibleInViewport && !careerDialogState.horizontalOverflow, `career dialog should show readable summary and daily challenge: ${JSON.stringify(careerDialogState)}`);
   assert(!careerDialogClosed.open && careerDialogClosed.ariaHidden === 'true', `career dialog should close cleanly: ${JSON.stringify(careerDialogClosed)}`);
   assert(chainState.cells === 49 && Number(chainState.specials) >= 1, 'chain board should render with special cells');
+  assert(tacticsForecastStart.dangerCount > 0 && tacticsForecastStart.intents?.length >= 4 && tacticsForecastStart.blastTargets?.length >= 1 && /目标/.test(tacticsForecastStart.action), `tactics mode should forecast enemy intent and available blast targets: ${JSON.stringify(tacticsForecastStart)}`);
+  assert(tacticsForecastAfterAction.incoming > 0 && tacticsForecastAfterAction.dangerCount > 0 && /火力锁定/.test(tacticsForecastAfterAction.intelHud) && /架盾/.test(tacticsForecastAfterAction.action), `tactics mode should update forecast after movement and action: ${JSON.stringify(tacticsForecastAfterAction)}`);
   assert(tacticsState.nonBlank && Number(tacticsState.ap) < 3 && tacticsState.action, `tactics mode should render and accept actions: ${JSON.stringify(tacticsState)}`);
+  assert(Number(tacticsState.danger) > 0 && tacticsState.intel, `tactics HUD should expose forecast and danger counters: ${JSON.stringify(tacticsState)}`);
   assert(pwaState.supported && pwaState.registered, 'service worker should register');
 
   await bestEffortSend('Page.close');
@@ -1294,6 +1301,8 @@ async function run() {
     careerDialogState,
     careerDialogClosed,
     chainState,
+    tacticsForecastStart,
+    tacticsForecastAfterAction,
     tacticsState,
     pwaState
   };

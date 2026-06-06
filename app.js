@@ -4512,6 +4512,8 @@ function init() {
               <span>行动 <strong id="premium-tactics-ap">3</strong></span>
               <span>回合 <strong id="premium-tactics-turn">1</strong></span>
               <span>威胁 <strong id="premium-tactics-threat">LOW</strong></span>
+              <span>预判 <strong id="premium-tactics-intel">安全窗口</strong></span>
+              <span>危险 <strong id="premium-tactics-danger">0</strong></span>
               <span>最佳 <strong id="premium-tactics-best">0</strong></span>
             </div>
             <div class="mini-actions">
@@ -7273,8 +7275,144 @@ function init() {
       return true;
     }
 
+    function tacticsCellCenter(x, y) {
+      return {
+        x: tactics.offsetX + x * tactics.tile + tactics.tile / 2,
+        y: tactics.offsetY + y * tactics.tile + tactics.tile / 2
+      };
+    }
+
+    function addTacticsDanger(map, x, y, tone = 'danger') {
+      if (x < 0 || y < 0 || x >= tactics.cols || y >= tactics.rows) return;
+      if (tactics.walls.has(tacticsKey(x, y))) return;
+      const priority = { lane: 1, move: 2, adjacent: 3, impact: 4 };
+      const key = tacticsKey(x, y);
+      const prev = map.get(key);
+      if (!prev || (priority[tone] || 0) > (priority[prev.tone] || 0)) {
+        map.set(key, { x, y, tone });
+      }
+    }
+
+    function tacticsEnemyStep(enemy) {
+      const p = tactics.player;
+      const options = [
+        { dx: Math.sign(p.x - enemy.x), dy: 0 },
+        { dx: 0, dy: Math.sign(p.y - enemy.y) },
+        { dx: -Math.sign(p.x - enemy.x), dy: 0 },
+        { dx: 0, dy: -Math.sign(p.y - enemy.y) }
+      ].filter(step => step.dx || step.dy);
+      return options.find(item => {
+        const nx = enemy.x + item.dx;
+        const ny = enemy.y + item.dy;
+        return !tacticsBlocked(nx, ny) && !(nx === p.x && ny === p.y);
+      }) || null;
+    }
+
+    function tacticsBlastTargets() {
+      const p = tactics.player;
+      return livingTacticsEnemies()
+        .filter(enemy => {
+          const dist = Math.abs(enemy.x - p.x) + Math.abs(enemy.y - p.y);
+          return dist <= 4 && (enemy.x === p.x || enemy.y === p.y) && tacticsLineClear(p.x, p.y, enemy.x, enemy.y);
+        })
+        .sort((a, b) => (Math.abs(a.x - p.x) + Math.abs(a.y - p.y)) - (Math.abs(b.x - p.x) + Math.abs(b.y - p.y)));
+    }
+
+    function tacticsForecast() {
+      const p = tactics.player;
+      const danger = new Map();
+      const lines = [];
+      const intents = [];
+      let incoming = 0;
+
+      livingTacticsEnemies().forEach(enemy => {
+        const dist = Math.abs(enemy.x - p.x) + Math.abs(enemy.y - p.y);
+        const aligned = (enemy.x === p.x || enemy.y === p.y) && tacticsLineClear(enemy.x, enemy.y, p.x, p.y);
+        if (enemy.type === 'turret') {
+          [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dy]) => {
+            let x = enemy.x + dx;
+            let y = enemy.y + dy;
+            let last = null;
+            while (x >= 0 && y >= 0 && x < tactics.cols && y < tactics.rows && !tactics.walls.has(tacticsKey(x, y))) {
+              addTacticsDanger(danger, x, y, 'lane');
+              last = { x, y };
+              x += dx;
+              y += dy;
+            }
+            if (last) lines.push({ from: tacticsCellCenter(enemy.x, enemy.y), to: tacticsCellCenter(last.x, last.y), tone: 'lane' });
+          });
+          if (aligned && dist <= 6) {
+            incoming += 16;
+            addTacticsDanger(danger, p.x, p.y, 'impact');
+            lines.push({ from: tacticsCellCenter(enemy.x, enemy.y), to: tacticsCellCenter(p.x, p.y), tone: 'impact' });
+            intents.push({ id: enemy.id, type: enemy.type, mode: 'lock', label: 'LOCK' });
+          } else {
+            intents.push({ id: enemy.id, type: enemy.type, mode: 'overwatch', label: 'WATCH' });
+          }
+          return;
+        }
+
+        if (dist <= 1) {
+          incoming += enemy.type === 'warden' ? 24 : 15;
+          addTacticsDanger(danger, p.x, p.y, 'impact');
+          intents.push({ id: enemy.id, type: enemy.type, mode: 'strike', label: 'STRIKE' });
+          return;
+        }
+
+        const step = tacticsEnemyStep(enemy);
+        if (step) {
+          const nx = enemy.x + step.dx;
+          const ny = enemy.y + step.dy;
+          addTacticsDanger(danger, nx, ny, 'move');
+          [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dy]) => addTacticsDanger(danger, nx + dx, ny + dy, 'adjacent'));
+          lines.push({ from: tacticsCellCenter(enemy.x, enemy.y), to: tacticsCellCenter(nx, ny), tone: 'move' });
+          intents.push({ id: enemy.id, type: enemy.type, mode: 'flank', label: 'FLANK', target: { x: nx, y: ny } });
+        } else {
+          intents.push({ id: enemy.id, type: enemy.type, mode: 'hold', label: 'HOLD' });
+        }
+      });
+
+      const blastTargets = tacticsBlastTargets();
+      let label = '安全窗口';
+      let tone = 'safe';
+      let suggestion = '推进核心';
+      if (tactics.lost) {
+        label = '机甲离线';
+        tone = 'danger';
+        suggestion = '重开行动';
+      } else if (tactics.won) {
+        label = '裂隙安全';
+        tone = 'safe';
+        suggestion = '评分已保存';
+      } else if (incoming > 0) {
+        label = '火力锁定';
+        tone = 'danger';
+        suggestion = tactics.player.charge > 0 ? '爆破或撤离' : '撤离或架盾';
+      } else if (blastTargets.length > 0 && tactics.player.charge > 0) {
+        label = `可爆破 ${Math.min(2, blastTargets.length)}`;
+        tone = 'attack';
+        suggestion = '直线火力窗口';
+      } else if ([...danger.values()].some(cell => cell.tone !== 'lane')) {
+        label = '包抄预警';
+        tone = 'warn';
+        suggestion = '避开标记格';
+      }
+
+      return {
+        dangerCells: [...danger.values()],
+        lines,
+        intents,
+        incoming,
+        blastTargets: blastTargets.map(enemy => enemy.id),
+        label,
+        tone,
+        suggestion
+      };
+    }
+
     function setTacticsUi() {
       const p = tactics.player;
+      const forecast = tacticsForecast();
       document.getElementById('premium-tactics-cores').textContent = p.cores;
       document.getElementById('premium-tactics-hp').textContent = Math.max(0, Math.ceil(p.hp));
       document.getElementById('premium-tactics-ap').textContent = p.ap;
@@ -7282,11 +7420,25 @@ function init() {
       document.getElementById('premium-tactics-best').textContent = localStorage.getItem(tactics.bestKey) || '0';
       const threatEl = document.getElementById('premium-tactics-threat');
       const nearby = livingTacticsEnemies().filter(enemy => Math.abs(enemy.x - p.x) + Math.abs(enemy.y - p.y) <= 3).length;
-      const threat = tactics.lost ? 'DOWN' : tactics.won ? 'CLEAR' : nearby >= 2 ? 'HIGH' : nearby === 1 ? 'MID' : 'LOW';
+      const threat = tactics.lost ? 'DOWN' : tactics.won ? 'CLEAR' : forecast.incoming > 0 ? 'HIGH' : nearby >= 2 ? 'HIGH' : nearby === 1 ? 'MID' : 'LOW';
       threatEl.textContent = threat;
       threatEl.style.color = threat === 'HIGH' || threat === 'DOWN' ? '#EF4444' : threat === 'MID' ? '#FBBF24' : '#34D399';
+      const intelEl = document.getElementById('premium-tactics-intel');
+      if (intelEl) {
+        intelEl.textContent = forecast.label;
+        intelEl.style.color = forecast.tone === 'danger' ? '#EF4444' : forecast.tone === 'warn' ? '#FBBF24' : forecast.tone === 'attack' ? '#A78BFA' : '#34D399';
+      }
+      const dangerEl = document.getElementById('premium-tactics-danger');
+      if (dangerEl) {
+        dangerEl.textContent = forecast.dangerCells.length;
+        dangerEl.style.color = forecast.incoming > 0 ? '#EF4444' : forecast.dangerCells.length > 0 ? '#FBBF24' : '#34D399';
+      }
       const actionBtn = document.getElementById('premium-tactics-action');
-      if (actionBtn) actionBtn.textContent = p.charge > 0 ? `相位爆破 x${p.charge}` : '架盾待机';
+      if (actionBtn) {
+        const targetText = p.charge > 0 && forecast.blastTargets.length > 0 ? ` · ${Math.min(2, forecast.blastTargets.length)} 目标` : '';
+        actionBtn.textContent = p.charge > 0 ? `相位爆破 x${p.charge}${targetText}` : '架盾待机';
+        actionBtn.title = forecast.suggestion;
+      }
     }
 
     function spendTacticsAp(amount = 1) {
@@ -7383,12 +7535,7 @@ function init() {
         drawTactics();
         return;
       }
-      const targets = livingTacticsEnemies()
-        .filter(enemy => {
-          const dist = Math.abs(enemy.x - p.x) + Math.abs(enemy.y - p.y);
-          return dist <= 4 && (enemy.x === p.x || enemy.y === p.y) && tacticsLineClear(p.x, p.y, enemy.x, enemy.y);
-        })
-        .sort((a, b) => (Math.abs(a.x - p.x) + Math.abs(a.y - p.y)) - (Math.abs(b.x - p.x) + Math.abs(b.y - p.y)));
+      const targets = tacticsBlastTargets();
       if (!targets.length) {
         p.shield = Math.min(35, p.shield + 18);
         p.charge--;
@@ -7419,17 +7566,7 @@ function init() {
           tactics.message = '敌方近战接触';
           return;
         }
-        const options = [
-          { dx: Math.sign(p.x - enemy.x), dy: 0 },
-          { dx: 0, dy: Math.sign(p.y - enemy.y) },
-          { dx: -Math.sign(p.x - enemy.x), dy: 0 },
-          { dx: 0, dy: -Math.sign(p.y - enemy.y) }
-        ].filter(step => step.dx || step.dy);
-        const step = options.find(item => {
-          const nx = enemy.x + item.dx;
-          const ny = enemy.y + item.dy;
-          return !tacticsBlocked(nx, ny) && !(nx === p.x && ny === p.y);
-        });
+        const step = tacticsEnemyStep(enemy);
         if (step && enemy.type !== 'turret') {
           enemy.x += step.dx;
           enemy.y += step.dy;
@@ -7457,6 +7594,37 @@ function init() {
           ctx.strokeRect(px + 0.5, py + 0.5, tactics.tile - 3, tactics.tile - 3);
         }
       }
+
+      const forecast = tacticsForecast();
+      const dangerPaint = {
+        lane: { fill: 'rgba(249, 115, 22, 0.08)', stroke: 'rgba(249, 115, 22, 0.2)' },
+        move: { fill: 'rgba(167, 139, 250, 0.14)', stroke: 'rgba(167, 139, 250, 0.38)' },
+        adjacent: { fill: 'rgba(251, 191, 36, 0.12)', stroke: 'rgba(251, 191, 36, 0.32)' },
+        impact: { fill: 'rgba(239, 68, 68, 0.24)', stroke: 'rgba(239, 68, 68, 0.68)' }
+      };
+      ctx.save();
+      forecast.dangerCells.forEach(cell => {
+        const px = tactics.offsetX + cell.x * tactics.tile;
+        const py = tactics.offsetY + cell.y * tactics.tile;
+        const paint = dangerPaint[cell.tone] || dangerPaint.adjacent;
+        ctx.fillStyle = paint.fill;
+        ctx.strokeStyle = paint.stroke;
+        ctx.lineWidth = cell.tone === 'impact' ? 2.5 : 1.5;
+        ctx.fillRect(px + 4, py + 4, tactics.tile - 10, tactics.tile - 10);
+        ctx.strokeRect(px + 5, py + 5, tactics.tile - 12, tactics.tile - 12);
+      });
+      forecast.lines.forEach(line => {
+        ctx.strokeStyle = line.tone === 'impact' ? 'rgba(239, 68, 68, 0.62)' : line.tone === 'move' ? 'rgba(167, 139, 250, 0.48)' : 'rgba(249, 115, 22, 0.28)';
+        ctx.lineWidth = line.tone === 'impact' ? 3 : 2;
+        ctx.setLineDash(line.tone === 'lane' ? [5, 7] : [8, 6]);
+        ctx.beginPath();
+        ctx.moveTo(line.from.x, line.from.y);
+        ctx.lineTo(line.to.x, line.to.y);
+        ctx.stroke();
+      });
+      ctx.setLineDash([]);
+      ctx.restore();
+      const intentMap = new Map(forecast.intents.map(intent => [intent.id, intent]));
 
       tactics.cores.forEach(core => {
         if (core.taken) return;
@@ -7499,6 +7667,12 @@ function init() {
         ctx.fillRect(px + 7, py + tactics.tile - 8, tactics.tile - 16, 4);
         ctx.fillStyle = '#34D399';
         ctx.fillRect(px + 7, py + tactics.tile - 8, (tactics.tile - 16) * Math.max(0, enemy.hp / enemy.maxHp), 4);
+        const intent = intentMap.get(enemy.id);
+        if (intent) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+          ctx.font = '800 7px JetBrains Mono, monospace';
+          ctx.fillText(intent.label, px + 9, py + 20);
+        }
       });
 
       const p = tactics.player;
@@ -7531,6 +7705,9 @@ function init() {
       ctx.fillStyle = '#fff';
       ctx.font = '800 12px JetBrains Mono, monospace';
       ctx.fillText(`SHIELD ${Math.round(p.shield)} · CHARGE ${p.charge}`, 18, 24);
+      ctx.fillStyle = forecast.tone === 'danger' ? '#FCA5A5' : forecast.tone === 'warn' ? '#FDE68A' : forecast.tone === 'attack' ? '#DDD6FE' : '#A7F3D0';
+      ctx.font = '800 11px JetBrains Mono, monospace';
+      ctx.fillText(`INTEL ${forecast.label} · ${forecast.dangerCells.length} ZONES`, 18, 42);
       ctx.fillStyle = '#A78BFA';
       ctx.font = '700 12px Plus Jakarta Sans, sans-serif';
       ctx.fillText(tactics.message, 18, 344);
@@ -7593,6 +7770,22 @@ function init() {
           driftShield: () => drift.player.shield,
           heistSteps: () => heist.steps,
           tacticsTurn: () => tactics.turn,
+          tacticsForecast: () => {
+            const forecast = tacticsForecast();
+            return {
+              label: forecast.label,
+              tone: forecast.tone,
+              suggestion: forecast.suggestion,
+              incoming: forecast.incoming,
+              dangerCount: forecast.dangerCells.length,
+              dangerCells: forecast.dangerCells,
+              intents: forecast.intents,
+              blastTargets: forecast.blastTargets,
+              intelHud: document.getElementById('premium-tactics-intel')?.textContent || '',
+              dangerHud: document.getElementById('premium-tactics-danger')?.textContent || '',
+              action: document.getElementById('premium-tactics-action')?.textContent || ''
+            };
+          },
           contracts: () => window.atherixArcadeCareer?.contracts?.() || [],
           runs: () => window.atherixArcadeCareer?.runs?.() || [],
           loadout: () => window.atherixArcadeCareer?.loadout?.() || {},
