@@ -206,6 +206,27 @@ export type ResourceAlerts = {
   hull: ResourceAlertLevel;
 };
 
+export type CoachDirectiveId =
+  | "collectLumen"
+  | "reachRelay"
+  | "repairRelay"
+  | "exitGate"
+  | "escapeStorm"
+  | "pulseDanger"
+  | "recoverCharge"
+  | "readContract";
+
+export type CoachDirective = {
+  id: CoachDirectiveId;
+  step: number;
+  totalSteps: number;
+  title: string;
+  detail: string;
+  progress: string;
+  target?: Vec2;
+  urgent: boolean;
+};
+
 export type HazardThreatLevel = "safe" | "near" | "danger";
 
 export type HazardThreat = {
@@ -1145,6 +1166,157 @@ export function getSectorFor(wave: number, difficulty: DifficultyId): SectorId {
     return hardcoreOrder[clampInt(wave - 1, 0, hardcoreOrder.length - 1)];
   }
   return standardOrder[clampInt(wave - 1, 0, standardOrder.length - 1)];
+}
+
+export function getCoachDirective(state: GameState): CoachDirective {
+  const totalSteps = 4;
+  if (state.status !== "playing") {
+    return {
+      id: "readContract",
+      step: 1,
+      totalSteps,
+      title: "救援简报",
+      detail: "选择难度后，按“补流明、修信标、撤离、升级”的顺序完成一波救援。",
+      progress: "准备开始",
+      urgent: false
+    };
+  }
+
+  const player = state.player;
+  const nearestLumen = nearest(state.lumen.filter((drop) => !drop.collected), player.position);
+  const activeStorm = state.storms.find((storm) => distance(storm.position, player.position) < getStormActiveRadius(storm));
+  if (activeStorm) {
+    return {
+      id: "escapeStorm",
+      step: Math.max(1, Math.min(totalSteps, state.stats.relaysRepaired + 1)),
+      totalSteps,
+      title: "紧急：脱离风暴",
+      detail: "紫色区域会快速吸走电量。先用推进离开范围，再回头继续修复。",
+      progress: `风暴停留 ${state.stats.stormSeconds.toFixed(1)} 秒`,
+      urgent: true
+    };
+  }
+
+  const dangerThreat = getHazardThreats(state).find((threat) => threat.level === "danger");
+  if (dangerThreat) {
+    const ready = player.pulseCooldown <= 0;
+    return {
+      id: "pulseDanger",
+      step: Math.max(1, Math.min(totalSteps, state.stats.relaysRepaired + 1)),
+      totalSteps,
+      title: ready ? "紧急：按 Q 脉冲" : "紧急：推进拉开距离",
+      detail: ready ? "粉色碎片已经贴近，立刻释放脉冲把它推开。" : "脉冲还在冷却，先横向推进，别原地硬修。",
+      progress: ready ? "脉冲就绪" : `脉冲冷却 ${Math.ceil(player.pulseCooldown)} 秒`,
+      urgent: true
+    };
+  }
+
+  if (player.charge < player.maxCharge * 0.28 && nearestLumen) {
+    return {
+      id: "recoverCharge",
+      step: 1,
+      totalSteps,
+      title: "先补电",
+      detail: "电量过低时不要硬修信标，先吃金色流明恢复操作空间。",
+      progress: `电量 ${Math.ceil(player.charge)}/${player.maxCharge}`,
+      target: nearestLumen.item.position,
+      urgent: true
+    };
+  }
+
+  if (state.gate.open) {
+    return {
+      id: "exitGate",
+      step: 4,
+      totalSteps,
+      title: "第 4 步：撤离",
+      detail: "所有蓝色信标已经稳定，冲进北侧光门完成本波。",
+      progress: `距离光门 ${formatDistance(distance(player.position, state.gate.position))}`,
+      target: state.gate.position,
+      urgent: false
+    };
+  }
+
+  const repairTarget = getActiveRepairTarget(state);
+  if (repairTarget) {
+    return {
+      id: "repairRelay",
+      step: 3,
+      totalSteps,
+      title: "第 3 步：按住 E 维修",
+      detail: "留在蓝色信标旁保持维修光束；离开会慢慢掉进度。",
+      progress: `维修进度 ${Math.round(repairTarget.progress * 100)}%`,
+      target: repairTarget.position,
+      urgent: true
+    };
+  }
+
+  const currentContract = CONTRACTS[state.contract.id];
+  const contractAge = state.elapsed - state.contract.startElapsed;
+  if (state.wave > 1 && state.contract.status === "active" && contractAge < 7) {
+    const routeTarget = nearestLumen?.item.position ?? nearest(state.relays.filter((relay) => !relay.repaired), player.position)?.item.position;
+    return {
+      id: "readContract",
+      step: 1,
+      totalSteps,
+      title: `先读合约：${currentContract.name}`,
+      detail: currentContract.requirement,
+      progress: getContractProgressText(state),
+      target: routeTarget,
+      urgent: false
+    };
+  }
+
+  if (state.wave === 1 && state.stats.lumenCollected < 2 && nearestLumen) {
+    return {
+      id: "collectLumen",
+      step: 1,
+      totalSteps,
+      title: "第 1 步：先捡 2 个流明",
+      detail: "金色流明会补电，也会建立连锁倍率。新手先补给，再去修信标。",
+      progress: `${Math.min(state.stats.lumenCollected, 2)}/2 流明`,
+      target: nearestLumen.item.position,
+      urgent: false
+    };
+  }
+
+  const nearestRelay = nearest(state.relays.filter((relay) => !relay.repaired), player.position);
+  if (nearestRelay) {
+    return {
+      id: "reachRelay",
+      step: 2,
+      totalSteps,
+      title: "第 2 步：靠近蓝色信标",
+      detail: "贴近信标后按住 E，边看危险圈边修，不要站在碎片路径上。",
+      progress: `已修复 ${state.stats.relaysRepaired}/${state.relays.length}`,
+      target: nearestRelay.item.position,
+      urgent: false
+    };
+  }
+
+  if (nearestLumen) {
+    return {
+      id: "collectLumen",
+      step: 1,
+      totalSteps,
+      title: "补给并保持连锁",
+      detail: "剩余流明可以补电和提分，适合在撤离前顺路回收。",
+      progress: `${state.stats.lumenCollected} 流明已回收`,
+      target: nearestLumen.item.position,
+      urgent: false
+    };
+  }
+
+  return {
+    id: "exitGate",
+    step: 4,
+    totalSteps,
+    title: "寻找北侧光门",
+    detail: "主目标完成后从北侧撤离，保留电量会提高结算评价。",
+    progress: "撤离阶段",
+    target: state.gate.position,
+    urgent: false
+  };
 }
 
 export function getObjectiveHint(state: GameState): ObjectiveHint {

@@ -3,6 +3,7 @@ import { InputMapper } from "./input";
 import {
   createInitialState,
   getActiveRepairTarget,
+  getCoachDirective,
   getContractSnapshot,
   getHazardThreats,
   getObjectiveHint,
@@ -17,6 +18,7 @@ import {
   SECTOR_LAYOUTS,
   updateSimulation,
   WAVE_MODIFIERS,
+  type CoachDirective,
   type ContractSnapshot,
   type DifficultyId,
   type GameState,
@@ -53,6 +55,7 @@ type HudSnapshot = {
   pulseReady: boolean;
   message: string;
   objectiveHint: ObjectiveHint;
+  coachDirective: CoachDirective;
   resourceAlerts: ResourceAlerts;
   status: GameState["status"];
   waveModifier: WaveModifier;
@@ -440,6 +443,7 @@ export class GameScene extends Phaser.Scene {
       pulseReady: this.state.player.pulseCooldown <= 0,
       message: this.state.message,
       objectiveHint: getObjectiveHint(this.state),
+      coachDirective: getCoachDirective(this.state),
       resourceAlerts: getResourceAlerts(this.state),
       status: this.state.status,
       waveModifier: WAVE_MODIFIERS[this.state.waveModifier],
@@ -588,20 +592,22 @@ export class GameScene extends Phaser.Scene {
     const graphics = this.navigatorView;
     if (!graphics) return;
     graphics.clear();
+    const coach = getCoachDirective(this.state);
     const hint = getObjectiveHint(this.state);
-    if (this.state.status !== "playing" || !hint.target) return;
+    const target = coach.target ?? hint.target;
+    if (this.state.status !== "playing" || !target) return;
 
-    const color = getHintColor(hint.kind);
+    const urgent = coach.urgent || hint.urgent;
+    const color = coach.target ? getCoachColor(coach.id) : getHintColor(hint.kind);
     const player = this.state.player.position;
-    const target = hint.target;
     const dx = target.x - player.x;
     const dy = target.y - player.y;
     const angle = Math.atan2(dy, dx);
-    const markerRadius = hint.urgent ? 56 : 46;
+    const markerRadius = urgent ? 56 : 46;
     const pulse = Math.sin(this.time.now * 0.006) * 0.5 + 0.5;
-    const alpha = hint.urgent ? 0.5 + pulse * 0.24 : 0.26 + pulse * 0.12;
+    const alpha = urgent ? 0.5 + pulse * 0.24 : 0.26 + pulse * 0.12;
 
-    graphics.lineStyle(hint.urgent ? 3 : 2, color, alpha);
+    graphics.lineStyle(urgent ? 3 : 2, color, alpha);
     graphics.lineBetween(player.x, player.y, target.x, target.y);
     graphics.lineStyle(3, color, 0.72);
     graphics.strokeCircle(target.x, target.y, markerRadius + pulse * 8);
@@ -611,7 +617,7 @@ export class GameScene extends Phaser.Scene {
     const arrowDistance = Math.min(Math.hypot(dx, dy) * 0.5, 92);
     const arrowX = player.x + Math.cos(angle) * arrowDistance;
     const arrowY = player.y + Math.sin(angle) * arrowDistance;
-    graphics.fillStyle(color, hint.urgent ? 0.78 : 0.58);
+    graphics.fillStyle(color, urgent ? 0.78 : 0.58);
     graphics.fillTriangle(
       arrowX + Math.cos(angle) * 16,
       arrowY + Math.sin(angle) * 16,
@@ -697,5 +703,12 @@ function getHintColor(kind: ObjectiveHint["kind"]): number {
   if (kind === "danger") return 0xff5f9b;
   if (kind === "lumen" || kind === "gate") return 0xffd76e;
   if (kind === "repair") return 0xffffff;
+  return 0x67f4ff;
+}
+
+function getCoachColor(id: CoachDirective["id"]): number {
+  if (id === "escapeStorm" || id === "pulseDanger") return 0xff5f9b;
+  if (id === "collectLumen" || id === "recoverCharge" || id === "exitGate") return 0xffd76e;
+  if (id === "repairRelay") return 0xffffff;
   return 0x67f4ff;
 }

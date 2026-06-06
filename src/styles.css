@@ -284,6 +284,7 @@ button {
 
 #wave-event,
 #contract-panel,
+#coach-panel,
 #pilot-tip {
   margin-top: 10px;
   padding: 9px 10px;
@@ -294,8 +295,18 @@ button {
 
 #wave-event[hidden],
 #contract-panel[hidden],
+#coach-panel[hidden],
 #pilot-tip[hidden] {
   display: none;
+}
+
+#coach-panel {
+  background: linear-gradient(90deg, rgba(255, 226, 122, 0.1), rgba(103, 244, 255, 0.06));
+}
+
+#coach-panel[data-urgent="true"] {
+  border-color: rgba(255, 95, 155, 0.42);
+  background: linear-gradient(90deg, rgba(255, 95, 155, 0.14), rgba(255, 226, 122, 0.06));
 }
 
 #pilot-tip.urgent {
@@ -314,8 +325,10 @@ button {
 }
 
 #pilot-tip strong,
+#coach-panel strong,
 #contract-panel strong,
 #wave-event strong,
+#coach-panel span,
 #contract-panel span,
 #wave-event span,
 #pilot-tip span {
@@ -323,6 +336,7 @@ button {
 }
 
 #wave-event strong,
+#coach-panel strong,
 #contract-panel strong,
 #pilot-tip strong {
   color: #fff3ad;
@@ -330,12 +344,39 @@ button {
 }
 
 #wave-event span,
+#coach-panel span,
 #contract-panel span,
 #pilot-tip span {
   margin-top: 3px;
   color: #c9ddec;
   font-size: 12px;
   line-height: 1.38;
+}
+
+.coach-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.coach-head b {
+  min-width: 38px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  color: #061018;
+  background: linear-gradient(90deg, var(--ui-gold), var(--ui-cyan));
+  font-size: 10px;
+  text-align: center;
+}
+
+#coach-panel em {
+  display: block;
+  margin-top: 6px;
+  color: #ffe27a;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
 }
 
 .contract-progress {
@@ -460,6 +501,7 @@ button {
 
 #shell[data-status="playing"] #wave-event,
 #shell[data-status="playing"] #contract-panel,
+#shell[data-status="playing"] #coach-panel,
 #shell[data-status="playing"] #pilot-tip {
   margin-top: 7px;
   padding: 7px 8px;
@@ -467,9 +509,11 @@ button {
 
 #shell[data-status="playing"] #wave-event strong,
 #shell[data-status="playing"] #contract-panel strong,
+#shell[data-status="playing"] #coach-panel strong,
 #shell[data-status="playing"] #pilot-tip strong,
 #shell[data-status="playing"] #wave-event span,
 #shell[data-status="playing"] #contract-panel span,
+#shell[data-status="playing"] #coach-panel span,
 #shell[data-status="playing"] #pilot-tip span {
   font-size: 11px;
 }
@@ -1201,6 +1245,7 @@ h1 {
 
   #wave-event span,
   #contract-panel span,
+  #coach-panel span,
   #pilot-tip span {
     font-size: 11px;
   }

@@ -9,6 +9,7 @@ import {
   createInitialState,
   getActiveRepairTarget,
   getAchievementSummaries,
+  getCoachDirective,
   getContractFor,
   getContractSnapshot,
   getHazardThreats,
@@ -58,6 +59,7 @@ assert.equal(getContractFor(1, "hardcore"), "cleanWave", "hardcore should start 
 assert.equal(state.contract.id, "lumenRoute", "new standard runs should include the first tactical contract");
 assert.equal(getContractSnapshot(state).status, "active", "contract snapshots should expose the active status");
 assert.equal(getObjectiveHint(state).kind, "relay", "fresh runs should guide players toward a relay");
+assert.equal(getCoachDirective(state).id, "collectLumen", "fresh runs should onboard players through lumen first");
 assert.ok(WAVE_MODIFIERS.lumenSurge.lumenChargeBonus > 0, "lumen surge should define a resource effect");
 
 let lumenContract = restartRun(createInitialState());
@@ -68,6 +70,7 @@ for (const drop of lumenContract.lumen.slice(0, 4)) {
 }
 assert.equal(lumenContract.contract.status, "completed", "collecting four lumen should complete the route contract");
 assert.equal(lumenContract.stats.contractsCompleted, 1, "completed contracts should be counted");
+assert.equal(getCoachDirective(lumenContract).id, "reachRelay", "after first lumen route, the coach should send players to relays");
 assert.ok(lumenContract.score > lumenContractScore, "completed contracts should award score");
 const afterContractReward = lumenContract.score;
 lumenContract = updateSimulation(lumenContract, idle, 0.5);
@@ -116,6 +119,7 @@ assert.equal(state.stats.lumenCollected, 1, "collected lumen should be counted")
 let lowCharge = movePlayerTo(state, 500, 350);
 lowCharge.player.charge = 24;
 assert.equal(getObjectiveHint(lowCharge).kind, "lumen", "low charge should prioritize nearby lumen");
+assert.equal(getCoachDirective(lowCharge).id, "recoverCharge", "low charge should switch the coach to recovery");
 assert.equal(getResourceAlerts(lowCharge).charge, "low", "low charge should be surfaced as a HUD alert");
 lowCharge.player.charge = 12;
 assert.equal(getResourceAlerts(lowCharge).charge, "critical", "critical charge should be distinguished from low charge");
@@ -130,6 +134,7 @@ assert.ok(surgeAfterPickup.player.charge > steadyAfterPickup.player.charge, "lum
 
 state = movePlayerTo(state, state.relays[0].position.x, state.relays[0].position.y);
 assert.equal(getObjectiveHint(state).kind, "repair", "standing near a relay should prompt repair");
+assert.equal(getCoachDirective(state).id, "repairRelay", "standing near a relay should explain the repair verb");
 assert.equal(getActiveRepairTarget(state)?.id, state.relays[0].id, "standing near a relay should expose a repair target for rendering");
 for (let i = 0; i < 260; i += 1) {
   state = updateSimulation(state, { ...idle, repair: true }, 0.016);
@@ -146,6 +151,7 @@ const stormed = updateSimulation(stormState, idle, 0.5);
 assert.ok(stormed.player.charge < stormCharge, "standing in a storm should siphon charge");
 assert.ok(stormed.stats.stormSeconds >= 0.5, "storm exposure should be counted once per tick");
 assert.equal(getObjectiveHint(stormed).kind, "danger", "storm exposure should become the urgent hint");
+assert.equal(getCoachDirective(stormed).id, "escapeStorm", "storm exposure should override normal coaching");
 
 let hitState = restartRun(createInitialState());
 hitState.hazards[0].position = { ...hitState.player.position };
@@ -155,6 +161,7 @@ assert.equal(getResourceAlerts(hitState).hull, "stable", "one standard hit shoul
 const hazardThreatState = restartRun(createInitialState());
 hazardThreatState.hazards[0].position = { x: hazardThreatState.player.position.x + 42, y: hazardThreatState.player.position.y };
 assert.equal(getHazardThreats(hazardThreatState)[0].level, "danger", "close hazards should be flagged for danger rendering");
+assert.equal(getCoachDirective(hazardThreatState).id, "pulseDanger", "dangerous hazards should override normal coaching");
 hazardThreatState.hazards[0].position = { x: hazardThreatState.player.position.x + 118, y: hazardThreatState.player.position.y };
 assert.equal(getHazardThreats(hazardThreatState)[0].level, "near", "near hazards should be flagged before collision");
 
@@ -189,6 +196,7 @@ state = state.relays.reduce((current, relay) => {
 }, state);
 assert.equal(state.gate.open, true, "all repaired relays should open the gate");
 assert.equal(getObjectiveHint(state).kind, "gate", "an open gate should become the next objective");
+assert.equal(getCoachDirective(state).id, "exitGate", "the coach should switch to evacuation after all relays are repaired");
 
 state = movePlayerTo(state, state.gate.position.x, state.gate.position.y);
 state = updateSimulation(state, idle, 0.016);

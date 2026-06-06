@@ -7,6 +7,7 @@ import {
   getAchievementSummaries,
   getUnlockedAchievementsForRun,
   type AchievementId,
+  type CoachDirective,
   type ContractSnapshot,
   type DifficultyId,
   type GameStatus,
@@ -73,6 +74,11 @@ const contractTitle = document.querySelector<HTMLElement>("#contract-title")!;
 const contractRequirement = document.querySelector<HTMLElement>("#contract-requirement")!;
 const contractProgress = document.querySelector<HTMLElement>("#contract-progress")!;
 const contractReward = document.querySelector<HTMLElement>("#contract-reward")!;
+const coachPanel = document.querySelector<HTMLDivElement>("#coach-panel")!;
+const coachTitle = document.querySelector<HTMLElement>("#coach-title")!;
+const coachStep = document.querySelector<HTMLElement>("#coach-step")!;
+const coachDetail = document.querySelector<HTMLElement>("#coach-detail")!;
+const coachProgress = document.querySelector<HTMLElement>("#coach-progress")!;
 const pilotTip = document.querySelector<HTMLDivElement>("#pilot-tip")!;
 const pilotTipTitle = document.querySelector<HTMLElement>("#pilot-tip-title")!;
 const pilotTipDetail = document.querySelector<HTMLElement>("#pilot-tip-detail")!;
@@ -216,6 +222,7 @@ window.addEventListener("game:hud", (event) => {
     pulseReady: boolean;
     message: string;
     contract: ContractSnapshot;
+    coachDirective: CoachDirective;
     objectiveHint: ObjectiveHint;
     resourceAlerts: ResourceAlerts;
     difficulty: DifficultyId;
@@ -260,7 +267,9 @@ window.addEventListener("game:hud", (event) => {
   contractRequirement.textContent = detail.contract.requirement;
   contractProgress.textContent = detail.contract.progress;
   contractReward.textContent = `奖励 ${detail.contract.rewardScore.toLocaleString()} 分`;
-  pilotTip.hidden = detail.status !== "playing";
+  renderCoachDirective(detail.coachDirective, detail.status);
+  const showPilotTip = detail.status === "playing" && detail.coachDirective.id === "readContract";
+  pilotTip.hidden = !showPilotTip;
   pilotTip.classList.toggle("urgent", detail.objectiveHint.urgent);
   pilotTip.dataset.kind = detail.objectiveHint.kind;
   pilotTipTitle.textContent = detail.objectiveHint.title;
@@ -338,6 +347,16 @@ function renderLoadout(summaries: UpgradeSummary[], status: GameStatus): void {
       return item;
     })
   );
+}
+
+function renderCoachDirective(directive: CoachDirective, status: GameStatus): void {
+  coachPanel.hidden = status !== "playing";
+  if (coachPanel.hidden) return;
+  coachPanel.dataset.urgent = String(directive.urgent);
+  coachTitle.textContent = directive.title;
+  coachStep.textContent = `${directive.step}/${directive.totalSteps}`;
+  coachDetail.textContent = directive.detail;
+  coachProgress.textContent = directive.progress;
 }
 
 function shortUpgradeName(id: UpgradeId): string {
