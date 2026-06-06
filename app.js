@@ -4439,6 +4439,7 @@ function init() {
               <span>最佳 <strong id="premium-boss-best">0</strong></span>
               <span>Boss <strong id="premium-boss-hp">100%</strong></span>
               <span>阶段 <strong id="premium-boss-phase">I</strong></span>
+              <span>招式 <strong id="premium-boss-pattern">扫描中</strong></span>
               <span>闪避 <strong id="premium-boss-dash">READY</strong></span>
             </div>
             <div class="mini-actions">
@@ -6136,7 +6137,19 @@ function init() {
       particles: [],
       shotTimer: 0,
       patternTimer: 0,
+      queuedPattern: '',
+      currentPattern: '',
+      telegraphTimer: 0,
+      telegraphDuration: 0,
+      patternFlash: 0,
       bonuses: {}
+    };
+
+    const bossPatternDefs = {
+      ring: { label: '棱镜环爆', color: '#06B6D4' },
+      snipe: { label: '锁定狙击', color: '#F97316' },
+      rain: { label: '量子雨幕', color: '#A78BFA' },
+      sweep: { label: '横扫光栅', color: '#EC4899' }
     };
 
     function setBossUi() {
@@ -6145,6 +6158,13 @@ function init() {
       document.getElementById('premium-boss-best').textContent = localStorage.getItem(bossMode.bestKey) || '0';
       document.getElementById('premium-boss-hp').textContent = `${Math.max(0, Math.ceil(bossMode.boss.hp / bossMode.boss.maxHp * 100))}%`;
       document.getElementById('premium-boss-phase').textContent = ['I', 'II', 'III'][bossMode.boss.phase - 1] || 'III';
+      const patternEl = document.getElementById('premium-boss-pattern');
+      if (patternEl) {
+        const pattern = bossMode.queuedPattern || bossMode.currentPattern;
+        patternEl.textContent = pattern
+          ? `${bossMode.queuedPattern ? '预警 ' : ''}${bossPatternDefs[pattern]?.label || pattern}`
+          : '扫描中';
+      }
       document.getElementById('premium-boss-dash').textContent = bossMode.player.dashCooldown > 0 ? `${Math.ceil(bossMode.player.dashCooldown / 1000)}s` : 'READY';
     }
 
@@ -6164,6 +6184,11 @@ function init() {
       bossMode.particles = [];
       bossMode.shotTimer = 0;
       bossMode.patternTimer = 0;
+      bossMode.queuedPattern = '';
+      bossMode.currentPattern = '';
+      bossMode.telegraphTimer = 0;
+      bossMode.telegraphDuration = 0;
+      bossMode.patternFlash = 0;
       bossMode.bonuses = bonuses;
       setBossUi();
       updateBossPauseButton();
@@ -6206,13 +6231,42 @@ function init() {
       }
     }
 
-    function spawnBossPattern() {
+    function bossPhaseFromHp() {
       const b = bossMode.boss;
       const hpRatio = b.maxHp > 0 ? b.hp / b.maxHp : 0;
       const phase = hpRatio < 0.33 ? 3 : (hpRatio < 0.66 ? 2 : 1);
       b.phase = phase;
       if (phase >= 2) unlockAchievement('boss_phase_2');
-      const pattern = pick(phase === 1 ? ['ring', 'snipe'] : phase === 2 ? ['ring', 'snipe', 'rain'] : ['ring', 'snipe', 'rain', 'sweep']);
+      return phase;
+    }
+
+    function pickBossPattern(phase) {
+      return pick(phase === 1 ? ['ring', 'snipe'] : phase === 2 ? ['ring', 'snipe', 'rain'] : ['ring', 'snipe', 'rain', 'sweep']);
+    }
+
+    function startBossTelegraph(forcedPattern = '') {
+      if (bossMode.queuedPattern) return bossMode.queuedPattern;
+      const phase = bossPhaseFromHp();
+      const pressure = Number(activeDifficultyDef().pressure || 1);
+      const pattern = forcedPattern || pickBossPattern(phase);
+      bossMode.queuedPattern = pattern;
+      bossMode.currentPattern = pattern;
+      bossMode.telegraphDuration = Math.max(430, (780 - phase * 70) / Math.sqrt(pressure));
+      bossMode.telegraphTimer = bossMode.telegraphDuration;
+      bossMode.patternFlash = bossMode.telegraphDuration;
+      bossSpark(bossMode.boss.x, bossMode.boss.y, bossPatternDefs[pattern]?.color || '#BAE6FD', 18);
+      setBossUi();
+      return pattern;
+    }
+
+    function spawnBossPattern(pattern = bossMode.queuedPattern || pickBossPattern(bossPhaseFromHp())) {
+      const b = bossMode.boss;
+      const phase = bossPhaseFromHp();
+      bossMode.currentPattern = pattern;
+      bossMode.queuedPattern = '';
+      bossMode.telegraphTimer = 0;
+      bossMode.telegraphDuration = 0;
+      bossMode.patternFlash = 320;
       if (pattern === 'ring') {
         const count = 14 + phase * 8;
         for (let i = 0; i < count; i++) {
@@ -6236,6 +6290,7 @@ function init() {
           bossMode.bullets.push({ x: fromLeft ? -20 : bossMode.canvas.width + 20, y: 128 + i * 74, vx: fromLeft ? 220 : -220, vy: 18, r: 9, color: '#EC4899', grazed: false });
         }
       }
+      setBossUi();
     }
 
     function runBoss(now) {
@@ -6253,6 +6308,7 @@ function init() {
       bossMode.t += dt;
       bossMode.shotTimer += dt;
       bossMode.patternTimer += dt;
+      bossMode.patternFlash = Math.max(0, bossMode.patternFlash - dt);
       p.invuln = Math.max(0, p.invuln - dt);
       p.dash = Math.max(0, p.dash - dt);
       p.dashCooldown = Math.max(0, p.dashCooldown - dt);
@@ -6271,9 +6327,16 @@ function init() {
         bossMode.shotTimer = 0;
         bossMode.shots.push({ x: p.x, y: p.y - 16, vy: -470, r: 4, damage: 9 + Math.floor(p.graze / 9) });
       }
-      if (bossMode.patternTimer > Math.max(430, (1150 - b.phase * 170) / Number(activeDifficultyDef().pressure || 1))) {
+      const phase = bossPhaseFromHp();
+      if (bossMode.queuedPattern) {
+        bossMode.telegraphTimer = Math.max(0, bossMode.telegraphTimer - dt);
+        if (bossMode.telegraphTimer <= 0) {
+          spawnBossPattern(bossMode.queuedPattern);
+          bossMode.patternTimer = 0;
+        }
+      } else if (bossMode.patternTimer > Math.max(430, (1150 - phase * 170) / Number(activeDifficultyDef().pressure || 1))) {
         bossMode.patternTimer = 0;
-        spawnBossPattern();
+        startBossTelegraph();
       }
       bossMode.shots.forEach(s => s.y += s.vy * dt / 1000);
       bossMode.bullets.forEach(s => { s.x += s.vx * dt / 1000; s.y += s.vy * dt / 1000; });
@@ -6315,6 +6378,54 @@ function init() {
       bossMode.raf = requestAnimationFrame(runBoss);
     }
 
+    function drawBossTelegraph(ctx, c) {
+      const pattern = bossMode.queuedPattern;
+      if (!pattern) return;
+      const b = bossMode.boss;
+      const p = bossMode.player;
+      const progress = clamp(1 - bossMode.telegraphTimer / Math.max(1, bossMode.telegraphDuration), 0, 1);
+      const color = bossPatternDefs[pattern]?.color || '#BAE6FD';
+      ctx.save();
+      ctx.globalAlpha = 0.28 + progress * 0.46;
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = 2 + progress * 2;
+      ctx.setLineDash([8, 8]);
+      if (pattern === 'ring') {
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, 58 + progress * 92, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      if (pattern === 'snipe') {
+        const base = Math.atan2(p.y - b.y, p.x - b.x);
+        for (let i = -3; i <= 3; i++) {
+          const angle = base + i * 0.13;
+          ctx.beginPath();
+          ctx.moveTo(b.x, b.y);
+          ctx.lineTo(b.x + Math.cos(angle) * 540, b.y + Math.sin(angle) * 540);
+          ctx.stroke();
+        }
+      }
+      if (pattern === 'rain') {
+        for (let i = 0; i < 18; i++) {
+          const x = 20 + i * 30 + Math.sin(bossMode.t / 300 + i) * 10;
+          ctx.fillRect(x - 5, 0, 10, c.height);
+        }
+      }
+      if (pattern === 'sweep') {
+        [128, 202].forEach(y => {
+          ctx.fillRect(0, y - 7, c.width, 14);
+          ctx.strokeRect(4, y - 12, c.width - 8, 24);
+        });
+      }
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#fff';
+      ctx.font = '900 12px JetBrains Mono, monospace';
+      ctx.fillText(`WARNING · ${bossPatternDefs[pattern]?.label || pattern}`, 18, 62);
+      ctx.restore();
+    }
+
     function drawBoss() {
       const { ctx, canvas: c, boss: b, player: p } = bossMode;
       if (!ctx || !c) return;
@@ -6338,6 +6449,7 @@ function init() {
       ctx.closePath();
       ctx.stroke();
       ctx.restore();
+      drawBossTelegraph(ctx, c);
       bossMode.shots.forEach(s => { ctx.fillStyle = '#BAE6FD'; ctx.fillRect(s.x - 2, s.y - 8, 4, 12); });
       bossMode.bullets.forEach(s => { ctx.fillStyle = s.color; ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill(); });
       bossMode.particles.forEach(pt => {
@@ -7455,6 +7567,26 @@ function init() {
           bossRunning: () => bossMode.running,
           bossPaused: () => bossMode.paused,
           bossPhase: () => bossMode.boss.phase,
+          bossPattern: () => ({
+            queued: bossMode.queuedPattern,
+            current: bossMode.currentPattern,
+            label: bossPatternDefs[bossMode.queuedPattern || bossMode.currentPattern]?.label || '',
+            telegraphMs: Math.ceil(bossMode.telegraphTimer),
+            bullets: bossMode.bullets.length,
+            hud: document.getElementById('premium-boss-pattern')?.textContent || ''
+          }),
+          forceBossTelegraph: (pattern = 'snipe') => {
+            if (!bossMode.running) startBoss();
+            bossMode.bullets = [];
+            bossMode.queuedPattern = '';
+            bossMode.currentPattern = '';
+            bossMode.telegraphTimer = 0;
+            bossMode.telegraphDuration = 0;
+            bossMode.patternTimer = 0;
+            startBossTelegraph(pattern);
+            drawBoss();
+            return window.__atherixDebug.premium.bossPattern();
+          },
           driftRunning: () => drift.running,
           driftPaused: () => drift.paused,
           driftGates: () => drift.gateIndex,

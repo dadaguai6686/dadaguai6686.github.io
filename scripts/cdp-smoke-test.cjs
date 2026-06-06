@@ -890,10 +890,30 @@ async function run() {
       nonBlank: colored > 1000,
       phase: document.querySelector('#premium-boss-phase')?.textContent,
       dash: document.querySelector('#premium-boss-dash')?.textContent,
+      pattern: document.querySelector('#premium-boss-pattern')?.textContent,
       hp: document.querySelector('#premium-boss-hp')?.textContent,
       lives: Number(document.querySelector('#premium-boss-lives')?.textContent || 0)
     };
   })()`);
+  const bossTelegraphState = await evaluate(`(() => {
+    const before = window.__atherixDebug?.premium?.forceBossTelegraph?.('snipe') || {};
+    return {
+      ...before,
+      patternText: document.querySelector('#premium-boss-pattern')?.textContent || '',
+      running: !!window.__atherixDebug?.premium?.bossRunning?.(),
+      paused: !!window.__atherixDebug?.premium?.bossPaused?.()
+    };
+  })()`);
+  await wait(220);
+  const bossTelegraphHoldState = await evaluate(`(() => ({
+    ...(window.__atherixDebug?.premium?.bossPattern?.() || {}),
+    patternText: document.querySelector('#premium-boss-pattern')?.textContent || ''
+  }))()`);
+  await wait(760);
+  const bossPatternReleasedState = await evaluate(`(() => ({
+    ...(window.__atherixDebug?.premium?.bossPattern?.() || {}),
+    patternText: document.querySelector('#premium-boss-pattern')?.textContent || ''
+  }))()`);
   await key('keyDown', 'p', 'KeyP');
   await key('keyUp', 'p', 'KeyP');
   await wait(180);
@@ -1183,6 +1203,9 @@ async function run() {
   assert(survivorDraftFreezeState.open && Math.abs(survivorDraftFreezeState.elapsedAfter - survivorDraftOpenState.beforeElapsed) < 1 && Math.abs(survivorDraftFreezeState.scoreAfter - survivorDraftOpenState.beforeScore) < 1, `survivor roguelite draft should freeze the run clock and score until a choice is made: ${JSON.stringify({ survivorDraftOpenState, survivorDraftFreezeState })}`);
   assert(!survivorDraftChosenState.open && survivorDraftChosenState.ariaHidden === 'true' && survivorDraftChosenState.optionCards === 0 && survivorDraftChosenState.running && Number(survivorDraftChosenState.level) >= 2 && survivorDraftChosenState.score > survivorDraftOpenState.beforeScore && survivorDraftChosenState.buildText.length > 2, `survivor roguelite draft should apply a chosen upgrade and resume the run: ${JSON.stringify(survivorDraftChosenState)}`);
   assert(bossState.nonBlank && bossState.dash && bossState.lives >= 4, `boss canvas should render active state and apply equipped loadout: ${JSON.stringify(bossState)}`);
+  assert(bossTelegraphState.running && !bossTelegraphState.paused && bossTelegraphState.queued === 'snipe' && bossTelegraphState.current === 'snipe' && bossTelegraphState.bullets === 0 && /预警/.test(bossTelegraphState.patternText) && /锁定狙击/.test(bossTelegraphState.patternText), `boss mode should surface a readable attack telegraph before spawning bullets: ${JSON.stringify(bossTelegraphState)}`);
+  assert(bossTelegraphHoldState.queued === 'snipe' && bossTelegraphHoldState.bullets === 0 && bossTelegraphHoldState.telegraphMs > 0 && /预警/.test(bossTelegraphHoldState.patternText), `boss telegraph should hold a reaction window before release: ${JSON.stringify(bossTelegraphHoldState)}`);
+  assert(!bossPatternReleasedState.queued && bossPatternReleasedState.current === 'snipe' && bossPatternReleasedState.bullets >= 7 && /锁定狙击/.test(bossPatternReleasedState.patternText), `boss pattern should release bullets only after the telegraph window: ${JSON.stringify(bossPatternReleasedState)}`);
   assert(bossPauseState.running && bossPauseState.paused && bossPauseState.pauseButton === '继续', `boss mode should enter pause with keyboard: ${JSON.stringify(bossPauseState)}`);
   assert(
     bossPauseFreezeState.paused &&
@@ -1257,6 +1280,9 @@ async function run() {
     survivorDraftFreezeState,
     survivorDraftChosenState,
     bossState,
+    bossTelegraphState,
+    bossTelegraphHoldState,
+    bossPatternReleasedState,
     bossPauseState,
     bossPauseFreezeState,
     bossResumeState,
