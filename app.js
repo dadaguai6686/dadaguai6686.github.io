@@ -595,6 +595,17 @@ function init() {
           navigateTo('game');
           setTimeout(() => document.getElementById('premium-director-start')?.click(), 260);
         }
+      },
+      {
+        id: 'run-log',
+        icon: 'activity',
+        title: '街机战报',
+        desc: '查看最近战斗记录、强项模式与平均声望',
+        keywords: 'arcade run log replay telemetry stats 战报 复盘 记录 数据',
+        action: () => {
+          navigateTo('game');
+          setTimeout(() => document.getElementById('premium-run-log-panel')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 220);
+        }
       }
     ].map(item => ({
       ...item,
@@ -4313,6 +4324,19 @@ function init() {
         </div>
         <div class="career-achievements" id="premium-achievement-feed" aria-live="polite"></div>
       </div>
+      <div class="arcade-run-log-panel" id="premium-run-log-panel" aria-label="街机战报复盘">
+        <div class="arcade-run-log-heading">
+          <span><i data-lucide="activity"></i> RUN TELEMETRY</span>
+          <strong id="premium-run-log-title">等待首局战报</strong>
+          <small id="premium-run-log-summary">完成任意高级街机模式后，这里会记录最近战报、强项模式与平均声望。</small>
+        </div>
+        <div class="arcade-run-log-stats">
+          <span>最近 <strong id="premium-run-last-score">--</strong></span>
+          <span>强项 <strong id="premium-run-best-mode">--</strong></span>
+          <span>均值 <strong id="premium-run-average">--</strong></span>
+        </div>
+        <div class="arcade-run-log-list" id="premium-run-log-list"></div>
+      </div>
       <div class="arcade-director-panel" id="premium-arcade-director" data-tone="daily" aria-label="街机导演推荐">
         <div class="arcade-director-main">
           <span><i data-lucide="target"></i> NEXT RUN</span>
@@ -4733,7 +4757,8 @@ function init() {
         daily: {},
         contracts: createDefaultContractState(),
         loadout: { active: 'pulse' },
-        difficulty: 'standard'
+        difficulty: 'standard',
+        runs: []
       };
     }
 
@@ -4749,6 +4774,7 @@ function init() {
         merged.loadout = merged.loadout && typeof merged.loadout === 'object' ? merged.loadout : { active: 'pulse' };
         if (!loadoutDefs.some(def => def.id === merged.loadout.active)) merged.loadout.active = 'pulse';
         if (!difficultyDefs.some(def => def.id === merged.difficulty)) merged.difficulty = 'standard';
+        merged.runs = Array.isArray(merged.runs) ? merged.runs.slice(0, 12).filter(run => run && typeof run === 'object') : [];
         if (!Array.isArray(merged.contracts.claimed)) merged.contracts.claimed = [];
         if (!merged.contracts.progress || typeof merged.contracts.progress !== 'object') merged.contracts.progress = {};
         merged.totalScore = Number.isFinite(Number(merged.totalScore)) ? Number(merged.totalScore) : 0;
@@ -4851,6 +4877,74 @@ function init() {
         const score = Number(career.best?.[game] || 0);
         return medalClass(career.medals?.[game] || medalFor(game, score)) !== 'none';
       }).length;
+    }
+
+    function formatRunTime(iso) {
+      try {
+        return new Date(iso).toLocaleString('zh-CN', {
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      } catch {
+        return '刚刚';
+      }
+    }
+
+    function runDifficultyLabel(id) {
+      return difficultyDefs.find(def => def.id === id)?.short || '标准';
+    }
+
+    function runLoadoutLabel(id) {
+      return loadoutDefs.find(def => def.id === id)?.label || '脉冲校准';
+    }
+
+    function careerRunStats() {
+      const runs = Array.isArray(career.runs) ? career.runs : [];
+      if (!runs.length) return { runs: [], average: 0, bestMode: '', last: null };
+      const average = Math.round(runs.reduce((sum, run) => sum + Number(run.score || 0), 0) / runs.length);
+      const best = runs.reduce((top, run) => Number(run.score || 0) > Number(top?.score || 0) ? run : top, runs[0]);
+      return {
+        runs,
+        average,
+        bestMode: best?.game || '',
+        last: runs[0] || null
+      };
+    }
+
+    function renderArcadeRunLog() {
+      const panel = document.getElementById('premium-run-log-panel');
+      const titleEl = document.getElementById('premium-run-log-title');
+      const summaryEl = document.getElementById('premium-run-log-summary');
+      const lastEl = document.getElementById('premium-run-last-score');
+      const bestEl = document.getElementById('premium-run-best-mode');
+      const avgEl = document.getElementById('premium-run-average');
+      const list = document.getElementById('premium-run-log-list');
+      if (!panel || !list) return;
+      const stats = careerRunStats();
+      const last = stats.last;
+      panel.dataset.empty = last ? 'false' : 'true';
+      if (titleEl) titleEl.textContent = last ? `${premiumTabLabels[last.game] || titles[last.game] || last.game} · ${last.score}` : '等待首局战报';
+      if (summaryEl) {
+        summaryEl.textContent = last
+          ? `${formatRunTime(last.at)} · ${runDifficultyLabel(last.difficulty)} · ${runLoadoutLabel(last.loadout)} · ${medalLabels[last.medal] || '无'}牌`
+          : '完成任意高级街机模式后，这里会记录最近战报、强项模式与平均声望。';
+      }
+      if (lastEl) lastEl.textContent = last ? String(last.score) : '--';
+      if (bestEl) bestEl.textContent = stats.bestMode ? (premiumTabLabels[stats.bestMode] || titles[stats.bestMode] || stats.bestMode) : '--';
+      if (avgEl) avgEl.textContent = stats.average ? String(stats.average) : '--';
+      list.innerHTML = stats.runs.length
+        ? stats.runs.slice(0, 4).map(run => `
+          <article class="arcade-run-log-item" data-medal="${escapeHTML(run.medal || 'none')}">
+            <div>
+              <strong>${escapeHTML(premiumTabLabels[run.game] || titles[run.game] || run.game)}</strong>
+              <small>${escapeHTML(formatRunTime(run.at))} · ${escapeHTML(runDifficultyLabel(run.difficulty))} · ${escapeHTML(runLoadoutLabel(run.loadout))}</small>
+            </div>
+            <span>${escapeHTML(String(run.score || 0))}</span>
+          </article>
+        `).join('')
+        : '<div class="arcade-run-empty">暂无战报。完成一局高级街机后会自动生成复盘记录。</div>';
     }
 
     function loadoutUnlocked(def) {
@@ -5190,6 +5284,7 @@ function init() {
           : '完成后解锁限定徽章';
       }
       renderAchievementFeed();
+      renderArcadeRunLog();
       renderArcadeDirector();
       renderArcadeContracts();
       renderArcadeDifficulty();
@@ -5209,6 +5304,7 @@ function init() {
     function recordPremiumResult(game, score, details = {}) {
       const rawValue = Math.max(0, Math.floor(score || 0));
       const difficulty = activeDifficultyDef();
+      const loadout = activeLoadoutDef();
       const scoreBoost = Number(loadoutBonuses().scoreBoost || 0) + Number(difficulty.scoreBoost || 0);
       const value = Math.max(0, Math.floor(rawValue * (1 + scoreBoost)));
       career.totalScore = Math.max(0, (career.totalScore || 0) + value);
@@ -5218,12 +5314,25 @@ function init() {
       if ((medalRank[medal] || 0) > (medalRank[career.medals[game] || 'none'] || 0)) {
         career.medals[game] = medal;
       }
+      career.runs = [
+        {
+          id: `${Date.now()}-${game}`,
+          at: new Date().toISOString(),
+          game,
+          rawScore: rawValue,
+          score: value,
+          medal,
+          difficulty: difficulty.id,
+          loadout: loadout.id
+        },
+        ...(Array.isArray(career.runs) ? career.runs : [])
+      ].slice(0, 12);
       const daily = getDailyChallenge();
-      if ((!career.daily || career.daily.date !== daily.date || career.daily.id !== daily.id) && daily.check(game, value, { ...details, rawScore: rawValue, loadout: activeLoadoutDef().id, difficulty: difficulty.id })) {
+      if ((!career.daily || career.daily.date !== daily.date || career.daily.id !== daily.id) && daily.check(game, value, { ...details, rawScore: rawValue, loadout: loadout.id, difficulty: difficulty.id })) {
         career.daily = { date: daily.date, id: daily.id, done: true };
         unlockAchievement('daily_clear');
       }
-      updateArcadeContracts(game, value, { ...details, rawScore: rawValue, loadout: activeLoadoutDef().id, difficulty: difficulty.id });
+      updateArcadeContracts(game, value, { ...details, rawScore: rawValue, loadout: loadout.id, difficulty: difficulty.id });
       saveCareer();
       updateCareerPanel();
     }
@@ -5247,6 +5356,7 @@ function init() {
         tuning: difficultyTuning()
       }),
       setDifficulty: setArcadeDifficulty,
+      runs: () => (Array.isArray(career.runs) ? career.runs : []).map(run => ({ ...run })),
       contracts: () => getDailyContracts().map(contract => ({
         id: contract.id,
         title: contract.title,
@@ -7135,6 +7245,7 @@ function init() {
           heistSteps: () => heist.steps,
           tacticsTurn: () => tactics.turn,
           contracts: () => window.atherixArcadeCareer?.contracts?.() || [],
+          runs: () => window.atherixArcadeCareer?.runs?.() || [],
           loadout: () => window.atherixArcadeCareer?.loadout?.() || {},
           difficulty: () => window.atherixArcadeCareer?.difficulty?.() || {}
         }
