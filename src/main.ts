@@ -15,6 +15,7 @@ import {
   type RunEndReason,
   type RunRating,
   type RunStats,
+  type SectorLayout,
   type Upgrade,
   type UpgradeId,
   type UpgradeSummary,
@@ -127,6 +128,7 @@ type RunEndDetail = {
   message: string;
   rating: RunRating;
   score: number;
+  sector: SectorLayout;
   stats: RunStats;
   status: "won" | "completed" | "lost";
   wave: number;
@@ -220,6 +222,7 @@ window.addEventListener("game:hud", (event) => {
     campaignWaves: number;
     status: GameStatus;
     waveModifier: WaveModifier;
+    sector: SectorLayout;
     upgradeSummaries: UpgradeSummary[];
     upgradeChoices: Upgrade[];
   };
@@ -264,7 +267,7 @@ window.addEventListener("game:hud", (event) => {
   pilotTipDetail.textContent = detail.objectiveHint.detail;
   missionText.textContent = detail.message;
   objectiveTitle.textContent = `目标：第 ${detail.wave}/${detail.campaignWaves} 波，修复 ${detail.relays} 座信标`;
-  objectiveDetail.textContent = `${DIFFICULTY_SETTINGS[detail.difficulty].name}模式 / ${detail.waveModifier.name}：${detail.waveModifier.briefing}`;
+  objectiveDetail.textContent = `${DIFFICULTY_SETTINGS[detail.difficulty].name}模式 / ${detail.sector.name} / ${detail.waveModifier.name}：${detail.sector.briefing} ${detail.waveModifier.briefing}`;
   latestUpgradeChoices = detail.upgradeChoices;
 });
 
@@ -505,6 +508,7 @@ function renderRunRecap(detail: RunEndDetail, newlyUnlocked: AchievementId[]): v
     ["用时", formatDuration(detail.elapsed)],
     ["最佳连锁", `${detail.bestCombo.toFixed(1)}x`],
     ["合约", `${detail.stats.contractsCompleted}/5`],
+    ["区域", detail.sector.name],
     ["事件", detail.waveModifier.name],
     ["流明", String(detail.stats.lumenCollected)],
     ["信标", String(detail.stats.relaysRepaired)],

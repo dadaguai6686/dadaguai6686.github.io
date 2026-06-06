@@ -72,6 +72,20 @@ export type WaveModifier = {
   stormPhaseBonus: number;
 };
 
+export type SectorId = "outerRing" | "crossCurrent" | "southernArc" | "stormSpine" | "overclockCore";
+
+export type SectorLayout = {
+  id: SectorId;
+  name: string;
+  description: string;
+  briefing: string;
+  relayPositions: Vec2[];
+  lumenPositions: Vec2[];
+  hazards: Hazard[];
+  storms: Storm[];
+  gatePosition: Vec2;
+};
+
 export type UpgradeId = "engine" | "repair" | "capacitor" | "pulse" | "shield";
 
 export type Upgrade = {
@@ -398,6 +412,184 @@ export const WAVE_MODIFIERS: Record<WaveModifierId, WaveModifier> = {
   }
 };
 
+export const SECTOR_LAYOUTS: Record<SectorId, SectorLayout> = {
+  outerRing: {
+    id: "outerRing",
+    name: "北环补给",
+    description: "信标沿外环分布，适合学习补给、维修和撤离节奏。",
+    briefing: "外环路线清楚，先建立补给节奏。",
+    relayPositions: [
+      { x: 170, y: 150 },
+      { x: 820, y: 165 },
+      { x: 270, y: 560 },
+      { x: 745, y: 495 }
+    ],
+    lumenPositions: [
+      { x: 388, y: 122 },
+      { x: 516, y: 148 },
+      { x: 636, y: 236 },
+      { x: 154, y: 380 },
+      { x: 458, y: 392 },
+      { x: 610, y: 396 },
+      { x: 888, y: 390 },
+      { x: 348, y: 600 },
+      { x: 550, y: 620 },
+      { x: 796, y: 626 }
+    ],
+    hazards: [
+      { id: 0, position: { x: 300, y: 235 }, velocity: { x: 72, y: 38 }, radius: 27 },
+      { id: 1, position: { x: 760, y: 335 }, velocity: { x: -62, y: 55 }, radius: 31 },
+      { id: 2, position: { x: 510, y: 565 }, velocity: { x: 82, y: -45 }, radius: 25 }
+    ],
+    storms: [
+      { id: 0, position: { x: 495, y: 235 }, radius: 82, phase: 0.8 },
+      { id: 1, position: { x: 655, y: 520 }, radius: 74, phase: 2.2 },
+      { id: 2, position: { x: 230, y: 395 }, radius: 66, phase: 4.1 }
+    ],
+    gatePosition: { x: 500, y: 55 }
+  },
+  crossCurrent: {
+    id: "crossCurrent",
+    name: "交叉洋流",
+    description: "信标呈十字分布，横向穿越会遇到更多碎片切线。",
+    briefing: "十字航线会拉长横穿距离，保留推进穿过中线。",
+    relayPositions: [
+      { x: 235, y: 205 },
+      { x: 515, y: 132 },
+      { x: 805, y: 318 },
+      { x: 485, y: 585 }
+    ],
+    lumenPositions: [
+      { x: 162, y: 150 },
+      { x: 350, y: 132 },
+      { x: 620, y: 168 },
+      { x: 855, y: 210 },
+      { x: 222, y: 402 },
+      { x: 420, y: 362 },
+      { x: 650, y: 420 },
+      { x: 830, y: 536 },
+      { x: 360, y: 630 },
+      { x: 578, y: 624 }
+    ],
+    hazards: [
+      { id: 0, position: { x: 270, y: 328 }, velocity: { x: 74, y: -52 }, radius: 28 },
+      { id: 1, position: { x: 690, y: 220 }, velocity: { x: -78, y: 45 }, radius: 29 },
+      { id: 2, position: { x: 710, y: 566 }, velocity: { x: -62, y: -74 }, radius: 26 }
+    ],
+    storms: [
+      { id: 0, position: { x: 540, y: 276 }, radius: 78, phase: 1.1 },
+      { id: 1, position: { x: 260, y: 520 }, radius: 70, phase: 2.8 },
+      { id: 2, position: { x: 812, y: 438 }, radius: 66, phase: 4.0 }
+    ],
+    gatePosition: { x: 500, y: 55 }
+  },
+  southernArc: {
+    id: "southernArc",
+    name: "南弧残站",
+    description: "下半区资源更多，但返航到北侧光门需要提前规划。",
+    briefing: "南弧资源密集，撤离前别把电量花光。",
+    relayPositions: [
+      { x: 205, y: 455 },
+      { x: 395, y: 605 },
+      { x: 690, y: 590 },
+      { x: 835, y: 405 }
+    ],
+    lumenPositions: [
+      { x: 158, y: 250 },
+      { x: 312, y: 318 },
+      { x: 506, y: 260 },
+      { x: 742, y: 252 },
+      { x: 905, y: 332 },
+      { x: 236, y: 590 },
+      { x: 450, y: 520 },
+      { x: 558, y: 648 },
+      { x: 732, y: 514 },
+      { x: 872, y: 610 }
+    ],
+    hazards: [
+      { id: 0, position: { x: 330, y: 430 }, velocity: { x: 70, y: 65 }, radius: 30 },
+      { id: 1, position: { x: 610, y: 330 }, velocity: { x: -74, y: 54 }, radius: 27 },
+      { id: 2, position: { x: 805, y: 545 }, velocity: { x: -64, y: -68 }, radius: 30 }
+    ],
+    storms: [
+      { id: 0, position: { x: 520, y: 430 }, radius: 78, phase: 0.4 },
+      { id: 1, position: { x: 250, y: 270 }, radius: 68, phase: 2.4 },
+      { id: 2, position: { x: 780, y: 245 }, radius: 72, phase: 4.6 }
+    ],
+    gatePosition: { x: 505, y: 55 }
+  },
+  stormSpine: {
+    id: "stormSpine",
+    name: "风暴脊线",
+    description: "紫色风暴沿中线压迫路线，适合考验绕行和推进时机。",
+    briefing: "中线风暴会切开战场，先选一侧清理再换边。",
+    relayPositions: [
+      { x: 155, y: 185 },
+      { x: 215, y: 555 },
+      { x: 790, y: 185 },
+      { x: 835, y: 555 }
+    ],
+    lumenPositions: [
+      { x: 112, y: 330 },
+      { x: 286, y: 120 },
+      { x: 338, y: 300 },
+      { x: 300, y: 622 },
+      { x: 460, y: 485 },
+      { x: 558, y: 168 },
+      { x: 672, y: 332 },
+      { x: 756, y: 624 },
+      { x: 890, y: 312 },
+      { x: 904, y: 128 }
+    ],
+    hazards: [
+      { id: 0, position: { x: 390, y: 230 }, velocity: { x: 66, y: 82 }, radius: 28 },
+      { id: 1, position: { x: 620, y: 500 }, velocity: { x: -72, y: -76 }, radius: 28 },
+      { id: 2, position: { x: 500, y: 350 }, velocity: { x: 88, y: -34 }, radius: 24 }
+    ],
+    storms: [
+      { id: 0, position: { x: 505, y: 230 }, radius: 86, phase: 0.9 },
+      { id: 1, position: { x: 500, y: 455 }, radius: 82, phase: 2.6 },
+      { id: 2, position: { x: 505, y: 620 }, radius: 66, phase: 4.3 }
+    ],
+    gatePosition: { x: 500, y: 55 }
+  },
+  overclockCore: {
+    id: "overclockCore",
+    name: "核心超频",
+    description: "目标靠近核心，奖励窗口快，但碎片会从外圈反复切入。",
+    briefing: "核心距离短但危险密度高，脉冲和短推进都要留给修复窗口。",
+    relayPositions: [
+      { x: 390, y: 245 },
+      { x: 635, y: 245 },
+      { x: 370, y: 500 },
+      { x: 650, y: 505 }
+    ],
+    lumenPositions: [
+      { x: 194, y: 142 },
+      { x: 500, y: 112 },
+      { x: 846, y: 160 },
+      { x: 210, y: 342 },
+      { x: 490, y: 350 },
+      { x: 792, y: 342 },
+      { x: 150, y: 590 },
+      { x: 395, y: 635 },
+      { x: 620, y: 635 },
+      { x: 858, y: 586 }
+    ],
+    hazards: [
+      { id: 0, position: { x: 265, y: 250 }, velocity: { x: 92, y: 48 }, radius: 25 },
+      { id: 1, position: { x: 760, y: 245 }, velocity: { x: -90, y: 52 }, radius: 25 },
+      { id: 2, position: { x: 505, y: 610 }, velocity: { x: 64, y: -86 }, radius: 29 }
+    ],
+    storms: [
+      { id: 0, position: { x: 500, y: 350 }, radius: 92, phase: 1.4 },
+      { id: 1, position: { x: 240, y: 520 }, radius: 68, phase: 3.1 },
+      { id: 2, position: { x: 800, y: 520 }, radius: 68, phase: 4.7 }
+    ],
+    gatePosition: { x: 500, y: 55 }
+  }
+};
+
 export const UPGRADE_CATALOG: Record<UpgradeId, Upgrade> = {
   engine: {
     id: "engine",
@@ -448,6 +640,7 @@ export type GameState = {
   storms: Storm[];
   gate: Gate;
   contract: ContractState;
+  sector: SectorId;
   upgrades: UpgradeState;
   wave: number;
   waveModifier: WaveModifierId;
@@ -474,29 +667,10 @@ export type RestartOptions = {
   difficulty?: DifficultyId;
 };
 
-const relayPositions: Vec2[] = [
-  { x: 170, y: 150 },
-  { x: 820, y: 165 },
-  { x: 270, y: 560 },
-  { x: 745, y: 495 }
-];
-
-const lumenPositions: Vec2[] = [
-  { x: 388, y: 122 },
-  { x: 516, y: 148 },
-  { x: 636, y: 236 },
-  { x: 154, y: 380 },
-  { x: 458, y: 392 },
-  { x: 610, y: 396 },
-  { x: 888, y: 390 },
-  { x: 348, y: 600 },
-  { x: 550, y: 620 },
-  { x: 796, y: 626 }
-];
-
 export function createInitialState(): GameState {
   const maxHull = 100;
   const maxCharge = 100;
+  const sector: SectorId = "outerRing";
   return {
     status: "menu",
     difficulty: "standard",
@@ -513,25 +687,13 @@ export function createInitialState(): GameState {
       pulseCooldown: 0,
       invulnerable: 0
     },
-    relays: relayPositions.map((position, id) => ({
-      id,
-      position: { ...position },
-      progress: 0,
-      repaired: false
-    })),
-    lumen: lumenPositions.map((position, id) => ({
-      id,
-      position: { ...position },
-      collected: false
-    })),
-    hazards: [
-      { id: 0, position: { x: 300, y: 235 }, velocity: { x: 72, y: 38 }, radius: 27 },
-      { id: 1, position: { x: 760, y: 335 }, velocity: { x: -62, y: 55 }, radius: 31 },
-      { id: 2, position: { x: 510, y: 565 }, velocity: { x: 82, y: -45 }, radius: 25 }
-    ],
+    relays: createRelays(sector),
+    lumen: createLumen(sector),
+    hazards: createHazards(sector),
     storms: [],
-    gate: { position: { x: 500, y: 55 }, open: false },
+    gate: { position: { ...SECTOR_LAYOUTS[sector].gatePosition }, open: false },
     contract: createContractState("lumenRoute", 0, createRunStats()),
+    sector,
     upgrades: createUpgradeState(),
     wave: 1,
     waveModifier: "steadySignal",
@@ -555,6 +717,8 @@ export function restartRun(state: GameState, upgradeId?: UpgradeId, options: Res
   next.status = "playing";
   next.wave = wonPreviousWave ? state.wave + 1 : 1;
   next.waveModifier = getWaveModifierFor(next.wave, next.difficulty);
+  next.sector = getSectorFor(next.wave, next.difficulty);
+  applySectorLayout(next);
   next.upgrades = wonPreviousWave ? { ...state.upgrades } : createUpgradeState();
   next.elapsed = wonPreviousWave ? state.elapsed : 0;
   next.endReason = "none";
@@ -580,11 +744,12 @@ export function restartRun(state: GameState, upgradeId?: UpgradeId, options: Res
       radius: 22 + i * 3
     }))
   );
-  next.storms = createStorms(next.wave, next.difficulty);
+  next.storms = createStorms(next.wave, next.difficulty, next.sector);
   const modifier = WAVE_MODIFIERS[next.waveModifier];
+  const sector = SECTOR_LAYOUTS[next.sector];
   next.message = wonPreviousWave
-    ? `升级已安装。第 ${next.wave}/${next.campaignWaves} 波，${modifier.name}：${modifier.briefing}`
-    : `${DIFFICULTY_SETTINGS[next.difficulty].name}模式，第 ${next.wave}/${next.campaignWaves} 波，${modifier.name}：${modifier.briefing}`;
+    ? `升级已安装。第 ${next.wave}/${next.campaignWaves} 波，${sector.name} / ${modifier.name}：${sector.briefing}`
+    : `${DIFFICULTY_SETTINGS[next.difficulty].name}模式，第 ${next.wave}/${next.campaignWaves} 波，${sector.name} / ${modifier.name}：${sector.briefing}`;
   return next;
 }
 
@@ -973,6 +1138,15 @@ export function getWaveModifierFor(wave: number, difficulty: DifficultyId): Wave
   return standardOrder[clampInt(wave - 1, 0, standardOrder.length - 1)];
 }
 
+export function getSectorFor(wave: number, difficulty: DifficultyId): SectorId {
+  const standardOrder: SectorId[] = ["outerRing", "crossCurrent", "southernArc", "stormSpine", "overclockCore"];
+  if (difficulty === "hardcore") {
+    const hardcoreOrder: SectorId[] = ["stormSpine", "overclockCore", "crossCurrent", "southernArc", "outerRing"];
+    return hardcoreOrder[clampInt(wave - 1, 0, hardcoreOrder.length - 1)];
+  }
+  return standardOrder[clampInt(wave - 1, 0, standardOrder.length - 1)];
+}
+
 export function getObjectiveHint(state: GameState): ObjectiveHint {
   if (state.status !== "playing") {
     return {
@@ -1086,14 +1260,47 @@ function createRunStats(): RunStats {
   };
 }
 
-function createStorms(wave: number, difficulty: DifficultyId): Storm[] {
-  const baseStorms: Storm[] = [
-    { id: 0, position: { x: 495, y: 235 }, radius: 82, phase: 0.8 },
-    { id: 1, position: { x: 655, y: 520 }, radius: 74, phase: 2.2 },
-    { id: 2, position: { x: 230, y: 395 }, radius: 66, phase: 4.1 }
-  ];
+function createRelays(sector: SectorId): Relay[] {
+  return SECTOR_LAYOUTS[sector].relayPositions.map((position, id) => ({
+    id,
+    position: { ...position },
+    progress: 0,
+    repaired: false
+  }));
+}
+
+function createLumen(sector: SectorId): Lumen[] {
+  return SECTOR_LAYOUTS[sector].lumenPositions.map((position, id) => ({
+    id,
+    position: { ...position },
+    collected: false
+  }));
+}
+
+function createHazards(sector: SectorId): Hazard[] {
+  return SECTOR_LAYOUTS[sector].hazards.map((hazard) => ({
+    ...hazard,
+    position: { ...hazard.position },
+    velocity: { ...hazard.velocity }
+  }));
+}
+
+function applySectorLayout(state: GameState): void {
+  const layout = SECTOR_LAYOUTS[state.sector];
+  state.relays = createRelays(state.sector);
+  state.lumen = createLumen(state.sector);
+  state.hazards = createHazards(state.sector);
+  state.storms = [];
+  state.gate = { position: { ...layout.gatePosition }, open: false };
+}
+
+function createStorms(wave: number, difficulty: DifficultyId, sector: SectorId): Storm[] {
+  const baseStorms = SECTOR_LAYOUTS[sector].storms;
   const stormCount = clampInt(Math.ceil(wave / 2) + DIFFICULTY_SETTINGS[difficulty].stormBonus, 0, baseStorms.length);
-  return baseStorms.slice(0, stormCount);
+  return baseStorms.slice(0, stormCount).map((storm) => ({
+    ...storm,
+    position: { ...storm.position }
+  }));
 }
 
 function awardScore(state: GameState, base: number, comboGain: number): void {

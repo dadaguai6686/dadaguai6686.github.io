@@ -3,6 +3,7 @@ import {
   ACHIEVEMENTS,
   CAMPAIGN_WAVES,
   MAX_UPGRADE_LEVEL,
+  SECTOR_LAYOUTS,
   WAVE_MODIFIERS,
   createContractState,
   createInitialState,
@@ -14,6 +15,7 @@ import {
   getObjectiveHint,
   getResourceAlerts,
   getRunRating,
+  getSectorFor,
   getUnlockedAchievementsForRun,
   getUpgradeChoices,
   getUpgradeSummaries,
@@ -46,6 +48,11 @@ assert.equal(getUpgradeSummary(state.upgrades, "engine").maxLevel, MAX_UPGRADE_L
 assert.ok(getUpgradeSummary(state.upgrades, "engine").nextEffect?.includes("推进"), "upgrade summaries should explain next effects");
 assert.equal(getWaveModifierFor(2, "standard"), "lumenSurge", "standard wave 2 should introduce lumen surge");
 assert.equal(getWaveModifierFor(1, "hardcore"), "shardCurrent", "hardcore should start with a combat modifier");
+assert.equal(getSectorFor(1, "standard"), "outerRing", "standard wave 1 should start in the teaching sector");
+assert.equal(getSectorFor(2, "standard"), "crossCurrent", "standard wave 2 should change the map layout");
+assert.equal(getSectorFor(1, "hardcore"), "stormSpine", "hardcore should start in a more demanding sector");
+assert.equal(state.sector, "outerRing", "new standard runs should expose their sector");
+assert.equal(SECTOR_LAYOUTS[state.sector].name, "北环补给", "sector layouts should be named for the HUD");
 assert.equal(getContractFor(1, "standard"), "lumenRoute", "standard wave 1 should teach the lumen route contract");
 assert.equal(getContractFor(1, "hardcore"), "cleanWave", "hardcore should start with a precision contract");
 assert.equal(state.contract.id, "lumenRoute", "new standard runs should include the first tactical contract");
@@ -198,6 +205,12 @@ assert.equal(getAchievementSummaries(["cleanWave"]).length, Object.keys(ACHIEVEM
 const upgraded = restartRun(state, "engine");
 assert.equal(upgraded.wave, 2, "winning and restarting should advance the wave");
 assert.equal(upgraded.waveModifier, "lumenSurge", "advancing waves should install the next wave modifier");
+assert.equal(upgraded.sector, "crossCurrent", "advancing waves should install the next sector layout");
+assert.notDeepEqual(
+  upgraded.relays.map((relay) => relay.position),
+  state.relays.map((relay) => relay.position),
+  "sector changes should move relay layouts between waves"
+);
 assert.equal(upgraded.upgrades.engine, 1, "chosen upgrade should be installed");
 assert.equal(getUpgradeSummary(upgraded.upgrades, "engine").level, 1, "installed upgrades should update summaries");
 assert.equal(upgraded.stats.wavesCleared, 1, "campaign stats should carry into the next wave");

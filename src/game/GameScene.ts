@@ -14,6 +14,7 @@ import {
   pauseRun,
   resumeRun,
   restartRun,
+  SECTOR_LAYOUTS,
   updateSimulation,
   WAVE_MODIFIERS,
   type ContractSnapshot,
@@ -27,6 +28,7 @@ import {
   type Relay,
   type RunEndReason,
   type RunStats,
+  type SectorLayout,
   type Storm,
   type Upgrade,
   type UpgradeId,
@@ -54,6 +56,7 @@ type HudSnapshot = {
   resourceAlerts: ResourceAlerts;
   status: GameState["status"];
   waveModifier: WaveModifier;
+  sector: SectorLayout;
   contract: ContractSnapshot;
   upgradeSummaries: UpgradeSummary[];
   upgradeChoices: Upgrade[];
@@ -128,6 +131,7 @@ export class GameScene extends Phaser.Scene {
             message: this.state.message,
             rating: getRunRating(this.state) as RunRating,
             score: this.state.score,
+            sector: SECTOR_LAYOUTS[this.state.sector] as SectorLayout,
             stats: this.state.stats as RunStats,
             status: this.state.status,
             wave: this.state.wave,
@@ -439,6 +443,7 @@ export class GameScene extends Phaser.Scene {
       resourceAlerts: getResourceAlerts(this.state),
       status: this.state.status,
       waveModifier: WAVE_MODIFIERS[this.state.waveModifier],
+      sector: SECTOR_LAYOUTS[this.state.sector],
       contract: getContractSnapshot(this.state),
       upgradeSummaries: getUpgradeSummaries(this.state.upgrades),
       upgradeChoices: this.state.status === "won" ? getUpgradeChoices(this.state) : []
