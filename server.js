@@ -61,6 +61,44 @@ const blockedRootFiles = new Set([
   '/auth.js',
   '/DEPLOYMENT.md'
 ]);
+const allowedCommentAvatars = new Set(['👨‍💻', '👩‍💻', '🚀', '🐱', '🦊', '🦄', '🤖', '🎨', '☕', '🐼', '👤']);
+
+function readTextField(res, label, value, { required = false, max = 1000, fallback = '' } = {}) {
+  const text = value == null ? '' : String(value).trim();
+  if (required && !text) {
+    res.status(400).json({ error: `${label} is required.` });
+    return undefined;
+  }
+  if (text.length > max) {
+    res.status(400).json({ error: `${label} must be ${max} characters or fewer.` });
+    return undefined;
+  }
+  return text || fallback;
+}
+
+function readUrlField(res, label, value, { max = 2048, allowLocalUploads = false } = {}) {
+  const raw = readTextField(res, label, value, { max });
+  if (raw === undefined) return undefined;
+  if (!raw) return '';
+  if (allowLocalUploads && raw.startsWith('/uploads/')) return raw;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return parsed.href;
+  } catch (err) {
+    // Fall through to validation error below.
+  }
+  res.status(400).json({ error: `${label} must be a valid http(s) URL.` });
+  return undefined;
+}
+
+function normalizeTags(tags) {
+  if (!Array.isArray(tags)) return [];
+  return tags
+    .map(tag => String(tag || '').trim())
+    .filter(Boolean)
+    .slice(0, 12)
+    .map(tag => tag.slice(0, 40));
+}
 
 // Enable CORS, baseline hardening & JSON Parsing middleware
 app.disable('x-powered-by');
@@ -242,20 +280,24 @@ app.get('/api/posts', (req, res) => {
 
 // POST: Create New Post (Admin Only)
 app.post('/api/posts', authenticateToken, (req, res) => {
-  const { id, title, excerpt, content, tag, date, readTime, pinned } = req.body;
+  const { id, pinned } = req.body;
+  const title = readTextField(res, 'Title', req.body.title, { required: true, max: 160 });
+  const excerpt = readTextField(res, 'Excerpt', req.body.excerpt, { max: 500 });
+  const content = readTextField(res, 'Content', req.body.content, { required: true, max: 60000 });
+  const tag = readTextField(res, 'Tag', req.body.tag, { max: 80, fallback: '未分类' });
+  const date = readTextField(res, 'Date', req.body.date, { max: 32 });
+  const readTime = readTextField(res, 'Read time', req.body.readTime, { max: 32, fallback: '5 分钟阅读' });
+  if ([title, excerpt, content, tag, date, readTime].some(value => value === undefined)) return;
 
-  if (!title || !content) {
-    return res.status(400).json({ error: 'Title and content are required.' });
-  }
-
-  const postId = id || 'post-' + Date.now();
+  const rawId = readTextField(res, 'Post id', id, { max: 80 });
+  if (rawId === undefined) return;
+  const postId = /^[a-zA-Z0-9_-]+$/.test(rawId) ? rawId : 'post-' + Date.now();
   const postDate = date || new Date().toISOString().split('T')[0];
-  const postReadTime = readTime || '5 分钟阅读';
   const postPinned = pinned ? 1 : 0;
 
   db.run(
     'INSERT INTO posts (id, title, excerpt, content, tag, date, readTime, pinned) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    [postId, title, excerpt, content, tag || '未分类', postDate, postReadTime, postPinned],
+    [postId, title, excerpt, content, tag, postDate, readTime, postPinned],
     function(err) {
       if (err) {
         return res.status(500).json({ error: err.message });
@@ -267,14 +309,15 @@ app.post('/api/posts', authenticateToken, (req, res) => {
 
 // PUT: Update Existing Post (Admin Only)
 app.put('/api/posts/:id', authenticateToken, (req, res) => {
-  const { title, excerpt, content, tag, date, readTime, pinned } = req.body;
   const postId = req.params.id;
-
-  if (!title || !content) {
-    return res.status(400).json({ error: 'Title and content are required.' });
-  }
-
-  const postPinned = pinned ? 1 : 0;
+  const title = readTextField(res, 'Title', req.body.title, { required: true, max: 160 });
+  const excerpt = readTextField(res, 'Excerpt', req.body.excerpt, { max: 500 });
+  const content = readTextField(res, 'Content', req.body.content, { required: true, max: 60000 });
+  const tag = readTextField(res, 'Tag', req.body.tag, { max: 80, fallback: '未分类' });
+  const date = readTextField(res, 'Date', req.body.date, { max: 32 });
+  const readTime = readTextField(res, 'Read time', req.body.readTime, { max: 32, fallback: '5 分钟阅读' });
+  if ([title, excerpt, content, tag, date, readTime].some(value => value === undefined)) return;
+  const postPinned = req.body.pinned ? 1 : 0;
 
   db.run(
     'UPDATE posts SET title = ?, excerpt = ?, content = ?, tag = ?, date = ?, readTime = ?, pinned = ? WHERE id = ?',
@@ -331,18 +374,23 @@ app.get('/api/projects', (req, res) => {
 
 // POST: Create New Project (Admin Only)
 app.post('/api/projects', authenticateToken, (req, res) => {
-  const { id, title, desc, tag, tags, img, pain, solution, github, live } = req.body;
+  const title = readTextField(res, 'Title', req.body.title, { required: true, max: 160 });
+  const desc = readTextField(res, 'Description', req.body.desc, { max: 800 });
+  const tag = readTextField(res, 'Tag', req.body.tag, { max: 80, fallback: '前端开发' });
+  const pain = readTextField(res, 'Pain point', req.body.pain, { max: 1200 });
+  const solution = readTextField(res, 'Solution', req.body.solution, { max: 1200 });
+  const img = readUrlField(res, 'Image URL', req.body.img, { allowLocalUploads: true });
+  const github = readUrlField(res, 'GitHub URL', req.body.github);
+  const live = readUrlField(res, 'Live URL', req.body.live);
+  const rawId = readTextField(res, 'Project id', req.body.id, { max: 80 });
+  if ([title, desc, tag, pain, solution, img, github, live, rawId].some(value => value === undefined)) return;
 
-  if (!title) {
-    return res.status(400).json({ error: 'Title is required.' });
-  }
-
-  const projId = id || 'proj-' + Date.now();
-  const tagsStr = Array.isArray(tags) ? JSON.stringify(tags) : '[]';
+  const projId = /^[a-zA-Z0-9_-]+$/.test(rawId) ? rawId : 'proj-' + Date.now();
+  const tagsStr = JSON.stringify(normalizeTags(req.body.tags));
 
   db.run(
     'INSERT INTO projects (id, title, desc, tag, tags, img, pain, solution, github, live) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [projId, title, desc, tag || '前端开发', tagsStr, img || '', pain || '', solution || '', github || '', live || ''],
+    [projId, title, desc, tag, tagsStr, img, pain, solution, github, live],
     function(err) {
       if (err) {
         return res.status(500).json({ error: err.message });
@@ -354,10 +402,17 @@ app.post('/api/projects', authenticateToken, (req, res) => {
 
 // PUT: Update Project (Admin Only)
 app.put('/api/projects/:id', authenticateToken, (req, res) => {
-  const { title, desc, tag, tags, img, pain, solution, github, live } = req.body;
   const projId = req.params.id;
-
-  const tagsStr = Array.isArray(tags) ? JSON.stringify(tags) : '[]';
+  const title = readTextField(res, 'Title', req.body.title, { required: true, max: 160 });
+  const desc = readTextField(res, 'Description', req.body.desc, { max: 800 });
+  const tag = readTextField(res, 'Tag', req.body.tag, { max: 80, fallback: '前端开发' });
+  const pain = readTextField(res, 'Pain point', req.body.pain, { max: 1200 });
+  const solution = readTextField(res, 'Solution', req.body.solution, { max: 1200 });
+  const img = readUrlField(res, 'Image URL', req.body.img, { allowLocalUploads: true });
+  const github = readUrlField(res, 'GitHub URL', req.body.github);
+  const live = readUrlField(res, 'Live URL', req.body.live);
+  if ([title, desc, tag, pain, solution, img, github, live].some(value => value === undefined)) return;
+  const tagsStr = JSON.stringify(normalizeTags(req.body.tags));
 
   db.run(
     'UPDATE projects SET title = ?, desc = ?, tag = ?, tags = ?, img = ?, pain = ?, solution = ?, github = ?, live = ? WHERE id = ?',
@@ -405,11 +460,12 @@ app.get('/api/comments', (req, res) => {
 
 // POST: Post comments
 app.post('/api/comments', writeLimiter, (req, res) => {
-  const { nickname, avatar, website, content } = req.body;
-
-  if (!nickname || !content) {
-    return res.status(400).json({ error: 'Nickname and content are required.' });
-  }
+  const nickname = readTextField(res, 'Nickname', req.body.nickname, { required: true, max: 60 });
+  const content = readTextField(res, 'Content', req.body.content, { required: true, max: 1000 });
+  const website = readUrlField(res, 'Website', req.body.website);
+  const rawAvatar = readTextField(res, 'Avatar', req.body.avatar, { max: 8, fallback: '👤' });
+  if ([nickname, content, website, rawAvatar].some(value => value === undefined)) return;
+  const avatar = allowedCommentAvatars.has(rawAvatar) ? rawAvatar : '👤';
 
   // Generate current timestamp string "YYYY-MM-DD HH:MM"
   const now = new Date();
@@ -418,7 +474,7 @@ app.post('/api/comments', writeLimiter, (req, res) => {
 
   db.run(
     'INSERT INTO comments (nickname, avatar, website, content, date) VALUES (?, ?, ?, ?, ?)',
-    [nickname, avatar || '👤', website || '', content, dateStr],
+    [nickname, avatar, website, content, dateStr],
     function(err) {
       if (err) {
         return res.status(500).json({ error: err.message });
@@ -428,8 +484,8 @@ app.post('/api/comments', writeLimiter, (req, res) => {
         comment: {
           id: this.lastID,
           nickname,
-          avatar: avatar || '👤',
-          website: website || '',
+          avatar,
+          website,
           content,
           date: dateStr
         }

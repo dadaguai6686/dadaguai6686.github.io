@@ -142,6 +142,23 @@ async function run() {
     assert(badComment.status === 400, 'invalid comment should return 400');
     assert(badComment.headers.get('ratelimit-limit') === '30', 'write rate-limit header missing');
 
+    const badWebsite = await fetch(`${baseUrl}/api/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nickname: 'Link Test', content: 'bad link', website: 'javascript:alert(1)' })
+    });
+    assert(badWebsite.status === 400, 'javascript: website should be rejected');
+
+    const sanitizedComment = await fetch(`${baseUrl}/api/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nickname: 'Clean User', content: 'hello', website: 'https://example.com/profile', avatar: '<svg>' })
+    });
+    assert(sanitizedComment.status === 200, 'valid comment should be accepted');
+    const sanitizedBody = await sanitizedComment.json();
+    assert(sanitizedBody.comment.avatar === '👤', 'unsupported avatar should be normalized');
+    assert(sanitizedBody.comment.website === 'https://example.com/profile', 'https website should be preserved');
+
     return {
       ok: true,
       port,
@@ -149,7 +166,8 @@ async function run() {
       posts: postList.length,
       corsAllowed: health.headers.get('access-control-allow-origin'),
       corsBlockedHeader: blockedCors.headers.get('access-control-allow-origin') || null,
-      sensitiveResults
+      sensitiveResults,
+      sanitizedAvatar: sanitizedBody.comment.avatar
     };
   } finally {
     child.kill();
