@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lumen Drift</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23070910'/%3E%3Ccircle cx='32' cy='32' r='21' fill='none' stroke='%2367f4ff' stroke-width='6'/%3E%3Cpath d='M32 10 45 48 32 39 19 48Z' fill='%23ffe27a'/%3E%3C/svg%3E"
+    />
+  </head>
+  <body>
+    <main id="shell">
+      <section id="game-wrap" aria-label="Lumen Drift game canvas"></section>
+      <aside id="hud" aria-live="polite">
+        <div class="brand">
+          <span class="mark"></span>
+          <div>
+            <strong>Lumen Drift</strong>
+            <span>Relay repair run</span>
+          </div>
+        </div>
+        <div class="meter-row">
+          <label>Charge</label>
+          <div class="meter"><i id="charge-fill"></i></div>
+          <b id="charge-value">100</b>
+        </div>
+        <div class="meter-row">
+          <label>Hull</label>
+          <div class="meter hull"><i id="hull-fill"></i></div>
+          <b id="hull-value">100</b>
+        </div>
+        <dl class="stats">
+          <div><dt>Relays</dt><dd id="relay-value">0/4</dd></div>
+          <div><dt>Lumen</dt><dd id="lumen-value">0</dd></div>
+          <div><dt>Wave</dt><dd id="wave-value">1</dd></div>
+          <div><dt>Score</dt><dd id="score-value">0</dd></div>
+          <div><dt>Chain</dt><dd id="combo-value">1.0x</dd></div>
+          <div><dt>Best</dt><dd id="best-combo-value">1.0x</dd></div>
+        </dl>
+        <div id="ability-bar">
+          <span id="boost-pill">Boost ready</span>
+          <span id="pulse-pill">Pulse ready</span>
+        </div>
+        <p id="mission-text">Repair every relay, harvest lumen, then slip through the gate.</p>
+      </aside>
+      <div id="overlay" class="show">
+        <div class="panel">
+          <span class="eyebrow">browser arcade roguelite</span>
+          <h1>Lumen Drift</h1>
+          <p>
+            Pilot a repair drone through a failing light network. Restore relays,
+            skim dangerous lumen trails, and outrun the void wave.
+          </p>
+          <button id="start-button" type="button">Start Run</button>
+          <div id="upgrade-choices" hidden></div>
+          <div class="keys">
+            <span>WASD / Arrows</span>
+            <span>Space Boost</span>
+            <span>E Repair</span>
+            <span>Q Pulse</span>
+          </div>
+        </div>
+      </div>
+      <div id="touch-controls" aria-label="Touch controls">
+        <div id="touch-stick" aria-hidden="true">
+          <span></span>
+        </div>
+        <div class="touch-actions">
+          <button type="button" data-touch-action="repair">Repair</button>
+          <button type="button" data-touch-action="boost">Boost</button>
+          <button type="button" data-touch-action="pulse">Pulse</button>
+        </div>
+      </div>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
