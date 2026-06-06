@@ -824,8 +824,9 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
     next.message = "开局读图缓冲：先看区域、事件和合约；移动后正式开始计时、耗电和危险。";
     return next;
   }
-  if (playerActed) {
+  if (next.briefingActive && playerActed) {
     next.briefingActive = false;
+    next.message = "正式开始：先沿导引线回收流明，再前往蓝色信标。";
   }
   next.elapsed += dt;
   next.comboTimer = Math.max(0, next.comboTimer - dt);

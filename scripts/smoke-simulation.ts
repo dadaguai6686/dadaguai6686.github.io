@@ -87,6 +87,7 @@ assert.ok(protectedStart.message.includes("读图缓冲"), "idle briefing should
 state = updateSimulation(state, { ...idle, move: { x: 1, y: 0 } }, 0.016);
 assert.equal(state.briefingActive, false, "the first movement should end the opening briefing");
 assert.ok(state.elapsed > 0, "the run timer should start after player input");
+assert.ok(state.message.includes("正式开始"), "the first input should replace the briefing copy");
 
 const seededA = restartRun(createInitialState(), undefined, { routeSeed: 4660 });
 const seededB = restartRun(createInitialState(), undefined, { routeSeed: 4660 });
