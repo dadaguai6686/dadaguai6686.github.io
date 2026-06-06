@@ -36,6 +36,7 @@ npm run dev
 - 三档难度：练习、标准、硬核。
 - 五波短局目标：连续稳定 5 波光网后完成本轮救援。
 - 本地成绩存档：最佳分数、最远波次、最佳连锁。
+- 中文结算复盘：展示分数、波次、用时、最佳连锁、流明、信标、受击和风暴停留，并根据失败原因给出下一局建议。
 - 可关闭的 WebAudio 合成音效：推进、拾取、修复、受击和胜负反馈。
 - 分数和连锁倍率，鼓励连续收集、修复和撤离。
 - 紫色风暴会吸走电量，迫使玩家移动。
@@ -45,9 +46,9 @@ npm run dev
 
 ## 项目结构
 
-- `src/game/simulation.ts`：可测试的游戏状态、难度、终局、计分、升级和暂停逻辑
+- `src/game/simulation.ts`：可测试的游戏状态、难度、终局、计分、升级、复盘统计和暂停逻辑
 - `src/game/GameScene.ts`：Phaser 场景、程序化视觉、输入桥接和反馈事件
-- `src/main.ts`：中文 HUD、菜单、触控、暂停、成绩存档、音效和升级 UI
+- `src/main.ts`：中文 HUD、菜单、触控、暂停、成绩存档、音效、结算复盘和升级 UI
 - `docs/design.md`：Game Studio 设计说明
 - `scripts/smoke-simulation.ts`：核心循环 smoke test
 

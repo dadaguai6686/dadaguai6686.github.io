@@ -27,6 +27,7 @@
         <div id="record-strip">
           <span>最佳分数 <b id="record-score">0</b></span>
           <span>最远波次 <b id="record-wave">1/5</b></span>
+          <span>最佳连锁 <b id="record-combo">1.0x</b></span>
         </div>
         <div class="meter-row">
           <label>电量</label>
@@ -70,6 +71,10 @@
             <button id="audio-toggle" type="button" aria-pressed="true">音效 开</button>
           </div>
           <p id="difficulty-detail">标准模式：推荐第一次游玩，完整体验风险、连锁和升级。</p>
+          <div id="run-recap" hidden aria-live="polite">
+            <div id="recap-metrics"></div>
+            <p id="recap-advice"></p>
+          </div>
           <div id="how-to-play">
             <article>
               <strong>怎么玩</strong>

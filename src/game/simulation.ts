@@ -61,6 +61,25 @@ export type Upgrade = {
 
 export type UpgradeState = Record<UpgradeId, number>;
 
+export type RunEndReason =
+  | "none"
+  | "waveCleared"
+  | "campaignCompleted"
+  | "hullDestroyed"
+  | "chargeDepleted";
+
+export type RunStats = {
+  boostUses: number;
+  pulseUses: number;
+  lumenCollected: number;
+  relaysRepaired: number;
+  hitsTaken: number;
+  stormSeconds: number;
+  repairSeconds: number;
+  distanceTraveled: number;
+  wavesCleared: number;
+};
+
 export const CAMPAIGN_WAVES = 5;
 
 export const DIFFICULTY_SETTINGS: Record<DifficultyId, Difficulty> = {
@@ -157,6 +176,8 @@ export type GameState = {
   bestCombo: number;
   message: string;
   elapsed: number;
+  endReason: RunEndReason;
+  stats: RunStats;
   shake: number;
 };
 
@@ -237,6 +258,8 @@ export function createInitialState(): GameState {
     bestCombo: 1,
     message: "修复全部信标，收集流明，最后从北侧光门撤离。",
     elapsed: 0,
+    endReason: "none",
+    stats: createRunStats(),
     shake: 0
   };
 }
@@ -248,6 +271,9 @@ export function restartRun(state: GameState, upgradeId?: UpgradeId, options: Res
   next.status = "playing";
   next.wave = wonPreviousWave ? state.wave + 1 : 1;
   next.upgrades = wonPreviousWave ? { ...state.upgrades } : createUpgradeState();
+  next.elapsed = wonPreviousWave ? state.elapsed : 0;
+  next.endReason = "none";
+  next.stats = wonPreviousWave ? { ...state.stats } : createRunStats();
   if (wonPreviousWave && upgradeId && next.upgrades[upgradeId] < 3) {
     next.upgrades[upgradeId] += 1;
   }
@@ -283,6 +309,7 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
   const next = structuredClone(state);
   const player = next.player;
   const difficulty = DIFFICULTY_SETTINGS[next.difficulty];
+  const previousPosition = { ...player.position };
   next.elapsed += dt;
   next.comboTimer = Math.max(0, next.comboTimer - dt);
   if (next.comboTimer <= 0) {
@@ -304,6 +331,7 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
   if (input.boost && player.boostCooldown <= 0 && (input.move.x !== 0 || input.move.y !== 0)) {
     player.boostCooldown = Math.max(0.62, 1.15 - engineLevel * 0.12);
     player.charge = Math.max(0, player.charge - 8);
+    next.stats.boostUses += 1;
     next.shake = 0.18;
   }
 
@@ -319,6 +347,7 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
 
   player.position.x = clamp(player.position.x + player.velocity.x * dt, 44, next.arena.width - 44);
   player.position.y = clamp(player.position.y + player.velocity.y * dt, 44, next.arena.height - 44);
+  next.stats.distanceTraveled += distance(previousPosition, player.position);
 
   const repairTarget = next.relays.find(
     (relay) => !relay.repaired && distance(relay.position, player.position) < 76
@@ -327,10 +356,12 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
     const repairSpeed = (0.26 + next.upgrades.repair * 0.07 + player.lumen * 0.005) * difficulty.repairScale;
     repairTarget.progress = Math.min(1, repairTarget.progress + dt * repairSpeed);
     player.charge = Math.max(0, player.charge - dt * 3.2);
+    next.stats.repairSeconds += dt;
     next.message = "保持在信标旁，维修光束正在充能。";
     if (repairTarget.progress >= 1) {
       repairTarget.repaired = true;
       player.lumen += 2;
+      next.stats.relaysRepaired += 1;
       awardScore(next, 260 + next.upgrades.repair * 75, 0.48);
       next.shake = 0.1;
       next.message = `信标修复完成，${formatCombo(next.combo)} 连锁保持中。`;
@@ -347,6 +378,7 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
     const pulseLevel = next.upgrades.pulse;
     player.pulseCooldown = Math.max(2.8, 5.5 - pulseLevel * 0.45);
     player.charge = Math.max(0, player.charge - 10);
+    next.stats.pulseUses += 1;
     next.hazards.forEach((hazard) => {
       const toHazard = subtract(hazard.position, player.position);
       const len = Math.hypot(toHazard.x, toHazard.y) || 1;
@@ -363,6 +395,7 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
     if (!drop.collected && distance(drop.position, player.position) < 34) {
       drop.collected = true;
       player.lumen += 1;
+      next.stats.lumenCollected += 1;
       player.charge = Math.min(player.maxCharge, player.charge + 9 + next.upgrades.capacitor * 3);
       awardScore(next, 70, 0.25);
       next.message = `流明回收，${formatCombo(next.combo)} 连锁。`;
@@ -383,6 +416,7 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
       player.hull = Math.max(0, player.hull - 16 * damageScale * difficulty.damageScale);
       player.charge = Math.max(0, player.charge - 7);
       player.invulnerable = 0.85;
+      next.stats.hitsTaken += 1;
       next.combo = 1;
       next.comboTimer = 0;
       next.score = Math.max(0, next.score - 75);
@@ -395,10 +429,12 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
     }
   });
 
+  let insideStorm = false;
   next.storms.forEach((storm) => {
     storm.phase += dt * (0.8 + next.wave * 0.04);
     const activeRadius = getStormActiveRadius(storm);
     if (distance(storm.position, player.position) < activeRadius) {
+      insideStorm = true;
       player.charge = Math.max(0, player.charge - dt * (9 + next.wave * 0.7) * difficulty.drainScale);
       if (player.invulnerable <= 0 && storm.phase % (Math.PI * 2) > Math.PI * 1.35) {
         player.hull = Math.max(0, player.hull - dt * (5.5 - next.upgrades.shield) * difficulty.damageScale);
@@ -407,6 +443,9 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
       next.message = "风暴场正在吸走电量，立刻脱离范围。";
     }
   });
+  if (insideStorm) {
+    next.stats.stormSeconds += dt;
+  }
 
   player.charge = Math.max(0, player.charge - dt * (2.05 + next.wave * 0.22) * difficulty.drainScale);
   next.gate.open = next.relays.every((relay) => relay.repaired);
@@ -416,6 +455,8 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
     if (distance(next.gate.position, player.position) < 58) {
       awardScore(next, 900 + player.lumen * 45 + Math.ceil(player.charge) * 8, 0.35);
       next.status = next.wave >= next.campaignWaves ? "completed" : "won";
+      next.endReason = next.status === "completed" ? "campaignCompleted" : "waveCleared";
+      next.stats.wavesCleared += 1;
       next.message =
         next.status === "completed"
           ? `五波光网全部稳定，最终得分 ${next.score.toLocaleString()}。`
@@ -423,8 +464,9 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
     }
   }
 
-  if (player.hull <= 0 || player.charge <= 0) {
+  if (next.status === "playing" && (player.hull <= 0 || player.charge <= 0)) {
     next.status = "lost";
+    next.endReason = player.hull <= 0 ? "hullDestroyed" : "chargeDepleted";
     next.message = player.hull <= 0 ? "无人机损毁，重新启动救援。" : "电量归零，光网被虚空吞没。";
   }
 
@@ -467,6 +509,20 @@ function createUpgradeState(): UpgradeState {
     capacitor: 0,
     pulse: 0,
     shield: 0
+  };
+}
+
+function createRunStats(): RunStats {
+  return {
+    boostUses: 0,
+    pulseUses: 0,
+    lumenCollected: 0,
+    relaysRepaired: 0,
+    hitsTaken: 0,
+    stormSeconds: 0,
+    repairSeconds: 0,
+    distanceTraveled: 0,
+    wavesCleared: 0
   };
 }
 

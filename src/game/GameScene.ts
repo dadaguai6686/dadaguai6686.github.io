@@ -13,6 +13,8 @@ import {
   type Hazard,
   type Lumen,
   type Relay,
+  type RunEndReason,
+  type RunStats,
   type Storm,
   type Upgrade,
   type UpgradeId
@@ -84,9 +86,14 @@ export class GameScene extends Phaser.Scene {
         new CustomEvent("game:ended", {
           detail: {
             bestCombo: this.state.bestCombo,
+            charge: this.state.player.charge,
             difficulty: this.state.difficulty,
+            elapsed: this.state.elapsed,
+            endReason: this.state.endReason as RunEndReason,
+            hull: this.state.player.hull,
             message: this.state.message,
             score: this.state.score,
+            stats: this.state.stats as RunStats,
             status: this.state.status,
             wave: this.state.wave
           }

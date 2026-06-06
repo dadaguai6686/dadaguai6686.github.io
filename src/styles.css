@@ -121,7 +121,7 @@ button {
 
 #record-strip {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin-bottom: 12px;
 }
@@ -372,6 +372,52 @@ h1 {
   font-size: 12px;
 }
 
+#run-recap {
+  max-width: 620px;
+  margin: 0 auto 18px;
+}
+
+#run-recap[hidden] {
+  display: none;
+}
+
+#recap-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+#recap-metrics span {
+  min-height: 58px;
+  padding: 9px 8px;
+  border: 1px solid rgba(126, 239, 255, 0.14);
+  border-radius: 6px;
+  color: #94adbf;
+  background: rgba(255, 255, 255, 0.045);
+  font-size: 11px;
+  text-align: left;
+}
+
+#recap-metrics b {
+  display: block;
+  margin-top: 4px;
+  color: #fff3ad;
+  font-size: 16px;
+}
+
+.panel #recap-advice {
+  max-width: none;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 226, 122, 0.13);
+  border-radius: 6px;
+  color: #d6e9f7;
+  background: rgba(255, 226, 122, 0.06);
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: left;
+}
+
 #how-to-play {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -587,7 +633,6 @@ h1 {
   }
 
   #record-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
     margin-bottom: 8px;
   }
 
@@ -618,6 +663,10 @@ h1 {
 
   #how-to-play {
     grid-template-columns: 1fr;
+  }
+
+  #recap-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   #difficulty-picker {

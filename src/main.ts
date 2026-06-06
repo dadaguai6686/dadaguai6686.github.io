@@ -5,6 +5,8 @@ import {
   UPGRADE_CATALOG,
   type DifficultyId,
   type GameStatus,
+  type RunEndReason,
+  type RunStats,
   type Upgrade,
   type UpgradeId
 } from "./game/simulation";
@@ -44,6 +46,7 @@ const comboValue = document.querySelector<HTMLElement>("#combo-value")!;
 const bestComboValue = document.querySelector<HTMLElement>("#best-combo-value")!;
 const recordScore = document.querySelector<HTMLElement>("#record-score")!;
 const recordWave = document.querySelector<HTMLElement>("#record-wave")!;
+const recordCombo = document.querySelector<HTMLElement>("#record-combo")!;
 const boostPill = document.querySelector<HTMLElement>("#boost-pill")!;
 const pulsePill = document.querySelector<HTMLElement>("#pulse-pill")!;
 const missionText = document.querySelector<HTMLElement>("#mission-text")!;
@@ -58,6 +61,9 @@ const overlayEyebrow = overlay.querySelector<HTMLElement>(".eyebrow")!;
 const overlayTitle = overlay.querySelector<HTMLElement>("h1")!;
 const overlayCopy = overlay.querySelector<HTMLElement>("p")!;
 const howToPlay = document.querySelector<HTMLDivElement>("#how-to-play")!;
+const runRecap = document.querySelector<HTMLDivElement>("#run-recap")!;
+const recapMetrics = document.querySelector<HTMLDivElement>("#recap-metrics")!;
+const recapAdvice = document.querySelector<HTMLElement>("#recap-advice")!;
 const touchStick = document.querySelector<HTMLDivElement>("#touch-stick")!;
 const touchStickKnob = document.querySelector<HTMLSpanElement>("#touch-stick span")!;
 const touchButtons = document.querySelectorAll<HTMLButtonElement>("[data-touch-action]");
@@ -70,6 +76,20 @@ type SaveData = {
   bestWave: number;
   clears: number;
   selectedDifficulty: DifficultyId;
+};
+
+type RunEndDetail = {
+  bestCombo: number;
+  charge: number;
+  difficulty: DifficultyId;
+  elapsed: number;
+  endReason: RunEndReason;
+  hull: number;
+  message: string;
+  score: number;
+  stats: RunStats;
+  status: "won" | "completed" | "lost";
+  wave: number;
 };
 
 let latestUpgradeChoices: Upgrade[] = [];
@@ -129,6 +149,7 @@ function launchRun(upgradeId?: UpgradeId): void {
   void audioBus.unlock();
   audioBus.play("start");
   overlay.classList.remove("show");
+  runRecap.hidden = true;
   upgradeChoices.hidden = true;
   const runDifficulty = latestStatus === "won" ? latestDifficulty : selectedDifficulty;
   window.dispatchEvent(new CustomEvent("game:start", { detail: { difficulty: runDifficulty, upgradeId } }));
@@ -181,14 +202,7 @@ window.addEventListener("game:hud", (event) => {
 });
 
 window.addEventListener("game:ended", (event) => {
-  const detail = (event as CustomEvent).detail as {
-    bestCombo: number;
-    difficulty: DifficultyId;
-    message: string;
-    score: number;
-    status: "won" | "completed" | "lost";
-    wave: number;
-  };
+  const detail = (event as CustomEvent).detail as RunEndDetail;
   latestStatus = detail.status;
   latestScore = detail.score;
   latestWave = detail.wave;
@@ -196,7 +210,7 @@ window.addEventListener("game:ended", (event) => {
   latestDifficulty = detail.difficulty;
   persistRunResult(detail.status);
   overlay.classList.add("show");
-  howToPlay.hidden = detail.status === "won";
+  howToPlay.hidden = true;
   setDifficultyPickerVisible(detail.status !== "won");
   resumeButton.hidden = true;
   startButton.hidden = false;
@@ -205,6 +219,7 @@ window.addEventListener("game:ended", (event) => {
   overlayTitle.textContent =
     detail.status === "completed" ? "五波完成" : detail.status === "won" ? "光网稳定" : "信号中断";
   overlayCopy.textContent = detail.message;
+  renderRunRecap(detail);
   startButton.textContent =
     detail.status === "completed" ? "再次救援" : detail.status === "won" ? "不升级，进入下一波" : "重新救援";
   upgradeChoices.hidden = detail.status !== "won";
@@ -243,6 +258,7 @@ function showHelpOverlay(): void {
   overlayTitle.textContent = "维修、连锁、撤离";
   overlayCopy.textContent =
     "目标不是乱飞，而是在电量压力下规划路线：先补流明，再修信标，最后从北侧光门撤离。";
+  runRecap.hidden = true;
   howToPlay.hidden = false;
   upgradeChoices.hidden = true;
   startButton.hidden = latestStatus === "paused";
@@ -339,6 +355,7 @@ function updateAudioUi(): void {
 function updateRecordUi(): void {
   recordScore.textContent = saveData.bestScore.toLocaleString();
   recordWave.textContent = `${Math.max(1, saveData.bestWave)}/5`;
+  recordCombo.textContent = `${saveData.bestCombo.toFixed(1)}x`;
 }
 
 function setDifficultyPickerVisible(visible: boolean): void {
@@ -355,6 +372,76 @@ function persistRunResult(status: "won" | "completed" | "lost"): void {
   }
   saveSave(saveData);
   updateRecordUi();
+}
+
+function renderRunRecap(detail: RunEndDetail): void {
+  const metrics: Array<[string, string]> = [
+    ["分数", detail.score.toLocaleString()],
+    ["波次", `${detail.wave}/5`],
+    ["用时", formatDuration(detail.elapsed)],
+    ["最佳连锁", `${detail.bestCombo.toFixed(1)}x`],
+    ["流明", String(detail.stats.lumenCollected)],
+    ["信标", String(detail.stats.relaysRepaired)],
+    ["受击", String(detail.stats.hitsTaken)],
+    ["风暴", formatSeconds(detail.stats.stormSeconds)]
+  ];
+  recapMetrics.replaceChildren(
+    ...metrics.map(([label, value]) => {
+      const item = document.createElement("span");
+      const valueNode = document.createElement("b");
+      valueNode.textContent = value;
+      item.textContent = label;
+      item.append(valueNode);
+      return item;
+    })
+  );
+  recapAdvice.textContent = buildRunAdvice(detail);
+  runRecap.hidden = false;
+}
+
+function buildRunAdvice(detail: RunEndDetail): string {
+  const { stats } = detail;
+  if (detail.status === "completed") {
+    return stats.hitsTaken <= 2
+      ? "复盘：这次救援很干净。下一目标可以挑战硬核，重点保持连锁倍率冲高分。"
+      : "复盘：已经通关。想继续提分，优先减少碰撞，连锁被打断会损失大量分数。";
+  }
+  if (detail.status === "won") {
+    if (stats.hitsTaken === 0) {
+      return "复盘：本轮路线很稳。下一波威胁会增加，可以优先升级引擎或电容来保留节奏。";
+    }
+    return "复盘：已经稳定本波。升级时按短板选择：缺电选电容，常撞碎片选曜盾，修复压力大选信标织机。";
+  }
+  if (detail.endReason === "chargeDepleted") {
+    if (stats.lumenCollected < Math.max(3, detail.wave * 3)) {
+      return "下一次建议：先规划金色流明路线再修信标，电量低时不要硬修。";
+    }
+    if (stats.stormSeconds > 2.5) {
+      return "下一次建议：紫色风暴停留太久，推进穿出风暴后再回头修复。";
+    }
+    return "下一次建议：修复会持续耗电，修到一半也可以先离开补流明再回来。";
+  }
+  if (detail.endReason === "hullDestroyed") {
+    if (stats.pulseUses === 0) {
+      return "下一次建议：粉色碎片靠近时按 Q 脉冲推开，别把脉冲留到机体见底。";
+    }
+    if (stats.hitsTaken >= 3) {
+      return "下一次建议：碰撞过多会清空连锁，先绕开碎片密集区，再用推进切入信标。";
+    }
+    return "下一次建议：受击后有短暂无敌，利用这段时间拉开距离，不要原地继续修。";
+  }
+  return "下一次建议：先补给、再修复、最后撤离；保持移动比贪一次修复更重要。";
+}
+
+function formatDuration(seconds: number): string {
+  const totalSeconds = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(totalSeconds / 60);
+  const remaining = totalSeconds % 60;
+  return minutes > 0 ? `${minutes}:${String(remaining).padStart(2, "0")}` : `${remaining}秒`;
+}
+
+function formatSeconds(seconds: number): string {
+  return `${seconds < 10 ? seconds.toFixed(1) : Math.round(seconds)}秒`;
 }
 
 function loadSave(): SaveData {
