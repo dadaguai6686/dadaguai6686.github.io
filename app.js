@@ -38,11 +38,14 @@ function init() {
 
   // Global game controller placeholders for SPA navigation switching
   let gameRunning = false;
+  let gamePaused = false;
   let gameLoopId = null;
   let deathAnimationId = null;
+  let runnerEngineReady = false;
   let stopMusic = () => {};
   let initLevelData = () => {};
   let drawGame = () => {};
+  let clearRunnerPauseState = () => {};
 
   // Global Page Scroll Progress Bar Indicator
   window.addEventListener('scroll', () => {
@@ -350,7 +353,10 @@ function init() {
       cancelAnimationFrame(gameLoopId);
       cancelAnimationFrame(deathAnimationId);
       stopMusic();
-      resetGameKeyState();
+      if (runnerEngineReady) {
+        resetGameKeyState();
+        clearRunnerPauseState();
+      }
       releaseArcadeButtonFocus();
     } else {
       initLevelData();
@@ -5339,6 +5345,10 @@ function init() {
   const gameLauncherCard = document.getElementById('game-launcher-card');
   const arcadeCanvas = document.getElementById('arcade-canvas');
   const gameOverlay = document.getElementById('game-overlay-screen');
+  const gamePauseOverlay = document.getElementById('game-pause-screen');
+  const gamePauseResumeBtn = document.getElementById('game-pause-resume');
+  const gamePauseRestartBtn = document.getElementById('game-pause-restart');
+  const gamePauseMuteBtn = document.getElementById('game-pause-mute');
   const gameRestartBtn = document.getElementById('game-restart-btn');
   const gameTimerSpan = document.getElementById('game-timer');
   const gameCoinsSpan = document.getElementById('game-coins');
@@ -5357,6 +5367,7 @@ function init() {
   const btnRightLed = document.getElementById('btn-right-led');
   const btnDashLed = document.getElementById('btn-dash-led');
   const btnStartLed = document.getElementById('btn-start-led');
+  const btnPauseLed = document.getElementById('btn-pause-led');
   const btnBgmLed = document.getElementById('btn-bgm-led');
   const joystickShaft = document.getElementById('joystick-shaft');
 
@@ -5365,6 +5376,8 @@ function init() {
   let targetCoins = 5;
   let levelWidth = 1600;
   let gameStartTime = 0;
+  let gameElapsedBeforePause = 0;
+  let gamePauseStartedAt = 0;
   let statusTimeoutId = null;
 
   // Level elements and particles
@@ -5509,6 +5522,85 @@ function init() {
       const light = document.getElementById(id);
       if (light) light.classList.remove('active');
     });
+    [btnLeftLed, btnRightLed, btnStartLed, btnPauseLed, btnJumpLed, btnDashLed, btnBgmLed].forEach(button => {
+      if (button) button.classList.remove('is-held');
+    });
+  }
+
+  function getRunnerElapsedMs() {
+    if (gamePaused) return Math.max(0, gameElapsedBeforePause);
+    if (!gameStartTime) return 0;
+    return Math.max(0, Date.now() - gameStartTime);
+  }
+
+  function setPauseOverlayVisible(visible) {
+    if (!gamePauseOverlay) return;
+    gamePauseOverlay.style.display = visible ? 'flex' : 'none';
+    gamePauseOverlay.setAttribute('aria-hidden', visible ? 'false' : 'true');
+  }
+
+  function updateRunnerPauseMuteLabel() {
+    if (!gamePauseMuteBtn) return;
+    const label = gamePauseMuteBtn.querySelector('span');
+    const icon = gamePauseMuteBtn.querySelector('i');
+    if (label) label.textContent = isMusicMuted ? '开启 BGM' : '静音 BGM';
+    if (icon) icon.setAttribute('data-lucide', isMusicMuted ? 'volume-2' : 'volume-x');
+    safeCreateIcons();
+  }
+
+  function shiftRunnerDeadlines(deltaMs) {
+    if (deltaMs <= 0) return;
+    ['dashCooldownUntil', 'dashBurstUntil', 'invulnerableUntil'].forEach(key => {
+      if (player[key] && player[key] > 0) player[key] += deltaMs;
+    });
+  }
+
+  clearRunnerPauseState = function() {
+    gamePaused = false;
+    gameElapsedBeforePause = 0;
+    gamePauseStartedAt = 0;
+    setPauseOverlayVisible(false);
+    setRunnerTouchButtonState(btnPauseLed, false);
+  };
+
+  function pauseRunnerGame() {
+    if (!gameRunning || gamePaused) return false;
+    gameElapsedBeforePause = getRunnerElapsedMs();
+    gamePauseStartedAt = Date.now();
+    gamePaused = true;
+    gameRunning = false;
+    cancelAnimationFrame(gameLoopId);
+    stopMusic();
+    resetGameKeyState();
+    if (gameTimerSpan) gameTimerSpan.textContent = (gameElapsedBeforePause / 1000).toFixed(1);
+    setGameStatus('PAUSED', '#F59E0B', 0);
+    updateRunnerPauseMuteLabel();
+    setPauseOverlayVisible(true);
+    releaseArcadeButtonFocus();
+    return true;
+  }
+
+  function resumeRunnerGame() {
+    if (!gamePaused) return false;
+    const pauseDuration = Date.now() - gamePauseStartedAt;
+    shiftRunnerDeadlines(pauseDuration);
+    gamePaused = false;
+    gameRunning = true;
+    gameStartTime = Date.now() - gameElapsedBeforePause;
+    gamePauseStartedAt = 0;
+    setPauseOverlayVisible(false);
+    setRunnerTouchButtonState(btnPauseLed, false);
+    setGameStatus(player.dashReady ? 'READY' : 'DASH CD', player.dashReady ? '#8B5CF6' : '#64748B', 0);
+    if (musicSelect && musicSelect.value !== 'mute') startMusic();
+    releaseArcadeButtonFocus();
+    updateGame();
+    return true;
+  }
+
+  function toggleRunnerPause() {
+    if (gamePaused) return resumeRunnerGame();
+    if (gameRunning) return pauseRunnerGame();
+    return false;
   }
 
   // Game levels config
@@ -6369,7 +6461,9 @@ function init() {
       get player() {
         return { ...player };
       },
-      gameRunning: () => gameRunning
+      gameRunning: () => gameRunning,
+      gamePaused: () => gamePaused,
+      runnerElapsedMs: () => getRunnerElapsedMs()
     };
   }
 
@@ -6474,7 +6568,8 @@ function init() {
   }
 
   window.addEventListener('keydown', (e) => {
-    const gameControlCodes = ['Space', 'Enter', 'KeyW', 'KeyA', 'KeyD', 'KeyK', 'ShiftLeft', 'ShiftRight', 'ArrowUp', 'ArrowLeft', 'ArrowRight'];
+    const gameControlCodes = ['Space', 'Enter', 'Escape', 'KeyP', 'KeyW', 'KeyA', 'KeyD', 'KeyK', 'ShiftLeft', 'ShiftRight', 'ArrowUp', 'ArrowLeft', 'ArrowRight'];
+    const pauseToggleCodes = ['Escape', 'KeyP'];
     const isGameControlKey = gameControlCodes.includes(e.code);
     const gameIsActive = isGameSectionActive();
     const miniGameHasFocus = isMiniGameFocus();
@@ -6482,6 +6577,20 @@ function init() {
     if (gameIsActive && isGameControlKey && !isEditableTarget(e.target) && !miniGameHasFocus) {
       e.preventDefault();
       e.stopPropagation();
+    }
+
+    if (gameIsActive && !isEditableTarget(e.target) && !miniGameHasFocus && pauseToggleCodes.includes(e.code)) {
+      e.preventDefault();
+      toggleRunnerPause();
+      return;
+    }
+
+    if (gamePaused) {
+      if (gameIsActive && !isEditableTarget(e.target) && !miniGameHasFocus && e.code === 'Enter') {
+        e.preventDefault();
+        resumeRunnerGame();
+      }
+      return;
     }
 
     // If not running, Enter starts/retries the game. Space is reserved for jump only.
@@ -6524,7 +6633,7 @@ function init() {
   });
 
   window.addEventListener('keyup', (e) => {
-    if (isGameSectionActive() && !isEditableTarget(e.target) && !isMiniGameFocus() && ['Space', 'Enter', 'KeyW', 'KeyA', 'KeyD', 'KeyK', 'ShiftLeft', 'ShiftRight', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+    if (isGameSectionActive() && !isEditableTarget(e.target) && !isMiniGameFocus() && ['Space', 'Enter', 'Escape', 'KeyP', 'KeyW', 'KeyA', 'KeyD', 'KeyK', 'ShiftLeft', 'ShiftRight', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
       e.preventDefault();
       e.stopPropagation();
     }
@@ -6561,6 +6670,7 @@ function init() {
 
   function triggerDeath() {
     gameRunning = false;
+    clearRunnerPauseState();
     playArcadeSound('death');
     cancelAnimationFrame(gameLoopId);
     cancelAnimationFrame(deathAnimationId);
@@ -6606,6 +6716,7 @@ function init() {
     player.invulnerableUntil = Date.now() + 1300;
     if (gameOverlay) gameOverlay.style.display = 'none';
     cancelAnimationFrame(deathAnimationId);
+    clearRunnerPauseState();
     gameRunning = true;
     setGameStatus('CHECKPOINT', '#A78BFA');
     if (musicSelect && musicSelect.value !== 'mute') startMusic();
@@ -6613,13 +6724,13 @@ function init() {
   }
 
   function triggerWin() {
+    const finishTime = (getRunnerElapsedMs() / 1000).toFixed(1);
     gameRunning = false;
+    clearRunnerPauseState();
     playArcadeSound('win');
     cancelAnimationFrame(gameLoopId);
     stopMusic();
 
-    const finishTime = ((Date.now() - gameStartTime) / 1000).toFixed(1);
-    
     const bestLvlTime = localStorage.getItem(`atherix_astro_runner_best_lvl_${currentLevelIndex}`);
     if (!bestLvlTime || parseFloat(finishTime) < parseFloat(bestLvlTime)) {
       localStorage.setItem(`atherix_astro_runner_best_lvl_${currentLevelIndex}`, finishTime);
@@ -6859,7 +6970,7 @@ function init() {
     }
 
     if (gameTimerSpan) {
-      gameTimerSpan.textContent = ((Date.now() - gameStartTime) / 1000).toFixed(1);
+      gameTimerSpan.textContent = (getRunnerElapsedMs() / 1000).toFixed(1);
     }
 
     drawGame();
@@ -7115,6 +7226,7 @@ function init() {
     stopMusic();
     releaseArcadeButtonFocus();
     resetGameKeyState();
+    clearRunnerPauseState();
 
     initLevelData();
     if (gameOverlay) gameOverlay.style.display = 'none';
@@ -7137,6 +7249,7 @@ function init() {
       cancelAnimationFrame(gameLoopId);
       stopMusic();
       resetGameKeyState();
+      clearRunnerPauseState();
       
       initLevelData();
       drawGame();
@@ -7165,6 +7278,7 @@ function init() {
           startMusic();
         }
       }
+      updateRunnerPauseMuteLabel();
     });
   }
 
@@ -7183,31 +7297,25 @@ function init() {
   }
 
   if (btnJumpLed) {
-    btnJumpLed.addEventListener('mousedown', (e) => {
+    btnJumpLed.addEventListener('pointerdown', (e) => {
       e.preventDefault();
+      setRunnerTouchButtonState(btnJumpLed, true);
       if (gameRunning) {
         triggerPlayerJump();
         if (joystickShaft) joystickShaft.style.transform = 'translate(0, -6px)';
-      } else {
-        startLevel();
+      }
+      try {
+        btnJumpLed.setPointerCapture?.(e.pointerId);
+      } catch (err) {
+        // Pointer capture can fail for interrupted or synthetic pointer streams.
       }
       releaseArcadeButtonFocus();
     });
-    btnJumpLed.addEventListener('mouseup', () => {
-      if (joystickShaft) joystickShaft.style.transform = 'translate(0, 0)';
-    });
-    btnJumpLed.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      if (gameRunning) {
-        triggerPlayerJump();
-        if (joystickShaft) joystickShaft.style.transform = 'translate(0, -6px)';
-      } else {
-        startLevel();
-      }
-      releaseArcadeButtonFocus();
-    });
-    btnJumpLed.addEventListener('touchend', () => {
-      if (joystickShaft) joystickShaft.style.transform = 'translate(0, 0)';
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(type => {
+      btnJumpLed.addEventListener(type, () => {
+        setRunnerTouchButtonState(btnJumpLed, false);
+        if (joystickShaft) joystickShaft.style.transform = 'translate(0, 0)';
+      });
     });
   }
 
@@ -7236,11 +7344,27 @@ function init() {
     btnStartLed.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       setRunnerTouchButtonState(btnStartLed, true);
-      if (!runOverlayAction() && !gameRunning) startLevel();
+      if (gamePaused) {
+        resumeRunnerGame();
+      } else if (!runOverlayAction() && !gameRunning) {
+        startLevel();
+      }
       releaseArcadeButtonFocus();
     });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach(type => {
       btnStartLed.addEventListener(type, () => setRunnerTouchButtonState(btnStartLed, false));
+    });
+  }
+
+  if (btnPauseLed) {
+    btnPauseLed.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      setRunnerTouchButtonState(btnPauseLed, true);
+      toggleRunnerPause();
+      releaseArcadeButtonFocus();
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(type => {
+      btnPauseLed.addEventListener(type, () => setRunnerTouchButtonState(btnPauseLed, gamePaused));
     });
   }
 
@@ -7256,21 +7380,46 @@ function init() {
     });
   }
 
+  function toggleRunnerMusic() {
+    if (!musicSelect) return;
+    const curVal = musicSelect.value;
+    if (curVal === 'mute') {
+      isMusicMuted = false;
+      musicSelect.value = gameLevels[currentLevelIndex].musicId;
+      currentActiveSongIndex = gameLevels[currentLevelIndex].musicId;
+      if (gameRunning) startMusic();
+    } else {
+      isMusicMuted = true;
+      musicSelect.value = 'mute';
+      stopMusic();
+    }
+    updateRunnerPauseMuteLabel();
+  }
+
+  if (gamePauseResumeBtn) {
+    gamePauseResumeBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      resumeRunnerGame();
+    });
+  }
+
+  if (gamePauseRestartBtn) {
+    gamePauseRestartBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      startLevel();
+    });
+  }
+
+  if (gamePauseMuteBtn) {
+    gamePauseMuteBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      toggleRunnerMusic();
+    });
+  }
+
   if (btnBgmLed) {
     btnBgmLed.addEventListener('click', () => {
-      if (musicSelect) {
-        const curVal = musicSelect.value;
-        if (curVal === 'mute') {
-          isMusicMuted = false;
-          musicSelect.value = gameLevels[currentLevelIndex].musicId;
-          currentActiveSongIndex = gameLevels[currentLevelIndex].musicId;
-          if (gameRunning) startMusic();
-        } else {
-          isMusicMuted = true;
-          musicSelect.value = 'mute';
-          stopMusic();
-        }
-      }
+      toggleRunnerMusic();
     });
   }
 
@@ -7278,6 +7427,13 @@ function init() {
     gameLauncherCard.addEventListener('click', () => {
       navigateTo('game');
     });
+  }
+
+  runnerEngineReady = true;
+  updateRunnerPauseMuteLabel();
+  if (isGameSectionActive()) {
+    initLevelData();
+    drawGame();
   }
 
   // ==========================================

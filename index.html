@@ -22,7 +22,7 @@
   <link rel="canonical" href="https://dadaguai6686.github.io/">
   <link rel="alternate" type="application/rss+xml" title="Atherix Digital Space Feed" href="https://dadaguai6686.github.io/feed.xml">
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="style.css?v=20260606-command-v1">
+  <link rel="stylesheet" href="style.css?v=20260606-pause-v1">
   <link rel="manifest" href="/manifest.webmanifest">
   <!-- Lucide Icons Local -->
   <script src="lucide.min.js"></script>
@@ -905,6 +905,28 @@
                 <div style="border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 0.4rem; margin-top: 0.4rem; color: var(--text-muted); font-size: 0.7rem; line-height: 1.3;">操作技巧：踩踏红色机器人的头顶可击败它们并获取反弹跳。绿色胶囊提供护盾，蓝色电池刷新冲刺，菱形信标会保存检查点。收集齐目标数量的黄色水晶后，触碰最右端闪烁的绿色旋转传送门即可进入下一关！</div>
               </div>
             </div>
+
+            <div class="game-pause-overlay" id="game-pause-screen" aria-hidden="true">
+              <div class="game-pause-panel" role="dialog" aria-modal="true" aria-labelledby="game-pause-title">
+                <span class="game-pause-kicker">MISSION HOLD</span>
+                <h2 id="game-pause-title">PAUSED</h2>
+                <p>计时器、敌人、平台和冷却全部冻结。按 <strong>P</strong> / <strong>Esc</strong> 继续，Space 仍只负责跳跃。</p>
+                <div class="game-pause-actions">
+                  <button type="button" id="game-pause-resume" class="game-pause-action game-pause-primary">
+                    <i data-lucide="play"></i>
+                    <span>继续任务</span>
+                  </button>
+                  <button type="button" id="game-pause-restart" class="game-pause-action">
+                    <i data-lucide="rotate-ccw"></i>
+                    <span>重开关卡</span>
+                  </button>
+                  <button type="button" id="game-pause-mute" class="game-pause-action">
+                    <i data-lucide="volume-2"></i>
+                    <span>静音 BGM</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
           
           <!-- Arcade Cabinet Control Panel -->
@@ -952,6 +974,7 @@
 
               <div class="runner-action-cluster">
                 <button type="button" id="btn-start-led" data-runner-control="start" aria-label="开始或继续">START</button>
+                <button type="button" id="btn-pause-led" data-runner-control="pause" aria-label="暂停或继续">PAUSE</button>
                 <button type="button" id="btn-jump-led" data-runner-control="jump" aria-label="跳跃">JUMP</button>
                 <button type="button" id="btn-dash-led" data-runner-control="dash" aria-label="冲刺">DASH</button>
                 <button type="button" id="btn-bgm-led" data-runner-control="bgm" aria-label="切换音乐">BGM</button>
@@ -1242,6 +1265,6 @@
   <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <!-- Main JavaScript File -->
-  <script src="app.js?v=20260606-command-v1"></script>
+  <script src="app.js?v=20260606-pause-v1"></script>
 </body>
 </html>

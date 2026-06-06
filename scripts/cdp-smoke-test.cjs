@@ -343,6 +343,29 @@ async function run() {
     timer: document.querySelector('#game-timer')?.textContent,
     title: document.querySelector('#game-overlay-title')?.textContent
   }))()`);
+  const jumpButtonIdleState = await evaluate(`(async () => {
+    const firePointer = (selector, type) => {
+      const el = document.querySelector(selector);
+      if (!el) return false;
+      el.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        pointerId: 5,
+        pointerType: 'touch',
+        isPrimary: true
+      }));
+      return true;
+    };
+    const overlayBefore = document.querySelector('#game-overlay-screen')?.style.display || '';
+    firePointer('#btn-jump-led', 'pointerdown');
+    firePointer('#btn-jump-led', 'pointerup');
+    await new Promise(resolve => setTimeout(resolve, 160));
+    return {
+      overlayBefore,
+      overlayAfter: document.querySelector('#game-overlay-screen')?.style.display || '',
+      running: !!window.__atherixDebug?.gameRunning?.()
+    };
+  })()`, 3000);
   const runnerTouchState = await evaluate(`(async () => {
     const firePointer = (selector, type) => {
       const el = document.querySelector(selector);
@@ -367,6 +390,25 @@ async function run() {
     firePointer('#btn-dash-led', 'pointerdown');
     firePointer('#btn-dash-led', 'pointerup');
     await new Promise(resolve => setTimeout(resolve, 220));
+    const timerBeforePause = document.querySelector('#game-timer')?.textContent || '';
+    firePointer('#btn-pause-led', 'pointerdown');
+    firePointer('#btn-pause-led', 'pointerup');
+    await new Promise(resolve => setTimeout(resolve, 160));
+    const pauseVisible = document.querySelector('#game-pause-screen')?.style.display || '';
+    const pausedDuringHold = !!window.__atherixDebug?.gamePaused?.();
+    const runningAfterPause = !!window.__atherixDebug?.gameRunning?.();
+    const timerAtPause = document.querySelector('#game-timer')?.textContent || '';
+    const xAtPause = window.__atherixDebug?.player?.x || 0;
+    firePointer('#btn-right-led', 'pointerdown');
+    await new Promise(resolve => setTimeout(resolve, 320));
+    firePointer('#btn-right-led', 'pointerup');
+    const timerAfterPauseWait = document.querySelector('#game-timer')?.textContent || '';
+    const xAfterPauseWait = window.__atherixDebug?.player?.x || 0;
+    firePointer('#btn-pause-led', 'pointerdown');
+    firePointer('#btn-pause-led', 'pointerup');
+    await new Promise(resolve => setTimeout(resolve, 180));
+    const pausedAfterResume = !!window.__atherixDebug?.gamePaused?.();
+    const runningAfterResume = !!window.__atherixDebug?.gameRunning?.();
     const player = window.__atherixDebug?.player || {};
     return {
       controls,
@@ -375,7 +417,17 @@ async function run() {
       afterX: player.x || 0,
       dashReady: !!player.dashReady,
       dashCooldownUntil: player.dashCooldownUntil || 0,
-      running: !!window.__atherixDebug?.gameRunning?.()
+      running: !!window.__atherixDebug?.gameRunning?.(),
+      timerBeforePause,
+      pauseVisible,
+      timerAtPause,
+      timerAfterPauseWait,
+      xAtPause,
+      xAfterPauseWait,
+      pausedDuringHold,
+      runningAfterPause,
+      pausedAfterResume,
+      runningAfterResume
     };
   })()`, 7000);
   const arcadeInitial = await evaluate(`(() => ({
@@ -549,10 +601,14 @@ async function run() {
     `game navigation should reset scroll into visible content: ${JSON.stringify(gameViewportState)}`
   );
   assert(mainSpaceState.overlayBefore === 'flex' && mainSpaceState.overlayAfter === 'flex', 'Space should not start/retry the main game overlay');
-  assert(runnerTouchState.controls >= 5 && runnerTouchState.overlayAfterStart === 'none', 'runner touch controls should start the main game');
+  assert(jumpButtonIdleState.overlayBefore === 'flex' && jumpButtonIdleState.overlayAfter === 'flex' && !jumpButtonIdleState.running, 'JUMP touch button should not start the main game overlay');
+  assert(runnerTouchState.controls >= 7 && runnerTouchState.overlayAfterStart === 'none', 'runner touch controls should start the main game');
   assert(runnerTouchState.running && runnerTouchState.afterX > runnerTouchState.beforeX, 'runner touch controls should move the player horizontally');
   assert(!runnerTouchState.dashReady && runnerTouchState.dashCooldownUntil > 0, 'runner touch controls should trigger dash cooldown');
-  assert(runnerMobileState.controls >= 5 && runnerMobileState.visibleInFirstViewport && !runnerMobileState.horizontalOverflow, `runner touch controls should be reachable on mobile: ${JSON.stringify(runnerMobileState)}`);
+  assert(runnerTouchState.pauseVisible === 'flex' && runnerTouchState.pausedDuringHold && !runnerTouchState.runningAfterPause, `runner pause overlay should freeze the game: ${JSON.stringify(runnerTouchState)}`);
+  assert(runnerTouchState.timerAtPause === runnerTouchState.timerAfterPauseWait && Math.abs(runnerTouchState.xAfterPauseWait - runnerTouchState.xAtPause) < 0.01, `runner should not advance while paused: ${JSON.stringify(runnerTouchState)}`);
+  assert(runnerTouchState.runningAfterResume && !runnerTouchState.pausedAfterResume, `runner should resume from pause: ${JSON.stringify(runnerTouchState)}`);
+  assert(runnerMobileState.controls >= 7 && runnerMobileState.visibleInFirstViewport && !runnerMobileState.horizontalOverflow, `runner touch controls should be reachable on mobile: ${JSON.stringify(runnerMobileState)}`);
   assert(arcadeInitial.premium && arcadeInitial.careerPanel, 'premium arcade career panel should render');
   assert(arcadeInitial.oldPrototypeCount === 0, 'old prototype mini-games should be replaced');
   assert(arcadeInitial.premiumTabs >= 5 && arcadeInitial.tacticsPanel, 'premium arcade should include the tactics mode');

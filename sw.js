@@ -1,9 +1,9 @@
-const CACHE_VERSION = 'atherix-static-v5-discovery';
+const CACHE_VERSION = 'atherix-static-v6-pause';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/style.css?v=20260606-command-v1',
-  '/app.js?v=20260606-command-v1',
+  '/style.css?v=20260606-pause-v1',
+  '/app.js?v=20260606-pause-v1',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',
