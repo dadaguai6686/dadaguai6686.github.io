@@ -716,7 +716,6 @@ function showHelpOverlay(): void {
     setShellStatus(latestStatus);
   }
   overlay.classList.add("show");
-  overlayPanel.scrollTop = 0;
   achievementStrip.hidden = false;
   runHistory.hidden = true;
   updateAchievementUi();
@@ -738,6 +737,18 @@ function showHelpOverlay(): void {
   if (latestStatus !== "paused") {
     startButton.textContent = "开始救援";
   }
+  resetOverlayPanelScroll();
+}
+
+function resetOverlayPanelScroll(): void {
+  overlayPanel.focus({ preventScroll: true });
+  overlayPanel.scrollTop = 0;
+  window.requestAnimationFrame(() => {
+    overlayPanel.scrollTop = 0;
+  });
+  window.setTimeout(() => {
+    overlayPanel.scrollTop = 0;
+  }, 60);
 }
 
 window.addEventListener("keydown", (event) => {
