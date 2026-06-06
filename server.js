@@ -19,6 +19,20 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .split(',')
   .map(origin => origin.trim())
   .filter(Boolean);
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' https: data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "media-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'self'",
+  "manifest-src 'self'"
+].join('; ');
 
 const allowedImageMimeTypes = new Map([
   ['image/jpeg', '.jpg'],
@@ -31,10 +45,10 @@ const allowedImageMimeTypes = new Map([
 app.disable('x-powered-by');
 app.use(cors({
   origin(origin, cb) {
-    if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
-      return cb(null, true);
-    }
-    return cb(new Error('Origin is not allowed by CORS policy.'));
+    if (!origin) return cb(null, true);
+    if (allowedOrigins.includes(origin)) return cb(null, true);
+    if (!isProduction && allowedOrigins.length === 0) return cb(null, true);
+    return cb(null, false);
   }
 }));
 app.use((req, res, next) => {
@@ -43,6 +57,10 @@ app.use((req, res, next) => {
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+  res.setHeader('Content-Security-Policy', contentSecurityPolicy);
+  if (isProduction) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
   next();
 });
 app.use(express.json({ limit: '1mb' }));
