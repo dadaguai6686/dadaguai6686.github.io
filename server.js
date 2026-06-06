@@ -40,6 +40,27 @@ const allowedImageMimeTypes = new Map([
   ['image/gif', '.gif'],
   ['image/webp', '.webp']
 ]);
+const publicRootFiles = new Set([
+  '/',
+  '/index.html',
+  '/style.css',
+  '/app.js',
+  '/lucide.min.js',
+  '/manifest.webmanifest',
+  '/robots.txt',
+  '/sitemap.xml'
+]);
+const publicPathPrefixes = ['/assets/', '/uploads/'];
+const blockedRootFiles = new Set([
+  '/Dockerfile',
+  '/docker-compose.yml',
+  '/package.json',
+  '/package-lock.json',
+  '/server.js',
+  '/db.js',
+  '/auth.js',
+  '/DEPLOYMENT.md'
+]);
 
 // Enable CORS, baseline hardening & JSON Parsing middleware
 app.disable('x-powered-by');
@@ -130,6 +151,20 @@ app.use('/uploads', express.static(uploadDir, {
     res.setHeader('Cache-Control', 'public, max-age=604800');
   }
 }));
+app.use((req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+  if (req.path.startsWith('/api/')) return next();
+  if (publicRootFiles.has(req.path) || publicPathPrefixes.some(prefix => req.path.startsWith(prefix))) {
+    return next();
+  }
+  if (blockedRootFiles.has(req.path)) {
+    return res.status(404).send('Not found');
+  }
+  if (path.extname(req.path)) {
+    return res.status(404).send('Not found');
+  }
+  next();
+});
 app.use(express.static(__dirname, {
   etag: true,
   maxAge: '1h',

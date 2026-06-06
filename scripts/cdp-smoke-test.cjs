@@ -3,9 +3,13 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const appUrl = process.env.SMOKE_URL || `http://127.0.0.1:${process.env.PORT || 3341}`;
+const requestedAppUrl = process.env.SMOKE_URL || '';
+const managedAppPort = Number(process.env.SMOKE_PORT || (4300 + Math.floor(Math.random() * 700)));
+const appUrl = requestedAppUrl || `http://127.0.0.1:${managedAppPort}`;
 const cdpPort = Number(process.env.CDP_PORT || 9480);
 const edgePath = process.env.EDGE_PATH || 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
+let activeAppServer = null;
+let activeAppTempDir = '';
 
 function wait(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -54,8 +58,74 @@ function startHeadlessEdge() {
   return child;
 }
 
+function startAppServer() {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'atherix-game-smoke-'));
+  const child = spawn(process.execPath, ['server.js'], {
+    cwd: path.resolve(__dirname, '..'),
+    env: {
+      ...process.env,
+      NODE_ENV: 'development',
+      PORT: String(managedAppPort),
+      DB_PATH: path.join(tempDir, 'blog.db')
+    },
+    stdio: 'ignore',
+    windowsHide: true
+  });
+  return { child, tempDir };
+}
+
+async function cleanupAppServer() {
+  const child = activeAppServer;
+  if (child && !child.killed) {
+    child.kill();
+    await Promise.race([
+      new Promise(resolve => child.once('exit', resolve)),
+      wait(1500)
+    ]);
+  }
+  await wait(300);
+  if (activeAppTempDir) {
+    try {
+      fs.rmSync(activeAppTempDir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
+    } catch (error) {
+      console.warn(`[smoke:games] Could not remove temp directory ${activeAppTempDir}: ${error.message}`);
+    }
+  }
+  activeAppServer = null;
+  activeAppTempDir = '';
+}
+
+async function waitForAppServer() {
+  const deadline = Date.now() + 15000;
+  let lastError;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`${appUrl}/api/health`);
+      if (response.ok) return;
+    } catch (error) {
+      lastError = error;
+    }
+    await wait(300);
+  }
+  throw lastError || new Error('App server did not become ready');
+}
+
 async function run() {
   let launched = false;
+  let appServer = null;
+  let appTempDir = '';
+  let managedServer = false;
+  if (!requestedAppUrl) {
+    const started = startAppServer();
+    appServer = started.child;
+    appTempDir = started.tempDir;
+    activeAppServer = appServer;
+    activeAppTempDir = appTempDir;
+    managedServer = true;
+    await waitForAppServer();
+  }
+
+  let ws = null;
   try {
     await waitForCdp();
   } catch {
@@ -65,7 +135,7 @@ async function run() {
   }
 
   const target = await cdpJson(`/json/new?${encodeURIComponent(appUrl)}`, { method: 'PUT' });
-  const ws = new WebSocket(target.webSocketDebuggerUrl);
+  ws = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('CDP websocket open timeout')), 12000);
     ws.addEventListener('open', () => {
@@ -252,6 +322,8 @@ async function run() {
 
   return {
     launched,
+    managedServer,
+    appUrl,
     blogState,
     mainSpaceState,
     arcadeInitial,
@@ -262,9 +334,11 @@ async function run() {
   };
 }
 
-run().then(result => {
+run().then(async result => {
+  await cleanupAppServer();
   console.log(JSON.stringify(result, null, 2));
-}).catch(error => {
+}).catch(async error => {
+  await cleanupAppServer();
   console.error(JSON.stringify({ failed: true, message: error.message, stack: error.stack }, null, 2));
   process.exit(1);
 });

@@ -46,7 +46,43 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+async function assertProductionSecretRequired() {
+  const failPort = port + 1;
+  const failDir = fs.mkdtempSync(path.join(os.tmpdir(), 'atherix-api-secret-'));
+  const child = spawn(process.execPath, ['server.js'], {
+    cwd: path.resolve(__dirname, '..'),
+    env: {
+      ...process.env,
+      NODE_ENV: 'production',
+      PORT: String(failPort),
+      DB_PATH: path.join(failDir, 'blog.db'),
+      ADMIN_USERNAME: 'admin',
+      ADMIN_PASSWORD: 'api-smoke-password',
+      JWT_SECRET: ''
+    },
+    windowsHide: true,
+    stdio: 'ignore'
+  });
+
+  try {
+    const exitCode = await new Promise(resolve => {
+      const timer = setTimeout(() => resolve(null), 2500);
+      child.on('exit', code => {
+        clearTimeout(timer);
+        resolve(code);
+      });
+    });
+    assert(exitCode !== null, 'production server without JWT_SECRET should exit');
+    assert(exitCode !== 0, 'production server without JWT_SECRET should fail');
+  } finally {
+    if (!child.killed) child.kill();
+    fs.rmSync(failDir, { recursive: true, force: true });
+  }
+}
+
 async function run() {
+  await assertProductionSecretRequired();
+
   const child = spawn(process.execPath, ['server.js'], {
     cwd: path.resolve(__dirname, '..'),
     env: {
@@ -84,6 +120,14 @@ async function run() {
     assert(blockedCors.status === 200, 'blocked-origin non-browser request should still reach health');
     assert(!blockedCors.headers.get('access-control-allow-origin'), 'disallowed origin should not receive CORS allow header');
 
+    const sensitivePaths = ['/server.js', '/db.js', '/auth.js', '/package.json', '/package-lock.json', '/scripts/api-smoke-test.cjs', '/Dockerfile'];
+    const sensitiveResults = {};
+    for (const pathname of sensitivePaths) {
+      const response = await fetch(`${baseUrl}${pathname}`);
+      sensitiveResults[pathname] = response.status;
+      assert(response.status === 404, `${pathname} should not be publicly served`);
+    }
+
     const postList = await waitForSeededPosts();
     assert(Array.isArray(postList) && postList.length >= 1, 'seeded posts should be available');
 
@@ -104,7 +148,8 @@ async function run() {
       dbCreated: fs.existsSync(dbPath),
       posts: postList.length,
       corsAllowed: health.headers.get('access-control-allow-origin'),
-      corsBlockedHeader: blockedCors.headers.get('access-control-allow-origin') || null
+      corsBlockedHeader: blockedCors.headers.get('access-control-allow-origin') || null,
+      sensitiveResults
     };
   } finally {
     child.kill();

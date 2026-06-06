@@ -2,13 +2,14 @@
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 
-// Load JWT Secret from env. Development gets an ephemeral secret rather than
-// a hard-coded production credential.
-const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(48).toString('hex');
+let JWT_SECRET = process.env.JWT_SECRET;
 
-if (!process.env.JWT_SECRET) {
-  const level = process.env.NODE_ENV === 'production' ? 'error' : 'warn';
-  console[level]('[auth] JWT_SECRET is not set. Using an ephemeral secret; set JWT_SECRET before deployment.');
+if (!JWT_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET must be set in production.');
+  }
+  JWT_SECRET = crypto.randomBytes(48).toString('hex');
+  console.warn('[auth] JWT_SECRET is not set. Using an ephemeral development secret.');
 }
 
 /**
