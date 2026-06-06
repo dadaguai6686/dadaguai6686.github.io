@@ -95,6 +95,52 @@ type FeedbackCue = {
   scale?: number;
 };
 
+type SectorVisual = {
+  accent: number;
+  base: number;
+  grid: number;
+  haze: number;
+  secondary: number;
+};
+
+const SECTOR_VISUALS: Record<GameState["sector"], SectorVisual> = {
+  outerRing: {
+    accent: 0x67f4ff,
+    base: 0x07101a,
+    grid: 0x1f5364,
+    haze: 0x16394d,
+    secondary: 0xffd76e
+  },
+  crossCurrent: {
+    accent: 0x70ffcf,
+    base: 0x07131a,
+    grid: 0x235f65,
+    haze: 0x16434d,
+    secondary: 0xffd76e
+  },
+  southernArc: {
+    accent: 0xffd76e,
+    base: 0x0d0d18,
+    grid: 0x514326,
+    haze: 0x473015,
+    secondary: 0x67f4ff
+  },
+  stormSpine: {
+    accent: 0xb388ff,
+    base: 0x090817,
+    grid: 0x3a2b68,
+    haze: 0x251747,
+    secondary: 0xff5f9b
+  },
+  overclockCore: {
+    accent: 0xffffff,
+    base: 0x070b12,
+    grid: 0x5d4a22,
+    haze: 0x4a2f12,
+    secondary: 0x67f4ff
+  }
+};
+
 export class GameScene extends Phaser.Scene {
   private state: GameState = createInitialState();
   private inputMapper?: InputMapper;
@@ -269,36 +315,145 @@ export class GameScene extends Phaser.Scene {
 
   private drawBackdrop(): void {
     const graphics = this.starLayer!;
+    const visual = SECTOR_VISUALS[this.state.sector];
     graphics.clear();
-    graphics.fillStyle(0x070910, 1);
+    graphics.fillStyle(visual.base, 1);
     graphics.fillRect(0, 0, this.state.arena.width, this.state.arena.height);
+
+    this.drawSectorField(graphics, visual);
 
     for (let i = 0; i < 120; i += 1) {
       const x = (i * 137.31) % this.state.arena.width;
       const y = (i * 91.77) % this.state.arena.height;
       const size = 1 + ((i * 17) % 4) * 0.35;
       const alpha = 0.25 + ((i * 29) % 60) / 100;
-      graphics.fillStyle(i % 5 === 0 ? 0xffd76e : 0x8fecff, alpha);
+      graphics.fillStyle(i % 5 === 0 ? visual.secondary : visual.accent, alpha);
       graphics.fillCircle(x, y, size);
     }
 
-    graphics.lineStyle(1, 0x153a4a, 0.45);
+    graphics.lineStyle(1, visual.grid, 0.42);
     for (let x = 70; x < this.state.arena.width; x += 70) {
       graphics.lineBetween(x, 0, x - 90, this.state.arena.height);
     }
-    graphics.lineStyle(1, 0x2c1e46, 0.5);
+    graphics.lineStyle(1, visual.haze, 0.5);
     for (let y = 80; y < this.state.arena.height; y += 80) {
       graphics.lineBetween(0, y, this.state.arena.width, y + 90);
     }
 
-    graphics.lineStyle(3, 0x65efff, 0.28);
+    graphics.lineStyle(3, visual.accent, 0.3);
     this.state.relays.forEach((relay, index) => {
       const nextRelay = this.state.relays[(index + 1) % this.state.relays.length];
       graphics.lineBetween(relay.position.x, relay.position.y, nextRelay.position.x, nextRelay.position.y);
     });
 
-    graphics.lineStyle(2, 0xffd76e, 0.18);
+    graphics.lineStyle(2, visual.secondary, 0.2);
     graphics.strokeCircle(500, 350, 250);
+    graphics.lineStyle(5, visual.accent, 0.18);
+    graphics.strokeRoundedRect(42, 42, this.state.arena.width - 84, this.state.arena.height - 84, 18);
+    graphics.lineStyle(2, visual.secondary, 0.28);
+    graphics.lineBetween(452, 48, 548, 48);
+    graphics.lineBetween(432, 75, 568, 75);
+  }
+
+  private drawSectorField(graphics: Phaser.GameObjects.Graphics, visual: SectorVisual): void {
+    switch (this.state.sector) {
+      case "outerRing":
+        this.drawOuterRingField(graphics, visual);
+        break;
+      case "crossCurrent":
+        this.drawCrossCurrentField(graphics, visual);
+        break;
+      case "southernArc":
+        this.drawSouthernArcField(graphics, visual);
+        break;
+      case "stormSpine":
+        this.drawStormSpineField(graphics, visual);
+        break;
+      case "overclockCore":
+        this.drawOverclockCoreField(graphics, visual);
+        break;
+    }
+  }
+
+  private drawOuterRingField(graphics: Phaser.GameObjects.Graphics, visual: SectorVisual): void {
+    graphics.lineStyle(14, visual.haze, 0.28);
+    graphics.strokeCircle(500, 350, 310);
+    graphics.lineStyle(5, visual.accent, 0.14);
+    graphics.strokeCircle(500, 350, 286);
+    graphics.strokeCircle(500, 350, 214);
+    for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 6) {
+      const inner = 228;
+      const outer = 325;
+      graphics.lineStyle(2, visual.secondary, 0.13);
+      graphics.lineBetween(
+        500 + Math.cos(angle) * inner,
+        350 + Math.sin(angle) * inner,
+        500 + Math.cos(angle) * outer,
+        350 + Math.sin(angle) * outer
+      );
+    }
+  }
+
+  private drawCrossCurrentField(graphics: Phaser.GameObjects.Graphics, visual: SectorVisual): void {
+    graphics.lineStyle(34, visual.haze, 0.22);
+    graphics.lineBetween(60, 124, 930, 620);
+    graphics.lineBetween(76, 610, 920, 112);
+    graphics.lineStyle(4, visual.accent, 0.22);
+    for (let offset = -80; offset <= 80; offset += 40) {
+      graphics.lineBetween(88, 112 + offset, 920, 592 + offset);
+      graphics.lineBetween(100, 596 + offset, 910, 128 + offset);
+    }
+    graphics.fillStyle(visual.secondary, 0.12);
+    graphics.fillTriangle(496, 292, 538, 350, 496, 408);
+    graphics.fillTriangle(504, 292, 462, 350, 504, 408);
+  }
+
+  private drawSouthernArcField(graphics: Phaser.GameObjects.Graphics, visual: SectorVisual): void {
+    graphics.lineStyle(30, visual.haze, 0.24);
+    graphics.arc(500, 700, 420, Math.PI * 1.08, Math.PI * 1.92);
+    graphics.lineStyle(6, visual.accent, 0.2);
+    graphics.arc(500, 700, 360, Math.PI * 1.08, Math.PI * 1.92);
+    graphics.arc(500, 700, 270, Math.PI * 1.12, Math.PI * 1.88);
+    graphics.fillStyle(visual.secondary, 0.09);
+    graphics.fillRect(92, 525, 816, 120);
+    graphics.lineStyle(2, visual.secondary, 0.17);
+    for (let x = 140; x <= 860; x += 90) {
+      graphics.lineBetween(x, 530, x - 44, 645);
+    }
+  }
+
+  private drawStormSpineField(graphics: Phaser.GameObjects.Graphics, visual: SectorVisual): void {
+    graphics.fillStyle(visual.haze, 0.28);
+    graphics.fillRect(430, 70, 140, 580);
+    graphics.lineStyle(8, visual.accent, 0.2);
+    graphics.lineBetween(500, 76, 500, 640);
+    graphics.lineStyle(3, visual.secondary, 0.23);
+    for (let y = 110; y <= 610; y += 70) {
+      graphics.lineBetween(432, y, 376, y + 34);
+      graphics.lineBetween(568, y + 18, 624, y - 18);
+    }
+    graphics.lineStyle(2, visual.accent, 0.16);
+    graphics.strokeCircle(500, 230, 126);
+    graphics.strokeCircle(500, 455, 122);
+  }
+
+  private drawOverclockCoreField(graphics: Phaser.GameObjects.Graphics, visual: SectorVisual): void {
+    graphics.fillStyle(visual.haze, 0.2);
+    graphics.fillCircle(500, 350, 188);
+    graphics.lineStyle(5, visual.secondary, 0.2);
+    graphics.strokeCircle(500, 350, 110);
+    graphics.strokeCircle(500, 350, 178);
+    graphics.lineStyle(3, visual.accent, 0.22);
+    for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 8) {
+      graphics.lineBetween(
+        500 + Math.cos(angle) * 74,
+        350 + Math.sin(angle) * 74,
+        500 + Math.cos(angle) * 304,
+        350 + Math.sin(angle) * 304
+      );
+    }
+    graphics.lineStyle(2, visual.secondary, 0.18);
+    graphics.strokeCircle(500, 350, 300);
   }
 
   private createTextures(): void {
