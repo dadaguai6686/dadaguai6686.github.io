@@ -3164,10 +3164,73 @@ main {
 .chain-pink { background: radial-gradient(circle at 35% 25%, #fce7f3, #ec4899 58%, #9d174d); box-shadow: 0 0 12px rgba(236, 72, 153, 0.2); }
 .chain-gold { background: radial-gradient(circle at 35% 25%, #fef3c7, #fbbf24 58%, #b45309); box-shadow: 0 0 12px rgba(251, 191, 36, 0.2); }
 .chain-green { background: radial-gradient(circle at 35% 25%, #dcfce7, #34d399 58%, #047857); box-shadow: 0 0 12px rgba(52, 211, 153, 0.2); }
+.chain-bomb {
+  background: conic-gradient(from 45deg, #fef3c7, #f97316, #7f1d1d, #f97316, #fef3c7);
+  box-shadow: 0 0 18px rgba(249, 115, 22, 0.4), inset 0 0 16px rgba(255,255,255,0.18);
+}
+.chain-prism {
+  background: conic-gradient(from 90deg, #bae6fd, #a78bfa, #f9a8d4, #34d399, #bae6fd);
+  box-shadow: 0 0 22px rgba(167, 139, 250, 0.48), inset 0 0 18px rgba(255,255,255,0.22);
+}
+.chain-cleared {
+  border-color: rgba(52, 211, 153, 0.55);
+  box-shadow: 0 0 26px rgba(52, 211, 153, 0.2);
+}
 
 #premium-game-stage:focus {
   outline: 2px solid rgba(139, 92, 246, 0.45);
   outline-offset: 3px;
+}
+
+.premium-touch-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.premium-dpad {
+  display: grid;
+  grid-template-columns: repeat(3, 42px);
+  grid-template-rows: repeat(3, 42px);
+  gap: 0.35rem;
+}
+
+.premium-dpad [data-premium-control="up"] { grid-column: 2; grid-row: 1; }
+.premium-dpad [data-premium-control="left"] { grid-column: 1; grid-row: 2; }
+.premium-dpad [data-premium-control="right"] { grid-column: 3; grid-row: 2; }
+.premium-dpad [data-premium-control="down"] { grid-column: 2; grid-row: 3; }
+
+.premium-dpad button,
+.premium-action-pad {
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  background: radial-gradient(circle at 45% 25%, rgba(255, 255, 255, 0.18), rgba(139, 92, 246, 0.18) 45%, rgba(8, 6, 18, 0.92));
+  color: #fff;
+  border-radius: 10px;
+  font-weight: 900;
+  min-width: 42px;
+  min-height: 42px;
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 8px 18px rgba(0,0,0,0.22);
+}
+
+.premium-action-pad {
+  width: 76px;
+  height: 76px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 45% 25%, #f9a8d4, #ec4899 52%, #831843);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.28), 0 10px 26px rgba(236, 72, 153, 0.28);
+}
+
+.premium-dpad button:active,
+.premium-action-pad:active {
+  transform: translateY(2px) scale(0.97);
+  filter: brightness(1.15);
 }
 
 @media (max-width: 760px) {
@@ -3183,5 +3246,14 @@ main {
   }
   .mini-canvas {
     max-width: 100%;
+  }
+  .premium-touch-controls {
+    display: flex;
+  }
+}
+
+@media (pointer: fine) and (min-width: 900px) {
+  .premium-touch-controls {
+    opacity: 0.72;
   }
 }

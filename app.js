@@ -3065,503 +3065,7 @@ function init() {
     rhythmPlayBtn.addEventListener('click', startRhythmGame);
   }
 
-  // 3.5 Arcade Library: four self-contained mini games
-  const miniStage = document.getElementById('mini-game-stage');
-  const miniTabs = document.querySelectorAll('.mini-game-tab');
-  const miniPanels = document.querySelectorAll('.mini-game-panel');
-  const miniActiveTitle = document.getElementById('mini-active-title');
-  const miniGameTitles = {
-    snake: '贪吃蛇 Neon Snake',
-    breakout: '砖块弹球 Prism Breakout',
-    tile2048: '2048 Cyber Tiles',
-    memory: '记忆翻牌 Memory Matrix'
-  };
-  let activeMiniGame = 'snake';
-
-  function focusMiniStage() {
-    if (miniStage) miniStage.focus({ preventScroll: true });
-  }
-
-  function setMiniGame(name) {
-    activeMiniGame = name;
-    miniTabs.forEach(tab => tab.classList.toggle('active', tab.dataset.miniGame === name));
-    miniPanels.forEach(panel => panel.classList.toggle('active', panel.id === `mini-${name}`));
-    if (miniActiveTitle) miniActiveTitle.textContent = miniGameTitles[name] || name;
-    focusMiniStage();
-    drawSnake();
-    drawBreakout();
-  }
-
-  miniTabs.forEach(tab => {
-    tab.addEventListener('click', () => setMiniGame(tab.dataset.miniGame));
-  });
-
-  const snakeCanvas = document.getElementById('snake-canvas');
-  const snakeCtx = snakeCanvas ? snakeCanvas.getContext('2d') : null;
-  const snakeScoreEl = document.getElementById('snake-score');
-  const snakeBestEl = document.getElementById('snake-best');
-  const snakeStartBtn = document.getElementById('snake-start-btn');
-  const snakePauseBtn = document.getElementById('snake-pause-btn');
-  let snakeTimer = null;
-  let snake = [];
-  let snakeFood = { x: 8, y: 8 };
-  let snakeDir = { x: 1, y: 0 };
-  let snakeNextDir = { x: 1, y: 0 };
-  let snakeScore = 0;
-  let snakePaused = false;
-  let snakeRunning = false;
-  const snakeCell = 18;
-  const snakeBestKey = 'atherix_snake_best';
-
-  function updateSnakeBest() {
-    if (snakeBestEl) snakeBestEl.textContent = localStorage.getItem(snakeBestKey) || '0';
-  }
-
-  function placeSnakeFood() {
-    const cells = snakeCanvas ? Math.floor(snakeCanvas.width / snakeCell) : 20;
-    do {
-      snakeFood = {
-        x: Math.floor(Math.random() * cells),
-        y: Math.floor(Math.random() * cells)
-      };
-    } while (snake.some(p => p.x === snakeFood.x && p.y === snakeFood.y));
-  }
-
-  function startSnake() {
-    snake = [{ x: 6, y: 10 }, { x: 5, y: 10 }, { x: 4, y: 10 }];
-    snakeDir = { x: 1, y: 0 };
-    snakeNextDir = { x: 1, y: 0 };
-    snakeScore = 0;
-    snakePaused = false;
-    snakeRunning = true;
-    if (snakeScoreEl) snakeScoreEl.textContent = '0';
-    placeSnakeFood();
-    clearInterval(snakeTimer);
-    snakeTimer = setInterval(stepSnake, 110);
-    focusMiniStage();
-    drawSnake();
-  }
-
-  function endSnake() {
-    snakeRunning = false;
-    clearInterval(snakeTimer);
-    const best = Math.max(Number(localStorage.getItem(snakeBestKey) || 0), snakeScore);
-    localStorage.setItem(snakeBestKey, String(best));
-    updateSnakeBest();
-    drawSnake('GAME OVER');
-  }
-
-  function stepSnake() {
-    if (!snakeRunning || snakePaused) return;
-    snakeDir = snakeNextDir;
-    const cells = Math.floor(snakeCanvas.width / snakeCell);
-    const head = { x: snake[0].x + snakeDir.x, y: snake[0].y + snakeDir.y };
-    if (head.x < 0 || head.y < 0 || head.x >= cells || head.y >= cells || snake.some(p => p.x === head.x && p.y === head.y)) {
-      endSnake();
-      return;
-    }
-    snake.unshift(head);
-    if (head.x === snakeFood.x && head.y === snakeFood.y) {
-      snakeScore += 10;
-      if (snakeScoreEl) snakeScoreEl.textContent = snakeScore;
-      placeSnakeFood();
-    } else {
-      snake.pop();
-    }
-    drawSnake();
-  }
-
-  function drawSnake(message = '') {
-    if (!snakeCtx || !snakeCanvas) return;
-    snakeCtx.fillStyle = '#050816';
-    snakeCtx.fillRect(0, 0, snakeCanvas.width, snakeCanvas.height);
-    snakeCtx.strokeStyle = 'rgba(139, 92, 246, 0.08)';
-    for (let i = 0; i <= snakeCanvas.width; i += snakeCell) {
-      snakeCtx.beginPath();
-      snakeCtx.moveTo(i, 0);
-      snakeCtx.lineTo(i, snakeCanvas.height);
-      snakeCtx.stroke();
-      snakeCtx.beginPath();
-      snakeCtx.moveTo(0, i);
-      snakeCtx.lineTo(snakeCanvas.width, i);
-      snakeCtx.stroke();
-    }
-    snakeCtx.fillStyle = '#FBBF24';
-    snakeCtx.fillRect(snakeFood.x * snakeCell + 3, snakeFood.y * snakeCell + 3, snakeCell - 6, snakeCell - 6);
-    snake.forEach((part, idx) => {
-      snakeCtx.fillStyle = idx === 0 ? '#34D399' : '#06B6D4';
-      snakeCtx.fillRect(part.x * snakeCell + 2, part.y * snakeCell + 2, snakeCell - 4, snakeCell - 4);
-    });
-    if (message || !snakeRunning) {
-      snakeCtx.fillStyle = 'rgba(5, 8, 22, 0.72)';
-      snakeCtx.fillRect(0, 0, snakeCanvas.width, snakeCanvas.height);
-      snakeCtx.fillStyle = '#fff';
-      snakeCtx.font = 'bold 24px Outfit, sans-serif';
-      snakeCtx.textAlign = 'center';
-      snakeCtx.fillText(message || '按开始进入霓虹蛇局', snakeCanvas.width / 2, snakeCanvas.height / 2);
-    }
-  }
-
-  if (snakeStartBtn) snakeStartBtn.addEventListener('click', startSnake);
-  if (snakePauseBtn) {
-    snakePauseBtn.addEventListener('click', () => {
-      if (!snakeRunning) return;
-      snakePaused = !snakePaused;
-      snakePauseBtn.textContent = snakePaused ? '继续' : '暂停';
-      focusMiniStage();
-      drawSnake(snakePaused ? 'PAUSED' : '');
-    });
-  }
-  updateSnakeBest();
-  drawSnake();
-
-  const breakoutCanvas = document.getElementById('breakout-canvas');
-  const breakoutCtx = breakoutCanvas ? breakoutCanvas.getContext('2d') : null;
-  const breakoutScoreEl = document.getElementById('breakout-score');
-  const breakoutLivesEl = document.getElementById('breakout-lives');
-  const breakoutBestEl = document.getElementById('breakout-best');
-  const breakoutStartBtn = document.getElementById('breakout-start-btn');
-  const breakoutBestKey = 'atherix_breakout_best';
-  let breakoutAnimationId = null;
-  let breakoutRunning = false;
-  let breakoutScore = 0;
-  let breakoutLives = 3;
-  let breakoutPaddle = { x: 190, y: 294, w: 96, h: 12, speed: 7 };
-  let breakoutBall = { x: 240, y: 220, vx: 3.4, vy: -3.4, r: 7 };
-  let breakoutBricks = [];
-  const breakoutKeys = { left: false, right: false };
-
-  function updateBreakoutBest() {
-    if (breakoutBestEl) breakoutBestEl.textContent = localStorage.getItem(breakoutBestKey) || '0';
-  }
-
-  function resetBreakoutBricks() {
-    breakoutBricks = [];
-    for (let row = 0; row < 5; row++) {
-      for (let col = 0; col < 8; col++) {
-        breakoutBricks.push({ x: 24 + col * 54, y: 30 + row * 24, w: 44, h: 14, alive: true, hue: row });
-      }
-    }
-  }
-
-  function startBreakout() {
-    breakoutRunning = true;
-    breakoutScore = 0;
-    breakoutLives = 3;
-    breakoutPaddle.x = 190;
-    breakoutBall = { x: 240, y: 220, vx: 3.4, vy: -3.4, r: 7 };
-    resetBreakoutBricks();
-    if (breakoutScoreEl) breakoutScoreEl.textContent = '0';
-    if (breakoutLivesEl) breakoutLivesEl.textContent = '3';
-    cancelAnimationFrame(breakoutAnimationId);
-    focusMiniStage();
-    runBreakout();
-  }
-
-  function finishBreakout(message) {
-    breakoutRunning = false;
-    cancelAnimationFrame(breakoutAnimationId);
-    const best = Math.max(Number(localStorage.getItem(breakoutBestKey) || 0), breakoutScore);
-    localStorage.setItem(breakoutBestKey, String(best));
-    updateBreakoutBest();
-    drawBreakout(message);
-  }
-
-  function runBreakout() {
-    if (!breakoutRunning) return;
-    if (breakoutKeys.left) breakoutPaddle.x -= breakoutPaddle.speed;
-    if (breakoutKeys.right) breakoutPaddle.x += breakoutPaddle.speed;
-    breakoutPaddle.x = Math.max(0, Math.min(breakoutCanvas.width - breakoutPaddle.w, breakoutPaddle.x));
-
-    breakoutBall.x += breakoutBall.vx;
-    breakoutBall.y += breakoutBall.vy;
-    if (breakoutBall.x < breakoutBall.r || breakoutBall.x > breakoutCanvas.width - breakoutBall.r) breakoutBall.vx *= -1;
-    if (breakoutBall.y < breakoutBall.r) breakoutBall.vy *= -1;
-    if (breakoutBall.y > breakoutCanvas.height + 20) {
-      breakoutLives--;
-      if (breakoutLivesEl) breakoutLivesEl.textContent = breakoutLives;
-      if (breakoutLives <= 0) {
-        finishBreakout('GAME OVER');
-        return;
-      }
-      breakoutBall = { x: breakoutPaddle.x + breakoutPaddle.w / 2, y: 230, vx: 3.4, vy: -3.4, r: 7 };
-    }
-
-    if (breakoutBall.y + breakoutBall.r >= breakoutPaddle.y &&
-        breakoutBall.y - breakoutBall.r <= breakoutPaddle.y + breakoutPaddle.h &&
-        breakoutBall.x >= breakoutPaddle.x &&
-        breakoutBall.x <= breakoutPaddle.x + breakoutPaddle.w) {
-      const hit = (breakoutBall.x - (breakoutPaddle.x + breakoutPaddle.w / 2)) / (breakoutPaddle.w / 2);
-      breakoutBall.vx = hit * 5;
-      breakoutBall.vy = -Math.abs(breakoutBall.vy);
-    }
-
-    for (const brick of breakoutBricks) {
-      if (!brick.alive) continue;
-      if (breakoutBall.x + breakoutBall.r > brick.x && breakoutBall.x - breakoutBall.r < brick.x + brick.w &&
-          breakoutBall.y + breakoutBall.r > brick.y && breakoutBall.y - breakoutBall.r < brick.y + brick.h) {
-        brick.alive = false;
-        breakoutBall.vy *= -1;
-        breakoutScore += 25;
-        if (breakoutScoreEl) breakoutScoreEl.textContent = breakoutScore;
-        break;
-      }
-    }
-
-    if (breakoutBricks.every(b => !b.alive)) {
-      finishBreakout('VICTORY');
-      return;
-    }
-
-    drawBreakout();
-    breakoutAnimationId = requestAnimationFrame(runBreakout);
-  }
-
-  function drawBreakout(message = '') {
-    if (!breakoutCtx || !breakoutCanvas) return;
-    breakoutCtx.fillStyle = '#050816';
-    breakoutCtx.fillRect(0, 0, breakoutCanvas.width, breakoutCanvas.height);
-    for (const brick of breakoutBricks) {
-      if (!brick.alive) continue;
-      const colors = ['#06B6D4', '#8B5CF6', '#EC4899', '#FBBF24', '#34D399'];
-      breakoutCtx.fillStyle = colors[brick.hue % colors.length];
-      breakoutCtx.fillRect(brick.x, brick.y, brick.w, brick.h);
-    }
-    breakoutCtx.fillStyle = '#fff';
-    breakoutCtx.fillRect(breakoutPaddle.x, breakoutPaddle.y, breakoutPaddle.w, breakoutPaddle.h);
-    breakoutCtx.fillStyle = '#FBBF24';
-    breakoutCtx.beginPath();
-    breakoutCtx.arc(breakoutBall.x, breakoutBall.y, breakoutBall.r, 0, Math.PI * 2);
-    breakoutCtx.fill();
-    if (message || !breakoutRunning) {
-      breakoutCtx.fillStyle = 'rgba(5, 8, 22, 0.72)';
-      breakoutCtx.fillRect(0, 0, breakoutCanvas.width, breakoutCanvas.height);
-      breakoutCtx.fillStyle = '#fff';
-      breakoutCtx.font = 'bold 24px Outfit, sans-serif';
-      breakoutCtx.textAlign = 'center';
-      breakoutCtx.fillText(message || '按开始击碎棱镜砖块', breakoutCanvas.width / 2, breakoutCanvas.height / 2);
-    }
-  }
-
-  if (breakoutStartBtn) breakoutStartBtn.addEventListener('click', startBreakout);
-  updateBreakoutBest();
-  drawBreakout();
-
-  const tileBoard = document.getElementById('tile-board');
-  const tileScoreEl = document.getElementById('tile-score');
-  const tileBestEl = document.getElementById('tile-best');
-  const tileNewBtn = document.getElementById('tile-new-btn');
-  const tileBestKey = 'atherix_2048_best';
-  let tileGrid = [];
-  let tileScore = 0;
-
-  function updateTileBest() {
-    if (tileBestEl) tileBestEl.textContent = localStorage.getItem(tileBestKey) || '0';
-  }
-
-  function emptyTileCells() {
-    const cells = [];
-    tileGrid.forEach((row, r) => row.forEach((value, c) => {
-      if (!value) cells.push([r, c]);
-    }));
-    return cells;
-  }
-
-  function addTile() {
-    const empty = emptyTileCells();
-    if (!empty.length) return;
-    const [r, c] = empty[Math.floor(Math.random() * empty.length)];
-    tileGrid[r][c] = Math.random() < 0.88 ? 2 : 4;
-  }
-
-  function newTileGame() {
-    tileGrid = Array.from({ length: 4 }, () => Array(4).fill(0));
-    tileScore = 0;
-    addTile();
-    addTile();
-    focusMiniStage();
-    renderTiles();
-  }
-
-  function renderTiles() {
-    if (!tileBoard) return;
-    tileBoard.innerHTML = '';
-    tileGrid.flat().forEach(value => {
-      const cell = document.createElement('div');
-      cell.className = 'tile-cell';
-      cell.dataset.value = value || '';
-      cell.textContent = value || '';
-      tileBoard.appendChild(cell);
-    });
-    if (tileScoreEl) tileScoreEl.textContent = tileScore;
-    const best = Math.max(Number(localStorage.getItem(tileBestKey) || 0), tileScore);
-    localStorage.setItem(tileBestKey, String(best));
-    updateTileBest();
-  }
-
-  function slideTileLine(line) {
-    const values = line.filter(Boolean);
-    const merged = [];
-    let gained = 0;
-    for (let i = 0; i < values.length; i++) {
-      if (values[i] === values[i + 1]) {
-        const sum = values[i] * 2;
-        merged.push(sum);
-        gained += sum;
-        i++;
-      } else {
-        merged.push(values[i]);
-      }
-    }
-    while (merged.length < 4) merged.push(0);
-    return { line: merged, gained };
-  }
-
-  function moveTiles(dir) {
-    const before = JSON.stringify(tileGrid);
-    let gained = 0;
-    for (let i = 0; i < 4; i++) {
-      let line;
-      if (dir === 'left') line = tileGrid[i];
-      if (dir === 'right') line = [...tileGrid[i]].reverse();
-      if (dir === 'up') line = tileGrid.map(row => row[i]);
-      if (dir === 'down') line = tileGrid.map(row => row[i]).reverse();
-      const result = slideTileLine(line);
-      gained += result.gained;
-      let next = result.line;
-      if (dir === 'right' || dir === 'down') next = next.reverse();
-      if (dir === 'left' || dir === 'right') tileGrid[i] = next;
-      if (dir === 'up' || dir === 'down') next.forEach((value, r) => tileGrid[r][i] = value);
-    }
-    if (JSON.stringify(tileGrid) !== before) {
-      tileScore += gained;
-      addTile();
-      renderTiles();
-    }
-  }
-
-  if (tileNewBtn) tileNewBtn.addEventListener('click', newTileGame);
-  updateTileBest();
-  newTileGame();
-
-  const memoryBoard = document.getElementById('memory-board');
-  const memoryMovesEl = document.getElementById('memory-moves');
-  const memoryPairsEl = document.getElementById('memory-pairs');
-  const memoryBestEl = document.getElementById('memory-best');
-  const memoryNewBtn = document.getElementById('memory-new-btn');
-  const memoryBestKey = 'atherix_memory_best';
-  let memoryDeck = [];
-  let memoryFirst = null;
-  let memoryLock = false;
-  let memoryMoves = 0;
-  let memoryPairs = 0;
-
-  function updateMemoryBest() {
-    if (memoryBestEl) memoryBestEl.textContent = localStorage.getItem(memoryBestKey) || '--';
-  }
-
-  function newMemoryGame() {
-    const symbols = ['◆', '▲', '●', '✦', '✚', '⬟', '◇', '★'];
-    memoryDeck = [...symbols, ...symbols]
-      .sort(() => Math.random() - 0.5)
-      .map((symbol, index) => ({ id: index, symbol, revealed: false, matched: false }));
-    memoryFirst = null;
-    memoryLock = false;
-    memoryMoves = 0;
-    memoryPairs = 0;
-    focusMiniStage();
-    renderMemory();
-  }
-
-  function renderMemory() {
-    if (!memoryBoard) return;
-    memoryBoard.innerHTML = '';
-    memoryDeck.forEach(card => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = `memory-card ${card.revealed ? 'revealed' : ''} ${card.matched ? 'matched' : ''}`;
-      btn.textContent = card.revealed || card.matched ? card.symbol : '';
-      btn.setAttribute('aria-label', card.revealed || card.matched ? `卡片 ${card.symbol}` : '未翻开的卡片');
-      btn.addEventListener('click', () => flipMemory(card.id));
-      memoryBoard.appendChild(btn);
-    });
-    if (memoryMovesEl) memoryMovesEl.textContent = memoryMoves;
-    if (memoryPairsEl) memoryPairsEl.textContent = memoryPairs;
-    updateMemoryBest();
-  }
-
-  function flipMemory(id) {
-    if (memoryLock) return;
-    const card = memoryDeck.find(c => c.id === id);
-    if (!card || card.revealed || card.matched) return;
-    card.revealed = true;
-    if (!memoryFirst) {
-      memoryFirst = card;
-      renderMemory();
-      return;
-    }
-    memoryMoves++;
-    if (memoryFirst.symbol === card.symbol) {
-      memoryFirst.matched = true;
-      card.matched = true;
-      memoryFirst = null;
-      memoryPairs++;
-      if (memoryPairs === 8) {
-        const prev = Number(localStorage.getItem(memoryBestKey) || 0);
-        if (!prev || memoryMoves < prev) localStorage.setItem(memoryBestKey, String(memoryMoves));
-      }
-      renderMemory();
-    } else {
-      memoryLock = true;
-      renderMemory();
-      setTimeout(() => {
-        memoryFirst.revealed = false;
-        card.revealed = false;
-        memoryFirst = null;
-        memoryLock = false;
-        renderMemory();
-      }, 620);
-    }
-  }
-
-  if (memoryNewBtn) memoryNewBtn.addEventListener('click', newMemoryGame);
-  newMemoryGame();
-
-  window.addEventListener('keydown', (e) => {
-    if (!isGameSectionActive() || isEditableTarget(e.target) || !isMiniGameFocus()) return;
-    const codes = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space'];
-    if (!codes.includes(e.code)) return;
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (activeMiniGame === 'snake') {
-      if ((e.code === 'ArrowUp' || e.code === 'KeyW') && snakeDir.y !== 1) snakeNextDir = { x: 0, y: -1 };
-      if ((e.code === 'ArrowDown' || e.code === 'KeyS') && snakeDir.y !== -1) snakeNextDir = { x: 0, y: 1 };
-      if ((e.code === 'ArrowLeft' || e.code === 'KeyA') && snakeDir.x !== 1) snakeNextDir = { x: -1, y: 0 };
-      if ((e.code === 'ArrowRight' || e.code === 'KeyD') && snakeDir.x !== -1) snakeNextDir = { x: 1, y: 0 };
-      if (e.code === 'Space' && snakeRunning) {
-        snakePaused = !snakePaused;
-        drawSnake(snakePaused ? 'PAUSED' : '');
-      }
-    } else if (activeMiniGame === 'breakout') {
-      if (e.code === 'ArrowLeft' || e.code === 'KeyA') breakoutKeys.left = true;
-      if (e.code === 'ArrowRight' || e.code === 'KeyD') breakoutKeys.right = true;
-      if (e.code === 'Space' && !breakoutRunning) startBreakout();
-    } else if (activeMiniGame === 'tile2048') {
-      if (e.code === 'ArrowUp' || e.code === 'KeyW') moveTiles('up');
-      if (e.code === 'ArrowDown' || e.code === 'KeyS') moveTiles('down');
-      if (e.code === 'ArrowLeft' || e.code === 'KeyA') moveTiles('left');
-      if (e.code === 'ArrowRight' || e.code === 'KeyD') moveTiles('right');
-    }
-  });
-
-  window.addEventListener('keyup', (e) => {
-    if (activeMiniGame !== 'breakout') return;
-    if (e.code === 'ArrowLeft' || e.code === 'KeyA') breakoutKeys.left = false;
-    if (e.code === 'ArrowRight' || e.code === 'KeyD') breakoutKeys.right = false;
-  });
-
-  // Premium override: replace the lightweight prototypes with richer arcade modes.
+  // 3.5 Premium Arcade Lab: high-feedback canvas games
   (function initPremiumArcadeLab() {
     const library = document.querySelector('.arcade-library');
     if (!library) return;
@@ -3571,7 +3075,7 @@ function init() {
         <div>
           <span class="quick-card-kicker"><i data-lucide="sparkles"></i> PREMIUM ARCADE</span>
           <h2>高能街机实验室</h2>
-          <p>四个完整街机模式：生存割草、Boss 弹幕、潜行劫取、连锁消除。每局都有目标、升级、阶段和最佳纪录。</p>
+          <p>四个高级街机模式：生存构筑、Boss 弹幕、潜行劫取、连锁解谜。每局都有阶段事件、局内成长、特殊道具和最佳纪录。</p>
         </div>
         <div class="mini-game-scoreboard">
           <span>当前游戏</span>
@@ -3588,12 +3092,14 @@ function init() {
         <div class="mini-game-panel active" id="premium-survivor">
           <div class="mini-game-copy">
             <h3>Starcore Survivor</h3>
-            <p>WASD / 方向键移动，自动射击。吸收星核升级火力，在 90 秒内活得越久越强。</p>
+            <p>WASD / 方向键移动，自动射击，Space 释放星爆。吸收星核升级武器，在 90 秒内顶住精英潮和深空事件。</p>
             <div class="mini-stats">
               <span>能量 <strong id="premium-survivor-score">0</strong></span>
               <span>最佳 <strong id="premium-survivor-best">0</strong></span>
               <span>等级 <strong id="premium-survivor-level">1</strong></span>
               <span>生命 <strong id="premium-survivor-hp">100</strong></span>
+              <span>构筑 <strong id="premium-survivor-build">Pulse I</strong></span>
+              <span>危机 <strong id="premium-survivor-threat">WAVE 1</strong></span>
             </div>
             <div class="mini-actions">
               <button type="button" class="action-btn action-btn-primary" id="premium-survivor-start">部署 / 重开</button>
@@ -3605,12 +3111,14 @@ function init() {
         <div class="mini-game-panel" id="premium-boss">
           <div class="mini-game-copy">
             <h3>Prism Boss Rush</h3>
-            <p>A/D 移动，Space 冲刺无敌，自动开火。躲开三阶段弹幕并击破棱镜核心。</p>
+            <p>WASD / 方向键机动，Space 闪避无敌，自动开火。Boss 会切换环形、狙击、雨幕和横扫四种弹幕。</p>
             <div class="mini-stats">
               <span>分数 <strong id="premium-boss-score">0</strong></span>
               <span>机体 <strong id="premium-boss-lives">3</strong></span>
               <span>最佳 <strong id="premium-boss-best">0</strong></span>
               <span>Boss <strong id="premium-boss-hp">100%</strong></span>
+              <span>阶段 <strong id="premium-boss-phase">I</strong></span>
+              <span>闪避 <strong id="premium-boss-dash">READY</strong></span>
             </div>
             <div class="mini-actions">
               <button type="button" class="action-btn action-btn-primary" id="premium-boss-start">开战 / 重开</button>
@@ -3621,11 +3129,13 @@ function init() {
         <div class="mini-game-panel" id="premium-heist">
           <div class="mini-game-copy">
             <h3>Cyber Heist</h3>
-            <p>潜入数据金库。WASD / 方向键移动，绕开扫描守卫，偷走 4 枚密钥后抵达出口。</p>
+            <p>潜入数据金库。WASD / 方向键移动，Space 启动短暂隐身；黑入终端、绕过视野锥，偷走 4 枚密钥后撤离。</p>
             <div class="mini-stats">
               <span>密钥 <strong id="premium-heist-keys">0</strong>/4</span>
               <span>最佳 <strong id="premium-heist-best">0</strong></span>
               <span>警戒 <strong id="premium-heist-alert">LOW</strong></span>
+              <span>步数 <strong id="premium-heist-steps">0</strong></span>
+              <span>工具 <strong id="premium-heist-tools">CLOAK 2</strong></span>
             </div>
             <div class="mini-actions">
               <button type="button" class="action-btn action-btn-primary" id="premium-heist-new">生成任务</button>
@@ -3636,18 +3146,28 @@ function init() {
         <div class="mini-game-panel" id="premium-chain">
           <div class="mini-game-copy">
             <h3>Alchemy Chain</h3>
-            <p>点击相邻同色能量团触发连锁爆破。连得越大，爆炸越爽，限 30 步冲击高分。</p>
+            <p>点击相邻同色能量团触发连锁爆破。大连锁会生成炸弹与棱镜，30 步内完成目标分数。</p>
             <div class="mini-stats">
               <span>步数 <strong id="premium-chain-moves">30</strong></span>
               <span>分数 <strong id="premium-chain-score">0</strong></span>
               <span>最佳 <strong id="premium-chain-best">0</strong></span>
               <span>连锁 <strong id="premium-chain-combo">0</strong></span>
+              <span>目标 <strong id="premium-chain-target">9000</strong></span>
             </div>
             <div class="mini-actions">
               <button type="button" class="action-btn action-btn-primary" id="premium-chain-new">重置能量场</button>
             </div>
           </div>
           <div class="memory-board chain-board" id="premium-chain-board" aria-label="连锁消除棋盘"></div>
+        </div>
+        <div class="premium-touch-controls" aria-label="触控街机控制器">
+          <div class="premium-dpad">
+            <button type="button" data-premium-control="up" aria-label="上">▲</button>
+            <button type="button" data-premium-control="left" aria-label="左">◀</button>
+            <button type="button" data-premium-control="right" aria-label="右">▶</button>
+            <button type="button" data-premium-control="down" aria-label="下">▼</button>
+          </div>
+          <button type="button" class="premium-action-pad" data-premium-control="action" aria-label="动作">ACT</button>
         </div>
       </div>`;
 
@@ -3668,8 +3188,15 @@ function init() {
       if (stage) stage.focus({ preventScroll: true });
     }
 
+    function clearPremiumKeys() {
+      Object.keys(premiumKeys).forEach(key => {
+        premiumKeys[key] = false;
+      });
+    }
+
     function switchPremiumGame(name) {
       premiumActive = name;
+      clearPremiumKeys();
       library.querySelectorAll('[data-premium-game]').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.premiumGame === name);
       });
@@ -3682,6 +3209,38 @@ function init() {
 
     library.querySelectorAll('[data-premium-game]').forEach(btn => {
       btn.addEventListener('click', () => switchPremiumGame(btn.dataset.premiumGame));
+    });
+
+    function applyPremiumControl(control, pressed) {
+      if (control === 'up') premiumKeys.up = pressed;
+      if (control === 'down') premiumKeys.down = pressed;
+      if (control === 'left') premiumKeys.left = pressed;
+      if (control === 'right') premiumKeys.right = pressed;
+      if (control === 'action') premiumKeys.action = pressed;
+      if (pressed && premiumActive === 'heist') {
+        if (control === 'up') moveHeist(0, -1);
+        if (control === 'down') moveHeist(0, 1);
+        if (control === 'left') moveHeist(-1, 0);
+        if (control === 'right') moveHeist(1, 0);
+        if (control === 'action') triggerHeistCloak();
+      }
+    }
+
+    library.querySelectorAll('[data-premium-control]').forEach(btn => {
+      const control = btn.dataset.premiumControl;
+      const press = (event) => {
+        event.preventDefault();
+        focusStage();
+        applyPremiumControl(control, true);
+      };
+      const release = (event) => {
+        event.preventDefault();
+        applyPremiumControl(control, false);
+      };
+      btn.addEventListener('pointerdown', press);
+      btn.addEventListener('pointerup', release);
+      btn.addEventListener('pointerleave', release);
+      btn.addEventListener('pointercancel', release);
     });
 
     function drawGrid(ctx, w, h, color, gap = 28) {
@@ -3717,6 +3276,9 @@ function init() {
       ctx.restore();
     }
 
+    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+    const pick = (items) => items[Math.floor(Math.random() * items.length)];
+
     const survivor = {
       canvas: document.getElementById('premium-survivor-canvas'),
       ctx: document.getElementById('premium-survivor-canvas')?.getContext('2d'),
@@ -3733,6 +3295,7 @@ function init() {
       enemies: [],
       bullets: [],
       orbs: [],
+      pickups: [],
       particles: []
     };
 
@@ -3741,6 +3304,8 @@ function init() {
       document.getElementById('premium-survivor-best').textContent = localStorage.getItem(survivor.bestKey) || '0';
       document.getElementById('premium-survivor-level').textContent = survivor.player?.level || 1;
       document.getElementById('premium-survivor-hp').textContent = Math.max(0, Math.ceil(survivor.player?.hp || 100));
+      document.getElementById('premium-survivor-build').textContent = survivor.player?.build || 'Pulse I';
+      document.getElementById('premium-survivor-threat').textContent = `WAVE ${Math.max(1, Math.floor(survivor.elapsed / 18000) + 1)}`;
     }
 
     function startSurvivor() {
@@ -3751,10 +3316,28 @@ function init() {
       survivor.spawn = 0;
       survivor.shot = 0;
       survivor.score = 0;
-      survivor.player = { x: 280, y: 180, r: 12, hp: 100, xp: 0, level: 1, fireRate: 240, damage: 18, bulletSpeed: 370, speed: 190 };
+      survivor.player = {
+        x: 280,
+        y: 180,
+        r: 12,
+        hp: 100,
+        xp: 0,
+        level: 1,
+        fireRate: 240,
+        damage: 18,
+        bulletSpeed: 390,
+        speed: 198,
+        build: 'Pulse I',
+        magnet: 85,
+        novaCooldown: 0,
+        novaFlash: 0,
+        drones: 0,
+        pierce: 0
+      };
       survivor.enemies = [];
       survivor.bullets = [];
       survivor.orbs = [];
+      survivor.pickups = [];
       survivor.particles = [];
       document.getElementById('premium-survivor-pause').textContent = '暂停';
       setSurvivorUi();
@@ -3772,14 +3355,101 @@ function init() {
         { x: Math.random() * c.width, y: c.height + 24 },
         { x: -24, y: Math.random() * c.height }
       ][side];
-      const elite = Math.random() < Math.min(0.28, survivor.elapsed / 90000);
-      survivor.enemies.push({ ...p, r: elite ? 16 : 11, hp: elite ? 72 : 34, speed: elite ? 78 : 96, value: elite ? 36 : 14, color: elite ? '#F97316' : '#EC4899' });
+      const wave = Math.floor(survivor.elapsed / 18000);
+      const type = pick(wave > 3 ? ['swarm', 'swarm', 'brute', 'charger', 'warden'] : wave > 1 ? ['swarm', 'swarm', 'brute', 'charger'] : ['swarm', 'swarm', 'brute']);
+      const elite = Math.random() < Math.min(0.34, 0.08 + survivor.elapsed / 125000);
+      const stats = {
+        swarm: { r: 10, hp: 30 + wave * 6, speed: 108 + wave * 4, value: 14, color: '#EC4899' },
+        brute: { r: 17, hp: 82 + wave * 16, speed: 70 + wave * 3, value: 38, color: '#F97316' },
+        charger: { r: 12, hp: 42 + wave * 10, speed: 128 + wave * 8, value: 24, color: '#06B6D4' },
+        warden: { r: 21, hp: 150 + wave * 28, speed: 55 + wave * 2, value: 76, color: '#A78BFA' }
+      }[type];
+      survivor.enemies.push({
+        ...p,
+        ...stats,
+        type,
+        hp: stats.hp * (elite ? 1.55 : 1),
+        maxHp: stats.hp * (elite ? 1.55 : 1),
+        value: stats.value * (elite ? 2 : 1),
+        elite,
+        pulse: Math.random() * Math.PI * 2
+      });
     }
 
     function survivorBurst(x, y, color, count) {
       for (let i = 0; i < count; i++) {
         survivor.particles.push({ x, y, vx: (Math.random() - 0.5) * 190, vy: (Math.random() - 0.5) * 190, life: 420, color, r: Math.random() * 2.8 + 1 });
       }
+    }
+
+    function levelUpSurvivor() {
+      const p = survivor.player;
+      p.level++;
+      p.xp = 0;
+      const upgrade = p.level % 5;
+      if (upgrade === 0) {
+        p.drones++;
+        p.build = `Drone ${p.drones}`;
+      } else if (upgrade === 1) {
+        p.pierce++;
+        p.damage += 6;
+        p.build = `Rail ${p.pierce + 1}`;
+      } else if (upgrade === 2) {
+        p.fireRate = Math.max(72, p.fireRate - 30);
+        p.build = `Pulse ${p.level}`;
+      } else if (upgrade === 3) {
+        p.magnet += 28;
+        p.speed += 12;
+        p.build = 'Magnet+';
+      } else {
+        p.hp = Math.min(115, p.hp + 30);
+        p.damage += 9;
+        p.build = 'Overcharge';
+      }
+      survivorBurst(p.x, p.y, '#34D399', 42);
+    }
+
+    function fireSurvivorVolley() {
+      const p = survivor.player;
+      if (!survivor.enemies.length) return;
+      const target = survivor.enemies.reduce((best, enemy) => Math.hypot(enemy.x - p.x, enemy.y - p.y) < Math.hypot(best.x - p.x, best.y - p.y) ? enemy : best, survivor.enemies[0]);
+      const angle = Math.atan2(target.y - p.y, target.x - p.x);
+      const spread = p.level >= 7 ? [-0.26, -0.1, 0.1, 0.26] : p.level >= 4 ? [-0.18, 0, 0.18] : (p.level >= 2 ? [-0.08, 0.08] : [0]);
+      spread.forEach(offset => survivor.bullets.push({
+        x: p.x,
+        y: p.y,
+        vx: Math.cos(angle + offset) * p.bulletSpeed,
+        vy: Math.sin(angle + offset) * p.bulletSpeed,
+        r: p.pierce > 0 ? 5 : 4,
+        life: 980,
+        damage: p.damage,
+        pierce: p.pierce
+      }));
+      for (let i = 0; i < p.drones; i++) {
+        const spin = survivor.elapsed / 420 + i * Math.PI * 2 / Math.max(1, p.drones);
+        survivor.bullets.push({
+          x: p.x + Math.cos(spin) * 30,
+          y: p.y + Math.sin(spin) * 30,
+          vx: Math.cos(spin) * (p.bulletSpeed * 0.86),
+          vy: Math.sin(spin) * (p.bulletSpeed * 0.86),
+          r: 4,
+          life: 720,
+          damage: p.damage * 0.7,
+          pierce: 1
+        });
+      }
+    }
+
+    function triggerSurvivorNova() {
+      const p = survivor.player;
+      if (!p || p.novaCooldown > 0) return;
+      p.novaCooldown = 6200;
+      p.novaFlash = 320;
+      survivor.enemies.forEach(enemy => {
+        const d = Math.hypot(enemy.x - p.x, enemy.y - p.y);
+        if (d < 138) enemy.hp -= 95;
+      });
+      survivorBurst(p.x, p.y, '#BAE6FD', 68);
     }
 
     function finishSurvivor(text) {
@@ -3807,6 +3477,9 @@ function init() {
       survivor.spawn += dt;
       survivor.shot += dt;
       const c = survivor.canvas;
+      p.novaCooldown = Math.max(0, p.novaCooldown - dt);
+      p.novaFlash = Math.max(0, p.novaFlash - dt);
+      if (premiumKeys.action) triggerSurvivorNova();
       let mx = (premiumKeys.right ? 1 : 0) - (premiumKeys.left ? 1 : 0);
       let my = (premiumKeys.down ? 1 : 0) - (premiumKeys.up ? 1 : 0);
       const len = Math.hypot(mx, my) || 1;
@@ -3818,18 +3491,17 @@ function init() {
       }
       if (survivor.shot > p.fireRate && survivor.enemies.length) {
         survivor.shot = 0;
-        const target = survivor.enemies.reduce((best, enemy) => Math.hypot(enemy.x - p.x, enemy.y - p.y) < Math.hypot(best.x - p.x, best.y - p.y) ? enemy : best, survivor.enemies[0]);
-        const angle = Math.atan2(target.y - p.y, target.x - p.x);
-        const spread = p.level >= 4 ? [-0.18, 0, 0.18] : (p.level >= 2 ? [-0.08, 0.08] : [0]);
-        spread.forEach(offset => survivor.bullets.push({ x: p.x, y: p.y, vx: Math.cos(angle + offset) * p.bulletSpeed, vy: Math.sin(angle + offset) * p.bulletSpeed, r: 4, life: 900, damage: p.damage }));
+        fireSurvivorVolley();
       }
       survivor.bullets.forEach(b => { b.x += b.vx * dt / 1000; b.y += b.vy * dt / 1000; b.life -= dt; });
       survivor.bullets = survivor.bullets.filter(b => b.life > 0 && b.x > -20 && b.y > -20 && b.x < c.width + 20 && b.y < c.height + 20);
       survivor.enemies.forEach(enemy => {
         const a = Math.atan2(p.y - enemy.y, p.x - enemy.x);
-        enemy.x += Math.cos(a) * enemy.speed * dt / 1000;
-        enemy.y += Math.sin(a) * enemy.speed * dt / 1000;
-        if (Math.hypot(enemy.x - p.x, enemy.y - p.y) < enemy.r + p.r) p.hp -= 19 * dt / 1000;
+        enemy.pulse += dt / 280;
+        const strafe = enemy.type === 'charger' ? Math.sin(enemy.pulse) * 0.85 : enemy.type === 'warden' ? Math.sin(enemy.pulse) * 0.35 : 0;
+        enemy.x += (Math.cos(a) * enemy.speed + Math.cos(a + Math.PI / 2) * enemy.speed * strafe) * dt / 1000;
+        enemy.y += (Math.sin(a) * enemy.speed + Math.sin(a + Math.PI / 2) * enemy.speed * strafe) * dt / 1000;
+        if (Math.hypot(enemy.x - p.x, enemy.y - p.y) < enemy.r + p.r) p.hp -= (enemy.elite ? 28 : 18) * dt / 1000;
       });
       for (let i = survivor.enemies.length - 1; i >= 0; i--) {
         const enemy = survivor.enemies[i];
@@ -3837,11 +3509,13 @@ function init() {
           const b = survivor.bullets[j];
           if (Math.hypot(enemy.x - b.x, enemy.y - b.y) < enemy.r + b.r) {
             enemy.hp -= b.damage;
-            survivor.bullets.splice(j, 1);
+            if (b.pierce > 0) b.pierce--;
+            else survivor.bullets.splice(j, 1);
             survivorBurst(b.x, b.y, enemy.color, 4);
             if (enemy.hp <= 0) {
               survivor.score += enemy.value;
               survivor.orbs.push({ x: enemy.x, y: enemy.y, r: 6, value: enemy.value });
+              if (Math.random() < (enemy.elite ? 0.42 : 0.08)) survivor.pickups.push({ x: enemy.x, y: enemy.y, r: 8, type: pick(['heal', 'bomb', 'haste']) });
               survivorBurst(enemy.x, enemy.y, enemy.color, 14);
               survivor.enemies.splice(i, 1);
             }
@@ -3849,23 +3523,41 @@ function init() {
           }
         }
       }
+      survivor.enemies = survivor.enemies.filter(enemy => {
+        if (enemy.hp > 0) return true;
+        survivor.orbs.push({ x: enemy.x, y: enemy.y, r: 6, value: enemy.value });
+        survivorBurst(enemy.x, enemy.y, enemy.color, 18);
+        return false;
+      });
       survivor.orbs.forEach(orb => {
-        if (Math.hypot(p.x - orb.x, p.y - orb.y) < 85) {
+        if (Math.hypot(p.x - orb.x, p.y - orb.y) < p.magnet) {
           orb.x += (p.x - orb.x) * 0.12;
           orb.y += (p.y - orb.y) * 0.12;
         }
+      });
+      survivor.pickups.forEach(item => {
+        if (Math.hypot(p.x - item.x, p.y - item.y) < p.magnet * 0.72) {
+          item.x += (p.x - item.x) * 0.08;
+          item.y += (p.y - item.y) * 0.08;
+        }
+      });
+      survivor.pickups = survivor.pickups.filter(item => {
+        if (Math.hypot(p.x - item.x, p.y - item.y) >= p.r + item.r) return true;
+        if (item.type === 'heal') p.hp = Math.min(115, p.hp + 24);
+        if (item.type === 'bomb') survivor.enemies.forEach(enemy => enemy.hp -= 72);
+        if (item.type === 'haste') {
+          p.fireRate = Math.max(70, p.fireRate - 12);
+          p.speed += 8;
+        }
+        survivorBurst(item.x, item.y, item.type === 'heal' ? '#34D399' : item.type === 'bomb' ? '#F97316' : '#BAE6FD', 26);
+        return false;
       });
       survivor.orbs = survivor.orbs.filter(orb => {
         if (Math.hypot(p.x - orb.x, p.y - orb.y) < p.r + orb.r) {
           p.xp += orb.value;
           survivor.score += orb.value;
           if (p.xp >= 90 + p.level * 38) {
-            p.level++;
-            p.xp = 0;
-            p.fireRate = Math.max(90, p.fireRate - 26);
-            p.damage += 7;
-            p.hp = Math.min(100, p.hp + 22);
-            survivorBurst(p.x, p.y, '#34D399', 34);
+            levelUpSurvivor();
           }
           return false;
         }
@@ -3887,10 +3579,38 @@ function init() {
       ctx.fillRect(0, 0, c.width, c.height);
       drawGrid(ctx, c.width, c.height, 'rgba(6, 182, 212, 0.07)');
       survivor.orbs.forEach(o => { ctx.fillStyle = '#FBBF24'; ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, Math.PI * 2); ctx.fill(); });
+      survivor.pickups.forEach(item => {
+        ctx.fillStyle = item.type === 'heal' ? '#34D399' : item.type === 'bomb' ? '#F97316' : '#BAE6FD';
+        ctx.beginPath();
+        ctx.moveTo(item.x, item.y - 10);
+        ctx.lineTo(item.x + 10, item.y);
+        ctx.lineTo(item.x, item.y + 10);
+        ctx.lineTo(item.x - 10, item.y);
+        ctx.closePath();
+        ctx.fill();
+      });
       survivor.bullets.forEach(b => { ctx.fillStyle = '#BAE6FD'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill(); });
-      survivor.enemies.forEach(e => { ctx.fillStyle = e.color; ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); ctx.fill(); });
+      survivor.enemies.forEach(e => {
+        ctx.fillStyle = e.color;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.r + (e.elite ? Math.sin(e.pulse) * 2 : 0), 0, Math.PI * 2);
+        ctx.fill();
+        if (e.elite || e.type === 'warden') {
+          ctx.fillStyle = 'rgba(255,255,255,0.22)';
+          ctx.fillRect(e.x - e.r, e.y - e.r - 8, e.r * 2, 3);
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(e.x - e.r, e.y - e.r - 8, e.r * 2 * Math.max(0, e.hp / e.maxHp), 3);
+        }
+      });
       survivor.particles.forEach(pt => { ctx.globalAlpha = Math.max(0, pt.life / 420); ctx.fillStyle = pt.color; ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.r, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; });
       const p = survivor.player || { x: 280, y: 180, r: 12, hp: 100 };
+      if (p.novaFlash > 0) {
+        ctx.strokeStyle = `rgba(186, 230, 253, ${p.novaFlash / 320})`;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 138 * (1 - p.novaFlash / 480), 0, Math.PI * 2);
+        ctx.stroke();
+      }
       ctx.shadowColor = '#34D399';
       ctx.shadowBlur = 16;
       ctx.fillStyle = '#34D399';
@@ -3906,6 +3626,7 @@ function init() {
       ctx.fillStyle = '#fff';
       ctx.font = '700 12px JetBrains Mono, monospace';
       ctx.fillText(`${Math.max(0, 90 - survivor.elapsed / 1000).toFixed(0)}s`, 14, 22);
+      ctx.fillText(`NOVA ${p.novaCooldown > 0 ? Math.ceil(p.novaCooldown / 1000) : 'READY'}`, 14, 40);
     }
 
     document.getElementById('premium-survivor-start').addEventListener('click', startSurvivor);
@@ -3928,10 +3649,11 @@ function init() {
       last: 0,
       t: 0,
       score: 0,
-      player: { x: 280, y: 300, r: 12, lives: 3, invuln: 0, dash: 0 },
+      player: { x: 280, y: 300, r: 12, lives: 3, invuln: 0, dash: 0, dashCooldown: 0, graze: 0 },
       boss: { x: 280, y: 92, r: 38, hp: 1000, maxHp: 1000, phase: 1 },
       shots: [],
       bullets: [],
+      particles: [],
       shotTimer: 0,
       patternTimer: 0
     };
@@ -3941,6 +3663,8 @@ function init() {
       document.getElementById('premium-boss-lives').textContent = bossMode.player.lives;
       document.getElementById('premium-boss-best').textContent = localStorage.getItem(bossMode.bestKey) || '0';
       document.getElementById('premium-boss-hp').textContent = `${Math.max(0, Math.ceil(bossMode.boss.hp / bossMode.boss.maxHp * 100))}%`;
+      document.getElementById('premium-boss-phase').textContent = ['I', 'II', 'III'][bossMode.boss.phase - 1] || 'III';
+      document.getElementById('premium-boss-dash').textContent = bossMode.player.dashCooldown > 0 ? `${Math.ceil(bossMode.player.dashCooldown / 1000)}s` : 'READY';
     }
 
     function startBoss() {
@@ -3948,10 +3672,11 @@ function init() {
       bossMode.last = performance.now();
       bossMode.t = 0;
       bossMode.score = 0;
-      bossMode.player = { x: 280, y: 300, r: 12, lives: 3, invuln: 1000, dash: 0 };
+      bossMode.player = { x: 280, y: 300, r: 12, lives: 3, invuln: 1000, dash: 0, dashCooldown: 0, graze: 0 };
       bossMode.boss = { x: 280, y: 92, r: 38, hp: 1000, maxHp: 1000, phase: 1 };
       bossMode.shots = [];
       bossMode.bullets = [];
+      bossMode.particles = [];
       bossMode.shotTimer = 0;
       bossMode.patternTimer = 0;
       setBossUi();
@@ -3969,18 +3694,39 @@ function init() {
       overlay(bossMode.ctx, bossMode.canvas.width, bossMode.canvas.height, text, `Score ${Math.floor(bossMode.score)} · 点击开战再来一局`);
     }
 
+    function bossSpark(x, y, color, count = 8) {
+      for (let i = 0; i < count; i++) {
+        bossMode.particles.push({ x, y, vx: (Math.random() - 0.5) * 160, vy: (Math.random() - 0.5) * 160, r: Math.random() * 2 + 1, life: 360, color });
+      }
+    }
+
     function spawnBossPattern() {
       const b = bossMode.boss;
       const phase = b.hp < 330 ? 3 : (b.hp < 660 ? 2 : 1);
       b.phase = phase;
-      const count = 12 + phase * 6;
-      for (let i = 0; i < count; i++) {
-        const angle = Math.PI * 2 * i / count + bossMode.t * 0.002;
-        bossMode.bullets.push({ x: b.x, y: b.y, vx: Math.cos(angle) * (92 + phase * 22), vy: Math.sin(angle) * (92 + phase * 22), r: 5, color: ['#06B6D4', '#8B5CF6', '#EC4899', '#F97316'][i % 4] });
+      const pattern = pick(phase === 1 ? ['ring', 'snipe'] : phase === 2 ? ['ring', 'snipe', 'rain'] : ['ring', 'snipe', 'rain', 'sweep']);
+      if (pattern === 'ring') {
+        const count = 14 + phase * 8;
+        for (let i = 0; i < count; i++) {
+          const angle = Math.PI * 2 * i / count + bossMode.t * 0.002;
+          bossMode.bullets.push({ x: b.x, y: b.y, vx: Math.cos(angle) * (96 + phase * 26), vy: Math.sin(angle) * (96 + phase * 26), r: 5, color: ['#06B6D4', '#8B5CF6', '#EC4899', '#F97316'][i % 4], grazed: false });
+        }
       }
-      if (phase >= 2) {
+      if (pattern === 'snipe') {
         const base = Math.atan2(bossMode.player.y - b.y, bossMode.player.x - b.x);
-        for (let i = -2; i <= 2; i++) bossMode.bullets.push({ x: b.x, y: b.y, vx: Math.cos(base + i * 0.16) * 190, vy: Math.sin(base + i * 0.16) * 190, r: 6, color: '#F97316' });
+        for (let i = -3; i <= 3; i++) bossMode.bullets.push({ x: b.x, y: b.y, vx: Math.cos(base + i * 0.13) * (178 + phase * 22), vy: Math.sin(base + i * 0.13) * (178 + phase * 22), r: 6, color: '#F97316', grazed: false });
+      }
+      if (pattern === 'rain') {
+        for (let i = 0; i < 18 + phase * 4; i++) {
+          const x = 20 + i * 30 + Math.sin(bossMode.t / 300 + i) * 10;
+          bossMode.bullets.push({ x, y: -18, vx: Math.sin(i) * 18, vy: 145 + phase * 28, r: 5, color: '#A78BFA', grazed: false });
+        }
+      }
+      if (pattern === 'sweep') {
+        for (let i = 0; i < 2; i++) {
+          const fromLeft = i === 0;
+          bossMode.bullets.push({ x: fromLeft ? -20 : bossMode.canvas.width + 20, y: 128 + i * 74, vx: fromLeft ? 220 : -220, vy: 18, r: 9, color: '#EC4899', grazed: false });
+        }
       }
     }
 
@@ -3995,16 +3741,21 @@ function init() {
       bossMode.patternTimer += dt;
       p.invuln = Math.max(0, p.invuln - dt);
       p.dash = Math.max(0, p.dash - dt);
-      p.x = Math.max(16, Math.min(bossMode.canvas.width - 16, p.x + ((premiumKeys.right ? 1 : 0) - (premiumKeys.left ? 1 : 0)) * (p.dash > 0 ? 390 : 230) * dt / 1000));
-      if (premiumKeys.action && p.dash <= 0) {
-        p.dash = 180;
-        p.invuln = Math.max(p.invuln, 240);
+      p.dashCooldown = Math.max(0, p.dashCooldown - dt);
+      const speed = p.dash > 0 ? 410 : 225;
+      p.x = clamp(p.x + ((premiumKeys.right ? 1 : 0) - (premiumKeys.left ? 1 : 0)) * speed * dt / 1000, 16, bossMode.canvas.width - 16);
+      p.y = clamp(p.y + ((premiumKeys.down ? 1 : 0) - (premiumKeys.up ? 1 : 0)) * speed * 0.72 * dt / 1000, 178, bossMode.canvas.height - 18);
+      if (premiumKeys.action && p.dashCooldown <= 0) {
+        p.dash = 210;
+        p.dashCooldown = 1150;
+        p.invuln = Math.max(p.invuln, 280);
+        bossSpark(p.x, p.y, '#34D399', 16);
       }
       b.x = bossMode.canvas.width / 2 + Math.sin(bossMode.t / 850) * 130;
       b.y = 84 + Math.sin(bossMode.t / 520) * 18;
-      if (bossMode.shotTimer > 95) {
+      if (bossMode.shotTimer > 88) {
         bossMode.shotTimer = 0;
-        bossMode.shots.push({ x: p.x, y: p.y - 16, vy: -430, r: 4, damage: 9 });
+        bossMode.shots.push({ x: p.x, y: p.y - 16, vy: -470, r: 4, damage: 9 + Math.floor(p.graze / 9) });
       }
       if (bossMode.patternTimer > Math.max(520, 1150 - b.phase * 170)) {
         bossMode.patternTimer = 0;
@@ -4012,20 +3763,30 @@ function init() {
       }
       bossMode.shots.forEach(s => s.y += s.vy * dt / 1000);
       bossMode.bullets.forEach(s => { s.x += s.vx * dt / 1000; s.y += s.vy * dt / 1000; });
+      bossMode.particles.forEach(pt => { pt.x += pt.vx * dt / 1000; pt.y += pt.vy * dt / 1000; pt.life -= dt; });
+      bossMode.particles = bossMode.particles.filter(pt => pt.life > 0);
       bossMode.shots = bossMode.shots.filter(s => s.y > -20);
       bossMode.bullets = bossMode.bullets.filter(s => s.x > -40 && s.x < bossMode.canvas.width + 40 && s.y > -40 && s.y < bossMode.canvas.height + 40);
       bossMode.shots = bossMode.shots.filter(s => {
         if (Math.hypot(s.x - b.x, s.y - b.y) < s.r + b.r) {
           b.hp -= s.damage;
           bossMode.score += 6;
+          bossSpark(s.x, s.y, '#BAE6FD', 2);
           return false;
         }
         return true;
       });
       bossMode.bullets = bossMode.bullets.filter(s => {
+        const distance = Math.hypot(s.x - p.x, s.y - p.y);
+        if (!s.grazed && distance < s.r + p.r + 12 && distance > s.r + p.r) {
+          s.grazed = true;
+          p.graze++;
+          bossMode.score += 18;
+        }
         if (p.invuln <= 0 && Math.hypot(s.x - p.x, s.y - p.y) < s.r + p.r) {
           p.lives--;
           p.invuln = 1400;
+          bossSpark(p.x, p.y, '#EF4444', 26);
           return false;
         }
         return true;
@@ -4065,6 +3826,21 @@ function init() {
       ctx.restore();
       bossMode.shots.forEach(s => { ctx.fillStyle = '#BAE6FD'; ctx.fillRect(s.x - 2, s.y - 8, 4, 12); });
       bossMode.bullets.forEach(s => { ctx.fillStyle = s.color; ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill(); });
+      bossMode.particles.forEach(pt => {
+        ctx.globalAlpha = Math.max(0, pt.life / 360);
+        ctx.fillStyle = pt.color;
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, pt.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      });
+      if (p.dash > 0) {
+        ctx.strokeStyle = 'rgba(52, 211, 153, 0.75)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 24, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       ctx.fillStyle = p.invuln > 0 ? '#34D399' : '#06B6D4';
       ctx.beginPath();
       ctx.moveTo(p.x, p.y - 16);
@@ -4076,6 +3852,9 @@ function init() {
       ctx.fillRect(18, 16, c.width - 36, 8);
       ctx.fillStyle = '#EC4899';
       ctx.fillRect(18, 16, (c.width - 36) * Math.max(0, b.hp / b.maxHp), 8);
+      ctx.fillStyle = '#fff';
+      ctx.font = '700 12px JetBrains Mono, monospace';
+      ctx.fillText(`PHASE ${b.phase}  GRAZE ${p.graze}`, 18, 42);
     }
 
     document.getElementById('premium-boss-start').addEventListener('click', startBoss);
@@ -4093,8 +3872,12 @@ function init() {
       keys: [],
       exit: { x: 18, y: 11 },
       guards: [],
+      terminals: [],
+      doors: [],
       collected: 0,
       steps: 0,
+      cloaks: 2,
+      cloakTurns: 0,
       alert: 'LOW',
       won: false
     };
@@ -4102,6 +3885,8 @@ function init() {
     function setHeistUi() {
       document.getElementById('premium-heist-keys').textContent = heist.collected;
       document.getElementById('premium-heist-best').textContent = localStorage.getItem(heist.bestKey) || '0';
+      document.getElementById('premium-heist-steps').textContent = heist.steps;
+      document.getElementById('premium-heist-tools').textContent = heist.cloakTurns > 0 ? `GHOST ${heist.cloakTurns}` : `CLOAK ${heist.cloaks}`;
       const alertEl = document.getElementById('premium-heist-alert');
       alertEl.textContent = heist.alert;
       alertEl.style.color = heist.alert === 'HIGH' ? '#EF4444' : (heist.alert === 'MID' ? '#FBBF24' : '#34D399');
@@ -4112,13 +3897,40 @@ function init() {
       heist.player = { x: 1, y: 1 };
       heist.keys = [{ x: 5, y: 2 }, { x: 10, y: 5 }, { x: 15, y: 3 }, { x: 13, y: 10 }];
       heist.exit = { x: 18, y: 11 };
-      heist.guards = [{ x: 7, y: 8, dir: 1, axis: 'x', min: 5, max: 11 }, { x: 16, y: 7, dir: -1, axis: 'y', min: 3, max: 10 }, { x: 2, y: 10, dir: 1, axis: 'x', min: 2, max: 8 }];
+      heist.guards = [
+        { x: 7, y: 8, dir: 1, axis: 'x', min: 5, max: 11, cone: 3 },
+        { x: 16, y: 7, dir: -1, axis: 'y', min: 3, max: 10, cone: 4 },
+        { x: 2, y: 10, dir: 1, axis: 'x', min: 2, max: 8, cone: 3 },
+        { x: 11, y: 2, dir: 1, axis: 'y', min: 2, max: 7, cone: 2 }
+      ];
+      heist.terminals = [{ x: 3, y: 5, used: false }, { x: 17, y: 9, used: false }];
+      heist.doors = [{ x: 9, y: 8, open: false }, { x: 12, y: 4, open: false }];
       heist.collected = 0;
       heist.steps = 0;
+      heist.cloaks = 2;
+      heist.cloakTurns = 0;
       heist.alert = 'LOW';
       heist.won = false;
       setHeistUi();
       focusStage();
+      drawHeist();
+    }
+
+    function guardSeesPlayer(g) {
+      if (heist.cloakTurns > 0) return false;
+      const dx = heist.player.x - g.x;
+      const dy = heist.player.y - g.y;
+      if (Math.abs(dx) + Math.abs(dy) > g.cone + 1) return false;
+      if (g.axis === 'x') return dy === 0 || Math.abs(dy) === 1 && Math.abs(dx) <= 2;
+      return dx === 0 || Math.abs(dx) === 1 && Math.abs(dy) <= 2;
+    }
+
+    function triggerHeistCloak() {
+      if (premiumActive !== 'heist' || heist.won || heist.cloakTurns > 0 || heist.cloaks <= 0) return;
+      heist.cloaks--;
+      heist.cloakTurns = 4;
+      heist.alert = 'GHOST';
+      setHeistUi();
       drawHeist();
     }
 
@@ -4127,8 +3939,10 @@ function init() {
       const nx = heist.player.x + dx;
       const ny = heist.player.y + dy;
       if (!heist.grid[ny] || heist.grid[ny][nx]) return;
+      if (heist.doors.some(door => !door.open && door.x === nx && door.y === ny)) return;
       heist.player = { x: nx, y: ny };
       heist.steps++;
+      heist.cloakTurns = Math.max(0, heist.cloakTurns - 1);
       heist.guards.forEach(g => {
         g[g.axis] += g.dir;
         if (g[g.axis] < g.min || g[g.axis] > g.max) {
@@ -4141,10 +3955,20 @@ function init() {
         if (got) heist.collected++;
         return !got;
       });
-      heist.alert = heist.guards.some(g => Math.abs(g.x - heist.player.x) + Math.abs(g.y - heist.player.y) <= 2) ? 'HIGH' : (heist.guards.some(g => Math.abs(g.x - heist.player.x) + Math.abs(g.y - heist.player.y) <= 4) ? 'MID' : 'LOW');
-      if (heist.guards.some(g => g.x === heist.player.x && g.y === heist.player.y)) {
+      heist.terminals.forEach(t => {
+        if (!t.used && t.x === heist.player.x && t.y === heist.player.y) {
+          t.used = true;
+          const door = heist.doors.find(d => !d.open);
+          if (door) door.open = true;
+          heist.cloaks = Math.min(3, heist.cloaks + 1);
+        }
+      });
+      const seen = heist.guards.some(guardSeesPlayer);
+      heist.alert = heist.cloakTurns > 0 ? 'GHOST' : seen ? 'HIGH' : (heist.guards.some(g => Math.abs(g.x - heist.player.x) + Math.abs(g.y - heist.player.y) <= 4) ? 'MID' : 'LOW');
+      if (heist.guards.some(g => g.x === heist.player.x && g.y === heist.player.y) || seen) {
         heist.collected = Math.max(0, heist.collected - 1);
         heist.player = { x: 1, y: 1 };
+        heist.cloakTurns = 0;
         heist.alert = 'HIGH';
       }
       if (heist.collected >= 4 && heist.player.x === heist.exit.x && heist.player.y === heist.exit.y) {
@@ -4170,16 +3994,36 @@ function init() {
       }
       ctx.fillStyle = heist.collected >= 4 ? '#34D399' : '#475569';
       ctx.fillRect(heist.exit.x * tile + 4, heist.exit.y * tile + 4, tile - 8, tile - 8);
+      heist.doors.forEach(door => {
+        ctx.fillStyle = door.open ? 'rgba(52, 211, 153, 0.22)' : '#7f1d1d';
+        ctx.fillRect(door.x * tile + 3, door.y * tile + 3, tile - 6, tile - 6);
+      });
+      heist.terminals.forEach(t => {
+        ctx.fillStyle = t.used ? '#34D399' : '#BAE6FD';
+        ctx.fillRect(t.x * tile + 6, t.y * tile + 8, tile - 12, tile - 14);
+      });
       heist.keys.forEach(k => { ctx.fillStyle = '#FBBF24'; ctx.beginPath(); ctx.arc(k.x * tile + 14, k.y * tile + 14, 7, 0, Math.PI * 2); ctx.fill(); });
       heist.guards.forEach(g => {
         ctx.fillStyle = 'rgba(239, 68, 68, 0.14)';
         ctx.beginPath();
         ctx.arc(g.x * tile + 14, g.y * tile + 14, tile * 2.2, 0, Math.PI * 2);
         ctx.fill();
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.18)';
+        ctx.beginPath();
+        ctx.moveTo(g.x * tile + 14, g.y * tile + 14);
+        if (g.axis === 'x') {
+          ctx.lineTo((g.x + g.dir * g.cone) * tile + 14, (g.y - 1.35) * tile + 14);
+          ctx.lineTo((g.x + g.dir * g.cone) * tile + 14, (g.y + 1.35) * tile + 14);
+        } else {
+          ctx.lineTo((g.x - 1.35) * tile + 14, (g.y + g.dir * g.cone) * tile + 14);
+          ctx.lineTo((g.x + 1.35) * tile + 14, (g.y + g.dir * g.cone) * tile + 14);
+        }
+        ctx.closePath();
+        ctx.fill();
         ctx.fillStyle = '#EF4444';
         ctx.fillRect(g.x * tile + 6, g.y * tile + 6, 16, 16);
       });
-      ctx.fillStyle = '#06B6D4';
+      ctx.fillStyle = heist.cloakTurns > 0 ? '#A78BFA' : '#06B6D4';
       ctx.fillRect(heist.player.x * tile + 5, heist.player.y * tile + 5, 18, 18);
       if (heist.won) overlay(ctx, c.width, c.height, 'VAULT CLEAR', '高分已保存 · 点击生成任务再来一局');
     }
@@ -4194,14 +4038,28 @@ function init() {
       grid: [],
       score: 0,
       moves: 30,
-      combo: 0
+      combo: 0,
+      target: 9000,
+      finished: false
     };
+
+    function randomChainCell() {
+      const roll = Math.random();
+      if (roll < 0.035) return 'bomb';
+      if (roll < 0.06) return 'prism';
+      return chain.colors[Math.floor(Math.random() * chain.colors.length)];
+    }
 
     function newChain() {
       chain.score = 0;
       chain.moves = 30;
       chain.combo = 0;
-      chain.grid = Array.from({ length: 7 }, () => Array.from({ length: 7 }, () => chain.colors[Math.floor(Math.random() * chain.colors.length)]));
+      chain.finished = false;
+      chain.grid = Array.from({ length: 7 }, () => Array.from({ length: 7 }, randomChainCell));
+      chain.grid[2][2] = 'cyan';
+      chain.grid[2][3] = 'cyan';
+      chain.grid[2][4] = 'cyan';
+      chain.grid[3][3] = 'bomb';
       focusStage();
       renderChain();
     }
@@ -4217,9 +4075,44 @@ function init() {
       return seen;
     }
 
+    function collectChainBlast(r, c, kind) {
+      const cells = new Set();
+      if (kind === 'bomb') {
+        for (let y = r - 1; y <= r + 1; y++) {
+          for (let x = c - 1; x <= c + 1; x++) {
+            if (y >= 0 && x >= 0 && y < 7 && x < 7) cells.add(`${y},${x}`);
+          }
+        }
+      } else {
+        const color = pick(chain.colors);
+        chain.grid.forEach((row, rowIndex) => row.forEach((value, colIndex) => {
+          if (value === color) cells.add(`${rowIndex},${colIndex}`);
+        }));
+      }
+      return [...cells];
+    }
+
+    function settleChain() {
+      for (let c = 0; c < 7; c++) {
+        const column = [];
+        for (let r = 6; r >= 0; r--) if (chain.grid[r][c]) column.push(chain.grid[r][c]);
+        while (column.length < 7) column.push(randomChainCell());
+        for (let r = 6; r >= 0; r--) chain.grid[r][c] = column[6 - r];
+      }
+    }
+
+    function finishChainIfNeeded() {
+      if (chain.finished) return;
+      if (chain.moves <= 0 || chain.score >= chain.target) {
+        chain.finished = true;
+        localStorage.setItem(chain.bestKey, String(Math.max(Number(localStorage.getItem(chain.bestKey) || 0), chain.score)));
+      }
+    }
+
     function popChain(r, c) {
-      if (chain.moves <= 0) return;
-      const group = [...floodChain(r, c, chain.grid[r][c])];
+      if (chain.moves <= 0 || chain.finished) return;
+      const value = chain.grid[r][c];
+      const group = value === 'bomb' || value === 'prism' ? collectChainBlast(r, c, value) : [...floodChain(r, c, value)];
       if (group.length < 3) {
         chain.combo = 0;
         renderChain();
@@ -4227,18 +4120,17 @@ function init() {
       }
       chain.moves--;
       chain.combo = group.length;
-      chain.score += group.length * group.length * 12;
+      chain.score += group.length * group.length * (value === 'bomb' || value === 'prism' ? 18 : 12);
       group.forEach(item => {
         const [row, col] = item.split(',').map(Number);
         chain.grid[row][col] = null;
       });
-      for (let c = 0; c < 7; c++) {
-        const column = [];
-        for (let r = 6; r >= 0; r--) if (chain.grid[r][c]) column.push(chain.grid[r][c]);
-        while (column.length < 7) column.push(chain.colors[Math.floor(Math.random() * chain.colors.length)]);
-        for (let r = 6; r >= 0; r--) chain.grid[r][c] = column[6 - r];
+      if (group.length >= 7) {
+        const [row, col] = group[0].split(',').map(Number);
+        chain.grid[row][col] = group.length >= 11 ? 'prism' : 'bomb';
       }
-      if (chain.moves === 0) localStorage.setItem(chain.bestKey, String(Math.max(Number(localStorage.getItem(chain.bestKey) || 0), chain.score)));
+      settleChain();
+      finishChainIfNeeded();
       renderChain();
     }
 
@@ -4248,6 +4140,7 @@ function init() {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = `chain-cell chain-${color}`;
+        btn.setAttribute('aria-label', color === 'bomb' ? '爆裂核心' : color === 'prism' ? '棱镜核心' : `${color} 能量`);
         btn.addEventListener('click', () => popChain(r, c));
         chain.board.appendChild(btn);
       }));
@@ -4255,6 +4148,8 @@ function init() {
       document.getElementById('premium-chain-score').textContent = chain.score;
       document.getElementById('premium-chain-best').textContent = localStorage.getItem(chain.bestKey) || '0';
       document.getElementById('premium-chain-combo').textContent = chain.combo;
+      document.getElementById('premium-chain-target').textContent = chain.score >= chain.target ? 'CLEAR' : chain.target;
+      chain.board.classList.toggle('chain-cleared', chain.finished && chain.score >= chain.target);
     }
 
     document.getElementById('premium-chain-new').addEventListener('click', newChain);
@@ -4275,6 +4170,7 @@ function init() {
         if (e.code === 'ArrowDown' || e.code === 'KeyS') moveHeist(0, 1);
         if (e.code === 'ArrowLeft' || e.code === 'KeyA') moveHeist(-1, 0);
         if (e.code === 'ArrowRight' || e.code === 'KeyD') moveHeist(1, 0);
+        if (e.code === 'Space') triggerHeistCloak();
       }
     });
 
@@ -4285,6 +4181,8 @@ function init() {
       if (e.code === 'ArrowRight' || e.code === 'KeyD') premiumKeys.right = false;
       if (e.code === 'Space') premiumKeys.action = false;
     });
+
+    window.addEventListener('blur', clearPremiumKeys);
   })();
 
   // 4. Cyber Astro-Runner Mario-style Game Engine
