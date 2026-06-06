@@ -2965,6 +2965,86 @@ main {
   font-size: 0.95rem;
 }
 
+.arcade-career-panel {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(220px, 1.15fr) minmax(220px, 1fr);
+  gap: 0.7rem;
+  margin-bottom: 1rem;
+}
+
+.career-rank-card,
+.career-daily-card,
+.career-achievements {
+  min-height: 74px;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(6, 182, 212, 0.1), rgba(52, 211, 153, 0.06)),
+    rgba(255, 255, 255, 0.035);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.career-rank-card span,
+.career-daily-card span {
+  display: block;
+  margin-bottom: 0.3rem;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.career-rank-card strong,
+.career-daily-card strong {
+  display: block;
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.98rem;
+  line-height: 1.25;
+}
+
+.career-rank-card small,
+.career-daily-card small {
+  display: block;
+  margin-top: 0.28rem;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+.career-achievements {
+  display: flex;
+  align-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  background:
+    linear-gradient(135deg, rgba(251, 191, 36, 0.11), rgba(236, 72, 153, 0.06)),
+    rgba(255, 255, 255, 0.035);
+}
+
+.career-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0.28rem 0.5rem;
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(251, 191, 36, 0.12);
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.career-badge-muted {
+  border-color: rgba(148, 163, 184, 0.18);
+  color: var(--text-muted);
+  background: rgba(148, 163, 184, 0.08);
+}
+
 .mini-game-tabs {
   display: flex;
   gap: 0.55rem;
@@ -3237,6 +3317,9 @@ main {
   .arcade-library-header {
     align-items: stretch;
     flex-direction: column;
+  }
+  .arcade-career-panel {
+    grid-template-columns: 1fr;
   }
   .mini-game-scoreboard {
     text-align: left;

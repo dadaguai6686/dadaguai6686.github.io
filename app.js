@@ -3089,6 +3089,19 @@ function init() {
           <strong id="premium-active-title">星核幸存者 Starcore Survivor</strong>
         </div>
       </div>
+      <div class="arcade-career-panel" aria-label="街机生涯总览">
+        <div class="career-rank-card">
+          <span>街机评级</span>
+          <strong id="premium-career-rating">RANK C</strong>
+          <small id="premium-career-total">总声望 0</small>
+        </div>
+        <div class="career-daily-card">
+          <span>今日挑战</span>
+          <strong id="premium-daily-challenge">加载挑战中...</strong>
+          <small id="premium-daily-status">完成后解锁限定徽章</small>
+        </div>
+        <div class="career-achievements" id="premium-achievement-feed" aria-live="polite"></div>
+      </div>
       <div class="mini-game-tabs" role="tablist" aria-label="精品小游戏选择">
         <button type="button" class="mini-game-tab active" data-premium-game="survivor">星核幸存者</button>
         <button type="button" class="mini-game-tab" data-premium-game="boss">棱镜 Boss</button>
@@ -3188,8 +3201,189 @@ function init() {
       survivor: '星核幸存者 Starcore Survivor',
       boss: '棱镜 Boss Rush',
       heist: '赛博潜入 Cyber Heist',
-      chain: '连锁炼金 Alchemy Chain'
+      chain: '连锁炼金 Alchemy Chain',
+      runner: '主线远征 Cyber Astro-Runner'
     };
+    const careerKey = 'atherix_premium_arcade_career_v2';
+    const medalRank = { none: 0, bronze: 1, silver: 2, gold: 3 };
+    const medalLabels = { none: '无', bronze: '铜', silver: '银', gold: '金' };
+    const medalRules = {
+      survivor: [
+        { name: 'gold', threshold: 2600 },
+        { name: 'silver', threshold: 1600 },
+        { name: 'bronze', threshold: 800 }
+      ],
+      boss: [
+        { name: 'gold', threshold: 2500 },
+        { name: 'silver', threshold: 1400 },
+        { name: 'bronze', threshold: 700 }
+      ],
+      heist: [
+        { name: 'gold', threshold: 1000 },
+        { name: 'silver', threshold: 800 },
+        { name: 'bronze', threshold: 550 }
+      ],
+      chain: [
+        { name: 'gold', threshold: 9000 },
+        { name: 'silver', threshold: 7000 },
+        { name: 'bronze', threshold: 4500 }
+      ],
+      runner: [
+        { name: 'gold', threshold: 2600 },
+        { name: 'silver', threshold: 1800 },
+        { name: 'bronze', threshold: 900 }
+      ]
+    };
+    const achievementDefs = [
+      { id: 'survivor_level_4', label: '星核觉醒', desc: '星核幸存者达到 4 级' },
+      { id: 'survivor_90', label: '深空存活', desc: '坚持完整 90 秒' },
+      { id: 'boss_phase_2', label: '棱镜破相', desc: 'Boss 进入第二阶段' },
+      { id: 'boss_clear', label: '碎光终结', desc: '击破棱镜核心' },
+      { id: 'heist_ghost', label: '幽影协议', desc: '成功启动隐身装置' },
+      { id: 'heist_clean', label: '无声撤离', desc: '低步数完成潜入' },
+      { id: 'chain_combo_9', label: '九连炼成', desc: '一次连锁爆破 9 格以上' },
+      { id: 'chain_clear', label: '贤者能场', desc: '完成连锁炼金目标' },
+      { id: 'runner_final', label: '星门远征', desc: '通关主线最终关' },
+      { id: 'daily_clear', label: '今日制霸', desc: '完成每日街机挑战' }
+    ];
+    const dailyChallenges = [
+      { id: 'survivor_1200', label: '星核幸存者得分 1200+', game: 'survivor', check: (game, score) => game === 'survivor' && score >= 1200 },
+      { id: 'boss_900', label: '棱镜 Boss 得分 900+', game: 'boss', check: (game, score) => game === 'boss' && score >= 900 },
+      { id: 'heist_700', label: '赛博潜入评分 700+', game: 'heist', check: (game, score) => game === 'heist' && score >= 700 },
+      { id: 'chain_6000', label: '连锁炼金得分 6000+', game: 'chain', check: (game, score) => game === 'chain' && score >= 6000 },
+      { id: 'runner_1500', label: '主线关卡评分 1500+', game: 'runner', check: (game, score) => game === 'runner' && score >= 1500 }
+    ];
+
+    function todayKey() {
+      const d = new Date();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${d.getFullYear()}-${month}-${day}`;
+    }
+
+    function getDailyChallenge() {
+      const key = todayKey();
+      const seed = key.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+      return { ...dailyChallenges[seed % dailyChallenges.length], date: key };
+    }
+
+    function createDefaultCareer() {
+      return {
+        totalScore: 0,
+        plays: 0,
+        best: {},
+        medals: {},
+        achievements: [],
+        daily: {}
+      };
+    }
+
+    function loadCareer() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(careerKey) || 'null');
+        const merged = { ...createDefaultCareer(), ...(parsed || {}) };
+        merged.best = merged.best && typeof merged.best === 'object' ? merged.best : {};
+        merged.medals = merged.medals && typeof merged.medals === 'object' ? merged.medals : {};
+        merged.achievements = Array.isArray(merged.achievements) ? merged.achievements : [];
+        merged.daily = merged.daily && typeof merged.daily === 'object' ? merged.daily : {};
+        merged.totalScore = Number.isFinite(Number(merged.totalScore)) ? Number(merged.totalScore) : 0;
+        merged.plays = Number.isFinite(Number(merged.plays)) ? Number(merged.plays) : 0;
+        return merged;
+      } catch {
+        return createDefaultCareer();
+      }
+    }
+
+    let career = loadCareer();
+
+    function saveCareer() {
+      localStorage.setItem(careerKey, JSON.stringify(career));
+    }
+
+    function medalFor(game, score) {
+      const rules = medalRules[game] || [];
+      const match = rules.find(rule => score >= rule.threshold);
+      return match?.name || 'none';
+    }
+
+    function careerRating() {
+      const medals = Object.values(career.medals || {});
+      const golds = medals.filter(medal => medal === 'gold').length;
+      const silvers = medals.filter(medal => medal === 'silver').length;
+      const unlocked = career.achievements.length;
+      if (golds >= 5 && unlocked >= 8) return 'RANK SSS';
+      if (golds >= 4 && unlocked >= 6) return 'RANK SS';
+      if (golds >= 2 && unlocked >= 4) return 'RANK S';
+      if (golds + silvers >= 3 || unlocked >= 3) return 'RANK A';
+      if (career.totalScore >= 2500) return 'RANK B';
+      return 'RANK C';
+    }
+
+    function renderAchievementFeed() {
+      const feed = document.getElementById('premium-achievement-feed');
+      if (!feed) return;
+      const latest = achievementDefs
+        .filter(def => career.achievements.includes(def.id))
+        .slice(-4);
+      feed.innerHTML = latest.length
+        ? latest.map(def => `<span class="career-badge" title="${def.desc}">${def.label}</span>`).join('')
+        : '<span class="career-badge career-badge-muted">等待首枚徽章</span>';
+    }
+
+    function updateCareerPanel() {
+      const ratingEl = document.getElementById('premium-career-rating');
+      const totalEl = document.getElementById('premium-career-total');
+      const challengeEl = document.getElementById('premium-daily-challenge');
+      const dailyStatusEl = document.getElementById('premium-daily-status');
+      const daily = getDailyChallenge();
+      if (ratingEl) ratingEl.textContent = careerRating();
+      if (totalEl) {
+        const medals = Object.entries(career.medals || {})
+          .map(([game, medal]) => `${titles[game] || game}: ${medalLabels[medal] || medal}`)
+          .join(' · ');
+        totalEl.textContent = `总声望 ${career.totalScore || 0}${medals ? ` · ${medals}` : ''}`;
+      }
+      if (challengeEl) challengeEl.textContent = daily.label;
+      if (dailyStatusEl) {
+        dailyStatusEl.textContent = career.daily?.date === daily.date && career.daily?.id === daily.id
+          ? '今日挑战已完成'
+          : '完成后解锁限定徽章';
+      }
+      renderAchievementFeed();
+    }
+
+    function unlockAchievement(id) {
+      if (!id || career.achievements.includes(id)) return false;
+      career.achievements.push(id);
+      saveCareer();
+      updateCareerPanel();
+      return true;
+    }
+
+    function recordPremiumResult(game, score, details = {}) {
+      const value = Math.max(0, Math.floor(score || 0));
+      career.totalScore = Math.max(0, (career.totalScore || 0) + value);
+      career.plays = (career.plays || 0) + 1;
+      career.best[game] = Math.max(Number(career.best[game] || 0), value);
+      const medal = medalFor(game, value);
+      if ((medalRank[medal] || 0) > (medalRank[career.medals[game] || 'none'] || 0)) {
+        career.medals[game] = medal;
+      }
+      const daily = getDailyChallenge();
+      if ((!career.daily || career.daily.date !== daily.date || career.daily.id !== daily.id) && daily.check(game, value, details)) {
+        career.daily = { date: daily.date, id: daily.id, done: true };
+        unlockAchievement('daily_clear');
+      }
+      saveCareer();
+      updateCareerPanel();
+    }
+
+    window.atherixArcadeCareer = {
+      recordResult: recordPremiumResult,
+      unlock: unlockAchievement,
+      update: updateCareerPanel
+    };
+    updateCareerPanel();
 
     function focusStage() {
       if (stage) stage.focus({ preventScroll: true });
@@ -3413,6 +3607,7 @@ function init() {
         p.damage += 9;
         p.build = 'Overcharge';
       }
+      if (p.level >= 4) unlockAchievement('survivor_level_4');
       survivorBurst(p.x, p.y, '#34D399', 42);
     }
 
@@ -3464,6 +3659,8 @@ function init() {
       cancelAnimationFrame(survivor.raf);
       const finalScore = Math.floor(survivor.score + survivor.elapsed / 120);
       localStorage.setItem(survivor.bestKey, String(Math.max(Number(localStorage.getItem(survivor.bestKey) || 0), finalScore)));
+      if (survivor.elapsed >= 90000) unlockAchievement('survivor_90');
+      recordPremiumResult('survivor', finalScore, { elapsed: survivor.elapsed, level: survivor.player?.level || 1 });
       setSurvivorUi();
       drawSurvivor();
       overlay(survivor.ctx, survivor.canvas.width, survivor.canvas.height, text, `Score ${finalScore} · 点击部署再来一局`);
@@ -3696,6 +3893,8 @@ function init() {
       bossMode.running = false;
       cancelAnimationFrame(bossMode.raf);
       localStorage.setItem(bossMode.bestKey, String(Math.max(Number(localStorage.getItem(bossMode.bestKey) || 0), Math.floor(bossMode.score))));
+      if (text === 'PRISM BROKEN') unlockAchievement('boss_clear');
+      recordPremiumResult('boss', bossMode.score, { phase: bossMode.boss.phase, graze: bossMode.player.graze });
       setBossUi();
       drawBoss();
       overlay(bossMode.ctx, bossMode.canvas.width, bossMode.canvas.height, text, `Score ${Math.floor(bossMode.score)} · 点击开战再来一局`);
@@ -3711,6 +3910,7 @@ function init() {
       const b = bossMode.boss;
       const phase = b.hp < 330 ? 3 : (b.hp < 660 ? 2 : 1);
       b.phase = phase;
+      if (phase >= 2) unlockAchievement('boss_phase_2');
       const pattern = pick(phase === 1 ? ['ring', 'snipe'] : phase === 2 ? ['ring', 'snipe', 'rain'] : ['ring', 'snipe', 'rain', 'sweep']);
       if (pattern === 'ring') {
         const count = 14 + phase * 8;
@@ -3923,13 +4123,33 @@ function init() {
       drawHeist();
     }
 
+    function heistTileBlocked(x, y) {
+      return !heist.grid[y] ||
+        heist.grid[y][x] === 1 ||
+        heist.doors.some(door => !door.open && door.x === x && door.y === y);
+    }
+
+    function heistVisionReach(g) {
+      for (let i = 1; i <= g.cone; i++) {
+        const x = g.axis === 'x' ? g.x + g.dir * i : g.x;
+        const y = g.axis === 'y' ? g.y + g.dir * i : g.y;
+        if (heistTileBlocked(x, y)) return i - 1;
+      }
+      return g.cone;
+    }
+
     function guardSeesPlayer(g) {
       if (heist.cloakTurns > 0) return false;
       const dx = heist.player.x - g.x;
       const dy = heist.player.y - g.y;
-      if (Math.abs(dx) + Math.abs(dy) > g.cone + 1) return false;
-      if (g.axis === 'x') return dy === 0 || Math.abs(dy) === 1 && Math.abs(dx) <= 2;
-      return dx === 0 || Math.abs(dx) === 1 && Math.abs(dy) <= 2;
+      if (g.axis === 'x') {
+        const forwardDistance = dx * g.dir;
+        if (forwardDistance <= 0 || forwardDistance > g.cone || Math.abs(dy) > 1) return false;
+        return forwardDistance <= heistVisionReach(g);
+      }
+      const forwardDistance = dy * g.dir;
+      if (forwardDistance <= 0 || forwardDistance > g.cone || Math.abs(dx) > 1) return false;
+      return forwardDistance <= heistVisionReach(g);
     }
 
     function triggerHeistCloak() {
@@ -3937,6 +4157,7 @@ function init() {
       heist.cloaks--;
       heist.cloakTurns = 4;
       heist.alert = 'GHOST';
+      unlockAchievement('heist_ghost');
       setHeistUi();
       drawHeist();
     }
@@ -3982,6 +4203,8 @@ function init() {
         heist.won = true;
         const score = Math.max(100, 1200 - heist.steps * 18);
         localStorage.setItem(heist.bestKey, String(Math.max(Number(localStorage.getItem(heist.bestKey) || 0), score)));
+        if (heist.steps <= 42) unlockAchievement('heist_clean');
+        recordPremiumResult('heist', score, { steps: heist.steps });
         heist.alert = 'CLEAR';
       }
       setHeistUi();
@@ -4011,19 +4234,20 @@ function init() {
       });
       heist.keys.forEach(k => { ctx.fillStyle = '#FBBF24'; ctx.beginPath(); ctx.arc(k.x * tile + 14, k.y * tile + 14, 7, 0, Math.PI * 2); ctx.fill(); });
       heist.guards.forEach(g => {
+        const reach = heistVisionReach(g);
         ctx.fillStyle = 'rgba(239, 68, 68, 0.14)';
         ctx.beginPath();
-        ctx.arc(g.x * tile + 14, g.y * tile + 14, tile * 2.2, 0, Math.PI * 2);
+        ctx.arc(g.x * tile + 14, g.y * tile + 14, tile * Math.max(1.25, reach * 0.72), 0, Math.PI * 2);
         ctx.fill();
         ctx.fillStyle = 'rgba(239, 68, 68, 0.18)';
         ctx.beginPath();
         ctx.moveTo(g.x * tile + 14, g.y * tile + 14);
         if (g.axis === 'x') {
-          ctx.lineTo((g.x + g.dir * g.cone) * tile + 14, (g.y - 1.35) * tile + 14);
-          ctx.lineTo((g.x + g.dir * g.cone) * tile + 14, (g.y + 1.35) * tile + 14);
+          ctx.lineTo((g.x + g.dir * reach) * tile + 14, (g.y - 1.35) * tile + 14);
+          ctx.lineTo((g.x + g.dir * reach) * tile + 14, (g.y + 1.35) * tile + 14);
         } else {
-          ctx.lineTo((g.x - 1.35) * tile + 14, (g.y + g.dir * g.cone) * tile + 14);
-          ctx.lineTo((g.x + 1.35) * tile + 14, (g.y + g.dir * g.cone) * tile + 14);
+          ctx.lineTo((g.x - 1.35) * tile + 14, (g.y + g.dir * reach) * tile + 14);
+          ctx.lineTo((g.x + 1.35) * tile + 14, (g.y + g.dir * reach) * tile + 14);
         }
         ctx.closePath();
         ctx.fill();
@@ -4047,7 +4271,8 @@ function init() {
       moves: 30,
       combo: 0,
       target: 9000,
-      finished: false
+      finished: false,
+      recorded: false
     };
 
     function randomChainCell() {
@@ -4062,6 +4287,7 @@ function init() {
       chain.moves = 30;
       chain.combo = 0;
       chain.finished = false;
+      chain.recorded = false;
       chain.grid = Array.from({ length: 7 }, () => Array.from({ length: 7 }, randomChainCell));
       chain.grid[2][2] = 'cyan';
       chain.grid[2][3] = 'cyan';
@@ -4113,6 +4339,11 @@ function init() {
       if (chain.moves <= 0 || chain.score >= chain.target) {
         chain.finished = true;
         localStorage.setItem(chain.bestKey, String(Math.max(Number(localStorage.getItem(chain.bestKey) || 0), chain.score)));
+        if (!chain.recorded) {
+          chain.recorded = true;
+          if (chain.score >= chain.target) unlockAchievement('chain_clear');
+          recordPremiumResult('chain', chain.score, { movesLeft: chain.moves, combo: chain.combo });
+        }
       }
     }
 
@@ -4127,6 +4358,7 @@ function init() {
       }
       chain.moves--;
       chain.combo = group.length;
+      if (group.length >= 9) unlockAchievement('chain_combo_9');
       chain.score += group.length * group.length * (value === 'bomb' || value === 'prism' ? 18 : 12);
       group.forEach(item => {
         const [row, col] = item.split(',').map(Number);
@@ -5444,6 +5676,16 @@ function init() {
     if (!bestLvlTime || parseFloat(finishTime) < parseFloat(bestLvlTime)) {
       localStorage.setItem(`atherix_astro_runner_best_lvl_${currentLevelIndex}`, finishTime);
       if (gameBestTimeSpan) gameBestTimeSpan.textContent = `${finishTime}s`;
+    }
+    const campaignScore = Math.max(120, Math.round(2200 - parseFloat(finishTime) * 24 + currentLevelIndex * 260 + player.shield * 80));
+    if (window.atherixArcadeCareer) {
+      window.atherixArcadeCareer.recordResult('runner', campaignScore, {
+        level: currentLevelIndex + 1,
+        finishTime: parseFloat(finishTime)
+      });
+      if (currentLevelIndex === gameLevels.length - 1) {
+        window.atherixArcadeCareer.unlock('runner_final');
+      }
     }
 
     createParticleExplosion(exitPortal.x + exitPortal.w/2, exitPortal.y + exitPortal.h/2, '#10B981', 40);

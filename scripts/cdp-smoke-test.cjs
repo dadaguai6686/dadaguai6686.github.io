@@ -15,6 +15,10 @@ function wait(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
 async function cdpJson(pathname, options) {
   const response = await fetch(`http://127.0.0.1:${cdpPort}${pathname}`, options);
   if (!response.ok) throw new Error(`${pathname} -> ${response.status}`);
@@ -240,6 +244,8 @@ async function run() {
   }))()`);
   const arcadeInitial = await evaluate(`(() => ({
     premium: !!document.querySelector('#premium-game-stage'),
+    careerPanel: !!document.querySelector('#premium-career-rating'),
+    dailyChallenge: document.querySelector('#premium-daily-challenge')?.textContent || '',
     oldPrototypeCount: document.querySelectorAll('#snake-canvas,#breakout-canvas,#tile-board,#memory-board').length,
     touchControls: document.querySelectorAll('[data-premium-control]').length,
     chainCells: document.querySelectorAll('#premium-chain-board .chain-cell').length,
@@ -305,7 +311,9 @@ async function run() {
       nonBlank: colored > 1000,
       tools: document.querySelector('#premium-heist-tools')?.textContent,
       steps: document.querySelector('#premium-heist-steps')?.textContent,
-      alert: document.querySelector('#premium-heist-alert')?.textContent
+      alert: document.querySelector('#premium-heist-alert')?.textContent,
+      achievementBadges: document.querySelectorAll('#premium-achievement-feed .career-badge').length,
+      rating: document.querySelector('#premium-career-rating')?.textContent
     };
   })()`);
 
@@ -327,6 +335,18 @@ async function run() {
       scope: registration?.scope || ''
     };
   })()`, 10000);
+
+  assert(blogState.visibleArticle && blogState.articleChars > 100, 'blog reader should open a populated article');
+  assert(mainSpaceState.overlayBefore === 'flex' && mainSpaceState.overlayAfter === 'flex', 'Space should not start/retry the main game overlay');
+  assert(arcadeInitial.premium && arcadeInitial.careerPanel, 'premium arcade career panel should render');
+  assert(arcadeInitial.oldPrototypeCount === 0, 'old prototype mini-games should be replaced');
+  assert(arcadeInitial.touchControls >= 5, 'premium touch controls should be available');
+  assert(survivorState.nonBlank && survivorState.threat, 'survivor canvas should render active state');
+  assert(bossState.nonBlank && bossState.dash, 'boss canvas should render active state');
+  assert(heistState.nonBlank && Number(heistState.steps) >= 1, 'heist should accept keyboard movement');
+  assert(heistState.achievementBadges >= 1, 'heist cloak should unlock at least one achievement badge');
+  assert(chainState.cells === 49 && Number(chainState.specials) >= 1, 'chain board should render with special cells');
+  assert(pwaState.supported && pwaState.registered, 'service worker should register');
 
   await send('Page.close').catch(() => {});
   ws.close();
