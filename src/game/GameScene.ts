@@ -98,8 +98,11 @@ export class GameScene extends Phaser.Scene {
   private readabilityView?: Phaser.GameObjects.Graphics;
   private starLayer?: Phaser.GameObjects.Graphics;
   private trail?: Phaser.GameObjects.Particles.ParticleEmitter;
+  private largeLabels = false;
+  private reducedMotion = false;
 
   create(): void {
+    this.applySettings(window.__lumenSettings);
     this.renderer.resize(window.innerWidth, window.innerHeight);
     this.createTextures();
     this.createWorld();
@@ -178,6 +181,14 @@ export class GameScene extends Phaser.Scene {
     window.addEventListener("game:resume", () => {
       this.state = resumeRun(this.state);
       this.emitHud();
+    });
+    window.addEventListener("game:settings", (event) => {
+      const previousLargeLabels = this.largeLabels;
+      this.applySettings((event as CustomEvent<{ largeLabels?: boolean; reducedMotion?: boolean }>).detail);
+      if (previousLargeLabels !== this.largeLabels) {
+        this.createWorld();
+        this.renderState();
+      }
     });
   }
 
@@ -312,13 +323,13 @@ export class GameScene extends Phaser.Scene {
       align: "center",
       color,
       fontFamily: "Inter, Segoe UI, sans-serif",
-      fontSize: "12px",
+      fontSize: this.largeLabels ? "16px" : "12px",
       fontStyle: "bold",
       stroke: "#061018",
-      strokeThickness: 4
+      strokeThickness: this.largeLabels ? 5 : 4
     });
     label.setOrigin(0.5);
-    label.setAlpha(0.82);
+    label.setAlpha(this.largeLabels ? 0.94 : 0.82);
     return label;
   }
 
@@ -397,7 +408,7 @@ export class GameScene extends Phaser.Scene {
 
   private renderState(): void {
     const camera = this.cameras.main;
-    if (this.state.shake > 0) {
+    if (!this.reducedMotion && this.state.shake > 0) {
       camera.setScroll(
         Phaser.Math.Between(-4, 4) * this.state.shake,
         Phaser.Math.Between(-4, 4) * this.state.shake
@@ -413,6 +424,7 @@ export class GameScene extends Phaser.Scene {
     this.playerView?.setRotation(Number.isFinite(angle) ? angle : 0);
     this.playerView?.setAlpha(this.state.player.invulnerable > 0 ? 0.62 + Math.sin(this.time.now * 0.04) * 0.25 : 1);
     this.trail?.setPosition(this.state.player.position.x, this.state.player.position.y);
+    this.trail?.setVisible(!this.reducedMotion && this.state.status === "playing");
 
     this.state.relays.forEach((relay) => {
       const view = this.relayViews.get(relay.id);
@@ -605,6 +617,13 @@ export class GameScene extends Phaser.Scene {
     ring.strokeCircle(0, 0, cue.kind === "pulse" ? 66 : cue.kind === "repair" || cue.kind === "win" ? 54 : 38);
 
     this.worldLayer.add([ring, text]);
+    if (this.reducedMotion) {
+      this.time.delayedCall(380, () => {
+        text.destroy();
+        ring.destroy();
+      });
+      return;
+    }
     this.tweens.add({
       targets: text,
       y: text.y - 44,
@@ -734,6 +753,11 @@ export class GameScene extends Phaser.Scene {
     this.worldLayer?.setScale(scale);
     this.worldLayer?.setPosition(offsetX, offsetY);
     this.renderer.resize(window.innerWidth, window.innerHeight);
+  }
+
+  private applySettings(settings?: { largeLabels?: boolean; reducedMotion?: boolean }): void {
+    this.largeLabels = Boolean(settings?.largeLabels);
+    this.reducedMotion = Boolean(settings?.reducedMotion);
   }
 }
 

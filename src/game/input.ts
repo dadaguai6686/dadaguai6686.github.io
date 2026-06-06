@@ -7,8 +7,14 @@ type VirtualInputState = {
   pulse: boolean;
 };
 
+type LumenSettingsState = {
+  largeLabels: boolean;
+  reducedMotion: boolean;
+};
+
 declare global {
   interface Window {
+    __lumenSettings?: LumenSettingsState;
     __lumenVirtualInput?: VirtualInputState;
   }
 }

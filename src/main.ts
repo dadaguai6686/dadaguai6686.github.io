@@ -54,6 +54,8 @@ const startButton = document.querySelector<HTMLButtonElement>("#start-button")!;
 const sessionTools = document.querySelector<HTMLDivElement>("#session-tools")!;
 const copyRouteButton = document.querySelector<HTMLButtonElement>("#copy-route-button")!;
 const restartRouteButton = document.querySelector<HTMLButtonElement>("#restart-route-button")!;
+const motionToggle = document.querySelector<HTMLButtonElement>("#motion-toggle")!;
+const labelToggle = document.querySelector<HTMLButtonElement>("#label-toggle")!;
 const resetSaveButton = document.querySelector<HTMLButtonElement>("#reset-save-button")!;
 const sessionFeedback = document.querySelector<HTMLElement>("#session-feedback")!;
 const chargeFill = document.querySelector<HTMLElement>("#charge-fill")!;
@@ -147,6 +149,8 @@ type SaveData = {
   bestWave: number;
   clears: number;
   dailyBest?: DailyBestEntry;
+  largeLabels: boolean;
+  reducedMotion: boolean;
   runHistory: RunHistoryEntry[];
   selectedDifficulty: DifficultyId;
   totalContracts: number;
@@ -227,6 +231,10 @@ window.__lumenVirtualInput = {
   repair: false,
   pulse: false
 };
+window.__lumenSettings = {
+  largeLabels: saveData.largeLabels,
+  reducedMotion: saveData.reducedMotion
+};
 
 startButton.addEventListener("click", () => {
   launchRun();
@@ -270,6 +278,20 @@ audioToggle.addEventListener("click", () => {
   }
 });
 
+motionToggle.addEventListener("click", () => {
+  saveData.reducedMotion = !saveData.reducedMotion;
+  saveSave(saveData);
+  updateSettingsUi("设置已保存：精简动效会关闭抖动和粒子尾迹。");
+  audioBus.play("button");
+});
+
+labelToggle.addEventListener("click", () => {
+  saveData.largeLabels = !saveData.largeLabels;
+  saveSave(saveData);
+  updateSettingsUi("设置已保存：画布标签和关键信息会更醒目。");
+  audioBus.play("button");
+});
+
 dailyRouteButton.addEventListener("click", () => {
   launchDailyChallenge();
 });
@@ -304,6 +326,7 @@ resetSaveButton.addEventListener("click", () => {
   selectedDifficulty = saveData.selectedDifficulty;
   saveSave(saveData);
   updateAudioUi();
+  updateSettingsUi();
   updateDifficultyUi();
   updateRecordUi();
   updateAchievementUi();
@@ -657,6 +680,23 @@ function updateDifficultyUi(): void {
 function updateAudioUi(): void {
   audioToggle.textContent = saveData.audioEnabled ? "音效 开" : "音效 关";
   audioToggle.setAttribute("aria-pressed", String(saveData.audioEnabled));
+}
+
+function updateSettingsUi(message?: string): void {
+  window.__lumenSettings = {
+    largeLabels: saveData.largeLabels,
+    reducedMotion: saveData.reducedMotion
+  };
+  shell.dataset.reducedMotion = String(saveData.reducedMotion);
+  shell.dataset.largeLabels = String(saveData.largeLabels);
+  motionToggle.textContent = saveData.reducedMotion ? "精简动效 开" : "精简动效 关";
+  motionToggle.setAttribute("aria-pressed", String(saveData.reducedMotion));
+  labelToggle.textContent = saveData.largeLabels ? "大字标签 开" : "大字标签 关";
+  labelToggle.setAttribute("aria-pressed", String(saveData.largeLabels));
+  window.dispatchEvent(new CustomEvent("game:settings", { detail: window.__lumenSettings }));
+  if (message) {
+    setSessionFeedback(message);
+  }
 }
 
 function updateDailyChallengeUi(): void {
@@ -1215,6 +1255,8 @@ function createDefaultSave(): SaveData {
     bestWave: 1,
     clears: 0,
     dailyBest: undefined,
+    largeLabels: false,
+    reducedMotion: false,
     runHistory: [],
     selectedDifficulty: "standard",
     totalContracts: 0
@@ -1240,6 +1282,8 @@ function loadSave(): SaveData {
       bestWave: finiteNumber(parsed.bestWave, fallback.bestWave),
       clears: finiteNumber(parsed.clears, fallback.clears),
       dailyBest: parseDailyBest(parsed.dailyBest),
+      largeLabels: Boolean(parsed.largeLabels ?? fallback.largeLabels),
+      reducedMotion: Boolean(parsed.reducedMotion ?? fallback.reducedMotion),
       runHistory: parseRunHistory(parsed.runHistory),
       selectedDifficulty: selected,
       totalContracts: finiteNumber(parsed.totalContracts, fallback.totalContracts)
@@ -1440,6 +1484,7 @@ audioBus = new AudioBus(() => saveData.audioEnabled);
 setShellStatus(latestStatus);
 updateDifficultyUi();
 updateAudioUi();
+updateSettingsUi();
 updateDailyChallengeUi();
 updateRecordUi();
 updateAchievementUi();
