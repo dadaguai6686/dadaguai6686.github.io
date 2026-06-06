@@ -3602,6 +3602,34 @@ body.command-open {
   line-height: 1.35;
 }
 
+.career-codex-open {
+  margin-top: 0.55rem;
+  min-height: 30px;
+  border: 1px solid rgba(6, 182, 212, 0.28);
+  border-radius: 6px;
+  background: rgba(6, 182, 212, 0.11);
+  color: #dffaff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0;
+}
+
+.career-codex-open svg {
+  width: 14px;
+  height: 14px;
+}
+
+.career-codex-open:hover,
+.career-codex-open:focus-visible {
+  border-color: rgba(52, 211, 153, 0.58);
+  box-shadow: 0 0 18px rgba(6, 182, 212, 0.18);
+}
+
 .career-achievements {
   display: flex;
   align-content: center;
@@ -3631,6 +3659,224 @@ body.command-open {
   border-color: rgba(148, 163, 184, 0.18);
   color: var(--text-muted);
   background: rgba(148, 163, 184, 0.08);
+}
+
+.premium-career-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(3, 7, 18, 0.7);
+  backdrop-filter: blur(8px);
+}
+
+.premium-career-dialog.active {
+  display: flex;
+}
+
+.premium-career-card {
+  box-sizing: border-box;
+  width: min(calc(100vw - 2rem), 880px);
+  max-height: min(88vh, 760px);
+  overflow: auto;
+  position: relative;
+  border: 1px solid rgba(139, 92, 246, 0.32);
+  border-radius: 10px;
+  padding: 1.1rem;
+  background:
+    linear-gradient(135deg, rgba(6, 182, 212, 0.12), rgba(236, 72, 153, 0.08)),
+    rgba(8, 10, 24, 0.96);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.premium-career-close {
+  position: absolute;
+  top: 0.8rem;
+  right: 0.8rem;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.8);
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.premium-career-close svg {
+  width: 16px;
+  height: 16px;
+}
+
+.premium-career-heading {
+  padding-right: 2.4rem;
+  margin-bottom: 0.85rem;
+}
+
+.premium-career-heading h3 {
+  margin: 0.4rem 0 0.3rem;
+  color: #fff;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.6rem;
+  letter-spacing: 0;
+}
+
+.premium-career-heading p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+}
+
+.career-dialog-daily {
+  margin-bottom: 0.85rem;
+  padding: 0.78rem 0.85rem;
+  border: 1px solid rgba(251, 191, 36, 0.22);
+  border-radius: 8px;
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.career-dialog-daily.is-complete {
+  border-color: rgba(52, 211, 153, 0.34);
+  background: rgba(52, 211, 153, 0.09);
+}
+
+.career-dialog-daily span,
+.career-medal-card span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.career-dialog-daily strong {
+  display: block;
+  margin-top: 0.25rem;
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.career-dialog-daily small {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.career-dialog-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 0.95rem;
+}
+
+.career-medal-card {
+  min-height: 112px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: rgba(15, 23, 42, 0.56);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.45rem;
+}
+
+.career-medal-card strong {
+  display: block;
+  margin-top: 0.25rem;
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.08rem;
+}
+
+.career-medal-card b {
+  align-self: flex-start;
+  border-radius: 999px;
+  padding: 0.18rem 0.46rem;
+  color: #cbd5e1;
+  background: rgba(148, 163, 184, 0.12);
+  font-size: 0.72rem;
+}
+
+.career-medal-card small {
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.career-medal-bronze {
+  border-color: rgba(217, 119, 6, 0.38);
+}
+
+.career-medal-silver {
+  border-color: rgba(203, 213, 225, 0.44);
+}
+
+.career-medal-gold {
+  border-color: rgba(251, 191, 36, 0.5);
+  box-shadow: inset 0 0 24px rgba(251, 191, 36, 0.08);
+}
+
+.career-medal-bronze b {
+  color: #fed7aa;
+  background: rgba(217, 119, 6, 0.18);
+}
+
+.career-medal-silver b {
+  color: #e2e8f0;
+  background: rgba(203, 213, 225, 0.18);
+}
+
+.career-medal-gold b {
+  color: #fef3c7;
+  background: rgba(251, 191, 36, 0.18);
+}
+
+.career-dialog-achievements {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.career-achievement {
+  min-height: 52px;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.career-achievement b,
+.career-achievement small {
+  display: block;
+}
+
+.career-achievement b {
+  color: #e5e7eb;
+  font-size: 0.78rem;
+}
+
+.career-achievement small {
+  margin-top: 0.2rem;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  line-height: 1.3;
+}
+
+.career-achievement.is-unlocked {
+  border-color: rgba(52, 211, 153, 0.32);
+  background: rgba(52, 211, 153, 0.08);
+}
+
+.career-achievement.is-unlocked b {
+  color: #d1fae5;
 }
 
 .mini-game-tabs {
@@ -3908,6 +4154,17 @@ body.command-open {
   }
   .arcade-career-panel {
     grid-template-columns: 1fr;
+  }
+  .premium-career-card {
+    width: min(96vw, 560px);
+    padding: 0.95rem;
+  }
+  .career-dialog-grid,
+  .career-dialog-achievements {
+    grid-template-columns: 1fr;
+  }
+  .premium-career-heading h3 {
+    font-size: 1.32rem;
   }
   .mini-game-scoreboard {
     text-align: left;

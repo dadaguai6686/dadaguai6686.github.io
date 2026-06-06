@@ -460,11 +460,22 @@ function init() {
       { id: 'boss', icon: 'crosshair', title: 'Prism Boss Rush', desc: '三阶段 Boss 弹幕战', keywords: 'boss bullet prism 弹幕' },
       { id: 'heist', icon: 'scan-eye', title: 'Cyber Heist', desc: '潜入、隐身、终端与撤离', keywords: 'heist stealth cloak 潜入' },
       { id: 'chain', icon: 'gem', title: 'Alchemy Chain', desc: '大连锁消除与特殊核心', keywords: 'chain alchemy puzzle 消除 连锁' },
-      { id: 'tactics', icon: 'shield', title: 'Rift Tactics', desc: '行动点、敌人 AI 与核心撤离', keywords: 'tactics rift strategy turn 战术 回合' }
+      { id: 'tactics', icon: 'shield', title: 'Rift Tactics', desc: '行动点、敌人 AI 与核心撤离', keywords: 'tactics rift strategy turn 战术 回合' },
+      {
+        id: 'career',
+        icon: 'trophy',
+        title: '街机生涯档案',
+        desc: '查看奖牌、每日挑战和全部成就',
+        keywords: 'career achievements medals arcade rank 生涯 成就 奖牌',
+        action: () => {
+          navigateTo('game');
+          setTimeout(() => document.getElementById('premium-career-open')?.click(), 220);
+        }
+      }
     ].map(item => ({
       ...item,
       type: '游戏',
-      action: item.id === 'runner' ? item.action : () => activatePremiumGame(item.id)
+      action: item.action || (() => activatePremiumGame(item.id))
     }));
     const postItems = blogPosts.map(post => ({
       type: '文章',
@@ -3606,6 +3617,10 @@ function init() {
           <span>街机评级</span>
           <strong id="premium-career-rating">RANK C</strong>
           <small id="premium-career-total">总声望 0</small>
+          <button type="button" class="career-codex-open" id="premium-career-open">
+            <i data-lucide="panel-right-open"></i>
+            <span>生涯档案</span>
+          </button>
         </div>
         <div class="career-daily-card">
           <span>今日挑战</span>
@@ -3613,6 +3628,21 @@ function init() {
           <small id="premium-daily-status">完成后解锁限定徽章</small>
         </div>
         <div class="career-achievements" id="premium-achievement-feed" aria-live="polite"></div>
+      </div>
+      <div class="premium-career-dialog" id="premium-career-dialog" aria-hidden="true">
+        <div class="premium-career-card" role="dialog" aria-modal="true" aria-labelledby="premium-career-title">
+          <button type="button" class="premium-career-close" id="premium-career-close" aria-label="关闭生涯档案">
+            <i data-lucide="x"></i>
+          </button>
+          <div class="premium-career-heading">
+            <span class="quick-card-kicker"><i data-lucide="trophy"></i> ARCADE CAREER</span>
+            <h3 id="premium-career-title">街机生涯档案</h3>
+            <p id="premium-career-summary">查看奖牌、每日挑战与全部成就。</p>
+          </div>
+          <div class="career-dialog-daily" id="premium-career-dialog-daily"></div>
+          <div class="career-dialog-grid" id="premium-career-medals"></div>
+          <div class="career-dialog-achievements" id="premium-career-achievements"></div>
+        </div>
       </div>
       <div class="mini-game-tabs" role="tablist" aria-label="精品小游戏选择">
         <button type="button" class="mini-game-tab active" data-premium-game="survivor">星核幸存者</button>
@@ -3873,6 +3903,68 @@ function init() {
         : '<span class="career-badge career-badge-muted">等待首枚徽章</span>';
     }
 
+    function medalClass(medal) {
+      return ['bronze', 'silver', 'gold'].includes(medal) ? medal : 'none';
+    }
+
+    function medalTargetText(game) {
+      const rules = medalRules[game] || [];
+      const bronze = rules.find(rule => rule.name === 'bronze')?.threshold || 0;
+      const silver = rules.find(rule => rule.name === 'silver')?.threshold || 0;
+      const gold = rules.find(rule => rule.name === 'gold')?.threshold || 0;
+      return `铜 ${bronze} · 银 ${silver} · 金 ${gold}`;
+    }
+
+    function renderCareerDialog() {
+      const summary = document.getElementById('premium-career-summary');
+      const dailyEl = document.getElementById('premium-career-dialog-daily');
+      const medalsEl = document.getElementById('premium-career-medals');
+      const achievementsEl = document.getElementById('premium-career-achievements');
+      const daily = getDailyChallenge();
+      const completedDaily = career.daily?.date === daily.date && career.daily?.id === daily.id;
+      const unlockedCount = career.achievements.length;
+      const gameOrder = ['runner', 'survivor', 'boss', 'heist', 'chain', 'tactics'];
+
+      if (summary) {
+        summary.textContent = `${careerRating()} · 总声望 ${career.totalScore || 0} · 已解锁 ${unlockedCount}/${achievementDefs.length} 项成就`;
+      }
+      if (dailyEl) {
+        dailyEl.innerHTML = `
+          <span>今日挑战</span>
+          <strong>${escapeHTML(daily.label)}</strong>
+          <small>${completedDaily ? '已完成，限定徽章已入库' : '完成后解锁「今日制霸」并计入生涯声望'}</small>
+        `;
+        dailyEl.classList.toggle('is-complete', completedDaily);
+      }
+      if (medalsEl) {
+        medalsEl.innerHTML = gameOrder.map(game => {
+          const score = Number(career.best?.[game] || 0);
+          const medal = medalClass(career.medals?.[game] || medalFor(game, score));
+          return `
+            <article class="career-medal-card career-medal-${medal}">
+              <div>
+                <span>${escapeHTML(titles[game] || game)}</span>
+                <strong>${score}</strong>
+              </div>
+              <b>${escapeHTML(medalLabels[medal] || medalLabels.none)}</b>
+              <small>${escapeHTML(medalTargetText(game))}</small>
+            </article>
+          `;
+        }).join('');
+      }
+      if (achievementsEl) {
+        achievementsEl.innerHTML = achievementDefs.map(def => {
+          const unlocked = career.achievements.includes(def.id);
+          return `
+            <span class="career-achievement ${unlocked ? 'is-unlocked' : 'is-locked'}" title="${escapeHTML(def.desc)}">
+              <b>${escapeHTML(def.label)}</b>
+              <small>${escapeHTML(unlocked ? '已解锁' : def.desc)}</small>
+            </span>
+          `;
+        }).join('');
+      }
+    }
+
     function updateCareerPanel() {
       const ratingEl = document.getElementById('premium-career-rating');
       const totalEl = document.getElementById('premium-career-total');
@@ -3893,6 +3985,7 @@ function init() {
           : '完成后解锁限定徽章';
       }
       renderAchievementFeed();
+      renderCareerDialog();
     }
 
     function unlockAchievement(id) {
@@ -3927,6 +4020,40 @@ function init() {
       update: updateCareerPanel
     };
     updateCareerPanel();
+
+    const careerDialog = document.getElementById('premium-career-dialog');
+    const careerOpenBtn = document.getElementById('premium-career-open');
+    const careerCloseBtn = document.getElementById('premium-career-close');
+
+    function setCareerDialogOpen(open) {
+      if (!careerDialog) return;
+      renderCareerDialog();
+      careerDialog.classList.toggle('active', open);
+      careerDialog.setAttribute('aria-hidden', open ? 'false' : 'true');
+      if (open) {
+        careerCloseBtn?.focus({ preventScroll: true });
+      } else {
+        careerOpenBtn?.focus({ preventScroll: true });
+      }
+    }
+
+    if (careerOpenBtn) {
+      careerOpenBtn.addEventListener('click', () => setCareerDialogOpen(true));
+    }
+    if (careerCloseBtn) {
+      careerCloseBtn.addEventListener('click', () => setCareerDialogOpen(false));
+    }
+    if (careerDialog) {
+      careerDialog.addEventListener('click', (event) => {
+        if (event.target === careerDialog) setCareerDialogOpen(false);
+      });
+    }
+    window.addEventListener('keydown', (event) => {
+      if (event.code === 'Escape' && careerDialog?.classList.contains('active')) {
+        event.preventDefault();
+        setCareerDialogOpen(false);
+      }
+    });
 
     function focusStage() {
       if (stage) stage.focus({ preventScroll: true });

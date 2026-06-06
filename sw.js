@@ -1,9 +1,9 @@
-const CACHE_VERSION = 'atherix-static-v7-arcade-pause';
+const CACHE_VERSION = 'atherix-static-v8-career';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/style.css?v=20260606-arcade-pause-v1',
-  '/app.js?v=20260606-arcade-pause-v1',
+  '/style.css?v=20260606-career-v1',
+  '/app.js?v=20260606-career-v1',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',

@@ -539,6 +539,31 @@ async function run() {
       rating: document.querySelector('#premium-career-rating')?.textContent
     };
   })()`);
+  await click('#premium-career-open');
+  await wait(220);
+  const careerDialogState = await evaluate(`(() => {
+    const dialog = document.querySelector('#premium-career-dialog');
+    const card = document.querySelector('.premium-career-card');
+    const rect = card?.getBoundingClientRect();
+    return {
+      open: dialog?.classList.contains('active') || false,
+      ariaHidden: dialog?.getAttribute('aria-hidden') || '',
+      display: dialog ? getComputedStyle(dialog).display : '',
+      summary: document.querySelector('#premium-career-summary')?.textContent || '',
+      daily: document.querySelector('#premium-career-dialog-daily')?.textContent || '',
+      medalCards: document.querySelectorAll('#premium-career-medals .career-medal-card').length,
+      achievements: document.querySelectorAll('#premium-career-achievements .career-achievement').length,
+      unlocked: document.querySelectorAll('#premium-career-achievements .career-achievement.is-unlocked').length,
+      visibleInViewport: dialog ? getComputedStyle(dialog).display !== 'none' : false,
+      horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+    };
+  })()`);
+  await click('#premium-career-close');
+  await wait(120);
+  const careerDialogClosed = await evaluate(`(() => ({
+    open: document.querySelector('#premium-career-dialog')?.classList.contains('active') || false,
+    ariaHidden: document.querySelector('#premium-career-dialog')?.getAttribute('aria-hidden') || ''
+  }))()`);
 
   await click('[data-premium-game="chain"]');
   await wait(250);
@@ -660,6 +685,10 @@ async function run() {
   assert(bossResumeState.running && !bossResumeState.paused && bossResumeState.pauseButton === '暂停', `boss mode should resume from keyboard pause: ${JSON.stringify(bossResumeState)}`);
   assert(heistState.nonBlank && Number(heistState.steps) >= 1, 'heist should accept keyboard movement');
   assert(heistState.achievementBadges >= 1, 'heist cloak should unlock at least one achievement badge');
+  assert(careerDialogState.open && careerDialogState.ariaHidden === 'false', `career dialog should open: ${JSON.stringify(careerDialogState)}`);
+  assert(careerDialogState.medalCards >= 6 && careerDialogState.achievements >= 13 && careerDialogState.unlocked >= 1, `career dialog should show medals and achievements: ${JSON.stringify(careerDialogState)}`);
+  assert(/RANK/.test(careerDialogState.summary) && careerDialogState.daily.length > 10 && careerDialogState.visibleInViewport && !careerDialogState.horizontalOverflow, `career dialog should show readable summary and daily challenge: ${JSON.stringify(careerDialogState)}`);
+  assert(!careerDialogClosed.open && careerDialogClosed.ariaHidden === 'true', `career dialog should close cleanly: ${JSON.stringify(careerDialogClosed)}`);
   assert(chainState.cells === 49 && Number(chainState.specials) >= 1, 'chain board should render with special cells');
   assert(tacticsState.nonBlank && Number(tacticsState.ap) < 3 && tacticsState.action, `tactics mode should render and accept actions: ${JSON.stringify(tacticsState)}`);
   assert(pwaState.supported && pwaState.registered, 'service worker should register');
@@ -690,6 +719,8 @@ async function run() {
     bossPauseFreezeState,
     bossResumeState,
     heistState,
+    careerDialogState,
+    careerDialogClosed,
     chainState,
     tacticsState,
     pwaState
