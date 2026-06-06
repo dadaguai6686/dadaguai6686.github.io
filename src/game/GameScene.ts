@@ -8,6 +8,7 @@ import {
   getHazardThreats,
   getObjectiveHint,
   getResourceAlerts,
+  getRunPerformance,
   getRoutePlan,
   getRunRating,
   getStormActiveRadius,
@@ -28,6 +29,7 @@ import {
   type ObjectiveHint,
   type ResourceAlerts,
   type RoutePlan,
+  type RunPerformance,
   type RunRating,
   type Relay,
   type RunEndReason,
@@ -64,6 +66,7 @@ type HudSnapshot = {
   waveModifier: WaveModifier;
   sector: SectorLayout;
   contract: ContractSnapshot;
+  performance: RunPerformance;
   upgradeSummaries: UpgradeSummary[];
   upgradeChoices: Upgrade[];
 };
@@ -454,6 +457,7 @@ export class GameScene extends Phaser.Scene {
       waveModifier: WAVE_MODIFIERS[this.state.waveModifier],
       sector: SECTOR_LAYOUTS[this.state.sector],
       contract: getContractSnapshot(this.state),
+      performance: getRunPerformance(this.state),
       upgradeSummaries: getUpgradeSummaries(this.state.upgrades),
       upgradeChoices: this.state.status === "won" ? getUpgradeChoices(this.state) : []
     };

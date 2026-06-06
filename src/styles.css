@@ -253,6 +253,98 @@ button {
   background: rgba(255, 255, 255, 0.055);
 }
 
+#signal-panel {
+  margin-top: 10px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 226, 122, 0.18);
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgba(255, 226, 122, 0.11), rgba(103, 244, 255, 0.055));
+}
+
+#signal-panel[hidden] {
+  display: none;
+}
+
+.signal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.signal-head strong,
+.signal-head span,
+#signal-panel em {
+  display: block;
+}
+
+.signal-head strong {
+  color: #fff3ad;
+  font-size: 12px;
+  font-weight: 1000;
+}
+
+.signal-head b {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  min-height: 22px;
+  margin-left: 4px;
+  border-radius: 6px;
+  color: #061018;
+  background: linear-gradient(135deg, var(--ui-cyan), var(--ui-gold));
+  font-size: 13px;
+}
+
+.signal-head span {
+  color: #ffe27a;
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.signal-meter {
+  height: 7px;
+  margin-top: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.signal-meter i {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--ui-cyan), var(--ui-gold));
+  box-shadow: 0 0 14px rgba(103, 244, 255, 0.42);
+  transition: width 180ms ease;
+}
+
+#signal-panel em {
+  margin-top: 6px;
+  color: #cfe3f2;
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1.35;
+}
+
+#signal-panel[data-grade="S"] {
+  border-color: rgba(255, 226, 122, 0.42);
+  background: linear-gradient(90deg, rgba(255, 226, 122, 0.16), rgba(103, 244, 255, 0.08));
+}
+
+#signal-panel[data-grade="C"] {
+  border-color: rgba(255, 95, 155, 0.36);
+  background: linear-gradient(90deg, rgba(255, 95, 155, 0.12), rgba(255, 226, 122, 0.05));
+}
+
+#signal-panel[data-grade="C"] .signal-head b,
+#signal-panel[data-grade="C"] .signal-meter i {
+  color: #fff7fb;
+  background: linear-gradient(135deg, var(--ui-rose), #7b4dff);
+}
+
 #loadout-strip {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -497,6 +589,20 @@ button {
   min-height: 24px;
   padding: 5px 3px;
   font-size: 9px;
+}
+
+#shell[data-status="playing"] #signal-panel {
+  margin-top: 7px;
+  padding: 7px 8px;
+}
+
+#shell[data-status="playing"] .signal-meter {
+  margin-top: 5px;
+}
+
+#shell[data-status="playing"] #signal-panel em {
+  margin-top: 5px;
+  font-size: 10px;
 }
 
 #shell[data-status="playing"] #wave-event,
@@ -1363,6 +1469,10 @@ h1 {
   #shell[data-status="playing"] #loadout-strip,
   #shell[data-status="playing"] #help-button {
     display: none;
+  }
+
+  #shell[data-status="playing"] #signal-panel {
+    margin-top: 6px;
   }
 
   .stats {

@@ -16,6 +16,7 @@ import {
   type ObjectiveHint,
   type ResourceAlerts,
   type RoutePlan,
+  type RunPerformance,
   type RunEndReason,
   type RunRating,
   type RunStats,
@@ -73,6 +74,11 @@ const recordCombo = document.querySelector<HTMLElement>("#record-combo")!;
 const recordContracts = document.querySelector<HTMLElement>("#record-contracts")!;
 const boostPill = document.querySelector<HTMLElement>("#boost-pill")!;
 const pulsePill = document.querySelector<HTMLElement>("#pulse-pill")!;
+const signalPanel = document.querySelector<HTMLDivElement>("#signal-panel")!;
+const signalGrade = document.querySelector<HTMLElement>("#signal-grade")!;
+const signalPoints = document.querySelector<HTMLElement>("#signal-points")!;
+const signalFill = document.querySelector<HTMLElement>("#signal-fill")!;
+const signalDetail = document.querySelector<HTMLElement>("#signal-detail")!;
 const loadoutStrip = document.querySelector<HTMLDivElement>("#loadout-strip")!;
 const waveEvent = document.querySelector<HTMLDivElement>("#wave-event")!;
 const waveEventTitle = document.querySelector<HTMLElement>("#wave-event-title")!;
@@ -326,6 +332,7 @@ window.addEventListener("game:hud", (event) => {
     pulseReady: boolean;
     message: string;
     contract: ContractSnapshot;
+    performance: RunPerformance;
     coachDirective: CoachDirective;
     objectiveHint: ObjectiveHint;
     resourceAlerts: ResourceAlerts;
@@ -362,6 +369,7 @@ window.addEventListener("game:hud", (event) => {
   pulsePill.textContent = detail.pulseReady ? "脉冲就绪" : "脉冲冷却中";
   boostPill.classList.toggle("cooling", !detail.boostReady);
   pulsePill.classList.toggle("cooling", !detail.pulseReady);
+  renderPerformance(detail.performance, detail.status);
   latestUpgradeSummaries = detail.upgradeSummaries;
   renderLoadout(detail.upgradeSummaries, detail.status);
   waveEvent.hidden = detail.status !== "playing";
@@ -457,6 +465,16 @@ function renderLoadout(summaries: UpgradeSummary[], status: GameStatus): void {
       return item;
     })
   );
+}
+
+function renderPerformance(performance: RunPerformance, status: GameStatus): void {
+  signalPanel.hidden = status !== "playing";
+  if (signalPanel.hidden) return;
+  signalPanel.dataset.grade = performance.id;
+  signalGrade.textContent = performance.id;
+  signalPoints.textContent = `${performance.points}/100`;
+  signalFill.style.width = `${Math.max(0, Math.min(100, performance.fill))}%`;
+  signalDetail.textContent = performance.detail;
 }
 
 function renderCoachDirective(directive: CoachDirective, status: GameStatus): void {

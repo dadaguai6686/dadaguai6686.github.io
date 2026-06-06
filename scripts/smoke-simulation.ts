@@ -16,6 +16,7 @@ import {
   getObjectiveHint,
   getResourceAlerts,
   getRoutePlan,
+  getRunPerformance,
   getRunRating,
   getSectorFor,
   getUnlockedAchievementsForRun,
@@ -67,6 +68,9 @@ assert.ok(WAVE_MODIFIERS.lumenSurge.lumenChargeBonus > 0, "lumen surge should de
 assert.ok(state.routeSeed > 0, "fresh runs should create a visible route seed");
 assert.equal(parseRouteSeed(getRoutePlan(state.routeSeed).code), state.routeSeed, "route codes should parse back to the same seed");
 assert.equal(parseRouteSeed(getRoutePlan(state.routeSeed).name), state.routeSeed, "full route names should parse back to the same seed");
+assert.equal(getRunPerformance(state).id, "B", "fresh active runs should start with a modest live rating");
+assert.ok(getRunPerformance(state).points < 62, "fresh active runs should not start at a high live rating");
+assert.ok(getRunPerformance(state).detail.includes("合约"), "live rating should point players at the active contract");
 
 const seededA = restartRun(createInitialState(), undefined, { routeSeed: 4660 });
 const seededB = restartRun(createInitialState(), undefined, { routeSeed: 4660 });
@@ -98,6 +102,7 @@ assert.equal(lumenContract.contract.status, "completed", "collecting four lumen 
 assert.equal(lumenContract.stats.contractsCompleted, 1, "completed contracts should be counted");
 assert.equal(getCoachDirective(lumenContract).id, "reachRelay", "after first lumen route, the coach should send players to relays");
 assert.ok(lumenContract.score > lumenContractScore, "completed contracts should award score");
+assert.ok(getRunPerformance(lumenContract).points > getRunPerformance(state).points, "completed contracts should improve live rating pressure");
 const afterContractReward = lumenContract.score;
 lumenContract = updateSimulation(lumenContract, idle, 0.5);
 assert.equal(lumenContract.stats.contractsCompleted, 1, "completed contract rewards should not be claimed twice");
@@ -186,6 +191,7 @@ hitState.hazards[0].position = { ...hitState.player.position };
 hitState = updateSimulation(hitState, idle, 0.016);
 assert.equal(hitState.stats.hitsTaken, 1, "hazard impacts should be counted");
 assert.equal(getResourceAlerts(hitState).hull, "stable", "one standard hit should not overstate hull danger");
+assert.ok(getRunPerformance(hitState).points < getRunPerformance(restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED })).points, "hits should lower live rating pressure");
 const hazardThreatState = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
 hazardThreatState.hazards[0].position = { x: hazardThreatState.player.position.x + 42, y: hazardThreatState.player.position.y };
 assert.equal(getHazardThreats(hazardThreatState)[0].level, "danger", "close hazards should be flagged for danger rendering");

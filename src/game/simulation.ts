@@ -140,6 +140,11 @@ export type RunRating = {
   points: number;
 };
 
+export type RunPerformance = RunRating & {
+  detail: string;
+  fill: number;
+};
+
 export type AchievementId =
   | "firstRepair"
   | "cleanWave"
@@ -1066,6 +1071,93 @@ export function getRunRating(state: GameState): RunRating {
     description: "先保证补给和生存，再追求速度与连锁。",
     points: cappedPoints
   };
+}
+
+export function getRunPerformance(state: GameState): RunPerformance {
+  const repairedRelays = state.relays.filter((relay) => relay.repaired).length;
+  const relayProgress = state.relays.length > 0 ? repairedRelays / state.relays.length : 0;
+  const contractPoints = state.contract.status === "completed" ? 14 : state.contract.status === "active" ? 6 : 0;
+  let points = Math.round(relayProgress * 34) + contractPoints;
+
+  points += state.bestCombo >= 4.5 ? 14 : state.bestCombo >= 3 ? 10 : state.bestCombo >= 2 ? 5 : 0;
+  points += state.stats.hitsTaken === 0 ? 12 : state.stats.hitsTaken <= 1 ? 8 : state.stats.hitsTaken <= 3 ? 3 : 0;
+  points += state.stats.stormSeconds <= 1 ? 8 : state.stats.stormSeconds <= 4 ? 4 : 0;
+  points += state.elapsed <= state.wave * 48 ? 6 : state.elapsed <= state.wave * 66 ? 3 : 0;
+  points += state.stats.lumenCollected >= Math.max(3, state.wave * 2) ? 5 : 0;
+  points += state.player.charge > state.player.maxCharge * 0.45 ? 5 : 0;
+  points += state.gate.open ? 12 : 0;
+
+  const cappedPoints = clampInt(points, 0, 100);
+  const rating = ratingFromPoints(cappedPoints);
+  return {
+    ...rating,
+    detail: getPerformanceDetail(state),
+    fill: cappedPoints
+  };
+}
+
+function ratingFromPoints(points: number): RunRating {
+  if (points >= 82) {
+    return {
+      id: "S",
+      name: "完美稳定",
+      description: "路线、连锁和风险控制都很出色。",
+      points
+    };
+  }
+  if (points >= 62) {
+    return {
+      id: "A",
+      name: "高效救援",
+      description: "节奏良好，还有少量提分空间。",
+      points
+    };
+  }
+  if (points >= 36) {
+    return {
+      id: "B",
+      name: "稳定推进",
+      description: "主路线可控，继续补合约、连锁和无损表现。",
+      points
+    };
+  }
+  return {
+    id: "C",
+    name: "信号不稳",
+    description: "先保证补给和生存，再追求速度与连锁。",
+    points
+  };
+}
+
+function getPerformanceDetail(state: GameState): string {
+  if (state.status !== "playing") {
+    return "开始后会实时显示评级压力和下一步提分目标。";
+  }
+  if (state.player.charge <= state.player.maxCharge * 0.28) {
+    return "电量偏低：先回收流明，别硬修。";
+  }
+  if (state.player.hull <= state.player.maxHull * 0.36) {
+    return "机体偏低：少穿碎片线，保留脉冲。";
+  }
+  if (state.contract.status === "failed") {
+    return "合约已失败：继续清主目标，减少受击保住评级。";
+  }
+  if (state.contract.status === "active") {
+    return `冲评级：优先完成合约「${CONTRACTS[state.contract.id].name}」。`;
+  }
+  if (state.stats.hitsTaken > 0) {
+    return "受击会压低评级：保持距离，别原地硬修。";
+  }
+  if (state.stats.stormSeconds > 1) {
+    return "风暴停留偏高：绕开紫色场再接信标。";
+  }
+  if (state.bestCombo < 3 && state.lumen.some((drop) => !drop.collected)) {
+    return "连锁还有空间：顺路回收流明冲 A/S。";
+  }
+  if (state.gate.open) {
+    return "光门已开：带着高电量撤离可保评级。";
+  }
+  return "路线稳定：继续修信标，保持无损和连锁。";
 }
 
 export function getContractFor(wave: number, difficulty: DifficultyId): ContractId {
