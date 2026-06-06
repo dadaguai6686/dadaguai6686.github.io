@@ -7,6 +7,7 @@ import {
   getAchievementSummaries,
   getUnlockedAchievementsForRun,
   type AchievementId,
+  type ContractSnapshot,
   type DifficultyId,
   type GameStatus,
   type ObjectiveHint,
@@ -58,12 +59,18 @@ const bestComboValue = document.querySelector<HTMLElement>("#best-combo-value")!
 const recordScore = document.querySelector<HTMLElement>("#record-score")!;
 const recordWave = document.querySelector<HTMLElement>("#record-wave")!;
 const recordCombo = document.querySelector<HTMLElement>("#record-combo")!;
+const recordContracts = document.querySelector<HTMLElement>("#record-contracts")!;
 const boostPill = document.querySelector<HTMLElement>("#boost-pill")!;
 const pulsePill = document.querySelector<HTMLElement>("#pulse-pill")!;
 const loadoutStrip = document.querySelector<HTMLDivElement>("#loadout-strip")!;
 const waveEvent = document.querySelector<HTMLDivElement>("#wave-event")!;
 const waveEventTitle = document.querySelector<HTMLElement>("#wave-event-title")!;
 const waveEventDetail = document.querySelector<HTMLElement>("#wave-event-detail")!;
+const contractPanel = document.querySelector<HTMLDivElement>("#contract-panel")!;
+const contractTitle = document.querySelector<HTMLElement>("#contract-title")!;
+const contractRequirement = document.querySelector<HTMLElement>("#contract-requirement")!;
+const contractProgress = document.querySelector<HTMLElement>("#contract-progress")!;
+const contractReward = document.querySelector<HTMLElement>("#contract-reward")!;
 const pilotTip = document.querySelector<HTMLDivElement>("#pilot-tip")!;
 const pilotTipTitle = document.querySelector<HTMLElement>("#pilot-tip-title")!;
 const pilotTipDetail = document.querySelector<HTMLElement>("#pilot-tip-detail")!;
@@ -85,6 +92,9 @@ const recapRating = document.querySelector<HTMLDivElement>("#recap-rating")!;
 const recapRatingGrade = document.querySelector<HTMLElement>("#recap-rating-grade")!;
 const recapRatingName = document.querySelector<HTMLElement>("#recap-rating-name")!;
 const recapRatingDetail = document.querySelector<HTMLElement>("#recap-rating-detail")!;
+const contractRecap = document.querySelector<HTMLDivElement>("#contract-recap")!;
+const contractRecapTitle = document.querySelector<HTMLElement>("#contract-recap-title")!;
+const contractRecapDetail = document.querySelector<HTMLElement>("#contract-recap-detail")!;
 const recapMetrics = document.querySelector<HTMLDivElement>("#recap-metrics")!;
 const achievementUnlocks = document.querySelector<HTMLDivElement>("#achievement-unlocks")!;
 const recapAdvice = document.querySelector<HTMLElement>("#recap-advice")!;
@@ -97,15 +107,18 @@ type SaveData = {
   achievements: AchievementId[];
   audioEnabled: boolean;
   bestCombo: number;
+  bestContracts: number;
   bestScore: number;
   bestWave: number;
   clears: number;
   selectedDifficulty: DifficultyId;
+  totalContracts: number;
 };
 
 type RunEndDetail = {
   bestCombo: number;
   charge: number;
+  contract: ContractSnapshot;
   difficulty: DifficultyId;
   elapsed: number;
   endReason: RunEndReason;
@@ -199,6 +212,7 @@ window.addEventListener("game:hud", (event) => {
     boostReady: boolean;
     pulseReady: boolean;
     message: string;
+    contract: ContractSnapshot;
     objectiveHint: ObjectiveHint;
     resourceAlerts: ResourceAlerts;
     difficulty: DifficultyId;
@@ -235,6 +249,12 @@ window.addEventListener("game:hud", (event) => {
   waveEvent.hidden = detail.status !== "playing";
   waveEventTitle.textContent = `本波事件：${detail.waveModifier.name}`;
   waveEventDetail.textContent = detail.waveModifier.description;
+  contractPanel.hidden = detail.status !== "playing";
+  contractPanel.dataset.status = detail.contract.status;
+  contractTitle.textContent = `战术合约：${detail.contract.name}`;
+  contractRequirement.textContent = detail.contract.requirement;
+  contractProgress.textContent = detail.contract.progress;
+  contractReward.textContent = `奖励 ${detail.contract.rewardScore.toLocaleString()} 分`;
   pilotTip.hidden = detail.status !== "playing";
   pilotTip.classList.toggle("urgent", detail.objectiveHint.urgent);
   pilotTip.dataset.kind = detail.objectiveHint.kind;
@@ -436,6 +456,7 @@ function updateRecordUi(): void {
   recordScore.textContent = saveData.bestScore.toLocaleString();
   recordWave.textContent = `${Math.max(1, saveData.bestWave)}/5`;
   recordCombo.textContent = `${saveData.bestCombo.toFixed(1)}x`;
+  recordContracts.textContent = `${saveData.bestContracts}/5`;
 }
 
 function setDifficultyPickerVisible(visible: boolean): void {
@@ -447,6 +468,10 @@ function persistRunResult(detail: RunEndDetail): AchievementId[] {
   saveData.bestScore = Math.max(saveData.bestScore, detail.score);
   saveData.bestWave = Math.max(saveData.bestWave, detail.wave);
   saveData.bestCombo = Math.max(saveData.bestCombo, detail.bestCombo);
+  saveData.bestContracts = Math.max(saveData.bestContracts, detail.stats.contractsCompleted);
+  if (detail.contract.status === "completed") {
+    saveData.totalContracts += 1;
+  }
   if (detail.status === "completed") {
     saveData.clears += 1;
   }
@@ -465,11 +490,13 @@ function renderRunRecap(detail: RunEndDetail, newlyUnlocked: AchievementId[]): v
   recapRatingGrade.textContent = detail.rating.id;
   recapRatingName.textContent = detail.rating.name;
   recapRatingDetail.textContent = `${detail.rating.points}/100 · ${detail.rating.description}`;
+  renderContractRecap(detail.contract);
   const metrics: Array<[string, string]> = [
     ["分数", detail.score.toLocaleString()],
     ["波次", `${detail.wave}/5`],
     ["用时", formatDuration(detail.elapsed)],
     ["最佳连锁", `${detail.bestCombo.toFixed(1)}x`],
+    ["合约", `${detail.stats.contractsCompleted}/5`],
     ["事件", detail.waveModifier.name],
     ["流明", String(detail.stats.lumenCollected)],
     ["信标", String(detail.stats.relaysRepaired)],
@@ -489,6 +516,17 @@ function renderRunRecap(detail: RunEndDetail, newlyUnlocked: AchievementId[]): v
   renderAchievementUnlocks(newlyUnlocked);
   recapAdvice.textContent = buildRunAdvice(detail);
   runRecap.hidden = false;
+}
+
+function renderContractRecap(contract: ContractSnapshot): void {
+  contractRecap.hidden = false;
+  contractRecap.dataset.status = contract.status;
+  const statusText = contract.status === "completed" ? "完成" : contract.status === "failed" ? "失败" : "进行中";
+  contractRecapTitle.textContent = `战术合约：${contract.name} · ${statusText}`;
+  contractRecapDetail.textContent =
+    contract.status === "completed"
+      ? `${contract.requirement}，奖励 ${contract.rewardScore.toLocaleString()} 分已结算。`
+      : `${contract.requirement}。${contract.progress}`;
 }
 
 function updateAchievementUi(): void {
@@ -541,6 +579,14 @@ function buildAchievementStatusText(unlockedCount: number, total: number): strin
 
 function buildRunAdvice(detail: RunEndDetail): string {
   const { stats } = detail;
+  if ((detail.status === "won" || detail.status === "completed") && detail.contract.status === "failed") {
+    return `复盘：主目标完成了，但战术合约“${detail.contract.name}”没达成。下一次先围绕合约规划路线，再决定是否冒险修复。`;
+  }
+  if ((detail.status === "won" || detail.status === "completed") && detail.contract.status === "completed") {
+    return detail.status === "completed"
+      ? `复盘：最终合约“${detail.contract.name}”已完成，整轮路线目标很清楚。下一局可以挑战更高难度或冲 S 级高分。`
+      : `复盘：本波合约“${detail.contract.name}”已完成，说明路线目标很清楚。下一波继续先读合约，再选择升级和路线。`;
+  }
   if (detail.status === "completed") {
     return stats.hitsTaken <= 2
       ? "复盘：这次救援很干净。下一目标可以挑战硬核，重点保持连锁倍率冲高分。"
@@ -589,10 +635,12 @@ function loadSave(): SaveData {
     achievements: [],
     audioEnabled: true,
     bestCombo: 1,
+    bestContracts: 0,
     bestScore: 0,
     bestWave: 1,
     clears: 0,
-    selectedDifficulty: "standard"
+    selectedDifficulty: "standard",
+    totalContracts: 0
   };
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -606,10 +654,12 @@ function loadSave(): SaveData {
       audioEnabled: parsed.audioEnabled ?? fallback.audioEnabled,
       achievements: parseAchievements(parsed.achievements),
       bestCombo: finiteNumber(parsed.bestCombo, fallback.bestCombo),
+      bestContracts: finiteNumber(parsed.bestContracts, fallback.bestContracts),
       bestScore: finiteNumber(parsed.bestScore, fallback.bestScore),
       bestWave: finiteNumber(parsed.bestWave, fallback.bestWave),
       clears: finiteNumber(parsed.clears, fallback.clears),
-      selectedDifficulty: selected
+      selectedDifficulty: selected,
+      totalContracts: finiteNumber(parsed.totalContracts, fallback.totalContracts)
     };
   } catch {
     return fallback;
@@ -634,7 +684,17 @@ function parseAchievements(value: unknown): AchievementId[] {
   return value.filter((id): id is AchievementId => typeof id === "string" && id in ACHIEVEMENTS);
 }
 
-type SoundKind = "boost" | "button" | "hit" | "loss" | "pickup" | "pulse" | "repair" | "start" | "win";
+type SoundKind =
+  | "boost"
+  | "button"
+  | "contract"
+  | "hit"
+  | "loss"
+  | "pickup"
+  | "pulse"
+  | "repair"
+  | "start"
+  | "win";
 
 class AudioBus {
   private context?: AudioContext;
@@ -654,6 +714,7 @@ class AudioBus {
     const sounds: Record<SoundKind, Array<[number, number, number]>> = {
       boost: [[160, 0.07, 0.035], [260, 0.06, 0.026]],
       button: [[520, 0.04, 0.02]],
+      contract: [[620, 0.06, 0.032], [920, 0.08, 0.028], [1240, 0.1, 0.024]],
       hit: [[130, 0.11, 0.05], [82, 0.13, 0.035]],
       loss: [[180, 0.12, 0.04], [120, 0.18, 0.035]],
       pickup: [[660, 0.05, 0.035], [980, 0.07, 0.028]],

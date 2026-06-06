@@ -99,6 +99,7 @@ export type RunEndReason =
 
 export type RunStats = {
   boostUses: number;
+  contractsCompleted: number;
   pulseUses: number;
   lumenCollected: number;
   relaysRepaired: number;
@@ -148,6 +149,32 @@ export type AchievementRunContext = {
   wave: number;
 };
 
+export type ContractId = "lumenRoute" | "relayRush" | "cleanWave" | "stormSkipper" | "pulseDiscipline";
+
+export type ContractStatus = "active" | "completed" | "failed";
+
+export type TacticalContract = {
+  id: ContractId;
+  name: string;
+  description: string;
+  requirement: string;
+  rewardScore: number;
+};
+
+export type ContractState = {
+  id: ContractId;
+  rewardClaimed: boolean;
+  startElapsed: number;
+  startStats: RunStats;
+  status: ContractStatus;
+};
+
+export type ContractSnapshot = TacticalContract & {
+  progress: string;
+  rewardClaimed: boolean;
+  status: ContractStatus;
+};
+
 export type ObjectiveHintKind = "menu" | "danger" | "repair" | "relay" | "lumen" | "gate";
 
 export type ObjectiveHint = {
@@ -183,6 +210,44 @@ export const REPAIR_RADIUS = 76;
 export const LUMEN_PICKUP_RADIUS = 34;
 export const HAZARD_PLAYER_RADIUS = 28;
 export const HAZARD_NEAR_BUFFER = 112;
+
+export const CONTRACTS: Record<ContractId, TacticalContract> = {
+  lumenRoute: {
+    id: "lumenRoute",
+    name: "流明航线",
+    description: "先建立补给路线，保持电量节奏。",
+    requirement: "本波回收 4 个流明",
+    rewardScore: 360
+  },
+  relayRush: {
+    id: "relayRush",
+    name: "速修信标",
+    description: "快速打开第一处维修窗口。",
+    requirement: "38 秒内修复第一座信标",
+    rewardScore: 420
+  },
+  cleanWave: {
+    id: "cleanWave",
+    name: "无损救援",
+    description: "用路线和脉冲避免碎片碰撞。",
+    requirement: "本波撤离时不受击",
+    rewardScore: 520
+  },
+  stormSkipper: {
+    id: "stormSkipper",
+    name: "风暴掠行",
+    description: "绕开风暴，不把电量交给紫色场。",
+    requirement: "本波风暴停留不超过 1 秒",
+    rewardScore: 500
+  },
+  pulseDiscipline: {
+    id: "pulseDiscipline",
+    name: "脉冲节律",
+    description: "少用脉冲，靠路线和推进处理危险。",
+    requirement: "本波撤离时脉冲不超过 1 次",
+    rewardScore: 480
+  }
+};
 
 export const ACHIEVEMENTS: Record<AchievementId, Achievement> = {
   firstRepair: {
@@ -382,6 +447,7 @@ export type GameState = {
   hazards: Hazard[];
   storms: Storm[];
   gate: Gate;
+  contract: ContractState;
   upgrades: UpgradeState;
   wave: number;
   waveModifier: WaveModifierId;
@@ -465,6 +531,7 @@ export function createInitialState(): GameState {
     ],
     storms: [],
     gate: { position: { x: 500, y: 55 }, open: false },
+    contract: createContractState("lumenRoute", 0, createRunStats()),
     upgrades: createUpgradeState(),
     wave: 1,
     waveModifier: "steadySignal",
@@ -492,6 +559,7 @@ export function restartRun(state: GameState, upgradeId?: UpgradeId, options: Res
   next.elapsed = wonPreviousWave ? state.elapsed : 0;
   next.endReason = "none";
   next.stats = wonPreviousWave ? { ...state.stats } : createRunStats();
+  next.contract = createContractState(getContractFor(next.wave, next.difficulty), next.elapsed, next.stats);
   if (wonPreviousWave && upgradeId && next.upgrades[upgradeId] < MAX_UPGRADE_LEVEL) {
     next.upgrades[upgradeId] += 1;
   }
@@ -698,6 +766,14 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
     next.message = player.hull <= 0 ? "无人机损毁，重新启动救援。" : "电量归零，光网被虚空吞没。";
   }
 
+  updateContractProgress(next, difficulty, modifier);
+  if (next.status === "won" || next.status === "completed") {
+    next.message =
+      next.status === "completed"
+        ? `五波光网全部稳定，最终得分 ${next.score.toLocaleString()}。`
+        : `光网稳定，得分 ${next.score.toLocaleString()}。请选择一项升级。`;
+  }
+
   return next;
 }
 
@@ -790,6 +866,35 @@ export function getRunRating(state: GameState): RunRating {
     name: "信号不稳",
     description: "先保证补给和生存，再追求速度与连锁。",
     points: cappedPoints
+  };
+}
+
+export function getContractFor(wave: number, difficulty: DifficultyId): ContractId {
+  const standardOrder: ContractId[] = ["lumenRoute", "relayRush", "cleanWave", "stormSkipper", "pulseDiscipline"];
+  if (difficulty === "hardcore") {
+    const hardcoreOrder: ContractId[] = ["cleanWave", "stormSkipper", "pulseDiscipline", "relayRush", "lumenRoute"];
+    return hardcoreOrder[clampInt(wave - 1, 0, hardcoreOrder.length - 1)];
+  }
+  return standardOrder[clampInt(wave - 1, 0, standardOrder.length - 1)];
+}
+
+export function createContractState(id: ContractId, startElapsed = 0, startStats: RunStats = createRunStats()): ContractState {
+  return {
+    id,
+    rewardClaimed: false,
+    startElapsed,
+    startStats: { ...startStats },
+    status: "active"
+  };
+}
+
+export function getContractSnapshot(state: GameState): ContractSnapshot {
+  const contract = CONTRACTS[state.contract.id];
+  return {
+    ...contract,
+    progress: getContractProgressText(state),
+    rewardClaimed: state.contract.rewardClaimed,
+    status: state.contract.status
   };
 }
 
@@ -969,6 +1074,7 @@ function createUpgradeState(): UpgradeState {
 function createRunStats(): RunStats {
   return {
     boostUses: 0,
+    contractsCompleted: 0,
     pulseUses: 0,
     lumenCollected: 0,
     relaysRepaired: 0,
@@ -1044,6 +1150,91 @@ function nearest<T extends { position: Vec2 }>(items: T[], origin: Vec2): { item
     }
     return best;
   }, undefined);
+}
+
+function updateContractProgress(state: GameState, difficulty: Difficulty, modifier: WaveModifier): void {
+  if (state.contract.status !== "active") return;
+
+  const deltas = getContractDeltas(state);
+  const waveEnded = state.status === "won" || state.status === "completed";
+  const elapsed = state.elapsed - state.contract.startElapsed;
+  let nextStatus: ContractStatus = "active";
+
+  switch (state.contract.id) {
+    case "lumenRoute":
+      if (deltas.lumenCollected >= 4) nextStatus = "completed";
+      else if (waveEnded) nextStatus = "failed";
+      break;
+    case "relayRush":
+      if (deltas.relaysRepaired >= 1) nextStatus = elapsed <= 38 ? "completed" : "failed";
+      else if (elapsed > 38 && deltas.relaysRepaired < 1) nextStatus = "failed";
+      break;
+    case "cleanWave":
+      if (deltas.hitsTaken > 0) nextStatus = "failed";
+      else if (waveEnded) nextStatus = "completed";
+      break;
+    case "stormSkipper":
+      if (deltas.stormSeconds > 1) nextStatus = "failed";
+      else if (waveEnded) nextStatus = "completed";
+      break;
+    case "pulseDiscipline":
+      if (deltas.pulseUses > 1) nextStatus = "failed";
+      else if (waveEnded) nextStatus = "completed";
+      break;
+  }
+
+  if (state.status === "lost" && nextStatus === "active") {
+    nextStatus = "failed";
+  }
+
+  if (nextStatus === "active") return;
+  state.contract.status = nextStatus;
+  if (nextStatus === "completed" && !state.contract.rewardClaimed) {
+    const reward = Math.round(CONTRACTS[state.contract.id].rewardScore * difficulty.scoreScale * (1 + modifier.scoreBonus));
+    state.score += reward;
+    state.stats.contractsCompleted += 1;
+    state.contract.rewardClaimed = true;
+    if (state.status === "playing") {
+      state.message = `战术合约完成：${CONTRACTS[state.contract.id].name}，奖励 ${reward} 分。`;
+    }
+  } else if (nextStatus === "failed" && state.status === "playing") {
+    state.message = `战术合约失败：${CONTRACTS[state.contract.id].name}。继续完成主目标。`;
+  }
+}
+
+function getContractProgressText(state: GameState): string {
+  const deltas = getContractDeltas(state);
+  const elapsed = state.elapsed - state.contract.startElapsed;
+  if (state.contract.status === "completed") return "已完成，奖励已结算。";
+  if (state.contract.status === "failed") return "本波已失败，主目标仍可完成。";
+
+  switch (state.contract.id) {
+    case "lumenRoute":
+      return `${Math.min(deltas.lumenCollected, 4)}/4 流明`;
+    case "relayRush":
+      return deltas.relaysRepaired >= 1 ? "第一座信标已修复" : `${Math.max(0, Math.ceil(38 - elapsed))} 秒内修复第一座信标`;
+    case "cleanWave":
+      return deltas.hitsTaken === 0 ? "无受击保持中" : `${deltas.hitsTaken} 次受击`;
+    case "stormSkipper":
+      return `${Math.min(deltas.stormSeconds, 9).toFixed(1)}/1.0 秒风暴停留`;
+    case "pulseDiscipline":
+      return `${Math.min(deltas.pulseUses, 9)}/1 次脉冲`;
+  }
+}
+
+function getContractDeltas(state: GameState): RunStats {
+  return {
+    boostUses: state.stats.boostUses - state.contract.startStats.boostUses,
+    contractsCompleted: state.stats.contractsCompleted - state.contract.startStats.contractsCompleted,
+    pulseUses: state.stats.pulseUses - state.contract.startStats.pulseUses,
+    lumenCollected: state.stats.lumenCollected - state.contract.startStats.lumenCollected,
+    relaysRepaired: state.stats.relaysRepaired - state.contract.startStats.relaysRepaired,
+    hitsTaken: state.stats.hitsTaken - state.contract.startStats.hitsTaken,
+    stormSeconds: state.stats.stormSeconds - state.contract.startStats.stormSeconds,
+    repairSeconds: state.stats.repairSeconds - state.contract.startStats.repairSeconds,
+    distanceTraveled: state.stats.distanceTraveled - state.contract.startStats.distanceTraveled,
+    wavesCleared: state.stats.wavesCleared - state.contract.startStats.wavesCleared
+  };
 }
 
 function getResourceAlertLevel(

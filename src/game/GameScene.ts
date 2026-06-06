@@ -3,6 +3,7 @@ import { InputMapper } from "./input";
 import {
   createInitialState,
   getActiveRepairTarget,
+  getContractSnapshot,
   getHazardThreats,
   getObjectiveHint,
   getResourceAlerts,
@@ -15,6 +16,7 @@ import {
   restartRun,
   updateSimulation,
   WAVE_MODIFIERS,
+  type ContractSnapshot,
   type DifficultyId,
   type GameState,
   type Hazard,
@@ -52,11 +54,12 @@ type HudSnapshot = {
   resourceAlerts: ResourceAlerts;
   status: GameState["status"];
   waveModifier: WaveModifier;
+  contract: ContractSnapshot;
   upgradeSummaries: UpgradeSummary[];
   upgradeChoices: Upgrade[];
 };
 
-type FeedbackKind = "boost" | "hit" | "loss" | "pickup" | "pulse" | "repair" | "win";
+type FeedbackKind = "boost" | "contract" | "hit" | "loss" | "pickup" | "pulse" | "repair" | "win";
 
 type FeedbackCue = {
   kind: FeedbackKind;
@@ -96,6 +99,7 @@ export class GameScene extends Phaser.Scene {
     const previousRepairedIds = new Set(this.state.relays.filter((relay) => relay.repaired).map((relay) => relay.id));
     const previousHull = this.state.player.hull;
     const previousBoostCooldown = this.state.player.boostCooldown;
+    const previousContractStatus = this.state.contract.status;
     const previousPulseCooldown = this.state.player.pulseCooldown;
     const input = this.inputMapper.read();
     this.state = updateSimulation(this.state, input, Math.min(deltaMs / 1000, 0.033));
@@ -104,6 +108,7 @@ export class GameScene extends Phaser.Scene {
     this.emitFeedback({
       previousBoostCooldown,
       previousCollectedIds,
+      previousContractStatus,
       previousHull,
       previousPulseCooldown,
       previousRepairedIds,
@@ -115,6 +120,7 @@ export class GameScene extends Phaser.Scene {
           detail: {
             bestCombo: this.state.bestCombo,
             charge: this.state.player.charge,
+            contract: getContractSnapshot(this.state),
             difficulty: this.state.difficulty,
             elapsed: this.state.elapsed,
             endReason: this.state.endReason as RunEndReason,
@@ -433,6 +439,7 @@ export class GameScene extends Phaser.Scene {
       resourceAlerts: getResourceAlerts(this.state),
       status: this.state.status,
       waveModifier: WAVE_MODIFIERS[this.state.waveModifier],
+      contract: getContractSnapshot(this.state),
       upgradeSummaries: getUpgradeSummaries(this.state.upgrades),
       upgradeChoices: this.state.status === "won" ? getUpgradeChoices(this.state) : []
     };
@@ -442,6 +449,7 @@ export class GameScene extends Phaser.Scene {
   private emitFeedback(previous: {
     previousBoostCooldown: number;
     previousCollectedIds: Set<number>;
+    previousContractStatus: GameState["contract"]["status"];
     previousHull: number;
     previousPulseCooldown: number;
     previousRepairedIds: Set<number>;
@@ -488,6 +496,15 @@ export class GameScene extends Phaser.Scene {
         scale: 1.1
       });
     });
+    if (previous.previousContractStatus === "active" && this.state.contract.status === "completed") {
+      this.dispatchFeedback({
+        kind: "contract",
+        text: "合约完成",
+        position: this.state.player.position,
+        color: 0xffd76e,
+        scale: 1.16
+      });
+    }
     if (previous.previousHull - this.state.player.hull >= 5) {
       this.dispatchFeedback({
         kind: "hit",

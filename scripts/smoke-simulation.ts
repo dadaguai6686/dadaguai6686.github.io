@@ -4,9 +4,12 @@ import {
   CAMPAIGN_WAVES,
   MAX_UPGRADE_LEVEL,
   WAVE_MODIFIERS,
+  createContractState,
   createInitialState,
   getActiveRepairTarget,
   getAchievementSummaries,
+  getContractFor,
+  getContractSnapshot,
   getHazardThreats,
   getObjectiveHint,
   getResourceAlerts,
@@ -43,8 +46,48 @@ assert.equal(getUpgradeSummary(state.upgrades, "engine").maxLevel, MAX_UPGRADE_L
 assert.ok(getUpgradeSummary(state.upgrades, "engine").nextEffect?.includes("推进"), "upgrade summaries should explain next effects");
 assert.equal(getWaveModifierFor(2, "standard"), "lumenSurge", "standard wave 2 should introduce lumen surge");
 assert.equal(getWaveModifierFor(1, "hardcore"), "shardCurrent", "hardcore should start with a combat modifier");
+assert.equal(getContractFor(1, "standard"), "lumenRoute", "standard wave 1 should teach the lumen route contract");
+assert.equal(getContractFor(1, "hardcore"), "cleanWave", "hardcore should start with a precision contract");
+assert.equal(state.contract.id, "lumenRoute", "new standard runs should include the first tactical contract");
+assert.equal(getContractSnapshot(state).status, "active", "contract snapshots should expose the active status");
 assert.equal(getObjectiveHint(state).kind, "relay", "fresh runs should guide players toward a relay");
 assert.ok(WAVE_MODIFIERS.lumenSurge.lumenChargeBonus > 0, "lumen surge should define a resource effect");
+
+let lumenContract = restartRun(createInitialState());
+const lumenContractScore = lumenContract.score;
+for (const drop of lumenContract.lumen.slice(0, 4)) {
+  lumenContract = movePlayerTo(lumenContract, drop.position.x, drop.position.y);
+  lumenContract = updateSimulation(lumenContract, idle, 0.016);
+}
+assert.equal(lumenContract.contract.status, "completed", "collecting four lumen should complete the route contract");
+assert.equal(lumenContract.stats.contractsCompleted, 1, "completed contracts should be counted");
+assert.ok(lumenContract.score > lumenContractScore, "completed contracts should award score");
+const afterContractReward = lumenContract.score;
+lumenContract = updateSimulation(lumenContract, idle, 0.5);
+assert.equal(lumenContract.stats.contractsCompleted, 1, "completed contract rewards should not be claimed twice");
+assert.ok(lumenContract.score >= afterContractReward, "later updates should keep the claimed contract score");
+
+let rushContract = restartRun(createInitialState());
+rushContract.contract = createContractState("relayRush", rushContract.elapsed, rushContract.stats);
+rushContract = updateSimulation(rushContract, idle, 38.1);
+assert.equal(rushContract.contract.status, "failed", "relay rush should fail after the time limit without a repair");
+
+let cleanContract = restartRun(createInitialState());
+cleanContract.contract = createContractState("cleanWave", cleanContract.elapsed, cleanContract.stats);
+cleanContract.hazards[0].position = { ...cleanContract.player.position };
+cleanContract = updateSimulation(cleanContract, idle, 0.016);
+assert.equal(cleanContract.contract.status, "failed", "no-hit contracts should fail on hazard impact");
+
+let cleanClear = restartRun(createInitialState());
+cleanClear.contract = createContractState("cleanWave", cleanClear.elapsed, cleanClear.stats);
+cleanClear.relays.forEach((relay) => {
+  relay.repaired = true;
+  relay.progress = 1;
+});
+cleanClear = movePlayerTo(cleanClear, cleanClear.gate.position.x, cleanClear.gate.position.y);
+cleanClear = updateSimulation(cleanClear, idle, 0.016);
+assert.equal(cleanClear.status, "won", "prepared clean contract state should clear the wave");
+assert.equal(cleanClear.contract.status, "completed", "clean wave contracts should complete on a no-hit clear");
 
 state = updateSimulation(
   state,

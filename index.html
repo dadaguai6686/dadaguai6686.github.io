@@ -28,6 +28,7 @@
           <span>最佳分数 <b id="record-score">0</b></span>
           <span>最远波次 <b id="record-wave">1/5</b></span>
           <span>最佳连锁 <b id="record-combo">1.0x</b></span>
+          <span>最佳合约 <b id="record-contracts">0/5</b></span>
         </div>
         <div class="meter-row">
           <label>电量</label>
@@ -55,6 +56,14 @@
         <div id="wave-event" hidden>
           <strong id="wave-event-title">本波事件：稳定信号</strong>
           <span id="wave-event-detail">基础战场，没有额外异常。</span>
+        </div>
+        <div id="contract-panel" hidden data-status="active">
+          <strong id="contract-title">战术合约：流明航线</strong>
+          <span id="contract-requirement">本波回收 4 个流明</span>
+          <div class="contract-progress">
+            <b id="contract-progress">0/4 流明</b>
+            <em id="contract-reward">奖励 360 分</em>
+          </div>
         </div>
         <div id="pilot-tip" hidden>
           <strong id="pilot-tip-title">导航提示</strong>
@@ -87,6 +96,10 @@
               <span id="recap-rating-name">稳定完成</span>
               <em id="recap-rating-detail">0/100 · 完成救援后显示表现评价。</em>
             </div>
+            <div id="contract-recap" hidden data-status="active">
+              <strong id="contract-recap-title">战术合约</strong>
+              <span id="contract-recap-detail">完成本波副目标会显示在这里。</span>
+            </div>
             <div id="recap-metrics"></div>
             <div id="achievement-unlocks" hidden></div>
             <p id="recap-advice"></p>
@@ -103,6 +116,10 @@
             <article>
               <strong>怎么活下来</strong>
               <span>Space 推进，Q 释放脉冲推开碎片；不要站在紫色风暴里。</span>
+            </article>
+            <article>
+              <strong>战术合约</strong>
+              <span>每波有一个额外挑战，完成会立刻加分，也会进入结算记录。</span>
             </article>
           </div>
           <button id="start-button" type="button">开始救援</button>
