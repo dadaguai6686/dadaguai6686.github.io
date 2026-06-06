@@ -86,6 +86,13 @@ export type SectorLayout = {
   gatePosition: Vec2;
 };
 
+export type RoutePlan = {
+  seed: number;
+  code: string;
+  name: string;
+  description: string;
+};
+
 export type UpgradeId = "engine" | "repair" | "capacitor" | "pulse" | "shield";
 
 export type Upgrade = {
@@ -661,6 +668,7 @@ export type GameState = {
   storms: Storm[];
   gate: Gate;
   contract: ContractState;
+  routeSeed: number;
   sector: SectorId;
   upgrades: UpgradeState;
   wave: number;
@@ -686,12 +694,14 @@ export type InputState = {
 
 export type RestartOptions = {
   difficulty?: DifficultyId;
+  routeSeed?: number;
 };
 
 export function createInitialState(): GameState {
   const maxHull = 100;
   const maxCharge = 100;
   const sector: SectorId = "outerRing";
+  const routeSeed = 0;
   return {
     status: "menu",
     difficulty: "standard",
@@ -708,12 +718,13 @@ export function createInitialState(): GameState {
       pulseCooldown: 0,
       invulnerable: 0
     },
-    relays: createRelays(sector),
-    lumen: createLumen(sector),
-    hazards: createHazards(sector),
+    relays: createRelays(sector, routeSeed, 1),
+    lumen: createLumen(sector, routeSeed, 1),
+    hazards: createHazards(sector, routeSeed, 1),
     storms: [],
     gate: { position: { ...SECTOR_LAYOUTS[sector].gatePosition }, open: false },
     contract: createContractState("lumenRoute", 0, createRunStats()),
+    routeSeed,
     sector,
     upgrades: createUpgradeState(),
     wave: 1,
@@ -739,6 +750,7 @@ export function restartRun(state: GameState, upgradeId?: UpgradeId, options: Res
   next.wave = wonPreviousWave ? state.wave + 1 : 1;
   next.waveModifier = getWaveModifierFor(next.wave, next.difficulty);
   next.sector = getSectorFor(next.wave, next.difficulty);
+  next.routeSeed = wonPreviousWave ? state.routeSeed : normalizeRouteSeed(options.routeSeed ?? createRouteSeed());
   applySectorLayout(next);
   next.upgrades = wonPreviousWave ? { ...state.upgrades } : createUpgradeState();
   next.elapsed = wonPreviousWave ? state.elapsed : 0;
@@ -760,17 +772,18 @@ export function restartRun(state: GameState, upgradeId?: UpgradeId, options: Res
   next.hazards = next.hazards.concat(
     Array.from({ length: extraHazards }, (_, i) => ({
       id: 10 + i,
-      position: { x: 220 + i * 245, y: 260 + ((i * 133) % 280) },
-      velocity: { x: 54 + i * 18, y: i % 2 === 0 ? 72 : -66 },
+      position: varyRoutePosition({ x: 220 + i * 245, y: 260 + ((i * 133) % 280) }, next.routeSeed, next.wave, 0x7100 + i, 38),
+      velocity: varyRouteVelocity({ x: 54 + i * 18, y: i % 2 === 0 ? 72 : -66 }, next.routeSeed, next.wave, 0x7200 + i),
       radius: 22 + i * 3
     }))
   );
-  next.storms = createStorms(next.wave, next.difficulty, next.sector);
+  next.storms = createStorms(next.wave, next.difficulty, next.sector, next.routeSeed);
   const modifier = WAVE_MODIFIERS[next.waveModifier];
   const sector = SECTOR_LAYOUTS[next.sector];
+  const route = getRoutePlan(next.routeSeed);
   next.message = wonPreviousWave
-    ? `升级已安装。第 ${next.wave}/${next.campaignWaves} 波，${sector.name} / ${modifier.name}：${sector.briefing}`
-    : `${DIFFICULTY_SETTINGS[next.difficulty].name}模式，第 ${next.wave}/${next.campaignWaves} 波，${sector.name} / ${modifier.name}：${sector.briefing}`;
+    ? `升级已安装。第 ${next.wave}/${next.campaignWaves} 波，${route.name} / ${sector.name} / ${modifier.name}：${sector.briefing}`
+    : `${DIFFICULTY_SETTINGS[next.difficulty].name}模式，第 ${next.wave}/${next.campaignWaves} 波，${route.name} / ${sector.name} / ${modifier.name}：${sector.briefing}`;
   return next;
 }
 
@@ -1168,6 +1181,42 @@ export function getSectorFor(wave: number, difficulty: DifficultyId): SectorId {
   return standardOrder[clampInt(wave - 1, 0, standardOrder.length - 1)];
 }
 
+export function getRoutePlan(seed: number): RoutePlan {
+  const normalized = normalizeRouteSeed(seed);
+  const callsigns = ["青灯", "星桥", "夜航", "棱镜", "岚脊", "银弦", "金涌", "北针"];
+  const traits = [
+    "信标和补给会出现轻微偏航，适合重新规划开局路线。",
+    "危险源有轻微漂移，维修窗口需要重新观察。",
+    "补给航线会微调，连锁路线不会每局完全相同。",
+    "风暴相位和资源点略有变化，适合复盘后再挑战。"
+  ];
+  const code = normalized.toString(36).toUpperCase().padStart(4, "0").slice(-4);
+  const name = `${callsigns[normalized % callsigns.length]}-${code}`;
+  return {
+    seed: normalized,
+    code,
+    name,
+    description: traits[Math.floor(normalized / callsigns.length) % traits.length]
+  };
+}
+
+export function normalizeRouteSeed(seed: number): number {
+  const normalized = Math.abs(Math.trunc(seed)) % 1679616;
+  return normalized === 0 ? 1 : normalized;
+}
+
+export function parseRouteSeed(value: string | null | undefined): number | undefined {
+  if (!value) return undefined;
+  const cleaned = value
+    .toUpperCase()
+    .replace(/^LD[-_]?/, "")
+    .replace(/^[\u4E00-\u9FA5]+[-_]?/, "")
+    .replace(/[^0-9A-Z]/g, "");
+  if (!cleaned) return undefined;
+  const parsed = Number.parseInt(cleaned, 36);
+  return Number.isFinite(parsed) ? normalizeRouteSeed(parsed) : undefined;
+}
+
 export function getCoachDirective(state: GameState): CoachDirective {
   const totalSteps = 4;
   if (state.status !== "playing") {
@@ -1432,47 +1481,92 @@ function createRunStats(): RunStats {
   };
 }
 
-function createRelays(sector: SectorId): Relay[] {
+function createRelays(sector: SectorId, routeSeed: number, wave: number): Relay[] {
+  const salt = sectorSalt(sector) + 0x1000;
   return SECTOR_LAYOUTS[sector].relayPositions.map((position, id) => ({
     id,
-    position: { ...position },
+    position: varyRoutePosition(position, routeSeed, wave, salt + id, 24),
     progress: 0,
     repaired: false
   }));
 }
 
-function createLumen(sector: SectorId): Lumen[] {
+function createLumen(sector: SectorId, routeSeed: number, wave: number): Lumen[] {
+  const salt = sectorSalt(sector) + 0x2000;
   return SECTOR_LAYOUTS[sector].lumenPositions.map((position, id) => ({
     id,
-    position: { ...position },
+    position: varyRoutePosition(position, routeSeed, wave, salt + id, 30),
     collected: false
   }));
 }
 
-function createHazards(sector: SectorId): Hazard[] {
+function createHazards(sector: SectorId, routeSeed: number, wave: number): Hazard[] {
+  const salt = sectorSalt(sector) + 0x3000;
   return SECTOR_LAYOUTS[sector].hazards.map((hazard) => ({
     ...hazard,
-    position: { ...hazard.position },
-    velocity: { ...hazard.velocity }
+    position: varyRoutePosition(hazard.position, routeSeed, wave, salt + hazard.id, 34),
+    velocity: varyRouteVelocity(hazard.velocity, routeSeed, wave, salt + hazard.id)
   }));
 }
 
 function applySectorLayout(state: GameState): void {
   const layout = SECTOR_LAYOUTS[state.sector];
-  state.relays = createRelays(state.sector);
-  state.lumen = createLumen(state.sector);
-  state.hazards = createHazards(state.sector);
+  state.relays = createRelays(state.sector, state.routeSeed, state.wave);
+  state.lumen = createLumen(state.sector, state.routeSeed, state.wave);
+  state.hazards = createHazards(state.sector, state.routeSeed, state.wave);
   state.storms = [];
-  state.gate = { position: { ...layout.gatePosition }, open: false };
+  const gatePosition = varyRoutePosition(layout.gatePosition, state.routeSeed, state.wave, sectorSalt(state.sector) + 0x4000, 24);
+  state.gate = { position: { x: clamp(gatePosition.x, 430, 570), y: layout.gatePosition.y }, open: false };
 }
 
-function createStorms(wave: number, difficulty: DifficultyId, sector: SectorId): Storm[] {
+function createStorms(wave: number, difficulty: DifficultyId, sector: SectorId, routeSeed: number): Storm[] {
   const baseStorms = SECTOR_LAYOUTS[sector].storms;
   const stormCount = clampInt(Math.ceil(wave / 2) + DIFFICULTY_SETTINGS[difficulty].stormBonus, 0, baseStorms.length);
+  const salt = sectorSalt(sector) + 0x5000;
   return baseStorms.slice(0, stormCount).map((storm) => ({
     ...storm,
-    position: { ...storm.position }
+    position: varyRoutePosition(storm.position, routeSeed, wave, salt + storm.id, 24),
+    phase: storm.phase + routeNoise(routeSeed, wave, salt + storm.id + 101) * Math.PI * 0.65
   }));
+}
+
+function createRouteSeed(): number {
+  const timePart = Date.now() % 1679616;
+  const randomPart = Math.floor(Math.random() * 1679616);
+  return normalizeRouteSeed(timePart ^ randomPart);
+}
+
+function varyRoutePosition(position: Vec2, routeSeed: number, wave: number, salt: number, amount: number): Vec2 {
+  if (routeSeed <= 0) return { ...position };
+  const offsetX = (routeNoise(routeSeed, wave, salt) - 0.5) * amount * 2;
+  const offsetY = (routeNoise(routeSeed, wave, salt + 97) - 0.5) * amount * 2;
+  return {
+    x: clamp(position.x + offsetX, 92, 908),
+    y: clamp(position.y + offsetY, 96, 646)
+  };
+}
+
+function varyRouteVelocity(velocity: Vec2, routeSeed: number, wave: number, salt: number): Vec2 {
+  if (routeSeed <= 0) return { ...velocity };
+  const scale = 0.92 + routeNoise(routeSeed, wave, salt + 211) * 0.16;
+  const trimX = (routeNoise(routeSeed, wave, salt + 233) - 0.5) * 12;
+  const trimY = (routeNoise(routeSeed, wave, salt + 251) - 0.5) * 12;
+  return {
+    x: (velocity.x + trimX) * scale,
+    y: (velocity.y + trimY) * scale
+  };
+}
+
+function routeNoise(seed: number, wave: number, salt: number): number {
+  let value = (normalizeRouteSeed(seed) ^ Math.imul(wave + 11, 374761393) ^ Math.imul(salt + 17, 668265263)) >>> 0;
+  value = Math.imul(value ^ (value >>> 15), 2246822519);
+  value = Math.imul(value ^ (value >>> 13), 3266489917);
+  return ((value ^ (value >>> 16)) >>> 0) / 4294967295;
+}
+
+function sectorSalt(sector: SectorId): number {
+  const order: SectorId[] = ["outerRing", "crossCurrent", "southernArc", "stormSpine", "overclockCore"];
+  return (order.indexOf(sector) + 1) * 4096;
 }
 
 function awardScore(state: GameState, base: number, comboGain: number): void {

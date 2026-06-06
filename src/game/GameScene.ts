@@ -8,6 +8,7 @@ import {
   getHazardThreats,
   getObjectiveHint,
   getResourceAlerts,
+  getRoutePlan,
   getRunRating,
   getStormActiveRadius,
   getUpgradeChoices,
@@ -26,6 +27,7 @@ import {
   type Lumen,
   type ObjectiveHint,
   type ResourceAlerts,
+  type RoutePlan,
   type RunRating,
   type Relay,
   type RunEndReason,
@@ -57,6 +59,7 @@ type HudSnapshot = {
   objectiveHint: ObjectiveHint;
   coachDirective: CoachDirective;
   resourceAlerts: ResourceAlerts;
+  routePlan: RoutePlan;
   status: GameState["status"];
   waveModifier: WaveModifier;
   sector: SectorLayout;
@@ -133,6 +136,7 @@ export class GameScene extends Phaser.Scene {
             hull: this.state.player.hull,
             message: this.state.message,
             rating: getRunRating(this.state) as RunRating,
+            routePlan: getRoutePlan(this.state.routeSeed) as RoutePlan,
             score: this.state.score,
             sector: SECTOR_LAYOUTS[this.state.sector] as SectorLayout,
             stats: this.state.stats as RunStats,
@@ -149,8 +153,8 @@ export class GameScene extends Phaser.Scene {
     this.startRunWithUpgrade();
   }
 
-  startRunWithUpgrade(upgradeId?: UpgradeId, difficulty?: DifficultyId): void {
-    this.state = restartRun(this.state, upgradeId, { difficulty });
+  startRunWithUpgrade(upgradeId?: UpgradeId, difficulty?: DifficultyId, routeSeed?: number): void {
+    this.state = restartRun(this.state, upgradeId, { difficulty, routeSeed });
     this.createWorld();
     this.renderState();
     this.emitHud();
@@ -158,8 +162,8 @@ export class GameScene extends Phaser.Scene {
 
   private createHudBridge(): void {
     window.addEventListener("game:start", (event) => {
-      const detail = (event as CustomEvent<{ difficulty?: DifficultyId; upgradeId?: UpgradeId }>).detail;
-      this.startRunWithUpgrade(detail?.upgradeId, detail?.difficulty);
+      const detail = (event as CustomEvent<{ difficulty?: DifficultyId; routeSeed?: number; upgradeId?: UpgradeId }>).detail;
+      this.startRunWithUpgrade(detail?.upgradeId, detail?.difficulty, detail?.routeSeed);
     });
     window.addEventListener("game:pause", () => {
       this.state = pauseRun(this.state);
@@ -445,6 +449,7 @@ export class GameScene extends Phaser.Scene {
       objectiveHint: getObjectiveHint(this.state),
       coachDirective: getCoachDirective(this.state),
       resourceAlerts: getResourceAlerts(this.state),
+      routePlan: getRoutePlan(this.state.routeSeed),
       status: this.state.status,
       waveModifier: WAVE_MODIFIERS[this.state.waveModifier],
       sector: SECTOR_LAYOUTS[this.state.sector],

@@ -6,6 +6,7 @@ import {
   UPGRADE_CATALOG,
   getAchievementSummaries,
   getUnlockedAchievementsForRun,
+  parseRouteSeed,
   type AchievementId,
   type CoachDirective,
   type ContractSnapshot,
@@ -13,6 +14,7 @@ import {
   type GameStatus,
   type ObjectiveHint,
   type ResourceAlerts,
+  type RoutePlan,
   type RunEndReason,
   type RunRating,
   type RunStats,
@@ -133,6 +135,7 @@ type RunEndDetail = {
   hull: number;
   message: string;
   rating: RunRating;
+  routePlan: RoutePlan;
   score: number;
   sector: SectorLayout;
   stats: RunStats;
@@ -203,7 +206,8 @@ function launchRun(upgradeId?: UpgradeId): void {
   achievementUnlocks.hidden = true;
   upgradeChoices.hidden = true;
   const runDifficulty = latestStatus === "won" ? latestDifficulty : selectedDifficulty;
-  window.dispatchEvent(new CustomEvent("game:start", { detail: { difficulty: runDifficulty, upgradeId } }));
+  const routeSeed = latestStatus === "won" ? undefined : getRequestedRouteSeed();
+  window.dispatchEvent(new CustomEvent("game:start", { detail: { difficulty: runDifficulty, routeSeed, upgradeId } }));
 }
 
 window.addEventListener("game:hud", (event) => {
@@ -225,6 +229,7 @@ window.addEventListener("game:hud", (event) => {
     coachDirective: CoachDirective;
     objectiveHint: ObjectiveHint;
     resourceAlerts: ResourceAlerts;
+    routePlan: RoutePlan;
     difficulty: DifficultyId;
     campaignWaves: number;
     status: GameStatus;
@@ -276,7 +281,7 @@ window.addEventListener("game:hud", (event) => {
   pilotTipDetail.textContent = detail.objectiveHint.detail;
   missionText.textContent = detail.message;
   objectiveTitle.textContent = `目标：第 ${detail.wave}/${detail.campaignWaves} 波，修复 ${detail.relays} 座信标`;
-  objectiveDetail.textContent = `${DIFFICULTY_SETTINGS[detail.difficulty].name}模式 / ${detail.sector.name} / ${detail.waveModifier.name}：${detail.sector.briefing} ${detail.waveModifier.briefing}`;
+  objectiveDetail.textContent = `${DIFFICULTY_SETTINGS[detail.difficulty].name}模式 / 救援代号 ${detail.routePlan.name} / ${detail.sector.name} / ${detail.waveModifier.name}：${detail.sector.briefing} ${detail.waveModifier.briefing}`;
   latestUpgradeChoices = detail.upgradeChoices;
 });
 
@@ -527,6 +532,7 @@ function renderRunRecap(detail: RunEndDetail, newlyUnlocked: AchievementId[]): v
     ["用时", formatDuration(detail.elapsed)],
     ["最佳连锁", `${detail.bestCombo.toFixed(1)}x`],
     ["合约", `${detail.stats.contractsCompleted}/5`],
+    ["代号", detail.routePlan.name],
     ["区域", detail.sector.name],
     ["事件", detail.waveModifier.name],
     ["流明", String(detail.stats.lumenCollected)],
@@ -659,6 +665,11 @@ function formatDuration(seconds: number): string {
 
 function formatSeconds(seconds: number): string {
   return `${seconds < 10 ? seconds.toFixed(1) : Math.round(seconds)}秒`;
+}
+
+function getRequestedRouteSeed(): number | undefined {
+  const params = new URLSearchParams(window.location.search);
+  return parseRouteSeed(params.get("route") ?? params.get("seed"));
 }
 
 function loadSave(): SaveData {
