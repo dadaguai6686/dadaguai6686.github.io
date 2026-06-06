@@ -8,6 +8,13 @@
     <language>zh-CN</language>
     <lastBuildDate>Sat, 06 Jun 2026 00:00:00 +0800</lastBuildDate>
     <generator>Atherix Vanilla Web Stack</generator>
+    <image>
+      <url>https://dadaguai6686.github.io/assets/atherix-og-card.png</url>
+      <title>Atherix Digital Space</title>
+      <link>https://dadaguai6686.github.io/</link>
+      <width>144</width>
+      <height>76</height>
+    </image>
     <item>
       <title>如何构建一个极速的无框架博客？</title>
       <link>https://dadaguai6686.github.io/#post/post-1</link>

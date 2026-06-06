@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'atherix-static-v12-arcade-director';
+const CACHE_VERSION = 'atherix-static-v13-brand-preview';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -8,7 +8,10 @@ const STATIC_ASSETS = [
   '/manifest.webmanifest',
   '/sitemap.xml',
   '/feed.xml',
-  '/assets/atherix-icon.svg'
+  '/assets/atherix-icon.svg',
+  '/assets/atherix-icon-192.png',
+  '/assets/atherix-icon-512.png',
+  '/assets/atherix-og-card.png'
 ];
 
 self.addEventListener('install', (event) => {

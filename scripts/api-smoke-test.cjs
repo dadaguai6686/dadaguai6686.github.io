@@ -127,11 +127,28 @@ async function run() {
     assert((serviceWorkerScript.headers.get('content-type') || '').includes('javascript'), 'service worker should be served as javascript');
     const serviceWorkerText = await serviceWorkerScript.text();
     assert(serviceWorkerText.includes('/feed.xml') && serviceWorkerText.includes('/sitemap.xml'), 'service worker should precache discovery metadata');
+    assert(serviceWorkerText.includes('/assets/atherix-og-card.png') && serviceWorkerText.includes('/assets/atherix-icon-512.png'), 'service worker should precache branded PWA assets');
 
     const indexHtml = await fetch(`${baseUrl}/`);
     const indexText = await indexHtml.text();
     assert(indexText.includes('rel="canonical" href="https://dadaguai6686.github.io/"'), 'index should expose an absolute canonical URL');
     assert(indexText.includes('type="application/rss+xml"'), 'index should link the RSS feed');
+    assert(indexText.includes('property="og:image" content="https://dadaguai6686.github.io/assets/atherix-og-card.png"'), 'index should expose the local branded Open Graph image');
+    assert(indexText.includes('name="twitter:image" content="https://dadaguai6686.github.io/assets/atherix-og-card.png"'), 'index should expose the local Twitter card image');
+    assert(indexText.includes('rel="apple-touch-icon" href="/assets/atherix-icon-192.png"'), 'index should expose an Apple touch icon');
+
+    const manifest = await fetch(`${baseUrl}/manifest.webmanifest`);
+    const manifestBody = await manifest.json();
+    assert(manifest.status === 200, 'manifest should be publicly served');
+    assert(manifestBody.id === '/' && manifestBody.lang === 'zh-CN', 'manifest should include a stable id and language');
+    assert(manifestBody.icons?.some(icon => icon.src === '/assets/atherix-icon-192.png' && icon.purpose.includes('maskable')), 'manifest should include a maskable 192px PNG icon');
+    assert(manifestBody.icons?.some(icon => icon.src === '/assets/atherix-icon-512.png' && icon.purpose.includes('maskable')), 'manifest should include a maskable 512px PNG icon');
+    assert(Array.isArray(manifestBody.shortcuts) && manifestBody.shortcuts.length >= 3, 'manifest should expose PWA shortcuts');
+    assert(manifestBody.screenshots?.some(shot => shot.src === '/assets/atherix-og-card.png' && shot.sizes === '1200x630'), 'manifest should include the branded wide screenshot');
+
+    const ogImage = await fetch(`${baseUrl}/assets/atherix-og-card.png`);
+    assert(ogImage.status === 200 && (ogImage.headers.get('content-type') || '').includes('image/png'), 'branded Open Graph image should be publicly served as PNG');
+    assert(Number(ogImage.headers.get('content-length') || 0) > 10000, 'branded Open Graph image should not be empty');
 
     const sitemap = await fetch(`${baseUrl}/sitemap.xml`);
     const sitemapText = await sitemap.text();
@@ -144,6 +161,7 @@ async function run() {
     const feed = await fetch(`${baseUrl}/feed.xml`);
     const feedText = await feed.text();
     assert(feed.status === 200 && feedText.includes('<rss version="2.0"') && feedText.includes('atherix-post-1'), 'RSS feed should be publicly served with seeded posts');
+    assert(feedText.includes('<url>https://dadaguai6686.github.io/assets/atherix-og-card.png</url>'), 'RSS feed should expose the branded channel image');
 
     const sensitivePaths = [
       '/server.js',
@@ -271,6 +289,8 @@ async function run() {
       corsAllowed: health.headers.get('access-control-allow-origin'),
       corsBlockedHeader: blockedCors.headers.get('access-control-allow-origin') || null,
       serviceWorkerStatus: serviceWorkerScript.status,
+      manifestIcons: manifestBody.icons.length,
+      ogImageBytes: Number(ogImage.headers.get('content-length') || 0),
       sitemapStatus: sitemap.status,
       feedStatus: feed.status,
       sensitiveResults,
