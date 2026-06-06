@@ -212,6 +212,7 @@ async function run() {
     return evaluate(`(() => {
       const el = document.querySelector(${JSON.stringify(selector)});
       if (!el) return false;
+      el.focus?.({ preventScroll: true });
       el.click();
       return true;
     })()`);
@@ -252,6 +253,59 @@ async function run() {
       projectActionsVisible: !!projectActions && getComputedStyle(projectActions).display !== 'none'
     };
   })()`);
+
+  const accessibilityBaseline = await evaluate(`(() => ({
+    skipHref: document.querySelector('.skip-link')?.getAttribute('href') || '',
+    mainTabIndex: document.querySelector('#main-content')?.getAttribute('tabindex') || '',
+    buttonsMissingType: document.querySelectorAll('button:not([type])').length,
+    commandTriggerLabel: document.querySelector('#command-palette-trigger')?.getAttribute('aria-label') || '',
+    adminTriggerLabel: document.querySelector('#admin-login-trigger')?.getAttribute('aria-label') || '',
+    horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+  }))()`);
+
+  await click('#command-palette-trigger');
+  await waitFor('#command-palette.active');
+  await wait(120);
+  const commandFocusOpenState = await evaluate(`(() => {
+    const palette = document.querySelector('#command-palette');
+    return {
+      open: palette?.classList.contains('active') || false,
+      ariaHidden: palette?.getAttribute('aria-hidden') || '',
+      focusId: document.activeElement?.id || '',
+      focusInside: palette?.contains(document.activeElement) || false
+    };
+  })()`);
+  await key('keyDown', 'Escape', 'Escape');
+  await key('keyUp', 'Escape', 'Escape');
+  await wait(180);
+  const commandFocusClosedState = await evaluate(`(() => ({
+    open: document.querySelector('#command-palette')?.classList.contains('active') || false,
+    ariaHidden: document.querySelector('#command-palette')?.getAttribute('aria-hidden') || '',
+    focusId: document.activeElement?.id || ''
+  }))()`);
+
+  await click('#admin-login-trigger');
+  await waitFor('#admin-login-modal.active');
+  await wait(160);
+  const adminModalOpenState = await evaluate(`(() => {
+    const modal = document.querySelector('#admin-login-modal');
+    return {
+      open: modal?.classList.contains('active') || false,
+      role: modal?.getAttribute('role') || '',
+      ariaHidden: modal?.getAttribute('aria-hidden') || '',
+      focusId: document.activeElement?.id || '',
+      focusInside: modal?.contains(document.activeElement) || false
+    };
+  })()`);
+  await key('keyDown', 'Escape', 'Escape');
+  await key('keyUp', 'Escape', 'Escape');
+  await wait(380);
+  const adminModalClosedState = await evaluate(`(() => ({
+    open: document.querySelector('#admin-login-modal')?.classList.contains('active') || false,
+    ariaHidden: document.querySelector('#admin-login-modal')?.getAttribute('aria-hidden') || '',
+    display: getComputedStyle(document.querySelector('#admin-login-modal')).display,
+    focusId: document.activeElement?.id || ''
+  }))()`);
 
   await click('#command-palette-trigger');
   await waitFor('#command-palette.active');
@@ -388,8 +442,21 @@ async function run() {
     cards: document.querySelectorAll('.project-card').length,
     disabledLiveButtons: document.querySelectorAll('.project-card .project-btn-disabled[aria-disabled="true"]').length,
     modalOpen: document.querySelector('#project-modal')?.classList.contains('active') || false,
+    modalAriaHidden: document.querySelector('#project-modal')?.getAttribute('aria-hidden') || '',
+    modalRole: document.querySelector('#project-modal')?.getAttribute('role') || '',
+    modalFocusInside: document.querySelector('#project-modal')?.contains(document.activeElement) || false,
+    modalFocusId: document.activeElement?.id || '',
     modalLiveDisabled: document.querySelector('#modal-live-link')?.getAttribute('aria-disabled') === 'true',
     fakeHashLinks: [...document.querySelectorAll('.project-card a[href$="/#"], .project-card a[href="#"]')].length
+  }))()`);
+  await key('keyDown', 'Escape', 'Escape');
+  await key('keyUp', 'Escape', 'Escape');
+  await wait(380);
+  const projectModalClosedState = await evaluate(`(() => ({
+    open: document.querySelector('#project-modal')?.classList.contains('active') || false,
+    ariaHidden: document.querySelector('#project-modal')?.getAttribute('aria-hidden') || '',
+    display: getComputedStyle(document.querySelector('#project-modal')).display,
+    focusClass: document.activeElement?.className || ''
   }))()`);
 
   await click('.nav-item[data-target="game"]');
@@ -788,6 +855,12 @@ async function run() {
 
   assert(blogState.visibleArticle && blogState.articleChars > 100, 'blog reader should open a populated article');
   assert(!adminStartupState.token && !adminStartupState.blogActionsVisible && !adminStartupState.projectActionsVisible, 'invalid cached admin token should be cleared on startup');
+  assert(accessibilityBaseline.skipHref === '#main-content' && accessibilityBaseline.mainTabIndex === '-1' && accessibilityBaseline.buttonsMissingType === 0 && !accessibilityBaseline.horizontalOverflow, `core accessibility affordances should be present: ${JSON.stringify(accessibilityBaseline)}`);
+  assert(accessibilityBaseline.commandTriggerLabel && accessibilityBaseline.adminTriggerLabel, `icon-only header actions should have labels: ${JSON.stringify(accessibilityBaseline)}`);
+  assert(commandFocusOpenState.open && commandFocusOpenState.ariaHidden === 'false' && commandFocusOpenState.focusId === 'command-search-input' && commandFocusOpenState.focusInside, `command palette should focus search input on open: ${JSON.stringify(commandFocusOpenState)}`);
+  assert(!commandFocusClosedState.open && commandFocusClosedState.ariaHidden === 'true' && commandFocusClosedState.focusId === 'command-palette-trigger', `command palette should close and restore focus: ${JSON.stringify(commandFocusClosedState)}`);
+  assert(adminModalOpenState.open && adminModalOpenState.role === 'dialog' && adminModalOpenState.ariaHidden === 'false' && adminModalOpenState.focusId === 'admin-username' && adminModalOpenState.focusInside, `admin modal should expose dialog semantics and focus first field: ${JSON.stringify(adminModalOpenState)}`);
+  assert(!adminModalClosedState.open && adminModalClosedState.ariaHidden === 'true' && adminModalClosedState.display === 'none' && adminModalClosedState.focusId === 'admin-login-trigger', `admin modal should close on Escape and restore focus: ${JSON.stringify(adminModalClosedState)}`);
   assert(commandBeforeExecute.open && commandBeforeExecute.results >= 1 && /Rift Tactics/.test(commandBeforeExecute.firstTitle), `command palette should find tactics mode: ${JSON.stringify(commandBeforeExecute)}`);
   assert(commandState.closed && commandState.gameActive && commandState.tacticsActive && /Rift Tactics/.test(commandState.activeTitle), `command palette should execute game navigation: ${JSON.stringify(commandState)}`);
   assert(blogHubBefore.panel && blogHubBefore.total >= 1 && blogHubBefore.filters >= 3 && blogHubBefore.cards >= 1, `blog reading hub should render stats and filters: ${JSON.stringify(blogHubBefore)}`);
@@ -812,6 +885,8 @@ async function run() {
   );
   assert(projectState.cards >= 1, 'project cards should render');
   assert(projectState.disabledLiveButtons >= 1 && projectState.modalLiveDisabled, 'projects without demos should render disabled live actions');
+  assert(projectState.modalOpen && projectState.modalAriaHidden === 'false' && projectState.modalRole === 'dialog' && projectState.modalFocusInside, `project details modal should open with focus inside: ${JSON.stringify(projectState)}`);
+  assert(!projectModalClosedState.open && projectModalClosedState.ariaHidden === 'true' && projectModalClosedState.display === 'none', `project details modal should close on Escape: ${JSON.stringify(projectModalClosedState)}`);
   assert(projectState.fakeHashLinks === 0, 'project cards should not convert placeholder live links into fake hash URLs');
   assert(
     gameViewportState.scrollY <= 80 && gameViewportState.sectionVisible,
@@ -875,6 +950,11 @@ async function run() {
     cdpPort,
     appUrl,
     adminStartupState,
+    accessibilityBaseline,
+    commandFocusOpenState,
+    commandFocusClosedState,
+    adminModalOpenState,
+    adminModalClosedState,
     commandBeforeExecute,
     commandState,
     blogHubBefore,
@@ -884,6 +964,7 @@ async function run() {
     blogHubAfterBookmark,
     projectViewportState,
     projectState,
+    projectModalClosedState,
     gameViewportState,
     mainSpaceState,
     runnerTouchState,

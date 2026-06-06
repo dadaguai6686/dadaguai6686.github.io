@@ -4,11 +4,20 @@ function init() {
   let iconRenderQueued = false;
 
   // Safe helper to create icons without throwing ReferenceError
-  function safeCreateIcons() {
+  function normalizeButtonTypes(scope = document) {
+    const root = scope && typeof scope.querySelectorAll === 'function' ? scope : document;
+    root.querySelectorAll('button:not([type])').forEach(button => {
+      button.type = 'button';
+    });
+  }
+
+  function safeCreateIcons(scope = document) {
+    normalizeButtonTypes(scope);
     if (typeof lucide === 'undefined' || iconRenderQueued) return;
     iconRenderQueued = true;
 
     requestAnimationFrame(() => {
+      normalizeButtonTypes(scope);
       iconRenderQueued = false;
       try {
         lucide.createIcons();
@@ -238,6 +247,85 @@ function init() {
       });
   }
 
+  const focusableSelector = [
+    'a[href]:not([aria-disabled="true"])',
+    'button:not([disabled])',
+    'input:not([type="hidden"]):not([disabled])',
+    'select:not([disabled])',
+    'textarea:not([disabled])',
+    '[tabindex]:not([tabindex="-1"])'
+  ].join(',');
+  const modalFocusOrigins = new WeakMap();
+  const modalCloseTimers = new WeakMap();
+  let commandPaletteFocusOrigin = null;
+
+  function isVisibleFocusableElement(element) {
+    if (!element || element.getAttribute('aria-hidden') === 'true' || element.getAttribute('aria-disabled') === 'true') {
+      return false;
+    }
+    const style = window.getComputedStyle(element);
+    return style.visibility !== 'hidden' &&
+      style.display !== 'none' &&
+      element.getClientRects().length > 0;
+  }
+
+  function getFocusableElements(container) {
+    if (!container) return [];
+    return [...container.querySelectorAll(focusableSelector)]
+      .filter(element => element.tabIndex !== -1 && isVisibleFocusableElement(element));
+  }
+
+  function restoreFocusTo(element) {
+    if (!element || !document.contains(element) || typeof element.focus !== 'function') return false;
+    try {
+      element.focus({ preventScroll: true });
+    } catch (err) {
+      element.focus();
+    }
+    return document.activeElement === element;
+  }
+
+  function focusInitialElement(container) {
+    if (!container) return;
+    const preferred = container.querySelector('[data-autofocus], input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), select:not([disabled])');
+    if (preferred && isVisibleFocusableElement(preferred)) {
+      restoreFocusTo(preferred);
+      return;
+    }
+    const firstFocusable = getFocusableElements(container)[0];
+    if (firstFocusable) restoreFocusTo(firstFocusable);
+  }
+
+  function trapFocus(event, container) {
+    if (event.key !== 'Tab' || !container) return;
+    const focusable = getFocusableElements(container);
+    if (!focusable.length) {
+      event.preventDefault();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = document.activeElement;
+
+    if (event.shiftKey && (active === first || !container.contains(active))) {
+      event.preventDefault();
+      restoreFocusTo(last);
+      return;
+    }
+    if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      restoreFocusTo(first);
+    }
+  }
+
+  const skipLink = document.querySelector('.skip-link');
+  const mainContent = document.getElementById('main-content');
+  if (skipLink && mainContent) {
+    skipLink.addEventListener('click', () => {
+      requestAnimationFrame(() => restoreFocusTo(mainContent));
+    });
+  }
+
   // ==========================================
   // API CALL HANDLING (TUN / PROXY SAFE RELATIVE PATHS)
   // ==========================================
@@ -315,6 +403,7 @@ function init() {
 
   function navigateTo(targetId, options = {}) {
     const version = ++navigationVersion;
+    closeAllProjectModals({ restoreFocus: false });
     currentRoute = targetId;
     if (targetId !== 'blog-reader') currentPostId = '';
     if (targetId !== 'blog-reader') {
@@ -608,6 +697,9 @@ function init() {
 
   function openCommandPalette(initialQuery = '') {
     if (!commandPalette || !commandSearchInput) return;
+    if (!commandPalette.classList.contains('active')) {
+      commandPaletteFocusOrigin = document.activeElement || commandTrigger;
+    }
     buildCommandItems();
     commandSearchInput.value = initialQuery;
     commandActiveIndex = 0;
@@ -615,20 +707,26 @@ function init() {
     commandPalette.setAttribute('aria-hidden', 'false');
     document.body.classList.add('command-open');
     renderCommandResults();
-    setTimeout(() => commandSearchInput.focus(), 30);
+    setTimeout(() => restoreFocusTo(commandSearchInput), 30);
   }
 
-  function closeCommandPalette() {
+  function closeCommandPalette(options = {}) {
     if (!commandPalette) return;
+    const { restoreFocus = true } = options;
+    const focusTarget = commandPaletteFocusOrigin || commandTrigger;
     commandPalette.classList.remove('active');
     commandPalette.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('command-open');
+    commandPaletteFocusOrigin = null;
+    if (restoreFocus) {
+      requestAnimationFrame(() => restoreFocusTo(focusTarget || commandTrigger));
+    }
   }
 
   function executeCommandItem(index = commandActiveIndex) {
     const item = commandMatches[index];
     if (!item) return;
-    closeCommandPalette();
+    closeCommandPalette({ restoreFocus: false });
     setTimeout(() => item.action?.(), 40);
   }
 
@@ -675,6 +773,11 @@ function init() {
       closeCommandPalette();
     }
   });
+
+  window.addEventListener('keydown', (event) => {
+    if (!commandPalette?.classList.contains('active')) return;
+    trapFocus(event, commandPalette);
+  }, true);
 
   // ==========================================
   // THEME SWITCHER
@@ -826,28 +929,74 @@ function init() {
   // Modal Open/Close helpers
   function openModal(modalEl) {
     if (!modalEl) return;
+    const previousTimer = modalCloseTimers.get(modalEl);
+    if (previousTimer) {
+      clearTimeout(previousTimer);
+      modalCloseTimers.delete(modalEl);
+    }
+    if (!modalEl.classList.contains('active') && document.activeElement && !modalEl.contains(document.activeElement)) {
+      modalFocusOrigins.set(modalEl, document.activeElement);
+    }
+    modalEl.setAttribute('role', modalEl.getAttribute('role') || 'dialog');
+    modalEl.setAttribute('aria-modal', 'true');
+    modalEl.setAttribute('aria-hidden', 'false');
     modalEl.style.display = 'flex';
     setTimeout(() => {
       modalEl.classList.add('active');
+      focusInitialElement(modalEl);
     }, 50);
   }
 
-  function closeModal(modalEl) {
+  function closeModal(modalEl, options = {}) {
     if (!modalEl) return;
+    const { restoreFocus = true } = options;
+    const focusTarget = modalFocusOrigins.get(modalEl);
     modalEl.classList.remove('active');
-    setTimeout(() => {
+    modalEl.setAttribute('aria-hidden', 'true');
+    if (restoreFocus) {
+      requestAnimationFrame(() => restoreFocusTo(focusTarget));
+    }
+    modalFocusOrigins.delete(modalEl);
+    const timer = setTimeout(() => {
       modalEl.style.display = 'none';
+      modalCloseTimers.delete(modalEl);
     }, 300);
+    modalCloseTimers.set(modalEl, timer);
+  }
+
+  function getActiveProjectModal() {
+    const activeModals = [...document.querySelectorAll('.project-modal.active')];
+    return activeModals[activeModals.length - 1] || null;
+  }
+
+  function closeAllProjectModals(options = {}) {
+    document.querySelectorAll('.project-modal.active').forEach(modal => closeModal(modal, options));
   }
 
   // Close modals on clicking outside content card
   document.querySelectorAll('.project-modal').forEach(modal => {
+    modal.setAttribute('aria-hidden', modal.classList.contains('active') ? 'false' : 'true');
     modal.addEventListener('click', (e) => {
       if (e.target === modal) {
         closeModal(modal);
       }
     });
   });
+
+  window.addEventListener('keydown', (event) => {
+    if (commandPalette?.classList.contains('active')) return;
+    const activeModal = getActiveProjectModal();
+    if (!activeModal) return;
+    if (event.key === 'Tab') {
+      trapFocus(event, activeModal);
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      closeModal(activeModal);
+    }
+  }, true);
 
   // ==========================================
   // DASHBOARD WIDGETS
@@ -1726,6 +1875,7 @@ function init() {
     
     tags.forEach(tag => {
       const btn = document.createElement('button');
+      btn.type = 'button';
       btn.className = `tag-cloud-btn ${selectedTag === tag ? 'active' : ''}`;
       btn.textContent = tag === 'all' ? '全部文章' : tag;
       

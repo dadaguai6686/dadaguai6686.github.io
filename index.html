@@ -64,45 +64,45 @@
         <span>Atherix</span>
       </div>
       <div class="nav-links">
-        <button class="nav-item active" data-target="home">
+        <button type="button" class="nav-item active" data-target="home">
           <i data-lucide="layout-grid">🏠</i>
           <span>首页</span>
         </button>
-        <button class="nav-item" data-target="blog">
+        <button type="button" class="nav-item" data-target="blog">
           <i data-lucide="book-open">📚</i>
           <span>博客</span>
         </button>
-        <button class="nav-item" data-target="toolbox">
+        <button type="button" class="nav-item" data-target="toolbox">
           <i data-lucide="wrench">🛠️</i>
           <span>工具箱</span>
         </button>
-        <button class="nav-item" data-target="game">
+        <button type="button" class="nav-item" data-target="game">
           <i data-lucide="gamepad-2">🎮</i>
           <span>街机游戏</span>
         </button>
-        <button class="nav-item" data-target="projects">
+        <button type="button" class="nav-item" data-target="projects">
           <i data-lucide="folder-git-2">💻</i>
           <span>项目</span>
         </button>
-        <button class="nav-item" data-target="guestbook">
+        <button type="button" class="nav-item" data-target="guestbook">
           <i data-lucide="message-square">💬</i>
           <span>留言</span>
         </button>
       </div>
-      <button class="theme-toggle-btn command-toggle-btn" id="command-palette-trigger" title="全站搜索">
+      <button type="button" class="theme-toggle-btn command-toggle-btn" id="command-palette-trigger" title="全站搜索" aria-label="打开全站搜索">
         <i data-lucide="search" style="font-style: normal;">🔎</i>
       </button>
-      <button class="theme-toggle-btn" id="theme-toggle" title="切换主题">
+      <button type="button" class="theme-toggle-btn" id="theme-toggle" title="切换主题" aria-label="切换主题">
         <i data-lucide="sun" id="theme-icon" style="font-style: normal;">☀️</i>
       </button>
-      <button class="theme-toggle-btn" id="admin-login-trigger" title="管理员登录">
+      <button type="button" class="theme-toggle-btn" id="admin-login-trigger" title="管理员登录" aria-label="管理员登录或退出">
         <i data-lucide="lock" id="admin-lock-icon" style="font-style: normal;">🔒</i>
       </button>
     </nav>
   </header>
 
   <!-- Main Content Areas -->
-  <main id="main-content">
+  <main id="main-content" tabindex="-1">
     
     <!-- SECTION 1: HOME (Bento Dashboard) -->
     <section class="view-section active" id="home">
@@ -1133,9 +1133,9 @@
   <!-- ========================================== -->
 
   <!-- Project Details Modal (Popup Card) -->
-  <div class="project-modal" id="project-modal">
+  <div class="project-modal" id="project-modal" role="dialog" aria-modal="true" aria-labelledby="modal-project-title" aria-hidden="true">
     <div class="glass-card modal-content">
-      <button class="modal-close" id="modal-close-btn">
+      <button type="button" class="modal-close" id="modal-close-btn" aria-label="关闭项目详情">
         <i data-lucide="x"></i>
       </button>
       <div class="post-meta" style="margin-bottom: 0.5rem;">
@@ -1167,12 +1167,12 @@
   </div>
 
   <!-- Admin Login Modal -->
-  <div class="project-modal" id="admin-login-modal">
+  <div class="project-modal" id="admin-login-modal" role="dialog" aria-modal="true" aria-labelledby="admin-login-title" aria-hidden="true">
     <div class="glass-card modal-content" style="max-width: 400px;">
-      <button class="modal-close" id="admin-login-close">
+      <button type="button" class="modal-close" id="admin-login-close" aria-label="关闭管理员登录">
         <i data-lucide="x"></i>
       </button>
-      <h2 class="modal-title" style="text-align: center; margin-bottom: 1.5rem;">管理员登录</h2>
+      <h2 class="modal-title" id="admin-login-title" style="text-align: center; margin-bottom: 1.5rem;">管理员登录</h2>
       <form id="admin-login-form" style="display: flex; flex-direction: column; gap: 1.2rem;">
         <div class="form-group">
           <label for="admin-username">用户名</label>
@@ -1191,9 +1191,9 @@
   </div>
 
   <!-- Blog Write/Edit Modal -->
-  <div class="project-modal" id="blog-edit-modal">
+  <div class="project-modal" id="blog-edit-modal" role="dialog" aria-modal="true" aria-labelledby="blog-editor-modal-title" aria-hidden="true">
     <div class="glass-card modal-content" style="max-width: 800px; max-height: 90vh;">
-      <button class="modal-close" id="blog-edit-close">
+      <button type="button" class="modal-close" id="blog-edit-close" aria-label="关闭博客编辑器">
         <i data-lucide="x"></i>
       </button>
       <h2 class="modal-title" id="blog-editor-modal-title">编辑博客文章</h2>
@@ -1235,9 +1235,9 @@
   </div>
 
   <!-- Project Edit/Add Modal -->
-  <div class="project-modal" id="project-edit-modal">
+  <div class="project-modal" id="project-edit-modal" role="dialog" aria-modal="true" aria-labelledby="project-editor-modal-title" aria-hidden="true">
     <div class="glass-card modal-content" style="max-width: 650px;">
-      <button class="modal-close" id="project-edit-close">
+      <button type="button" class="modal-close" id="project-edit-close" aria-label="关闭项目编辑器">
         <i data-lucide="x"></i>
       </button>
       <h2 class="modal-title" id="project-editor-modal-title">管理项目展示卡片</h2>
