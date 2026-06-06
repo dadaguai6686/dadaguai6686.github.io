@@ -222,6 +222,34 @@ async function run() {
     const loginBody = await login.json();
     assert(typeof loginBody.token === 'string' && loginBody.token.length > 20, 'login should return a JWT');
 
+    const smokePostId = `smoke-${Date.now()}`;
+    const createdPost = await fetch(`${baseUrl}/api/posts`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${loginBody.token}`
+      },
+      body: JSON.stringify({
+        id: smokePostId,
+        title: 'Smoke Test Draft',
+        excerpt: 'short draft',
+        content: '# Smoke Test Draft\n\nTemporary test content.',
+        tag: '测试',
+        readTime: '1 分钟阅读'
+      })
+    });
+    assert(createdPost.status === 200, 'admin post creation should succeed');
+    assert(createdPost.headers.get('ratelimit-limit') === '30', 'admin post creation should be write rate-limited');
+    const createdPostBody = await createdPost.json();
+    assert(createdPostBody.postId === smokePostId, 'created smoke post id should be returned');
+
+    const deletedPost = await fetch(`${baseUrl}/api/posts/${encodeURIComponent(smokePostId)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${loginBody.token}` }
+    });
+    assert(deletedPost.status === 200, 'admin post deletion should succeed');
+    assert(deletedPost.headers.get('ratelimit-limit') === '30', 'admin post deletion should be write rate-limited');
+
     const uploadDir = path.resolve(__dirname, '..', 'uploads');
     const beforeUploads = new Set(fs.readdirSync(uploadDir));
     const fakeImageForm = new FormData();
@@ -249,6 +277,7 @@ async function run() {
       sanitizedAvatar: sanitizedBody.comment.avatar,
       spamTrapStatus: spamTrap.status,
       linkSpamStatus: linkSpam.status,
+      adminWriteLimit: createdPost.headers.get('ratelimit-limit'),
       forgedUploadStatus: fakeImageUpload.status
     };
   } finally {

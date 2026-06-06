@@ -15,6 +15,7 @@ const { authenticateToken, JWT_SECRET } = require('./auth');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
+const trustProxy = process.env.TRUST_PROXY || '';
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .split(',')
   .map(origin => origin.trim())
@@ -82,6 +83,15 @@ const blockedRootFiles = new Set([
   '/SECURITY.md'
 ]);
 const allowedCommentAvatars = new Set(['👨‍💻', '👩‍💻', '🚀', '🐱', '🦊', '🦄', '🤖', '🎨', '☕', '🐼', '👤']);
+
+function parseTrustProxy(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw || raw === 'false' || raw === '0') return false;
+  if (raw === 'true') return true;
+  const numeric = Number(raw);
+  if (Number.isInteger(numeric) && numeric >= 0) return numeric;
+  return value;
+}
 
 function readTextField(res, label, value, { required = false, max = 1000, fallback = '' } = {}) {
   const text = value == null ? '' : String(value).trim();
@@ -182,11 +192,26 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-function createRateLimit({ windowMs, max, message }) {
+function createRateLimit({ windowMs, max, message, maxKeys = 5000 }) {
   const hits = new Map();
+  const cleanup = () => {
+    const now = Date.now();
+    for (const [key, record] of hits.entries()) {
+      if (now > record.resetAt) hits.delete(key);
+    }
+    while (hits.size > maxKeys) {
+      const oldestKey = hits.keys().next().value;
+      if (oldestKey === undefined) break;
+      hits.delete(oldestKey);
+    }
+  };
+  const cleanupTimer = setInterval(cleanup, Math.min(windowMs, 60 * 1000));
+  cleanupTimer.unref?.();
+
   return (req, res, next) => {
     const key = `${req.ip}:${req.path}`;
     const now = Date.now();
+    if (hits.size > maxKeys) cleanup();
     const record = hits.get(key) || { count: 0, resetAt: now + windowMs };
     if (now > record.resetAt) {
       record.count = 0;
@@ -204,8 +229,8 @@ function createRateLimit({ windowMs, max, message }) {
   };
 }
 
-const authLimiter = createRateLimit({ windowMs: 15 * 60 * 1000, max: 12, message: 'Too many login attempts. Please wait and try again.' });
-const writeLimiter = createRateLimit({ windowMs: 60 * 1000, max: 30 });
+const authLimiter = createRateLimit({ windowMs: 15 * 60 * 1000, max: 12, maxKeys: 2000, message: 'Too many login attempts. Please wait and try again.' });
+const writeLimiter = createRateLimit({ windowMs: 60 * 1000, max: 30, maxKeys: 5000 });
 
 // Ensure upload directory exists
 const uploadDir = path.join(__dirname, 'uploads');
@@ -238,6 +263,9 @@ const upload = multer({
 });
 
 // Static files hosting
+if (trustProxy) {
+  app.set('trust proxy', parseTrustProxy(trustProxy));
+}
 app.use('/uploads', express.static(uploadDir, {
   maxAge: '7d',
   immutable: false,
@@ -344,7 +372,7 @@ app.get('/api/posts', (req, res) => {
 });
 
 // POST: Create New Post (Admin Only)
-app.post('/api/posts', authenticateToken, (req, res) => {
+app.post('/api/posts', authenticateToken, writeLimiter, (req, res) => {
   const { id, pinned } = req.body;
   const title = readTextField(res, 'Title', req.body.title, { required: true, max: 160 });
   const excerpt = readTextField(res, 'Excerpt', req.body.excerpt, { max: 500 });
@@ -373,7 +401,7 @@ app.post('/api/posts', authenticateToken, (req, res) => {
 });
 
 // PUT: Update Existing Post (Admin Only)
-app.put('/api/posts/:id', authenticateToken, (req, res) => {
+app.put('/api/posts/:id', authenticateToken, writeLimiter, (req, res) => {
   const postId = req.params.id;
   const title = readTextField(res, 'Title', req.body.title, { required: true, max: 160 });
   const excerpt = readTextField(res, 'Excerpt', req.body.excerpt, { max: 500 });
@@ -400,7 +428,7 @@ app.put('/api/posts/:id', authenticateToken, (req, res) => {
 });
 
 // DELETE: Remove Post (Admin Only)
-app.delete('/api/posts/:id', authenticateToken, (req, res) => {
+app.delete('/api/posts/:id', authenticateToken, writeLimiter, (req, res) => {
   const postId = req.params.id;
 
   db.run('DELETE FROM posts WHERE id = ?', [postId], function(err) {
@@ -438,7 +466,7 @@ app.get('/api/projects', (req, res) => {
 });
 
 // POST: Create New Project (Admin Only)
-app.post('/api/projects', authenticateToken, (req, res) => {
+app.post('/api/projects', authenticateToken, writeLimiter, (req, res) => {
   const title = readTextField(res, 'Title', req.body.title, { required: true, max: 160 });
   const desc = readTextField(res, 'Description', req.body.desc, { max: 800 });
   const tag = readTextField(res, 'Tag', req.body.tag, { max: 80, fallback: '前端开发' });
@@ -466,7 +494,7 @@ app.post('/api/projects', authenticateToken, (req, res) => {
 });
 
 // PUT: Update Project (Admin Only)
-app.put('/api/projects/:id', authenticateToken, (req, res) => {
+app.put('/api/projects/:id', authenticateToken, writeLimiter, (req, res) => {
   const projId = req.params.id;
   const title = readTextField(res, 'Title', req.body.title, { required: true, max: 160 });
   const desc = readTextField(res, 'Description', req.body.desc, { max: 800 });
@@ -495,7 +523,7 @@ app.put('/api/projects/:id', authenticateToken, (req, res) => {
 });
 
 // DELETE: Remove Project (Admin Only)
-app.delete('/api/projects/:id', authenticateToken, (req, res) => {
+app.delete('/api/projects/:id', authenticateToken, writeLimiter, (req, res) => {
   const projId = req.params.id;
 
   db.run('DELETE FROM projects WHERE id = ?', [projId], function(err) {
@@ -568,7 +596,7 @@ app.post('/api/comments', writeLimiter, (req, res) => {
 });
 
 // DELETE: Delete Comment (Admin Only)
-app.delete('/api/comments/:id', authenticateToken, (req, res) => {
+app.delete('/api/comments/:id', authenticateToken, writeLimiter, (req, res) => {
   const commentId = req.params.id;
 
   db.run('DELETE FROM comments WHERE id = ?', [commentId], function(err) {
