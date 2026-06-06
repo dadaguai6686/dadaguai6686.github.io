@@ -22,7 +22,7 @@
   <link rel="canonical" href="https://dadaguai6686.github.io/">
   <link rel="alternate" type="application/rss+xml" title="Atherix Digital Space Feed" href="https://dadaguai6686.github.io/feed.xml">
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="style.css?v=20260606-drift-v1">
+  <link rel="stylesheet" href="style.css?v=20260606-reader-hub-v1">
   <link rel="manifest" href="/manifest.webmanifest">
   <!-- Lucide Icons Local -->
   <script src="lucide.min.js"></script>
@@ -320,6 +320,32 @@
           <div class="blog-search-bar">
             <i data-lucide="search" style="color: var(--text-muted);"></i>
             <input type="text" class="blog-search-input" id="blog-search" placeholder="搜索文章标题、简介或内容...">
+          </div>
+
+          <div class="blog-insight-panel" id="blog-insight-panel" aria-label="阅读中心">
+            <div class="blog-insight-stats">
+              <div class="blog-insight-stat">
+                <span>文章</span>
+                <strong id="blog-total-count">0</strong>
+              </div>
+              <div class="blog-insight-stat">
+                <span>稍后读</span>
+                <strong id="blog-bookmark-count">0</strong>
+              </div>
+              <div class="blog-insight-stat">
+                <span>继续读</span>
+                <strong id="blog-progress-count">0</strong>
+              </div>
+              <div class="blog-insight-stat">
+                <span>平均进度</span>
+                <strong id="blog-average-progress">0%</strong>
+              </div>
+            </div>
+            <div class="blog-reader-filters" role="tablist" aria-label="阅读筛选">
+              <button type="button" class="blog-reader-filter active" data-reader-filter="all" aria-pressed="true">全部</button>
+              <button type="button" class="blog-reader-filter" data-reader-filter="bookmarked" aria-pressed="false">稍后读</button>
+              <button type="button" class="blog-reader-filter" data-reader-filter="in-progress" aria-pressed="false">继续读</button>
+            </div>
           </div>
 
           <div class="blog-posts-grid" id="blog-posts-container">
@@ -1265,6 +1291,6 @@
   <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <!-- Main JavaScript File -->
-  <script src="app.js?v=20260606-drift-v1"></script>
+  <script src="app.js?v=20260606-reader-hub-v1"></script>
 </body>
 </html>

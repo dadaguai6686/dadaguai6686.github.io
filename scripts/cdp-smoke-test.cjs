@@ -279,6 +279,25 @@ async function run() {
 
   await click('.nav-item[data-target="blog"]');
   await waitFor('.blog-post-card');
+  const blogHubBefore = await evaluate(`(() => {
+    const firstCard = document.querySelector('.blog-post-card');
+    const firstPostId = firstCard?.dataset.postId || '';
+    if (firstPostId) {
+      localStorage.setItem(\`atherix_reader_progress_\${firstPostId}\`, '42');
+      document.querySelector('#blog-search')?.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    return {
+      firstPostId,
+      panel: !!document.querySelector('#blog-insight-panel'),
+      total: Number(document.querySelector('#blog-total-count')?.textContent || 0),
+      filters: document.querySelectorAll('[data-reader-filter]').length,
+      cards: document.querySelectorAll('.blog-post-card').length,
+      progressCards: document.querySelectorAll('.post-state-chip.is-progress').length,
+      progressText: document.querySelector('.post-state-chip.is-progress')?.textContent || '',
+      average: document.querySelector('#blog-average-progress')?.textContent || '',
+      horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+    };
+  })()`);
   await click('.blog-post-card');
   await waitFor('#reader-post-content h2');
   await click('#reader-bookmark-btn');
@@ -298,6 +317,18 @@ async function run() {
     inlineCode: document.querySelectorAll('#reader-post-content p code, #reader-post-content li code').length,
     orderedItems: document.querySelectorAll('#reader-post-content ol li').length,
     unorderedItems: document.querySelectorAll('#reader-post-content ul li').length
+  }))()`);
+  await click('#reader-back-btn');
+  await wait(220);
+  await click('[data-reader-filter="bookmarked"]');
+  await wait(180);
+  const blogHubAfterBookmark = await evaluate(`(() => ({
+    activeFilter: document.querySelector('[data-reader-filter="bookmarked"]')?.classList.contains('active') || false,
+    bookmarkCount: Number(document.querySelector('#blog-bookmark-count')?.textContent || 0),
+    cards: document.querySelectorAll('.blog-post-card').length,
+    bookmarkedCards: document.querySelectorAll('.post-state-chip.is-bookmarked').length,
+    progressCards: document.querySelectorAll('.post-state-chip.is-progress').length,
+    horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
   }))()`);
 
   await click('.nav-item[data-target="projects"]');
@@ -700,9 +731,12 @@ async function run() {
   assert(!adminStartupState.token && !adminStartupState.blogActionsVisible && !adminStartupState.projectActionsVisible, 'invalid cached admin token should be cleared on startup');
   assert(commandBeforeExecute.open && commandBeforeExecute.results >= 1 && /Rift Tactics/.test(commandBeforeExecute.firstTitle), `command palette should find tactics mode: ${JSON.stringify(commandBeforeExecute)}`);
   assert(commandState.closed && commandState.gameActive && commandState.tacticsActive && /Rift Tactics/.test(commandState.activeTitle), `command palette should execute game navigation: ${JSON.stringify(commandState)}`);
+  assert(blogHubBefore.panel && blogHubBefore.total >= 1 && blogHubBefore.filters >= 3 && blogHubBefore.cards >= 1, `blog reading hub should render stats and filters: ${JSON.stringify(blogHubBefore)}`);
+  assert(blogHubBefore.progressCards >= 1 && /42/.test(blogHubBefore.progressText) && !blogHubBefore.horizontalOverflow, `blog reading hub should show resumable progress without overflow: ${JSON.stringify(blogHubBefore)}`);
   assert(blogState.toolbar && blogState.bookmarkPressed, 'blog reader toolbar should render and toggle bookmark state');
   assert(blogState.tocActive && blogState.tocLinks >= 2, 'blog reader should build a table of contents from article headings');
   assert(/^\d+%$/.test(blogState.progress), 'blog reader should report reading progress');
+  assert(blogHubAfterBookmark.activeFilter && blogHubAfterBookmark.bookmarkCount >= 1 && blogHubAfterBookmark.bookmarkedCards >= 1 && !blogHubAfterBookmark.horizontalOverflow, `blog reading hub should filter bookmarked articles: ${JSON.stringify(blogHubAfterBookmark)}`);
   assert(
     blogState.codeBlocks >= 1,
     `blog markdown should preserve fenced code blocks: ${JSON.stringify(blogState)}`
@@ -780,7 +814,9 @@ async function run() {
     adminStartupState,
     commandBeforeExecute,
     commandState,
+    blogHubBefore,
     blogState,
+    blogHubAfterBookmark,
     projectViewportState,
     projectState,
     gameViewportState,

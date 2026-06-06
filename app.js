@@ -440,6 +440,28 @@ function init() {
     const routeItems = [
       { type: '导航', icon: 'layout-grid', title: '首页', desc: '返回 Bento 数字仪表盘', keywords: 'home dashboard bento 首页', action: () => navigateTo('home') },
       { type: '导航', icon: 'book-open', title: '博客', desc: '浏览文章列表与推荐阅读', keywords: 'blog article post 博客 文章', action: () => navigateTo('blog') },
+      {
+        type: '导航',
+        icon: 'bookmark-check',
+        title: '稍后读',
+        desc: '查看已收藏的待读文章',
+        keywords: 'bookmark reading later 稍后读 收藏 阅读',
+        action: () => {
+          navigateTo('blog');
+          setTimeout(() => document.querySelector('[data-reader-filter="bookmarked"]')?.click(), 180);
+        }
+      },
+      {
+        type: '导航',
+        icon: 'book-marked',
+        title: '继续阅读',
+        desc: '回到已有阅读进度的文章',
+        keywords: 'continue reading progress 继续阅读 进度',
+        action: () => {
+          navigateTo('blog');
+          setTimeout(() => document.querySelector('[data-reader-filter="in-progress"]')?.click(), 180);
+        }
+      },
       { type: '导航', icon: 'wrench', title: '工具箱', desc: '打开本地开发与创作工具', keywords: 'toolbox tools 工具 json markdown', action: () => navigateTo('toolbox') },
       { type: '导航', icon: 'gamepad-2', title: '街机游戏', desc: '进入主线跑酷与高级街机实验室', keywords: 'game arcade runner 游戏 街机', action: () => navigateTo('game') },
       { type: '导航', icon: 'folder-git-2', title: '项目', desc: '查看项目卡片与技术亮点', keywords: 'project portfolio 项目', action: () => navigateTo('projects') },
@@ -1106,6 +1128,11 @@ function init() {
   const pinnedPostsContainer = document.getElementById('pinned-posts-container');
   const blogTagCloud = document.getElementById('blog-tag-cloud');
   const blogSearch = document.getElementById('blog-search');
+  const blogTotalCount = document.getElementById('blog-total-count');
+  const blogBookmarkCount = document.getElementById('blog-bookmark-count');
+  const blogProgressCount = document.getElementById('blog-progress-count');
+  const blogAverageProgress = document.getElementById('blog-average-progress');
+  const blogReaderFilterButtons = document.querySelectorAll('[data-reader-filter]');
   const blogReader = document.getElementById('blog-reader');
   const blogReaderCard = document.getElementById('blog-reader-card');
   const blogListSection = document.getElementById('blog');
@@ -1124,6 +1151,7 @@ function init() {
   const blogEditForm = document.getElementById('blog-edit-form');
 
   let selectedTag = 'all';
+  let readerFilter = 'all';
 
   async function loadBlogPosts() {
     try {
@@ -1214,6 +1242,11 @@ function init() {
     return `atherix_reader_progress_${postId}`;
   }
 
+  function getReaderProgressValue(postId) {
+    const raw = Number(localStorage.getItem(readerProgressKey(postId)) || 0);
+    return Math.max(0, Math.min(100, Number.isFinite(raw) ? Math.round(raw) : 0));
+  }
+
   function readerAnchorPrefix(postId) {
     return String(postId || 'post').replace(/[^\w-]/g, '-');
   }
@@ -1238,6 +1271,33 @@ function init() {
       ? '<i data-lucide="bookmark-check"></i> 已稍后读'
       : '<i data-lucide="bookmark"></i> 稍后读';
     safeCreateIcons();
+  }
+
+  function updateBlogInsightPanel() {
+    const bookmarks = new Set(getReaderBookmarks());
+    const progressValues = blogPosts.map(post => getReaderProgressValue(post.id));
+    const inProgress = progressValues.filter(value => value > 0 && value < 100).length;
+    const average = progressValues.length
+      ? Math.round(progressValues.reduce((sum, value) => sum + value, 0) / progressValues.length)
+      : 0;
+    if (blogTotalCount) blogTotalCount.textContent = String(blogPosts.length);
+    if (blogBookmarkCount) blogBookmarkCount.textContent = String(blogPosts.filter(post => bookmarks.has(post.id)).length);
+    if (blogProgressCount) blogProgressCount.textContent = String(inProgress);
+    if (blogAverageProgress) blogAverageProgress.textContent = `${average}%`;
+    blogReaderFilterButtons.forEach(btn => {
+      const active = btn.dataset.readerFilter === readerFilter;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+  }
+
+  function matchesReaderFilter(post, bookmarks) {
+    if (readerFilter === 'bookmarked') return bookmarks.has(post.id);
+    if (readerFilter === 'in-progress') {
+      const progress = getReaderProgressValue(post.id);
+      return progress > 0 && progress < 100;
+    }
+    return true;
   }
 
   function buildReaderToc(postId) {
@@ -1269,6 +1329,7 @@ function init() {
     const percent = Math.max(0, Math.min(100, Math.round(scrolled / total * 100)));
     readerProgressPercent.textContent = `${percent}%`;
     if (currentPostId) localStorage.setItem(readerProgressKey(currentPostId), String(percent));
+    updateBlogInsightPanel();
 
     if (!readerToc?.classList.contains('active')) return;
     let activeId = '';
@@ -1351,6 +1412,8 @@ function init() {
         showToast('已加入稍后读', 'success');
       }
       updateReaderBookmarkState();
+      updateBlogInsightPanel();
+      renderBlogList();
     });
   }
 
@@ -1361,6 +1424,7 @@ function init() {
       if (blogReaderCard) blogReaderCard.classList.remove('active');
       document.title = 'Atherix - 个人博客与数字空间';
       navigateTo('blog');
+      renderBlogList();
     });
   }
 
@@ -1391,8 +1455,10 @@ function init() {
   function renderBlogList() {
     if (!blogPostsContainer) return;
     blogPostsContainer.innerHTML = '';
+    updateBlogInsightPanel();
 
     const query = blogSearch ? blogSearch.value.trim().toLowerCase() : '';
+    const bookmarks = new Set(getReaderBookmarks());
     const filtered = blogPosts.filter(post => {
       const title = String(post.title || '').toLowerCase();
       const excerpt = String(post.excerpt || '').toLowerCase();
@@ -1402,11 +1468,16 @@ function init() {
                          excerpt.includes(query) ||
                          content.includes(query);
       const matchTag = selectedTag === 'all' || tag === selectedTag;
-      return matchQuery && matchTag;
+      return matchQuery && matchTag && matchesReaderFilter(post, bookmarks);
     });
 
     if (filtered.length === 0) {
-      blogPostsContainer.innerHTML = '<div class="glass-card" style="text-align: center; color: var(--text-secondary); padding: 3rem 1rem;">没有找到匹配的文章。</div>';
+      const emptyCopy = readerFilter === 'bookmarked'
+        ? '稍后读还没有文章。打开一篇文章并点击「稍后读」即可加入。'
+        : readerFilter === 'in-progress'
+          ? '还没有可继续阅读的文章。读到一半离开后，这里会自动出现。'
+          : '没有找到匹配的文章。';
+      blogPostsContainer.innerHTML = `<div class="glass-card" style="text-align: center; color: var(--text-secondary); padding: 3rem 1rem;">${emptyCopy}</div>`;
       return;
     }
 
@@ -1415,12 +1486,20 @@ function init() {
       card.className = 'glass-card blog-post-card glow-card';
       card.setAttribute('role', 'button');
       card.setAttribute('tabindex', '0');
+      card.dataset.postId = post.id || '';
       const postId = escapeHTML(post.id || '');
       const title = escapeHTML(post.title || '未命名文章');
       const tag = escapeHTML(post.tag || '未分类');
       const date = escapeHTML(post.date || '');
       const readTime = escapeHTML(post.readTime || '');
       const excerpt = escapeHTML(post.excerpt || '');
+      const progress = getReaderProgressValue(post.id);
+      const bookmarked = bookmarks.has(post.id);
+      const progressLabel = progress >= 100 ? '已读完' : progress > 0 ? `已读 ${progress}%` : '未开始';
+      const stateChips = [
+        bookmarked ? '<span class="post-state-chip is-bookmarked">稍后读</span>' : '',
+        progress > 0 ? `<span class="post-state-chip is-progress">${progressLabel}</span>` : '<span class="post-state-chip">新文章</span>'
+      ].filter(Boolean).join('');
       
       // Inject admin controls if logged in
       let adminControls = '';
@@ -1443,7 +1522,17 @@ function init() {
         </div>
         <h3>${title}</h3>
         <p class="post-excerpt">${excerpt}</p>
-        <span class="post-read-more">阅读全文 <i data-lucide="chevron-right" style="width: 14px; height: 14px;"></i></span>
+        <div class="post-state-row">${stateChips}</div>
+        <div class="post-card-footer">
+          <span class="post-read-more">阅读全文 <i data-lucide="chevron-right" style="width: 14px; height: 14px;"></i></span>
+          <div class="post-progress-cluster" aria-label="阅读进度 ${progress}%">
+            <div class="post-progress-label">
+              <span>进度</span>
+              <span>${progressLabel}</span>
+            </div>
+            <div class="post-progress-track"><span class="post-progress-fill" style="width: ${progress}%"></span></div>
+          </div>
+        </div>
       `;
       
       // Card click reads, except if control was clicked
@@ -1515,6 +1604,13 @@ function init() {
   if (blogSearch) {
     blogSearch.addEventListener('input', renderBlogList);
   }
+
+  blogReaderFilterButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      readerFilter = btn.dataset.readerFilter || 'all';
+      renderBlogList();
+    });
+  });
 
   // Add/Edit Blog Form actions
   if (addPostBtn) {

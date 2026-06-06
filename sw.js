@@ -1,9 +1,9 @@
-const CACHE_VERSION = 'atherix-static-v9-drift';
+const CACHE_VERSION = 'atherix-static-v10-reader-hub';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/style.css?v=20260606-drift-v1',
-  '/app.js?v=20260606-drift-v1',
+  '/style.css?v=20260606-reader-hub-v1',
+  '/app.js?v=20260606-reader-hub-v1',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',
