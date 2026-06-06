@@ -4128,6 +4128,165 @@ body.command-open {
   font-size: 0.7rem;
 }
 
+.arcade-loadout-panel {
+  margin-bottom: 1rem;
+  padding: 0.85rem;
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(14, 165, 233, 0.1), rgba(52, 211, 153, 0.06)),
+    rgba(3, 7, 18, 0.48);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.arcade-loadout-panel[data-tone="aegis"] {
+  border-color: rgba(52, 211, 153, 0.24);
+  background:
+    linear-gradient(135deg, rgba(52, 211, 153, 0.11), rgba(14, 165, 233, 0.06)),
+    rgba(3, 7, 18, 0.48);
+}
+
+.arcade-loadout-panel[data-tone="overdrive"] {
+  border-color: rgba(251, 146, 60, 0.28);
+  background:
+    linear-gradient(135deg, rgba(251, 146, 60, 0.12), rgba(236, 72, 153, 0.07)),
+    rgba(3, 7, 18, 0.48);
+}
+
+.arcade-loadout-panel[data-tone="strategy"] {
+  border-color: rgba(167, 139, 250, 0.28);
+  background:
+    linear-gradient(135deg, rgba(167, 139, 250, 0.12), rgba(34, 211, 238, 0.06)),
+    rgba(3, 7, 18, 0.48);
+}
+
+.arcade-loadout-heading {
+  display: grid;
+  grid-template-columns: minmax(130px, auto) minmax(120px, 0.65fr) minmax(220px, 1.4fr);
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.75rem;
+}
+
+.arcade-loadout-heading span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #bae6fd;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.arcade-loadout-heading svg {
+  width: 14px;
+  height: 14px;
+}
+
+.arcade-loadout-heading strong {
+  color: #fff;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1rem;
+}
+
+.arcade-loadout-heading small {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.arcade-loadout-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.arcade-loadout-card {
+  min-height: 126px;
+  padding: 0.68rem;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.48);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.38rem;
+  text-align: left;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.arcade-loadout-card[data-tone="pulse"] {
+  border-color: rgba(34, 211, 238, 0.22);
+}
+
+.arcade-loadout-card[data-tone="aegis"] {
+  border-color: rgba(52, 211, 153, 0.22);
+}
+
+.arcade-loadout-card[data-tone="overdrive"] {
+  border-color: rgba(251, 146, 60, 0.24);
+}
+
+.arcade-loadout-card[data-tone="strategy"] {
+  border-color: rgba(167, 139, 250, 0.24);
+}
+
+.arcade-loadout-card:hover:not(:disabled),
+.arcade-loadout-card:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(34, 211, 238, 0.5);
+  box-shadow: 0 12px 26px rgba(8, 145, 178, 0.14);
+}
+
+.arcade-loadout-card.is-equipped {
+  border-color: rgba(52, 211, 153, 0.45);
+  background:
+    linear-gradient(135deg, rgba(52, 211, 153, 0.12), rgba(34, 211, 238, 0.08)),
+    rgba(15, 23, 42, 0.55);
+}
+
+.arcade-loadout-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.arcade-loadout-card span {
+  align-self: flex-start;
+  border-radius: 999px;
+  padding: 0.12rem 0.42rem;
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-muted);
+  font-size: 0.64rem;
+  font-weight: 900;
+}
+
+.arcade-loadout-card.is-equipped span {
+  background: rgba(52, 211, 153, 0.14);
+  color: #bbf7d0;
+}
+
+.arcade-loadout-card strong {
+  color: #fff;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.94rem;
+  line-height: 1.22;
+}
+
+.arcade-loadout-card small {
+  color: var(--text-secondary);
+  font-size: 0.69rem;
+  line-height: 1.34;
+  flex: 1;
+}
+
+.arcade-loadout-card em {
+  color: #dffaff;
+  font-style: normal;
+  font-size: 0.66rem;
+  line-height: 1.35;
+}
+
 .premium-career-dialog {
   position: fixed;
   inset: 0;
@@ -4651,6 +4810,12 @@ body.command-open {
   filter: brightness(1.15);
 }
 
+@media (max-width: 1100px) {
+  .arcade-loadout-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 760px) {
   .arcade-library-header {
     align-items: stretch;
@@ -4675,6 +4840,13 @@ body.command-open {
   }
   .arcade-contract-grid {
     grid-template-columns: 1fr;
+  }
+  .arcade-loadout-heading,
+  .arcade-loadout-grid {
+    grid-template-columns: 1fr;
+  }
+  .arcade-loadout-card {
+    min-height: auto;
   }
   .premium-career-card {
     width: min(96vw, 560px);

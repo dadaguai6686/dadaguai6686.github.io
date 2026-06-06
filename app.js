@@ -707,7 +707,9 @@ function init() {
     commandPalette.setAttribute('aria-hidden', 'false');
     document.body.classList.add('command-open');
     renderCommandResults();
-    setTimeout(() => restoreFocusTo(commandSearchInput), 30);
+    restoreFocusTo(commandSearchInput);
+    requestAnimationFrame(() => restoreFocusTo(commandSearchInput));
+    setTimeout(() => restoreFocusTo(commandSearchInput), 80);
   }
 
   function closeCommandPalette(options = {}) {
@@ -4037,6 +4039,14 @@ function init() {
         </div>
         <div class="arcade-contract-grid" id="premium-contract-list"></div>
       </div>
+      <div class="arcade-loadout-panel" id="premium-loadout-panel" aria-label="街机战术芯片">
+        <div class="arcade-loadout-heading">
+          <span><i data-lucide="cpu"></i> TACTICAL LOADOUT</span>
+          <strong id="premium-loadout-active">脉冲校准</strong>
+          <small id="premium-loadout-summary">声望、机动与生存微调会应用到下一局。</small>
+        </div>
+        <div class="arcade-loadout-grid" id="premium-loadout-list"></div>
+      </div>
       <div class="premium-career-dialog" id="premium-career-dialog" aria-hidden="true">
         <div class="premium-career-card" role="dialog" aria-modal="true" aria-labelledby="premium-career-title">
           <button type="button" class="premium-career-close" id="premium-career-close" aria-label="关闭生涯档案">
@@ -4282,6 +4292,48 @@ function init() {
       { id: 'mind_contract', title: '冷静解法', desc: '连锁 4500+ 或战术 850+', tone: 'mind', type: 'target_games', games: ['chain', 'tactics'], scoreTarget: 850, targetCount: 1, reward: 300 },
       { id: 'speed_contract', title: '高速航线', desc: '主线 900+ 或漂移 850+', tone: 'speed', type: 'target_games', games: ['runner', 'drift'], scoreTarget: 850, targetCount: 1, reward: 300 }
     ];
+    const loadoutDefs = [
+      {
+        id: 'pulse',
+        label: '脉冲校准',
+        tone: 'pulse',
+        requirement: '默认启用',
+        unlock: () => true,
+        summary: '稳定声望与星核吸附，适合熟悉所有模式。',
+        perks: ['声望 +5%', '星核吸附 +24', '战术护盾 +8'],
+        bonuses: { scoreBoost: 0.05, survivorMagnet: 24, driftBoost: 10, tacticsShield: 8 }
+      },
+      {
+        id: 'aegis',
+        label: '棱镜护盾',
+        tone: 'aegis',
+        requirement: '完成 1 局或声望 600',
+        unlock: () => (career.plays || 0) >= 1 || (career.totalScore || 0) >= 600,
+        summary: '提高容错率，适合 Boss、潜入和高压漂移。',
+        perks: ['生命/护盾提升', 'Boss 机体 +1', '潜入隐身 +1'],
+        bonuses: { scoreBoost: 0.03, survivorHp: 18, bossLives: 1, driftShield: 16, heistCloaks: 1, tacticsHp: 14 }
+      },
+      {
+        id: 'overdrive',
+        label: '霓虹超频',
+        tone: 'overdrive',
+        requirement: '任意奖牌或声望 1500',
+        unlock: () => earnedMedalCount() >= 1 || (career.totalScore || 0) >= 1500,
+        summary: '更快、更危险、更高收益，适合冲分。',
+        perks: ['声望 +10%', '移动/加速强化', '闪避冷却缩短'],
+        bonuses: { scoreBoost: 0.1, survivorSpeed: 18, driftBoost: 25, chainMoves: 1, bossDashMs: -150 }
+      },
+      {
+        id: 'strategist',
+        label: '裂隙参谋',
+        tone: 'strategy',
+        requirement: '2 项成就或声望 2600',
+        unlock: () => (career.achievements || []).length >= 2 || (career.totalScore || 0) >= 2600,
+        summary: '给解谜与战术模式更多计划空间。',
+        perks: ['战术行动 +1', '连锁步数 +3', '初始护盾 +16'],
+        bonuses: { scoreBoost: 0.07, tacticsAp: 1, tacticsShield: 16, chainMoves: 3, heistCloaks: 1 }
+      }
+    ];
 
     function todayKey() {
       const d = new Date();
@@ -4328,7 +4380,8 @@ function init() {
         medals: {},
         achievements: [],
         daily: {},
-        contracts: createDefaultContractState()
+        contracts: createDefaultContractState(),
+        loadout: { active: 'pulse' }
       };
     }
 
@@ -4341,6 +4394,8 @@ function init() {
         merged.achievements = Array.isArray(merged.achievements) ? merged.achievements : [];
         merged.daily = merged.daily && typeof merged.daily === 'object' ? merged.daily : {};
         merged.contracts = merged.contracts && typeof merged.contracts === 'object' ? merged.contracts : createDefaultContractState();
+        merged.loadout = merged.loadout && typeof merged.loadout === 'object' ? merged.loadout : { active: 'pulse' };
+        if (!loadoutDefs.some(def => def.id === merged.loadout.active)) merged.loadout.active = 'pulse';
         if (!Array.isArray(merged.contracts.claimed)) merged.contracts.claimed = [];
         if (!merged.contracts.progress || typeof merged.contracts.progress !== 'object') merged.contracts.progress = {};
         merged.totalScore = Number.isFinite(Number(merged.totalScore)) ? Number(merged.totalScore) : 0;
@@ -4436,6 +4491,73 @@ function init() {
         ? career.achievements.length / achievementDefs.length
         : 0;
       return Math.round((medalProgress * 0.58 + achievementProgress * 0.42) * 100);
+    }
+
+    function earnedMedalCount() {
+      return careerGameOrder.filter(game => {
+        const score = Number(career.best?.[game] || 0);
+        return medalClass(career.medals?.[game] || medalFor(game, score)) !== 'none';
+      }).length;
+    }
+
+    function loadoutUnlocked(def) {
+      try {
+        return !!def.unlock();
+      } catch {
+        return def.id === 'pulse';
+      }
+    }
+
+    function activeLoadoutDef() {
+      const current = loadoutDefs.find(def => def.id === career.loadout?.active && loadoutUnlocked(def));
+      return current || loadoutDefs[0];
+    }
+
+    function loadoutBonuses() {
+      return { ...(activeLoadoutDef().bonuses || {}) };
+    }
+
+    function setActiveLoadout(id) {
+      const target = loadoutDefs.find(def => def.id === id);
+      if (!target || !loadoutUnlocked(target)) {
+        showToast('该战术芯片尚未解锁', 'warning');
+        return;
+      }
+      career.loadout = { active: target.id };
+      saveCareer();
+      updateCareerPanel();
+      showToast(`已装备战术芯片：${target.label}`, 'success');
+    }
+
+    function renderArcadeLoadouts() {
+      const panel = document.getElementById('premium-loadout-panel');
+      const list = document.getElementById('premium-loadout-list');
+      const activeEl = document.getElementById('premium-loadout-active');
+      const summaryEl = document.getElementById('premium-loadout-summary');
+      if (!panel || !list) return;
+      const active = activeLoadoutDef();
+      if (career.loadout?.active !== active.id) {
+        career.loadout = { active: active.id };
+        saveCareer();
+      }
+      panel.dataset.tone = active.tone;
+      if (activeEl) activeEl.textContent = active.label;
+      if (summaryEl) summaryEl.textContent = active.summary;
+      list.innerHTML = loadoutDefs.map(def => {
+        const unlocked = loadoutUnlocked(def);
+        const equipped = active.id === def.id;
+        return `
+          <button type="button" class="arcade-loadout-card ${equipped ? 'is-equipped' : ''}" data-loadout-id="${escapeHTML(def.id)}" data-tone="${escapeHTML(def.tone)}" ${unlocked ? '' : 'disabled'} aria-pressed="${equipped ? 'true' : 'false'}">
+            <span>${unlocked ? (equipped ? '已装备' : '可装备') : '未解锁'}</span>
+            <strong>${escapeHTML(def.label)}</strong>
+            <small>${escapeHTML(unlocked ? def.summary : def.requirement)}</small>
+            <em>${def.perks.map(perk => escapeHTML(perk)).join(' · ')}</em>
+          </button>
+        `;
+      }).join('');
+      list.querySelectorAll('[data-loadout-id]').forEach(btn => {
+        btn.addEventListener('click', () => setActiveLoadout(btn.dataset.loadoutId));
+      });
     }
 
     function contractTargetValue(contract) {
@@ -4667,6 +4789,7 @@ function init() {
       renderAchievementFeed();
       renderArcadeDirector();
       renderArcadeContracts();
+      renderArcadeLoadouts();
       updatePremiumTabBadges();
       renderCareerDialog();
     }
@@ -4680,7 +4803,9 @@ function init() {
     }
 
     function recordPremiumResult(game, score, details = {}) {
-      const value = Math.max(0, Math.floor(score || 0));
+      const rawValue = Math.max(0, Math.floor(score || 0));
+      const scoreBoost = Number(loadoutBonuses().scoreBoost || 0);
+      const value = Math.max(0, Math.floor(rawValue * (1 + scoreBoost)));
       career.totalScore = Math.max(0, (career.totalScore || 0) + value);
       career.plays = (career.plays || 0) + 1;
       career.best[game] = Math.max(Number(career.best[game] || 0), value);
@@ -4689,11 +4814,11 @@ function init() {
         career.medals[game] = medal;
       }
       const daily = getDailyChallenge();
-      if ((!career.daily || career.daily.date !== daily.date || career.daily.id !== daily.id) && daily.check(game, value, details)) {
+      if ((!career.daily || career.daily.date !== daily.date || career.daily.id !== daily.id) && daily.check(game, value, { ...details, rawScore: rawValue, loadout: activeLoadoutDef().id })) {
         career.daily = { date: daily.date, id: daily.id, done: true };
         unlockAchievement('daily_clear');
       }
-      updateArcadeContracts(game, value, details);
+      updateArcadeContracts(game, value, { ...details, rawScore: rawValue, loadout: activeLoadoutDef().id });
       saveCareer();
       updateCareerPanel();
     }
@@ -4702,6 +4827,13 @@ function init() {
       recordResult: recordPremiumResult,
       unlock: unlockAchievement,
       update: updateCareerPanel,
+      loadout: () => ({
+        active: activeLoadoutDef().id,
+        label: activeLoadoutDef().label,
+        bonuses: loadoutBonuses(),
+        unlocked: loadoutDefs.filter(loadoutUnlocked).map(def => def.id)
+      }),
+      equipLoadout: setActiveLoadout,
       contracts: () => getDailyContracts().map(contract => ({
         id: contract.id,
         title: contract.title,
@@ -4900,6 +5032,7 @@ function init() {
     }
 
     function startSurvivor() {
+      const bonuses = loadoutBonuses();
       survivor.running = true;
       survivor.paused = false;
       survivor.last = performance.now();
@@ -4911,15 +5044,15 @@ function init() {
         x: 280,
         y: 180,
         r: 12,
-        hp: 100,
+        hp: 100 + Number(bonuses.survivorHp || 0),
         xp: 0,
         level: 1,
         fireRate: 240,
         damage: 18,
         bulletSpeed: 390,
-        speed: 198,
-        build: 'Pulse I',
-        magnet: 85,
+        speed: 198 + Number(bonuses.survivorSpeed || 0),
+        build: activeLoadoutDef().id === 'pulse' ? 'Pulse Sync' : activeLoadoutDef().label,
+        magnet: 85 + Number(bonuses.survivorMagnet || 0),
         novaCooldown: 0,
         novaFlash: 0,
         drones: 0,
@@ -5261,7 +5394,8 @@ function init() {
       bullets: [],
       particles: [],
       shotTimer: 0,
-      patternTimer: 0
+      patternTimer: 0,
+      bonuses: {}
     };
 
     function setBossUi() {
@@ -5274,18 +5408,20 @@ function init() {
     }
 
     function startBoss() {
+      const bonuses = loadoutBonuses();
       bossMode.running = true;
       bossMode.paused = false;
       bossMode.last = performance.now();
       bossMode.t = 0;
       bossMode.score = 0;
-      bossMode.player = { x: 280, y: 300, r: 12, lives: 3, invuln: 1000, dash: 0, dashCooldown: 0, graze: 0 };
+      bossMode.player = { x: 280, y: 300, r: 12, lives: 3 + Number(bonuses.bossLives || 0), invuln: 1000, dash: 0, dashCooldown: 0, graze: 0 };
       bossMode.boss = { x: 280, y: 92, r: 38, hp: 1000, maxHp: 1000, phase: 1 };
       bossMode.shots = [];
       bossMode.bullets = [];
       bossMode.particles = [];
       bossMode.shotTimer = 0;
       bossMode.patternTimer = 0;
+      bossMode.bonuses = bonuses;
       setBossUi();
       updateBossPauseButton();
       cancelAnimationFrame(bossMode.raf);
@@ -5381,7 +5517,7 @@ function init() {
       p.y = clamp(p.y + ((premiumKeys.down ? 1 : 0) - (premiumKeys.up ? 1 : 0)) * speed * 0.72 * dt / 1000, 178, bossMode.canvas.height - 18);
       if (premiumKeys.action && p.dashCooldown <= 0) {
         p.dash = 210;
-        p.dashCooldown = 1150;
+        p.dashCooldown = Math.max(720, 1150 + Number(bossMode.bonuses.bossDashMs || 0));
         p.invuln = Math.max(p.invuln, 280);
         bossSpark(p.x, p.y, '#34D399', 16);
       }
@@ -5513,6 +5649,7 @@ function init() {
       gateIndex: 0,
       multiplier: 1,
       boost: 100,
+      maxBoost: 100,
       hitCooldown: 0,
       player: { x: 70, y: 276, vx: 0, vy: 0, angle: -0.62, r: 12, shield: 100, trail: [] },
       gates: [
@@ -5541,10 +5678,11 @@ function init() {
       document.getElementById('premium-drift-best').textContent = localStorage.getItem(drift.bestKey) || '0';
       document.getElementById('premium-drift-shield').textContent = Math.max(0, Math.ceil(drift.player.shield));
       document.getElementById('premium-drift-mult').textContent = `x${drift.multiplier.toFixed(1)}`;
-      document.getElementById('premium-drift-boost').textContent = drift.boost >= 96 ? 'READY' : `${Math.ceil(drift.boost)}%`;
+      document.getElementById('premium-drift-boost').textContent = drift.boost >= drift.maxBoost - 4 ? 'READY' : `${Math.ceil(drift.boost)}%`;
     }
 
     function resetDriftState() {
+      const bonuses = loadoutBonuses();
       drift.running = true;
       drift.paused = false;
       drift.last = performance.now();
@@ -5552,9 +5690,10 @@ function init() {
       drift.score = 0;
       drift.gateIndex = 0;
       drift.multiplier = 1;
-      drift.boost = 100;
+      drift.maxBoost = 100 + Number(bonuses.driftBoost || 0);
+      drift.boost = drift.maxBoost;
       drift.hitCooldown = 0;
-      drift.player = { x: 70, y: 276, vx: 0, vy: 0, angle: -0.62, r: 12, shield: 100, trail: [] };
+      drift.player = { x: 70, y: 276, vx: 0, vy: 0, angle: -0.62, r: 12, shield: 100 + Number(bonuses.driftShield || 0), trail: [] };
       drift.drones = [
         { x: 278, y: 66, baseX: 278, baseY: 66, ampX: 110, ampY: 34, phase: 0, speed: 0.0016, r: 13 },
         { x: 430, y: 228, baseX: 430, baseY: 228, ampX: 52, ampY: 78, phase: 1.7, speed: 0.002, r: 12 },
@@ -5624,7 +5763,7 @@ function init() {
       drift.gateIndex++;
       drift.multiplier = Math.min(4, drift.multiplier + 0.28);
       if (drift.multiplier >= 3) unlockAchievement('drift_combo');
-      drift.boost = Math.min(100, drift.boost + 24);
+      drift.boost = Math.min(drift.maxBoost, drift.boost + 24);
       drift.score += Math.floor((210 + speed * 0.72) * drift.multiplier);
       driftSpark(gate.x, gate.y, '#34D399', 34);
       if (drift.gateIndex >= drift.gates.length) finishDrift('NEON ROUTE CLEARED');
@@ -5676,7 +5815,7 @@ function init() {
         drift.score += dt * 0.075 * drift.multiplier;
         driftSpark(p.x - Math.cos(p.angle) * 12, p.y - Math.sin(p.angle) * 12, '#BAE6FD', 2);
       } else {
-        drift.boost = Math.min(100, drift.boost + dt * 0.018);
+        drift.boost = Math.min(drift.maxBoost, drift.boost + dt * 0.018);
       }
 
       drift.elapsed += dt;
@@ -5877,6 +6016,7 @@ function init() {
     }
 
     function newHeist() {
+      const bonuses = loadoutBonuses();
       heist.grid = Array.from({ length: 13 }, (_, y) => Array.from({ length: 20 }, (_, x) => (x === 0 || y === 0 || x === 19 || y === 12 || (x % 4 === 0 && y % 3 !== 1)) ? 1 : 0));
       heist.player = { x: 1, y: 1 };
       heist.keys = [{ x: 5, y: 2 }, { x: 10, y: 5 }, { x: 15, y: 3 }, { x: 13, y: 10 }];
@@ -5891,7 +6031,7 @@ function init() {
       heist.doors = [{ x: 9, y: 8, open: false }, { x: 12, y: 4, open: false }];
       heist.collected = 0;
       heist.steps = 0;
-      heist.cloaks = 2;
+      heist.cloaks = 2 + Number(bonuses.heistCloaks || 0);
       heist.cloakTurns = 0;
       heist.alert = 'LOW';
       heist.won = false;
@@ -6060,8 +6200,9 @@ function init() {
     }
 
     function newChain() {
+      const bonuses = loadoutBonuses();
       chain.score = 0;
-      chain.moves = 30;
+      chain.moves = 30 + Number(bonuses.chainMoves || 0);
       chain.combo = 0;
       chain.finished = false;
       chain.recorded = false;
@@ -6198,6 +6339,7 @@ function init() {
     }
 
     function newTactics({ shouldFocus = false } = {}) {
+      const bonuses = loadoutBonuses();
       tactics.walls = new Set([
         tacticsKey(2, 2), tacticsKey(3, 2), tacticsKey(7, 2),
         tacticsKey(5, 3), tacticsKey(1, 4), tacticsKey(8, 4),
@@ -6215,7 +6357,16 @@ function init() {
         { id: 'warden-a', type: 'warden', x: 3, y: 6, hp: 95, maxHp: 95 }
       ];
       tactics.exit = { x: 9, y: 0 };
-      tactics.player = { x: 1, y: 6, hp: 100, shield: 0, ap: 3, charge: 1, cores: 0 };
+      tactics.player = {
+        x: 1,
+        y: 6,
+        hp: 100 + Number(bonuses.tacticsHp || 0),
+        shield: Number(bonuses.tacticsShield || 0),
+        ap: 3 + Number(bonuses.tacticsAp || 0),
+        baseAp: 3 + Number(bonuses.tacticsAp || 0),
+        charge: 1,
+        cores: 0
+      };
       tactics.turn = 1;
       tactics.kills = 0;
       tactics.won = false;
@@ -6276,7 +6427,7 @@ function init() {
       if (tactics.player.ap <= 0 && !tactics.won && !tactics.lost) {
         enemyTacticsTurn();
         if (!tactics.won && !tactics.lost) {
-          tactics.player.ap = 3;
+          tactics.player.ap = tactics.player.baseAp || 3;
           tactics.turn++;
         }
       }
@@ -6544,7 +6695,8 @@ function init() {
           driftShield: () => drift.player.shield,
           heistSteps: () => heist.steps,
           tacticsTurn: () => tactics.turn,
-          contracts: () => window.atherixArcadeCareer?.contracts?.() || []
+          contracts: () => window.atherixArcadeCareer?.contracts?.() || [],
+          loadout: () => window.atherixArcadeCareer?.loadout?.() || {}
         }
       };
     }
