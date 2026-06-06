@@ -4459,6 +4459,8 @@ function init() {
               <span>最佳 <strong id="premium-drift-best">0</strong></span>
               <span>护盾 <strong id="premium-drift-shield">100</strong></span>
               <span>倍率 <strong id="premium-drift-mult">x1.0</strong></span>
+              <span>线路 <strong id="premium-drift-line">READY</strong></span>
+              <span>连击 <strong id="premium-drift-combo">0x</strong></span>
               <span>加速 <strong id="premium-drift-boost">READY</strong></span>
             </div>
             <div class="mini-actions">
@@ -6509,6 +6511,14 @@ function init() {
       boost: 100,
       maxBoost: 100,
       hitCooldown: 0,
+      combo: 0,
+      bestCombo: 0,
+      lineQuality: 0,
+      lineLabel: 'READY',
+      lineTone: 'ready',
+      lineFlash: 0,
+      lineBank: 0,
+      splits: [],
       player: { x: 70, y: 276, vx: 0, vy: 0, angle: -0.62, r: 12, shield: 100, trail: [] },
       gates: [
         { x: 132, y: 238, r: 27 },
@@ -6537,6 +6547,16 @@ function init() {
       document.getElementById('premium-drift-shield').textContent = Math.max(0, Math.ceil(drift.player.shield));
       document.getElementById('premium-drift-mult').textContent = `x${drift.multiplier.toFixed(1)}`;
       document.getElementById('premium-drift-boost').textContent = drift.boost >= drift.maxBoost - 4 ? 'READY' : `${Math.ceil(drift.boost)}%`;
+      const lineEl = document.getElementById('premium-drift-line');
+      if (lineEl) {
+        lineEl.textContent = drift.lineLabel === 'READY' ? 'READY' : `${drift.lineLabel} ${drift.lineQuality}`;
+        lineEl.style.color = drift.lineTone === 'perfect' ? '#FDE68A' : drift.lineTone === 'apex' ? '#A7F3D0' : drift.lineTone === 'clean' ? '#BAE6FD' : drift.lineTone === 'danger' ? '#FCA5A5' : '#CBD5E1';
+      }
+      const comboEl = document.getElementById('premium-drift-combo');
+      if (comboEl) {
+        comboEl.textContent = `${drift.combo}x`;
+        comboEl.style.color = drift.combo >= 4 ? '#FDE68A' : drift.combo >= 2 ? '#A7F3D0' : '#fff';
+      }
     }
 
     function resetDriftState() {
@@ -6553,6 +6573,14 @@ function init() {
       drift.maxBoost = 100 + Number(bonuses.driftBoost || 0);
       drift.boost = drift.maxBoost;
       drift.hitCooldown = 0;
+      drift.combo = 0;
+      drift.bestCombo = 0;
+      drift.lineQuality = 0;
+      drift.lineLabel = 'READY';
+      drift.lineTone = 'ready';
+      drift.lineFlash = 0;
+      drift.lineBank = 0;
+      drift.splits = [];
       drift.player = { x: 70, y: 276, vx: 0, vy: 0, angle: -0.62, r: 12, shield: 100 + Number(bonuses.driftShield || 0) + Number(tuning.shield || 0), trail: [] };
       drift.drones = [
         { x: 278, y: 66, baseX: 278, baseY: 66, ampX: 110, ampY: 34, phase: 0, speed: 0.0016 * pressure, r: 13 },
@@ -6604,6 +6632,11 @@ function init() {
       if (drift.hitCooldown > 0) return;
       drift.player.shield -= amount;
       drift.multiplier = Math.max(1, drift.multiplier * 0.72);
+      drift.combo = 0;
+      drift.lineLabel = 'BROKEN';
+      drift.lineTone = 'danger';
+      drift.lineQuality = 0;
+      drift.lineFlash = 860;
       drift.hitCooldown = 760;
       drift.player.vx *= -0.36;
       drift.player.vy *= -0.36;
@@ -6617,15 +6650,72 @@ function init() {
       return Math.hypot(p.x - nearestX, p.y - nearestY) < p.r + 2;
     }
 
+    function driftAngleDelta(a, b) {
+      return Math.atan2(Math.sin(a - b), Math.cos(a - b));
+    }
+
+    function driftSegmentAngle(index) {
+      const gate = drift.gates[index];
+      const next = drift.gates[index + 1];
+      if (!gate || !next) return drift.player.angle;
+      return Math.atan2(next.y - gate.y, next.x - gate.x);
+    }
+
+    function driftToneColor(tone) {
+      if (tone === 'perfect') return '#FDE68A';
+      if (tone === 'apex') return '#34D399';
+      if (tone === 'clean') return '#BAE6FD';
+      if (tone === 'danger') return '#F97316';
+      return '#94A3B8';
+    }
+
+    function gradeDriftGate(gate, speed) {
+      const p = drift.player;
+      const distance = Math.hypot(gate.x - p.x, gate.y - p.y);
+      const centerScore = clamp(1 - distance / Math.max(1, gate.r + p.r), 0, 1);
+      const speedScore = clamp((speed - 95) / 185, 0, 1);
+      const targetAngle = driftSegmentAngle(drift.gateIndex);
+      const angleScore = drift.gateIndex >= drift.gates.length - 1
+        ? 0.78
+        : clamp(1 - Math.abs(driftAngleDelta(p.angle, targetAngle)) / 1.32, 0, 1);
+      const quality = Math.round(100 * (centerScore * 0.48 + speedScore * 0.28 + angleScore * 0.24));
+      if (quality >= 86) return { label: 'PERFECT', tone: 'perfect', quality, bonus: 1.42, boost: 34, comboKeep: true };
+      if (quality >= 70) return { label: 'APEX', tone: 'apex', quality, bonus: 1.22, boost: 28, comboKeep: true };
+      if (quality >= 52) return { label: 'CLEAN', tone: 'clean', quality, bonus: 1.08, boost: 22, comboKeep: true };
+      return { label: 'SCRAPPY', tone: 'danger', quality, bonus: 0.88, boost: 12, comboKeep: false };
+    }
+
+    function applyDriftLineGrade(grade, gate, speed) {
+      drift.lineQuality = grade.quality;
+      drift.lineLabel = grade.label;
+      drift.lineTone = grade.tone;
+      drift.lineFlash = 920;
+      drift.combo = grade.comboKeep ? drift.combo + 1 : 0;
+      drift.bestCombo = Math.max(drift.bestCombo, drift.combo);
+      drift.multiplier = Math.min(4.6, drift.multiplier + 0.18 + drift.combo * 0.045 + (grade.quality >= 86 ? 0.14 : 0));
+      if (drift.multiplier >= 3) unlockAchievement('drift_combo');
+      drift.boost = Math.min(drift.maxBoost, drift.boost + grade.boost + drift.combo * 2);
+      const splitScore = Math.floor((210 + speed * 0.72) * drift.multiplier * grade.bonus + drift.combo * 42);
+      drift.lineBank += Math.max(0, grade.quality - 52) * 2 + drift.combo * 18;
+      drift.score += splitScore;
+      drift.splits.unshift({
+        gate: drift.gateIndex + 1,
+        label: grade.label,
+        quality: grade.quality,
+        score: splitScore,
+        combo: drift.combo,
+        age: 1800
+      });
+      drift.splits = drift.splits.slice(0, 4);
+      driftSpark(gate.x, gate.y, driftToneColor(grade.tone), grade.quality >= 70 ? 42 : 24);
+    }
+
     function passDriftGate(speed) {
       const gate = drift.gates[drift.gateIndex];
       if (!gate) return;
+      const grade = gradeDriftGate(gate, speed);
+      applyDriftLineGrade(grade, gate, speed);
       drift.gateIndex++;
-      drift.multiplier = Math.min(4, drift.multiplier + 0.28);
-      if (drift.multiplier >= 3) unlockAchievement('drift_combo');
-      drift.boost = Math.min(drift.maxBoost, drift.boost + 24);
-      drift.score += Math.floor((210 + speed * 0.72) * drift.multiplier);
-      driftSpark(gate.x, gate.y, '#34D399', 34);
       if (drift.gateIndex >= drift.gates.length) finishDrift('NEON ROUTE CLEARED');
     }
 
@@ -6636,11 +6726,11 @@ function init() {
       cancelAnimationFrame(drift.raf);
       const complete = drift.gateIndex >= drift.gates.length;
       const timeBonus = complete ? Math.max(0, 76000 - drift.elapsed) / 42 : 0;
-      const finalScore = Math.floor(drift.score + drift.gateIndex * 120 + drift.player.shield * 7 + timeBonus);
+      const finalScore = Math.floor(drift.score + drift.gateIndex * 120 + drift.player.shield * 7 + timeBonus + drift.bestCombo * 75 + drift.lineBank);
       localStorage.setItem(drift.bestKey, String(Math.max(Number(localStorage.getItem(drift.bestKey) || 0), finalScore)));
       if (complete) unlockAchievement('drift_clear');
       if (complete && drift.player.shield >= 75) unlockAchievement('drift_clean');
-      recordPremiumResult('drift', finalScore, { gates: drift.gateIndex, shield: drift.player.shield, elapsed: drift.elapsed });
+      recordPremiumResult('drift', finalScore, { gates: drift.gateIndex, shield: drift.player.shield, elapsed: drift.elapsed, bestCombo: drift.bestCombo, line: drift.lineLabel });
       setDriftUi();
       updateDriftPauseButton();
       drawDrift();
@@ -6680,6 +6770,7 @@ function init() {
 
       drift.elapsed += dt;
       drift.hitCooldown = Math.max(0, drift.hitCooldown - dt);
+      drift.lineFlash = Math.max(0, drift.lineFlash - dt);
       const drag = Math.pow(premiumKeys.down ? 0.955 : 0.982, dt / 16.67);
       p.vx *= drag;
       p.vy *= drag;
@@ -6717,7 +6808,7 @@ function init() {
       }
       if (Math.abs(turn) > 0 && speed > 130) {
         drift.score += speed * dt / 1000 * 0.34 * drift.multiplier;
-        drift.multiplier = Math.min(4, drift.multiplier + dt * 0.00018);
+        drift.multiplier = Math.min(4.6, drift.multiplier + dt * 0.00018);
       } else {
         drift.multiplier = Math.max(1, drift.multiplier - dt * 0.00023);
       }
@@ -6731,6 +6822,8 @@ function init() {
         pt.life -= dt;
       });
       drift.particles = drift.particles.filter(pt => pt.life > 0);
+      drift.splits.forEach(split => { split.age -= dt; });
+      drift.splits = drift.splits.filter(split => split.age > 0).slice(0, 4);
 
       setDriftUi();
       drawDrift();
@@ -6780,6 +6873,30 @@ function init() {
         ctx.font = '800 12px JetBrains Mono, monospace';
         ctx.textAlign = 'center';
         ctx.fillText(String(index + 1), gate.x, gate.y + 4);
+        if (active) {
+          const next = drift.gates[index + 1];
+          ctx.save();
+          ctx.strokeStyle = 'rgba(253, 230, 138, 0.44)';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([6, 6]);
+          ctx.beginPath();
+          ctx.arc(gate.x, gate.y, gate.r * 0.42, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          if (next) {
+            const angle = Math.atan2(next.y - gate.y, next.x - gate.x);
+            ctx.strokeStyle = 'rgba(186, 230, 253, 0.5)';
+            ctx.beginPath();
+            ctx.moveTo(gate.x, gate.y);
+            ctx.lineTo(gate.x + Math.cos(angle) * 54, gate.y + Math.sin(angle) * 54);
+            ctx.stroke();
+            ctx.fillStyle = '#BAE6FD';
+            ctx.beginPath();
+            ctx.arc(gate.x + Math.cos(angle) * 58, gate.y + Math.sin(angle) * 58, 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+        }
       });
 
       drift.drones.forEach(drone => {
@@ -6834,6 +6951,26 @@ function init() {
       ctx.font = '700 12px JetBrains Mono, monospace';
       ctx.textAlign = 'left';
       ctx.fillText(`${Math.max(0, 76 - drift.elapsed / 1000).toFixed(0)}s · BOOST ${Math.ceil(drift.boost)}%`, 16, 24);
+      if (drift.lineFlash > 0 && drift.lineLabel !== 'READY') {
+        const alpha = clamp(drift.lineFlash / 920, 0, 1);
+        ctx.save();
+        ctx.globalAlpha = 0.35 + alpha * 0.65;
+        ctx.fillStyle = driftToneColor(drift.lineTone);
+        ctx.font = '900 18px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${drift.lineLabel} ${drift.lineQuality} · ${drift.combo}x`, c.width / 2, 42);
+        ctx.restore();
+      }
+      drift.splits.forEach((split, index) => {
+        const alpha = clamp(split.age / 1800, 0, 1);
+        ctx.save();
+        ctx.globalAlpha = 0.42 + alpha * 0.58;
+        ctx.fillStyle = driftToneColor(split.label === 'PERFECT' ? 'perfect' : split.label === 'APEX' ? 'apex' : split.label === 'CLEAN' ? 'clean' : 'danger');
+        ctx.font = '800 10px JetBrains Mono, monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(`#${split.gate} ${split.label} ${split.quality} +${split.score} ${split.combo}x`, c.width - 16, 24 + index * 15);
+        ctx.restore();
+      });
     }
 
     document.getElementById('premium-drift-start').addEventListener('click', startDrift);
@@ -7768,6 +7905,38 @@ function init() {
           driftPaused: () => drift.paused,
           driftGates: () => drift.gateIndex,
           driftShield: () => drift.player.shield,
+          driftLineState: () => ({
+            running: drift.running,
+            paused: drift.paused,
+            gates: drift.gateIndex,
+            label: drift.lineLabel,
+            tone: drift.lineTone,
+            quality: drift.lineQuality,
+            combo: drift.combo,
+            bestCombo: drift.bestCombo,
+            lineBank: Math.floor(drift.lineBank),
+            splits: drift.splits.map(split => ({ ...split })),
+            score: Math.floor(drift.score),
+            boost: Math.ceil(drift.boost),
+            mult: Number(drift.multiplier.toFixed(2)),
+            lineHud: document.getElementById('premium-drift-line')?.textContent || '',
+            comboHud: document.getElementById('premium-drift-combo')?.textContent || ''
+          }),
+          forceDriftApex: () => {
+            if (!drift.running) startDrift();
+            drift.paused = false;
+            const gate = drift.gates[drift.gateIndex];
+            if (!gate) return window.__atherixDebug.premium.driftLineState();
+            drift.player.x = gate.x;
+            drift.player.y = gate.y;
+            drift.player.angle = driftSegmentAngle(drift.gateIndex);
+            drift.player.vx = Math.cos(drift.player.angle) * 242;
+            drift.player.vy = Math.sin(drift.player.angle) * 242;
+            passDriftGate(Math.hypot(drift.player.vx, drift.player.vy));
+            setDriftUi();
+            drawDrift();
+            return window.__atherixDebug.premium.driftLineState();
+          },
           heistSteps: () => heist.steps,
           tacticsTurn: () => tactics.turn,
           tacticsForecast: () => {

@@ -974,7 +974,21 @@ async function run() {
       score: Number(document.querySelector('#premium-drift-score')?.textContent || 0),
       boost: document.querySelector('#premium-drift-boost')?.textContent || '',
       mult: document.querySelector('#premium-drift-mult')?.textContent || '',
+      line: document.querySelector('#premium-drift-line')?.textContent || '',
+      combo: document.querySelector('#premium-drift-combo')?.textContent || '',
       activeTitle: document.querySelector('#premium-active-title')?.textContent || ''
+    };
+  })()`);
+  const driftApexState = await evaluate(`(() => {
+    const before = window.__atherixDebug?.premium?.driftLineState?.() || {};
+    const after = window.__atherixDebug?.premium?.forceDriftApex?.() || {};
+    return {
+      before,
+      after,
+      line: document.querySelector('#premium-drift-line')?.textContent || '',
+      combo: document.querySelector('#premium-drift-combo')?.textContent || '',
+      gates: Number(document.querySelector('#premium-drift-gates')?.textContent || 0),
+      score: Number(document.querySelector('#premium-drift-score')?.textContent || 0)
     };
   })()`);
   await key('keyDown', 'p', 'KeyP');
@@ -1221,6 +1235,7 @@ async function run() {
   );
   assert(bossResumeState.running && !bossResumeState.paused && bossResumeState.pauseButton === '暂停', `boss mode should resume from keyboard pause: ${JSON.stringify(bossResumeState)}`);
   assert(driftState.nonBlank && driftState.running && !driftState.paused && driftState.score > 0 && /Neon Drift/.test(driftState.activeTitle) && driftState.boost !== 'READY', `drift mode should render, move, score, and spend boost: ${JSON.stringify(driftState)}`);
+  assert(driftApexState.after.running && driftApexState.after.gates >= driftApexState.before.gates + 1 && driftApexState.after.label === 'PERFECT' && driftApexState.after.quality >= 86 && driftApexState.after.combo >= 1 && driftApexState.after.bestCombo >= driftApexState.after.combo && driftApexState.after.splits?.length >= 1 && driftApexState.after.lineBank > driftApexState.before.lineBank && /PERFECT/.test(driftApexState.line) && /\dx/.test(driftApexState.combo), `drift mode should grade clean apex gates with combo, split, and HUD feedback: ${JSON.stringify(driftApexState)}`);
   assert(driftPauseState.running && driftPauseState.paused && driftPauseState.pauseButton === '继续', `drift mode should enter pause with keyboard: ${JSON.stringify(driftPauseState)}`);
   assert(
     driftPauseFreezeState.paused &&
@@ -1294,6 +1309,7 @@ async function run() {
     bossPauseFreezeState,
     bossResumeState,
     driftState,
+    driftApexState,
     driftPauseState,
     driftPauseFreezeState,
     driftResumeState,
