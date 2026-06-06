@@ -17,3 +17,9 @@ jobs:
       - run: npm audit --audit-level=moderate
       - run: npm run check
       - run: npm run smoke:api
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t atherix-digital-space:ci .
