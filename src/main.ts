@@ -5,6 +5,7 @@ import {
   DIFFICULTY_SETTINGS,
   UPGRADE_CATALOG,
   getAchievementSummaries,
+  getRoutePlan,
   getUnlockedAchievementsForRun,
   parseRouteSeed,
   type AchievementId,
@@ -100,9 +101,11 @@ const difficultyDetail = document.querySelector<HTMLElement>("#difficulty-detail
 const achievementStrip = document.querySelector<HTMLDivElement>("#achievement-strip")!;
 const runHistory = document.querySelector<HTMLDivElement>("#run-history")!;
 const audioToggle = document.querySelector<HTMLButtonElement>("#audio-toggle")!;
+const dailyRouteButton = document.querySelector<HTMLButtonElement>("#daily-route-button")!;
 const overlayEyebrow = overlay.querySelector<HTMLElement>(".eyebrow")!;
 const overlayTitle = overlay.querySelector<HTMLElement>("h1")!;
 const overlayCopy = overlay.querySelector<HTMLElement>("p")!;
+const missionBrief = document.querySelector<HTMLDivElement>("#mission-brief")!;
 const howToPlay = document.querySelector<HTMLDivElement>("#how-to-play")!;
 const runRecap = document.querySelector<HTMLDivElement>("#run-recap")!;
 const recapRating = document.querySelector<HTMLDivElement>("#recap-rating")!;
@@ -232,6 +235,10 @@ audioToggle.addEventListener("click", () => {
   }
 });
 
+dailyRouteButton.addEventListener("click", () => {
+  launchDailyChallenge();
+});
+
 copyRouteButton.addEventListener("click", () => {
   audioBus.play("button");
   void copyRouteLink();
@@ -281,6 +288,26 @@ function launchRun(upgradeId?: UpgradeId): void {
   const runDifficulty = latestStatus === "won" ? latestDifficulty : selectedDifficulty;
   const routeSeed = latestStatus === "won" ? undefined : getRequestedRouteSeed();
   window.dispatchEvent(new CustomEvent("game:start", { detail: { difficulty: runDifficulty, routeSeed, upgradeId } }));
+}
+
+function launchDailyChallenge(): void {
+  const daily = getDailyChallenge();
+  void audioBus.unlock();
+  audioBus.play("start");
+  latestDifficulty = selectedDifficulty;
+  saveData.selectedDifficulty = selectedDifficulty;
+  saveSave(saveData);
+  updateDifficultyUi();
+  overlay.classList.remove("show");
+  disarmResetSave();
+  runRecap.hidden = true;
+  achievementUnlocks.hidden = true;
+  upgradeChoices.hidden = true;
+  window.dispatchEvent(
+    new CustomEvent("game:start", {
+      detail: { difficulty: selectedDifficulty, routeSeed: daily.seed }
+    })
+  );
 }
 
 window.addEventListener("game:hud", (event) => {
@@ -381,6 +408,7 @@ window.addEventListener("game:ended", (event) => {
   overlayTitle.textContent =
     detail.status === "completed" ? "五波完成" : detail.status === "won" ? "光网稳定" : "信号中断";
   overlayCopy.textContent = detail.message;
+  missionBrief.hidden = true;
   renderRunRecap(detail, newlyUnlocked);
   updateSessionTools();
   startButton.textContent =
@@ -468,6 +496,7 @@ function showHelpOverlay(): void {
   overlayCopy.textContent =
     "目标不是乱飞，而是在电量压力下规划路线：先补流明，再修信标，最后从北侧光门撤离。";
   runRecap.hidden = true;
+  missionBrief.hidden = false;
   howToPlay.hidden = false;
   upgradeChoices.hidden = true;
   startButton.hidden = latestStatus === "paused";
@@ -556,11 +585,19 @@ function updateDifficultyUi(): void {
   });
   const difficulty = DIFFICULTY_SETTINGS[selectedDifficulty];
   difficultyDetail.textContent = `${difficulty.name}模式：${difficulty.description}`;
+  updateDailyChallengeUi();
 }
 
 function updateAudioUi(): void {
   audioToggle.textContent = saveData.audioEnabled ? "音效 开" : "音效 关";
   audioToggle.setAttribute("aria-pressed", String(saveData.audioEnabled));
+}
+
+function updateDailyChallengeUi(): void {
+  const daily = getDailyChallenge();
+  const difficulty = DIFFICULTY_SETTINGS[selectedDifficulty];
+  dailyRouteButton.textContent = `今日挑战 · ${daily.routeName}`;
+  dailyRouteButton.title = `${daily.label}，${difficulty.name}模式，固定救援代号 ${daily.routeName}`;
 }
 
 function updateRecordUi(): void {
@@ -885,6 +922,29 @@ function getRequestedRouteSeed(): number | undefined {
   return parseRouteSeed(params.get("route") ?? params.get("seed"));
 }
 
+function getDailyChallenge(date = new Date()): { key: string; label: string; routeName: string; seed: number } {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const key = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const seed = hashDailyChallengeKey(key);
+  return {
+    key,
+    label: `${month}月${day}日今日挑战`,
+    routeName: getRoutePlan(seed).name,
+    seed
+  };
+}
+
+function hashDailyChallengeKey(key: string): number {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < key.length; index += 1) {
+    hash ^= key.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return Math.abs(hash) % 1679615 + 1;
+}
+
 function createDefaultSave(): SaveData {
   return {
     achievements: [],
@@ -1095,6 +1155,7 @@ audioBus = new AudioBus(() => saveData.audioEnabled);
 setShellStatus(latestStatus);
 updateDifficultyUi();
 updateAudioUi();
+updateDailyChallengeUi();
 updateRecordUi();
 updateAchievementUi();
 updateRunHistoryUi();

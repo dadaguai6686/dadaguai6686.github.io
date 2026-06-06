@@ -88,6 +88,10 @@
             你是一台维修无人机。城市光网正在坍缩：修复蓝色信标、收集金色流明、
             避开紫色风暴和粉色碎片，在电量耗尽前冲进北侧光门。
           </p>
+          <div id="mission-brief" aria-label="核心循环">
+            <strong>核心循环：补流明 → 修信标 → 撤离升级</strong>
+            <span>开局先捡金色流明补电，靠近蓝色信标按住 E 修复；全部信标亮起后，从北侧光门撤离并选择升级。</span>
+          </div>
           <div id="menu-options">
             <div id="difficulty-picker" role="group" aria-label="选择难度">
               <button type="button" data-difficulty="training">练习</button>
@@ -95,9 +99,9 @@
               <button type="button" data-difficulty="hardcore">硬核</button>
             </div>
             <button id="audio-toggle" type="button" aria-pressed="true">音效 开</button>
+            <button id="daily-route-button" type="button">今日挑战</button>
           </div>
           <p id="difficulty-detail">标准模式：推荐第一次游玩，完整体验风险、连锁和升级。</p>
-          <div id="achievement-strip" aria-label="成就与挑战"></div>
           <div id="run-recap" hidden aria-live="polite">
             <div id="recap-rating" data-grade="B" aria-label="本局评级">
               <strong id="recap-rating-grade">B</strong>
@@ -120,6 +124,7 @@
             <button id="reset-save-button" type="button">清空本地存档</button>
             <span id="session-feedback">本地设置</span>
           </div>
+          <div id="achievement-strip" aria-label="成就与挑战"></div>
           <div id="upgrade-choices" hidden></div>
           <div id="run-history" aria-label="最近航行日志"></div>
           <div id="how-to-play">

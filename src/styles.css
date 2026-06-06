@@ -613,6 +613,34 @@ h1 {
   line-height: 1.55;
 }
 
+#mission-brief {
+  display: grid;
+  gap: 5px;
+  max-width: 620px;
+  margin: -4px auto 16px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 226, 122, 0.18);
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(255, 226, 122, 0.1), rgba(103, 244, 255, 0.055));
+  text-align: left;
+}
+
+#mission-brief[hidden] {
+  display: none;
+}
+
+#mission-brief strong {
+  color: #fff3ad;
+  font-size: 13px;
+  font-weight: 1000;
+}
+
+#mission-brief span {
+  color: #c8d9e8;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 #menu-options {
   display: flex;
   align-items: center;
@@ -638,7 +666,8 @@ h1 {
 }
 
 #difficulty-picker button,
-#audio-toggle {
+#audio-toggle,
+#daily-route-button {
   min-height: 34px;
   border: 1px solid transparent;
   border-radius: 6px;
@@ -656,7 +685,8 @@ h1 {
 }
 
 #difficulty-picker button:focus-visible,
-#audio-toggle:focus-visible {
+#audio-toggle:focus-visible,
+#daily-route-button:focus-visible {
   outline: none;
   border-color: rgba(255, 226, 122, 0.68);
 }
@@ -665,6 +695,20 @@ h1 {
   padding: 7px 11px;
   border-color: rgba(255, 226, 122, 0.16);
   background: rgba(255, 226, 122, 0.08);
+}
+
+#daily-route-button {
+  min-width: 178px;
+  padding: 7px 12px;
+  border-color: rgba(103, 244, 255, 0.24);
+  color: #061018;
+  background: linear-gradient(90deg, var(--ui-cyan), var(--ui-gold));
+  box-shadow: 0 8px 24px rgba(103, 244, 255, 0.16);
+}
+
+#daily-route-button:hover,
+#daily-route-button:focus-visible {
+  border-color: rgba(255, 255, 255, 0.68);
 }
 
 #difficulty-detail {
@@ -1368,6 +1412,20 @@ h1 {
   .panel p {
     margin-bottom: 14px;
     font-size: 14px;
+  }
+
+  #mission-brief {
+    margin-bottom: 12px;
+    padding: 9px 10px;
+  }
+
+  #menu-options {
+    gap: 8px;
+  }
+
+  #audio-toggle,
+  #daily-route-button {
+    flex: 1 1 142px;
   }
 
   #difficulty-detail {
