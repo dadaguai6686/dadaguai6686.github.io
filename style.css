@@ -962,6 +962,164 @@ main {
   margin-top: 0.2rem;
 }
 
+/* Local Data Vault */
+.vault-tool {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.vault-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.vault-stat-card {
+  min-height: 118px;
+  padding: 0.95rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018));
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.35rem;
+}
+
+.vault-stat-card span,
+.vault-stat-card small {
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+}
+
+.vault-stat-card strong {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: clamp(1.35rem, 2vw, 2rem);
+  color: var(--text-primary);
+  line-height: 1.05;
+}
+
+.vault-action-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.vault-danger-btn {
+  color: var(--danger);
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+.vault-danger-btn:hover {
+  color: #fff;
+  background: rgba(248, 113, 113, 0.16);
+}
+
+.vault-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid rgba(52, 211, 153, 0.24);
+  border-radius: 8px;
+  background: rgba(52, 211, 153, 0.06);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+
+.vault-notice svg {
+  width: 18px;
+  height: 18px;
+  color: var(--success);
+  flex: 0 0 auto;
+  margin-top: 0.1rem;
+}
+
+.vault-preview-panel {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.vault-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.8rem 0.95rem;
+  border-bottom: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.vault-preview-header strong {
+  font-size: 0.9rem;
+}
+
+.vault-preview-header span {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.vault-preview-list {
+  display: grid;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.vault-preview-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.75rem 0.95rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.vault-preview-item:last-child {
+  border-bottom: 0;
+}
+
+.vault-preview-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.vault-preview-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.83rem;
+}
+
+.vault-preview-copy span {
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+}
+
+.vault-preview-chip {
+  padding: 0.24rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.vault-empty-state {
+  padding: 1.25rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
 /* Markdown Editor Tool */
 .markdown-tool {
   display: grid;
@@ -2600,6 +2758,9 @@ body.command-open {
   .toolbox-layout {
     grid-template-columns: 1fr;
   }
+  .vault-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .blog-layout {
     grid-template-columns: 1fr;
   }
@@ -2671,6 +2832,19 @@ body.command-open {
   }
   .command-result-type {
     grid-column: 2;
+    justify-self: start;
+  }
+  .vault-stats-grid {
+    grid-template-columns: 1fr;
+  }
+  .vault-action-row .action-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .vault-preview-item {
+    grid-template-columns: 1fr;
+  }
+  .vault-preview-chip {
     justify-self: start;
   }
   main {

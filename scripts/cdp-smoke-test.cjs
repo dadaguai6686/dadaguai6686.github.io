@@ -331,6 +331,113 @@ async function run() {
     tacticsActive: document.querySelector('#premium-tactics')?.classList.contains('active') || false
   }))()`);
 
+  await click('#command-palette-trigger');
+  await waitFor('#command-palette.active');
+  await evaluate(`(() => {
+    const input = document.querySelector('#command-search-input');
+    input.value = '保险库';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await wait(180);
+  const vaultCommandBeforeExecute = await evaluate(`(() => ({
+    open: document.querySelector('#command-palette')?.classList.contains('active') || false,
+    results: document.querySelectorAll('.command-result-item').length,
+    firstTitle: document.querySelector('.command-result-title')?.textContent || '',
+    firstType: document.querySelector('.command-result-type')?.textContent || ''
+  }))()`);
+  await evaluate(`document.querySelector('.command-result-item')?.click()`);
+  await wait(500);
+  const vaultCommandState = await evaluate(`(() => ({
+    closed: !document.querySelector('#command-palette')?.classList.contains('active'),
+    toolboxActive: document.querySelector('#toolbox')?.classList.contains('active') || false,
+    vaultActive: document.querySelector('#tool-vault')?.classList.contains('active') || false,
+    navActive: document.querySelector('.tool-nav-btn[data-tool="vault"]')?.classList.contains('active') || false,
+    debugReady: !!window.__atherixDebug?.vault,
+    horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+  }))()`);
+
+  const vaultExportState = await evaluate(`(async () => {
+    localStorage.setItem('admin_token', 'vault-secret-should-not-export');
+    localStorage.setItem('atherix_reader_progress_vault-smoke', '64');
+    localStorage.setItem('atherix_premium_survivor_best', '1234');
+    window.__atherixDebug?.vault?.summary?.();
+
+    const clicks = [];
+    let blobTextPromise = Promise.resolve('');
+    const originalClick = HTMLAnchorElement.prototype.click;
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+    try {
+      HTMLAnchorElement.prototype.click = function () {
+        clicks.push({ download: this.download || '', href: this.href || '' });
+      };
+      URL.createObjectURL = function (blob) {
+        blobTextPromise = blob.text();
+        return 'blob:atherix-vault-smoke';
+      };
+      URL.revokeObjectURL = function () {};
+      document.querySelector('#vault-export-btn')?.click();
+      await new Promise(resolve => setTimeout(resolve, 160));
+    } finally {
+      HTMLAnchorElement.prototype.click = originalClick;
+      URL.createObjectURL = originalCreateObjectURL;
+      URL.revokeObjectURL = originalRevokeObjectURL;
+    }
+
+    const blobText = await blobTextPromise;
+    const payload = JSON.parse(blobText || '{}');
+    return {
+      clicks,
+      schema: payload.schema || '',
+      keys: Object.keys(payload.storage || {}).length,
+      hasAdminToken: Object.prototype.hasOwnProperty.call(payload.storage || {}, 'admin_token'),
+      readerValue: payload.storage?.['atherix_reader_progress_vault-smoke'] || '',
+      survivorBest: payload.storage?.['atherix_premium_survivor_best'] || '',
+      keyCountText: document.querySelector('#vault-key-count')?.textContent || '',
+      byteText: document.querySelector('#vault-byte-size')?.textContent || '',
+      readerText: document.querySelector('#vault-reader-count')?.textContent || '',
+      arcadeText: document.querySelector('#vault-arcade-count')?.textContent || '',
+      toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || ''
+    };
+  })()`, 5000);
+
+  const vaultImportState = await evaluate(`(async () => {
+    const payload = {
+      schema: 'atherix-vault-v1',
+      version: 1,
+      storage: {
+        theme: 'light',
+        admin_token: 'should-not-import',
+        outside_key: 'should-not-import',
+        'atherix_reader_progress_vault-smoke': '77',
+        'atherix_premium_survivor_best': '4321',
+        'atherix_todos': JSON.stringify([{ text: 'Vault restored task', completed: false }])
+      }
+    };
+    localStorage.setItem('admin_token', 'vault-secret-preserved');
+    localStorage.removeItem('outside_key');
+    localStorage.removeItem('atherix_reader_progress_vault-smoke');
+    const result = window.__atherixDebug.vault.importText(JSON.stringify(payload));
+    await new Promise(resolve => setTimeout(resolve, 260));
+    const state = {
+      imported: result.imported,
+      ignored: result.ignored,
+      progress: localStorage.getItem('atherix_reader_progress_vault-smoke') || '',
+      survivorBest: localStorage.getItem('atherix_premium_survivor_best') || '',
+      tokenAfter: localStorage.getItem('admin_token') || '',
+      outsideKey: localStorage.getItem('outside_key') || '',
+      theme: document.documentElement.getAttribute('data-theme') || '',
+      keyCountText: document.querySelector('#vault-key-count')?.textContent || '',
+      readerText: document.querySelector('#vault-reader-count')?.textContent || '',
+      arcadeText: document.querySelector('#vault-arcade-count')?.textContent || '',
+      listHasProgress: [...document.querySelectorAll('.vault-preview-copy strong')].some(el => el.textContent === 'atherix_reader_progress_vault-smoke'),
+      todoStored: localStorage.getItem('atherix_todos') || '',
+      toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || ''
+    };
+    localStorage.removeItem('admin_token');
+    return state;
+  })()`, 5000);
+
   await click('.nav-item[data-target="blog"]');
   await waitFor('.blog-post-card');
   const blogHubBefore = await evaluate(`(() => {
@@ -899,6 +1006,14 @@ async function run() {
   assert(!adminModalClosedState.open && adminModalClosedState.ariaHidden === 'true' && adminModalClosedState.display === 'none' && adminModalClosedState.focusId === 'admin-login-trigger', `admin modal should close on Escape and restore focus: ${JSON.stringify(adminModalClosedState)}`);
   assert(commandBeforeExecute.open && commandBeforeExecute.results >= 1 && /Rift Tactics/.test(commandBeforeExecute.firstTitle), `command palette should find tactics mode: ${JSON.stringify(commandBeforeExecute)}`);
   assert(commandState.closed && commandState.gameActive && commandState.tacticsActive && /Rift Tactics/.test(commandState.activeTitle), `command palette should execute game navigation: ${JSON.stringify(commandState)}`);
+  assert(vaultCommandBeforeExecute.open && vaultCommandBeforeExecute.results >= 1 && /数据保险库/.test(vaultCommandBeforeExecute.firstTitle), `command palette should find the data vault: ${JSON.stringify(vaultCommandBeforeExecute)}`);
+  assert(vaultCommandState.closed && vaultCommandState.toolboxActive && vaultCommandState.vaultActive && vaultCommandState.navActive && vaultCommandState.debugReady && !vaultCommandState.horizontalOverflow, `data vault command should open the vault panel: ${JSON.stringify(vaultCommandState)}`);
+  assert(vaultExportState.clicks.length === 1 && /atherix-vault-\d{8}-\d{6}\.json/.test(vaultExportState.clicks[0].download), `data vault should trigger a dated JSON export: ${JSON.stringify(vaultExportState)}`);
+  assert(vaultExportState.schema === 'atherix-vault-v1' && vaultExportState.keys >= 2 && !vaultExportState.hasAdminToken && vaultExportState.readerValue === '64' && vaultExportState.survivorBest === '1234', `data vault export should include allowed state without leaking admin token: ${JSON.stringify(vaultExportState)}`);
+  assert(/\d/.test(vaultExportState.keyCountText) && /\d/.test(vaultExportState.readerText) && /\d/.test(vaultExportState.arcadeText), `data vault should refresh summary after export: ${JSON.stringify(vaultExportState)}`);
+  assert(vaultImportState.progress === '77' && vaultImportState.survivorBest === '4321' && vaultImportState.theme === 'light' && vaultImportState.listHasProgress, `data vault import should restore whitelisted state and refresh UI: ${JSON.stringify(vaultImportState)}`);
+  assert(vaultImportState.tokenAfter === 'vault-secret-preserved' && !vaultImportState.outsideKey && vaultImportState.ignored.includes('admin_token') && vaultImportState.ignored.includes('outside_key'), `data vault import should ignore unsafe or unknown keys: ${JSON.stringify(vaultImportState)}`);
+  assert(/Vault restored task/.test(vaultImportState.todoStored), `data vault import should restore local tool state: ${JSON.stringify(vaultImportState)}`);
   assert(blogHubBefore.panel && blogHubBefore.total >= 1 && blogHubBefore.filters >= 3 && blogHubBefore.cards >= 1, `blog reading hub should render stats and filters: ${JSON.stringify(blogHubBefore)}`);
   assert(blogHubBefore.progressCards >= 1 && /42/.test(blogHubBefore.progressText) && !blogHubBefore.horizontalOverflow, `blog reading hub should show resumable progress without overflow: ${JSON.stringify(blogHubBefore)}`);
   assert(blogState.toolbar && blogState.bookmarkPressed, 'blog reader toolbar should render and toggle bookmark state');
@@ -997,6 +1112,10 @@ async function run() {
     adminModalClosedState,
     commandBeforeExecute,
     commandState,
+    vaultCommandBeforeExecute,
+    vaultCommandState,
+    vaultExportState,
+    vaultImportState,
     blogHubBefore,
     blogState,
     readerToolState,

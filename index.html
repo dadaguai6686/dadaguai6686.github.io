@@ -467,6 +467,10 @@
             <i data-lucide="music-4"></i>
             <span>极客合成器琴</span>
           </button>
+          <button class="tool-nav-btn" data-tool="vault">
+            <i data-lucide="database-backup"></i>
+            <span>数据保险库</span>
+          </button>
         </aside>
 
         <!-- Toolbox Right Active Tool Panel -->
@@ -780,6 +784,67 @@
               <div class="piano-tips" style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--text-secondary); background: rgba(139,92,246,0.06); padding: 0.5rem; border-radius: 6px; border: 1px dashed rgba(139,92,246,0.2);">
                 <i data-lucide="info" style="width:14px; height:14px; color: var(--accent); flex-shrink: 0;"></i>
                 <span id="piano-tips-text">物理键盘映射已激活！按住键盘 <strong>A、W、S、E、D、F、T、G、Y、H、U、J、K</strong> 即可快速弹奏对应的琴键。</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tool 8: Local Data Vault -->
+          <div class="tool-panel" id="tool-vault">
+            <div class="tool-header">
+              <h2>Atherix 数据保险库</h2>
+              <p>导出、导入与清点本地站点状态。阅读进度、收藏、工具草稿、待办和街机档案都留在你的浏览器里。</p>
+            </div>
+            <div class="vault-tool">
+              <div class="vault-stats-grid" aria-label="本地状态摘要">
+                <article class="vault-stat-card">
+                  <span>可备份项目</span>
+                  <strong id="vault-key-count">0</strong>
+                  <small>白名单 localStorage 条目</small>
+                </article>
+                <article class="vault-stat-card">
+                  <span>数据体积</span>
+                  <strong id="vault-byte-size">0 KB</strong>
+                  <small>导出 JSON 估算大小</small>
+                </article>
+                <article class="vault-stat-card">
+                  <span>阅读记录</span>
+                  <strong id="vault-reader-count">0</strong>
+                  <small>进度与稍后读收藏</small>
+                </article>
+                <article class="vault-stat-card">
+                  <span>街机档案</span>
+                  <strong id="vault-arcade-count">0</strong>
+                  <small>生涯、奖牌与最佳成绩</small>
+                </article>
+              </div>
+
+              <div class="vault-action-row">
+                <button class="action-btn action-btn-primary" id="vault-export-btn">
+                  <i data-lucide="download"></i> 导出站点存档
+                </button>
+                <button class="action-btn" id="vault-import-trigger">
+                  <i data-lucide="upload"></i> 导入存档
+                </button>
+                <input type="file" id="vault-import-file" accept="application/json,.json" hidden>
+                <button class="action-btn" id="vault-refresh-btn">
+                  <i data-lucide="refresh-cw"></i> 重新扫描
+                </button>
+                <button class="action-btn vault-danger-btn" id="vault-clear-btn">
+                  <i data-lucide="trash-2"></i> 清空本地状态
+                </button>
+              </div>
+
+              <div class="vault-notice">
+                <i data-lucide="shield-check"></i>
+                <span>保险库不会导出管理员登录令牌，也不会上传任何数据；导入时只接受 Atherix 白名单字段。</span>
+              </div>
+
+              <div class="vault-preview-panel">
+                <div class="vault-preview-header">
+                  <strong>本地状态清单</strong>
+                  <span id="vault-last-updated">尚未扫描</span>
+                </div>
+                <div class="vault-preview-list" id="vault-preview-list" aria-live="polite"></div>
               </div>
             </div>
           </div>

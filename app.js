@@ -563,7 +563,8 @@ function init() {
       { id: 'pomodoro', icon: 'timer', title: '番茄工作钟', desc: '专注计时与合成白噪音', keywords: 'pomodoro timer focus 番茄钟' },
       { id: 'codec', icon: 'hash', title: '哈希与编解码', desc: 'Base64、URL、MD5、SHA-256 处理', keywords: 'hash base64 url md5 sha256 codec' },
       { id: 'devkit', icon: 'square-terminal', title: '开发速查工具', desc: '时间戳、UUID、JWT 解码', keywords: 'devkit uuid jwt timestamp 开发' },
-      { id: 'piano', icon: 'music-4', title: '极客合成器琴', desc: 'Web Audio 合成器与节奏挑战', keywords: 'piano synth rhythm audio 音乐 节奏' }
+      { id: 'piano', icon: 'music-4', title: '极客合成器琴', desc: 'Web Audio 合成器与节奏挑战', keywords: 'piano synth rhythm audio 音乐 节奏' },
+      { id: 'vault', icon: 'database-backup', title: '数据保险库', desc: '导出、导入、恢复阅读进度与街机档案', keywords: 'vault backup restore export import data 备份 导出 导入 恢复 存档 保险库' }
     ].map(item => ({ ...item, type: '工具', action: () => activateToolPanel(item.id) }));
     const gameItems = [
       { id: 'runner', icon: 'rocket', title: 'Cyber Astro-Runner', desc: '8 关主线街机远征', keywords: 'runner platform main astro 跑酷 主线', action: () => navigateTo('game') },
@@ -2472,8 +2473,304 @@ function init() {
           panel.classList.remove('active');
         }
       });
+      if (toolId === 'vault') refreshVaultSummary();
     });
   });
+
+  // TOOL 0: Local Data Vault (export/import trusted client-side state)
+  const vaultExportBtn = document.getElementById('vault-export-btn');
+  const vaultImportTrigger = document.getElementById('vault-import-trigger');
+  const vaultImportFile = document.getElementById('vault-import-file');
+  const vaultRefreshBtn = document.getElementById('vault-refresh-btn');
+  const vaultClearBtn = document.getElementById('vault-clear-btn');
+  const vaultKeyCount = document.getElementById('vault-key-count');
+  const vaultByteSize = document.getElementById('vault-byte-size');
+  const vaultReaderCount = document.getElementById('vault-reader-count');
+  const vaultArcadeCount = document.getElementById('vault-arcade-count');
+  const vaultPreviewList = document.getElementById('vault-preview-list');
+  const vaultLastUpdated = document.getElementById('vault-last-updated');
+  const vaultSchema = 'atherix-vault-v1';
+  const vaultMaxValueBytes = 1024 * 1024;
+  const vaultAllowedExactKeys = new Set([
+    'theme',
+    'scratchpad_data',
+    'fallback_posts',
+    'fallback_projects',
+    'fallback_comments',
+    'atherix_reader_bookmarks',
+    'atherix_reader_focus_mode',
+    'atherix_todos',
+    'atherix_premium_arcade_career_v2',
+    'atherix_premium_survivor_best',
+    'atherix_premium_boss_best',
+    'atherix_premium_drift_best',
+    'atherix_premium_heist_best',
+    'atherix_premium_chain_best',
+    'atherix_premium_tactics_best'
+  ]);
+  const vaultAllowedPrefixes = [
+    'atherix_reader_progress_',
+    'atherix_astro_runner_best_lvl_'
+  ];
+
+  function vaultTextBytes(value) {
+    return new Blob([String(value ?? '')]).size;
+  }
+
+  function formatVaultBytes(bytes) {
+    const size = Math.max(0, Number(bytes) || 0);
+    if (size < 1024) return `${size} B`;
+    if (size < 1024 * 1024) return `${(size / 1024).toFixed(size < 10240 ? 1 : 0)} KB`;
+    return `${(size / 1024 / 1024).toFixed(2)} MB`;
+  }
+
+  function isVaultAllowedKey(key) {
+    const name = String(key || '');
+    if (!name || name === 'admin_token') return false;
+    return vaultAllowedExactKeys.has(name) || vaultAllowedPrefixes.some(prefix => name.startsWith(prefix));
+  }
+
+  function vaultCategory(key) {
+    if (key === 'theme') return '偏好设置';
+    if (key.startsWith('atherix_reader_')) return '阅读状态';
+    if (key.startsWith('atherix_premium_') || key.startsWith('atherix_astro_runner_')) return '街机档案';
+    if (key === 'scratchpad_data' || key === 'atherix_todos') return '工具草稿';
+    if (key.startsWith('fallback_')) return '离线缓存';
+    return '站点状态';
+  }
+
+  function normalizeVaultImportValue(value) {
+    if (typeof value === 'string') return value;
+    if (value === null || typeof value === 'undefined') return '';
+    if (typeof value === 'object') return JSON.stringify(value);
+    return String(value);
+  }
+
+  function getVaultEntries() {
+    const entries = [];
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (!isVaultAllowedKey(key)) continue;
+      const value = localStorage.getItem(key);
+      if (value !== null) entries.push([key, value]);
+    }
+    return entries.sort((a, b) => a[0].localeCompare(b[0], 'zh-Hans-CN'));
+  }
+
+  function buildVaultPayload(entries = getVaultEntries()) {
+    const storage = Object.fromEntries(entries);
+    const payload = {
+      schema: vaultSchema,
+      version: 1,
+      app: 'Atherix Digital Space',
+      exportedAt: new Date().toISOString(),
+      origin: window.location.origin,
+      storage
+    };
+    payload.summary = getVaultSummary(entries);
+    return payload;
+  }
+
+  function getVaultSummary(entries = getVaultEntries()) {
+    const json = JSON.stringify(Object.fromEntries(entries));
+    const readerKeys = entries.filter(([key]) => key.startsWith('atherix_reader_progress_')).length;
+    let bookmarks = 0;
+    try {
+      bookmarks = JSON.parse(localStorage.getItem('atherix_reader_bookmarks') || '[]').length || 0;
+    } catch {
+      bookmarks = 0;
+    }
+    const arcadeKeys = entries.filter(([key]) => key.startsWith('atherix_premium_') || key.startsWith('atherix_astro_runner_')).length;
+    return {
+      keys: entries.length,
+      bytes: vaultTextBytes(json),
+      reader: readerKeys + bookmarks,
+      arcade: arcadeKeys
+    };
+  }
+
+  function renderVaultPreview(entries = getVaultEntries()) {
+    if (!vaultPreviewList) return;
+    vaultPreviewList.innerHTML = '';
+    if (!entries.length) {
+      const empty = document.createElement('div');
+      empty.className = 'vault-empty-state';
+      empty.textContent = '暂无可备份的本地状态。阅读文章、添加待办或游玩街机后这里会自动出现记录。';
+      vaultPreviewList.appendChild(empty);
+      return;
+    }
+
+    entries.forEach(([key, value]) => {
+      const item = document.createElement('article');
+      item.className = 'vault-preview-item';
+
+      const copy = document.createElement('div');
+      copy.className = 'vault-preview-copy';
+      const label = document.createElement('strong');
+      label.textContent = key;
+      const meta = document.createElement('span');
+      meta.textContent = `${vaultCategory(key)} · ${formatVaultBytes(vaultTextBytes(value))}`;
+      copy.append(label, meta);
+
+      const chip = document.createElement('span');
+      chip.className = 'vault-preview-chip';
+      chip.textContent = vaultCategory(key);
+
+      item.append(copy, chip);
+      vaultPreviewList.appendChild(item);
+    });
+  }
+
+  function refreshVaultSummary() {
+    const entries = getVaultEntries();
+    const summary = getVaultSummary(entries);
+    if (vaultKeyCount) vaultKeyCount.textContent = String(summary.keys);
+    if (vaultByteSize) vaultByteSize.textContent = formatVaultBytes(summary.bytes);
+    if (vaultReaderCount) vaultReaderCount.textContent = String(summary.reader);
+    if (vaultArcadeCount) vaultArcadeCount.textContent = String(summary.arcade);
+    if (vaultLastUpdated) {
+      vaultLastUpdated.textContent = `最后扫描 ${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`;
+    }
+    renderVaultPreview(entries);
+    return summary;
+  }
+
+  function refreshImportedViews(importedKeys = []) {
+    const imported = new Set(importedKeys);
+    if (imported.has('theme')) initTheme();
+    if ([...imported].some(key => key.startsWith('atherix_reader_') || key === 'fallback_posts')) {
+      blogPosts = getLocalArray('fallback_posts', blogPosts.length ? blogPosts : defaultMockPosts);
+      renderBlogList();
+      renderPinnedBlogs();
+      renderTagCloud();
+    }
+    if (imported.has('fallback_projects')) {
+      projectsData = getLocalArray('fallback_projects', projectsData.length ? projectsData : defaultMockProjects);
+      renderProjectsList();
+    }
+    if (imported.has('fallback_comments')) loadComments();
+    if (imported.has('atherix_todos')) {
+      todos = getLocalArray('atherix_todos', []);
+      renderTodos();
+    }
+    document.dispatchEvent(new CustomEvent('atherix:vault-imported', { detail: { keys: importedKeys } }));
+    refreshVaultSummary();
+  }
+
+  function exportVault() {
+    const payload = buildVaultPayload();
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+    const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/, '').replace('T', '-');
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `atherix-vault-${stamp}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    showToast(`已导出 ${payload.summary.keys} 项本地状态`, 'success');
+    refreshVaultSummary();
+    return payload;
+  }
+
+  function importVaultPayload(payload) {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw new Error('存档格式无效');
+    }
+    if (payload.schema !== vaultSchema || !payload.storage || typeof payload.storage !== 'object' || Array.isArray(payload.storage)) {
+      throw new Error('不是 Atherix 数据保险库存档');
+    }
+
+    const importedKeys = [];
+    const ignoredKeys = [];
+    Object.entries(payload.storage).forEach(([key, value]) => {
+      if (!isVaultAllowedKey(key)) {
+        ignoredKeys.push(key);
+        return;
+      }
+      const normalized = normalizeVaultImportValue(value);
+      if (vaultTextBytes(normalized) > vaultMaxValueBytes) {
+        ignoredKeys.push(key);
+        return;
+      }
+      localStorage.setItem(key, normalized);
+      importedKeys.push(key);
+    });
+
+    refreshImportedViews(importedKeys);
+    showToast(`已导入 ${importedKeys.length} 项状态${ignoredKeys.length ? `，忽略 ${ignoredKeys.length} 项未知字段` : ''}`, 'success');
+    return { imported: importedKeys, ignored: ignoredKeys };
+  }
+
+  function importVaultText(text) {
+    const payload = JSON.parse(String(text || ''));
+    return importVaultPayload(payload);
+  }
+
+  if (vaultExportBtn) {
+    vaultExportBtn.addEventListener('click', exportVault);
+  }
+  if (vaultImportTrigger && vaultImportFile) {
+    vaultImportTrigger.addEventListener('click', () => vaultImportFile.click());
+  }
+  if (vaultImportFile) {
+    vaultImportFile.addEventListener('change', () => {
+      const file = vaultImportFile.files?.[0];
+      if (!file) return;
+      if (!/\.json$/i.test(file.name) && !/json/i.test(file.type || '')) {
+        showToast('请选择 JSON 格式的 Atherix 存档', 'warning');
+        vaultImportFile.value = '';
+        return;
+      }
+      const reader = new FileReader();
+      reader.addEventListener('load', () => {
+        try {
+          importVaultText(reader.result);
+        } catch (err) {
+          showToast(`导入失败: ${err.message}`, 'error');
+        } finally {
+          vaultImportFile.value = '';
+        }
+      });
+      reader.addEventListener('error', () => {
+        showToast('读取存档文件失败', 'error');
+        vaultImportFile.value = '';
+      });
+      reader.readAsText(file);
+    });
+  }
+  if (vaultRefreshBtn) {
+    vaultRefreshBtn.addEventListener('click', () => {
+      refreshVaultSummary();
+      showToast('已重新扫描本地状态', 'info');
+    });
+  }
+  if (vaultClearBtn) {
+    vaultClearBtn.addEventListener('click', () => {
+      const entries = getVaultEntries();
+      if (!entries.length) {
+        showToast('没有可清理的本地状态', 'info');
+        return;
+      }
+      if (!window.confirm(`确认清空 ${entries.length} 项 Atherix 本地状态？此操作不会影响服务器数据。`)) return;
+      entries.forEach(([key]) => localStorage.removeItem(key));
+      refreshImportedViews(entries.map(([key]) => key));
+      showToast('本地状态已清空', 'warning');
+    });
+  }
+  refreshVaultSummary();
+
+  if (['127.0.0.1', 'localhost'].includes(window.location.hostname)) {
+    window.__atherixDebug = {
+      ...(window.__atherixDebug || {}),
+      vault: {
+        exportPayload: () => buildVaultPayload(),
+        importText: importVaultText,
+        summary: () => refreshVaultSummary(),
+        allowed: key => isVaultAllowedKey(key)
+      }
+    };
+  }
 
   // TOOL 1: JSON Formatter (Advanced Syntax Tree View)
   const jsonInput = document.getElementById('json-input');
@@ -4842,6 +5139,11 @@ function init() {
         claimed: ensureContractsForToday().claimed.includes(contract.id)
       }))
     };
+    document.addEventListener('atherix:vault-imported', () => {
+      career = loadCareer();
+      ensureContractsForToday();
+      updateCareerPanel();
+    });
     updateCareerPanel();
 
     const careerDialog = document.getElementById('premium-career-dialog');
