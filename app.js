@@ -3655,6 +3655,7 @@ function init() {
             </div>
             <div class="mini-actions">
               <button type="button" class="action-btn action-btn-primary" id="premium-boss-start">开战 / 重开</button>
+              <button type="button" class="action-btn" id="premium-boss-pause">暂停</button>
             </div>
           </div>
           <canvas class="mini-canvas mini-canvas-wide" id="premium-boss-canvas" width="560" height="340"></canvas>
@@ -3937,8 +3938,14 @@ function init() {
       });
     }
 
+    function pauseRealtimePremiumGamesExcept(name) {
+      if (name !== 'survivor' && survivor.running && !survivor.paused) toggleSurvivorPause(true);
+      if (name !== 'boss' && bossMode.running && !bossMode.paused) toggleBossPause(true);
+    }
+
     function switchPremiumGame(name) {
       premiumActive = name;
+      pauseRealtimePremiumGamesExcept(name);
       clearPremiumKeys();
       library.querySelectorAll('[data-premium-game]').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.premiumGame === name);
@@ -4383,12 +4390,23 @@ function init() {
       ctx.fillText(`NOVA ${p.novaCooldown > 0 ? Math.ceil(p.novaCooldown / 1000) : 'READY'}`, 14, 40);
     }
 
+    function updateSurvivorPauseButton() {
+      const btn = document.getElementById('premium-survivor-pause');
+      if (btn) btn.textContent = survivor.paused ? '继续' : '暂停';
+    }
+
+    function toggleSurvivorPause(force) {
+      if (!survivor.running) return false;
+      survivor.paused = typeof force === 'boolean' ? force : !survivor.paused;
+      clearPremiumKeys();
+      updateSurvivorPauseButton();
+      focusStage();
+      return true;
+    }
+
     document.getElementById('premium-survivor-start').addEventListener('click', startSurvivor);
     document.getElementById('premium-survivor-pause').addEventListener('click', () => {
-      if (!survivor.running) return;
-      survivor.paused = !survivor.paused;
-      document.getElementById('premium-survivor-pause').textContent = survivor.paused ? '继续' : '暂停';
-      focusStage();
+      toggleSurvivorPause();
     });
     setSurvivorUi();
     drawSurvivor();
@@ -4399,6 +4417,7 @@ function init() {
       ctx: document.getElementById('premium-boss-canvas')?.getContext('2d'),
       bestKey: 'atherix_premium_boss_best',
       running: false,
+      paused: false,
       raf: null,
       last: 0,
       t: 0,
@@ -4423,6 +4442,7 @@ function init() {
 
     function startBoss() {
       bossMode.running = true;
+      bossMode.paused = false;
       bossMode.last = performance.now();
       bossMode.t = 0;
       bossMode.score = 0;
@@ -4434,6 +4454,7 @@ function init() {
       bossMode.shotTimer = 0;
       bossMode.patternTimer = 0;
       setBossUi();
+      updateBossPauseButton();
       cancelAnimationFrame(bossMode.raf);
       focusStage();
       bossMode.raf = requestAnimationFrame(runBoss);
@@ -4441,13 +4462,30 @@ function init() {
 
     function finishBoss(text) {
       bossMode.running = false;
+      bossMode.paused = false;
       cancelAnimationFrame(bossMode.raf);
       localStorage.setItem(bossMode.bestKey, String(Math.max(Number(localStorage.getItem(bossMode.bestKey) || 0), Math.floor(bossMode.score))));
       if (text === 'PRISM BROKEN') unlockAchievement('boss_clear');
       recordPremiumResult('boss', bossMode.score, { phase: bossMode.boss.phase, graze: bossMode.player.graze });
       setBossUi();
+      updateBossPauseButton();
       drawBoss();
       overlay(bossMode.ctx, bossMode.canvas.width, bossMode.canvas.height, text, `Score ${Math.floor(bossMode.score)} · 点击开战再来一局`);
+    }
+
+    function updateBossPauseButton() {
+      const btn = document.getElementById('premium-boss-pause');
+      if (btn) btn.textContent = bossMode.paused ? '继续' : '暂停';
+    }
+
+    function toggleBossPause(force) {
+      if (!bossMode.running) return false;
+      bossMode.paused = typeof force === 'boolean' ? force : !bossMode.paused;
+      bossMode.last = performance.now();
+      clearPremiumKeys();
+      updateBossPauseButton();
+      focusStage();
+      return true;
     }
 
     function bossSpark(x, y, color, count = 8) {
@@ -4491,6 +4529,12 @@ function init() {
       if (!bossMode.running) return;
       const dt = Math.min(34, now - bossMode.last);
       bossMode.last = now;
+      if (bossMode.paused) {
+        drawBoss();
+        overlay(bossMode.ctx, bossMode.canvas.width, bossMode.canvas.height, 'PAUSED', 'P / Esc 或按钮继续 Boss 战');
+        bossMode.raf = requestAnimationFrame(runBoss);
+        return;
+      }
       const p = bossMode.player;
       const b = bossMode.boss;
       bossMode.t += dt;
@@ -4615,7 +4659,11 @@ function init() {
     }
 
     document.getElementById('premium-boss-start').addEventListener('click', startBoss);
+    document.getElementById('premium-boss-pause').addEventListener('click', () => {
+      toggleBossPause();
+    });
     setBossUi();
+    updateBossPauseButton();
     drawBoss();
     overlay(bossMode.ctx, bossMode.canvas.width, bossMode.canvas.height, '棱镜核心等待挑战', 'A/D 移动 · Space 冲刺无敌 · 自动射击');
 
@@ -5301,11 +5349,32 @@ function init() {
     });
     newTactics();
 
+    if (['127.0.0.1', 'localhost'].includes(window.location.hostname)) {
+      window.__atherixDebug = {
+        ...(window.__atherixDebug || {}),
+        premium: {
+          active: () => premiumActive,
+          survivorRunning: () => survivor.running,
+          survivorPaused: () => survivor.paused,
+          bossRunning: () => bossMode.running,
+          bossPaused: () => bossMode.paused,
+          bossPhase: () => bossMode.boss.phase,
+          heistSteps: () => heist.steps,
+          tacticsTurn: () => tactics.turn
+        }
+      };
+    }
+
     window.addEventListener('keydown', (e) => {
       if (!isGameSectionActive() || isEditableTarget(e.target) || !document.activeElement?.closest?.('#premium-game-stage')) return;
-      const codes = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space'];
+      const codes = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyP', 'Escape'];
       if (!codes.includes(e.code)) return;
       e.preventDefault();
+      if (e.code === 'KeyP' || e.code === 'Escape') {
+        if (premiumActive === 'survivor') toggleSurvivorPause();
+        if (premiumActive === 'boss') toggleBossPause();
+        return;
+      }
       if (e.code === 'ArrowUp' || e.code === 'KeyW') premiumKeys.up = true;
       if (e.code === 'ArrowDown' || e.code === 'KeyS') premiumKeys.down = true;
       if (e.code === 'ArrowLeft' || e.code === 'KeyA') premiumKeys.left = true;
@@ -6458,6 +6527,7 @@ function init() {
 
   if (['127.0.0.1', 'localhost'].includes(window.location.hostname)) {
     window.__atherixDebug = {
+      ...(window.__atherixDebug || {}),
       get player() {
         return { ...player };
       },

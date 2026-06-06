@@ -483,6 +483,39 @@ async function run() {
       hp: document.querySelector('#premium-boss-hp')?.textContent
     };
   })()`);
+  await key('keyDown', 'p', 'KeyP');
+  await key('keyUp', 'p', 'KeyP');
+  await wait(180);
+  const bossPauseState = await evaluate(`(() => ({
+    running: !!window.__atherixDebug?.premium?.bossRunning?.(),
+    paused: !!window.__atherixDebug?.premium?.bossPaused?.(),
+    pauseButton: document.querySelector('#premium-boss-pause')?.textContent || '',
+    hpBefore: document.querySelector('#premium-boss-hp')?.textContent || '',
+    phaseBefore: document.querySelector('#premium-boss-phase')?.textContent || '',
+    scoreBefore: document.querySelector('#premium-boss-score')?.textContent || '',
+    dashBefore: document.querySelector('#premium-boss-dash')?.textContent || ''
+  }))()`);
+  await key('keyDown', 'ArrowUp', 'ArrowUp');
+  await key('keyDown', ' ', 'Space');
+  await wait(320);
+  await key('keyUp', 'ArrowUp', 'ArrowUp');
+  await key('keyUp', ' ', 'Space');
+  const bossPauseFreezeState = await evaluate(`(() => ({
+    running: !!window.__atherixDebug?.premium?.bossRunning?.(),
+    paused: !!window.__atherixDebug?.premium?.bossPaused?.(),
+    hpAfter: document.querySelector('#premium-boss-hp')?.textContent || '',
+    phaseAfter: document.querySelector('#premium-boss-phase')?.textContent || '',
+    scoreAfter: document.querySelector('#premium-boss-score')?.textContent || '',
+    dashAfter: document.querySelector('#premium-boss-dash')?.textContent || ''
+  }))()`);
+  await key('keyDown', 'Escape', 'Escape');
+  await key('keyUp', 'Escape', 'Escape');
+  await wait(180);
+  const bossResumeState = await evaluate(`(() => ({
+    running: !!window.__atherixDebug?.premium?.bossRunning?.(),
+    paused: !!window.__atherixDebug?.premium?.bossPaused?.(),
+    pauseButton: document.querySelector('#premium-boss-pause')?.textContent || ''
+  }))()`);
 
   await click('[data-premium-game="heist"]');
   await wait(300);
@@ -615,6 +648,16 @@ async function run() {
   assert(arcadeInitial.touchControls >= 5, 'premium touch controls should be available');
   assert(survivorState.nonBlank && survivorState.threat, 'survivor canvas should render active state');
   assert(bossState.nonBlank && bossState.dash, 'boss canvas should render active state');
+  assert(bossPauseState.running && bossPauseState.paused && bossPauseState.pauseButton === '继续', `boss mode should enter pause with keyboard: ${JSON.stringify(bossPauseState)}`);
+  assert(
+    bossPauseFreezeState.paused &&
+    bossPauseFreezeState.hpAfter === bossPauseState.hpBefore &&
+    bossPauseFreezeState.phaseAfter === bossPauseState.phaseBefore &&
+    bossPauseFreezeState.scoreAfter === bossPauseState.scoreBefore &&
+    bossPauseFreezeState.dashAfter === bossPauseState.dashBefore,
+    `boss mode should freeze while paused: ${JSON.stringify({ bossPauseState, bossPauseFreezeState })}`
+  );
+  assert(bossResumeState.running && !bossResumeState.paused && bossResumeState.pauseButton === '暂停', `boss mode should resume from keyboard pause: ${JSON.stringify(bossResumeState)}`);
   assert(heistState.nonBlank && Number(heistState.steps) >= 1, 'heist should accept keyboard movement');
   assert(heistState.achievementBadges >= 1, 'heist cloak should unlock at least one achievement badge');
   assert(chainState.cells === 49 && Number(chainState.specials) >= 1, 'chain board should render with special cells');
@@ -643,6 +686,9 @@ async function run() {
     arcadeInitial,
     survivorState,
     bossState,
+    bossPauseState,
+    bossPauseFreezeState,
+    bossResumeState,
     heistState,
     chainState,
     tacticsState,
