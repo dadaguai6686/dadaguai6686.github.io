@@ -142,6 +142,7 @@ type RunHistoryEntry = {
   elapsed: number;
   ratingId: RunRating["id"];
   ratingName: string;
+  routeSeed: number;
   routeName: string;
   score: number;
   status: RunEndDetail["status"];
@@ -776,8 +777,32 @@ function createRunHistoryCard(entry: RunHistoryEntry): HTMLElement {
   const detail = document.createElement("em");
   detail.textContent = `${entry.ratingName} · 合约 ${entry.contractsCompleted}/5 · ${getContractStatusLabel(entry.contractStatus)} · ${formatDuration(entry.elapsed)}`;
 
-  card.append(grade, title, score, detail);
+  const replayButton = document.createElement("button");
+  replayButton.type = "button";
+  replayButton.textContent = "重跑路线";
+  replayButton.addEventListener("click", () => replayRunHistory(entry));
+
+  card.append(grade, title, score, detail, replayButton);
   return card;
+}
+
+function replayRunHistory(entry: RunHistoryEntry): void {
+  void audioBus.unlock();
+  audioBus.play("start");
+  selectedDifficulty = entry.difficulty;
+  saveData.selectedDifficulty = selectedDifficulty;
+  saveSave(saveData);
+  updateDifficultyUi();
+  disarmResetSave();
+  overlay.classList.remove("show");
+  runRecap.hidden = true;
+  achievementUnlocks.hidden = true;
+  upgradeChoices.hidden = true;
+  window.dispatchEvent(
+    new CustomEvent("game:start", {
+      detail: { difficulty: entry.difficulty, routeSeed: entry.routeSeed }
+    })
+  );
 }
 
 function renderAchievementUnlocks(newlyUnlocked: AchievementId[]): void {
@@ -935,6 +960,7 @@ function normalizeRunHistoryEntry(value: unknown): RunHistoryEntry | undefined {
   const status = isRunHistoryStatus(entry.status) ? entry.status : "lost";
   const contractStatus = isContractStatus(entry.contractStatus) ? entry.contractStatus : "failed";
   const ratingId = isRatingId(entry.ratingId) ? entry.ratingId : "C";
+  const routeSeed = normalizeHistoryRouteSeed(entry.routeSeed, entry.routeName);
   return {
     id: typeof entry.id === "string" ? entry.id : `legacy-${Date.now()}`,
     bestCombo: finiteNumber(entry.bestCombo, 1),
@@ -944,6 +970,7 @@ function normalizeRunHistoryEntry(value: unknown): RunHistoryEntry | undefined {
     elapsed: Math.max(0, finiteNumber(entry.elapsed, 0)),
     ratingId,
     ratingName: typeof entry.ratingName === "string" ? entry.ratingName : "信号残缺",
+    routeSeed,
     routeName: typeof entry.routeName === "string" ? entry.routeName.slice(0, 24) : "星桥-0000",
     score: Math.max(0, Math.round(finiteNumber(entry.score, 0))),
     status,
@@ -963,6 +990,7 @@ function createRunHistoryEntry(detail: RunEndDetail): RunHistoryEntry {
     ratingId: detail.rating.id,
     ratingName: detail.rating.name,
     routeName: detail.routePlan.name,
+    routeSeed: detail.routePlan.seed,
     score: detail.score,
     status: detail.status,
     timestamp: Date.now(),
@@ -992,6 +1020,14 @@ function isContractStatus(value: unknown): value is ContractSnapshot["status"] {
 
 function isRatingId(value: unknown): value is RunRating["id"] {
   return value === "S" || value === "A" || value === "B" || value === "C";
+}
+
+function normalizeHistoryRouteSeed(seed: unknown, routeName: unknown): number {
+  const numericSeed = Number(seed);
+  if (Number.isFinite(numericSeed) && numericSeed > 0) {
+    return numericSeed;
+  }
+  return parseRouteSeed(typeof routeName === "string" ? routeName : undefined) ?? 1;
 }
 
 type SoundKind =
