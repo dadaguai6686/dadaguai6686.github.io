@@ -1084,11 +1084,27 @@ async function run() {
 
   await click('[data-premium-game="chain"]');
   await wait(250);
-  const chainState = await evaluate(`(() => ({
-    cells: document.querySelectorAll('#premium-chain-board .chain-cell').length,
-    specials: document.querySelectorAll('.chain-bomb,.chain-prism').length,
-    target: document.querySelector('#premium-chain-target')?.textContent
-  }))()`);
+  const chainState = await evaluate(`(() => {
+    const debugBefore = window.__atherixDebug?.premium?.chainState?.() || {};
+    const forced = window.__atherixDebug?.premium?.forceChainCombo?.() || {};
+    const debugAfter = window.__atherixDebug?.premium?.chainState?.() || {};
+    return {
+      cells: document.querySelectorAll('#premium-chain-board .chain-cell').length,
+      specials: document.querySelectorAll('.chain-bomb,.chain-prism,.chain-wild').length,
+      wilds: document.querySelectorAll('.chain-wild').length,
+      hinted: document.querySelectorAll('#premium-chain-board .chain-hint').length,
+      previewed: document.querySelectorAll('#premium-chain-board .chain-preview').length,
+      target: document.querySelector('#premium-chain-target')?.textContent,
+      mult: document.querySelector('#premium-chain-mult')?.textContent,
+      phase: document.querySelector('#premium-chain-phase')?.textContent,
+      goal: document.querySelector('#premium-chain-goal')?.textContent,
+      hint: document.querySelector('#premium-chain-hint')?.textContent,
+      feedback: document.querySelector('#premium-chain-board')?.dataset.feedback || '',
+      debugBefore,
+      forced,
+      debugAfter
+    };
+  })()`);
 
   await click('[data-premium-game="tactics"]');
   await wait(250);
@@ -1265,7 +1281,11 @@ async function run() {
   assert(careerDialogState.medalCards >= 7 && careerDialogState.achievements >= 16 && careerDialogState.unlocked >= 1, `career dialog should show medals and achievements: ${JSON.stringify(careerDialogState)}`);
   assert(/RANK/.test(careerDialogState.summary) && careerDialogState.daily.length > 10 && careerDialogState.visibleInViewport && !careerDialogState.horizontalOverflow, `career dialog should show readable summary and daily challenge: ${JSON.stringify(careerDialogState)}`);
   assert(!careerDialogClosed.open && careerDialogClosed.ariaHidden === 'true', `career dialog should close cleanly: ${JSON.stringify(careerDialogClosed)}`);
-  assert(chainState.cells === 49 && Number(chainState.specials) >= 1, 'chain board should render with special cells');
+  assert(chainState.cells === 49 && Number(chainState.specials) >= 1 && Number(chainState.wilds) >= 1, `chain board should render enhanced special cells: ${JSON.stringify(chainState)}`);
+  assert(chainState.debugBefore.bestMove?.cleared >= 3 && chainState.hinted === 1 && chainState.previewed >= 2, `chain should expose a highlighted best move and preview: ${JSON.stringify(chainState)}`);
+  assert(chainState.forced.before.bestMove?.cleared >= 12 && chainState.forced.after.combo >= 12 && chainState.forced.after.score > chainState.forced.before.score, `chain debug combo should clear a large deterministic cluster: ${JSON.stringify(chainState.forced)}`);
+  assert(chainState.forced.after.phaseIndex >= 1 && chainState.forced.after.lastSpecial && chainState.forced.after.mult > 1, `chain combo should advance phase, create a core, and raise multiplier: ${JSON.stringify(chainState.forced.after)}`);
+  assert(/^x\d+(\.\d)?$/.test(chainState.mult) && chainState.debugAfter.hud.mult === chainState.mult && chainState.debugAfter.hud.phase === chainState.phase && chainState.debugAfter.hud.hint === chainState.hint, `chain HUD should stay in sync with debug state: ${JSON.stringify(chainState)}`);
   assert(tacticsForecastStart.dangerCount > 0 && tacticsForecastStart.intents?.length >= 4 && tacticsForecastStart.blastTargets?.length >= 1 && /目标/.test(tacticsForecastStart.action), `tactics mode should forecast enemy intent and available blast targets: ${JSON.stringify(tacticsForecastStart)}`);
   assert(tacticsForecastAfterAction.incoming > 0 && tacticsForecastAfterAction.dangerCount > 0 && /火力锁定/.test(tacticsForecastAfterAction.intelHud) && /架盾/.test(tacticsForecastAfterAction.action), `tactics mode should update forecast after movement and action: ${JSON.stringify(tacticsForecastAfterAction)}`);
   assert(tacticsState.nonBlank && Number(tacticsState.ap) < 3 && tacticsState.action, `tactics mode should render and accept actions: ${JSON.stringify(tacticsState)}`);

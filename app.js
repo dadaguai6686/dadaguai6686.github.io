@@ -4492,12 +4492,16 @@ function init() {
         <div class="mini-game-panel" id="premium-chain">
           <div class="mini-game-copy">
             <h3>Alchemy Chain</h3>
-            <p>点击相邻同色能量团触发连锁爆破。大连锁会生成炸弹与棱镜，30 步内完成目标分数。</p>
+            <p>点击相邻同色能量团触发连锁爆破。完成阶段炼成、制造特殊核心并维持倍率，在限定步数内冲破目标分数。</p>
             <div class="mini-stats">
               <span>步数 <strong id="premium-chain-moves">30</strong></span>
               <span>分数 <strong id="premium-chain-score">0</strong></span>
               <span>最佳 <strong id="premium-chain-best">0</strong></span>
               <span>连锁 <strong id="premium-chain-combo">0</strong></span>
+              <span>倍率 <strong id="premium-chain-mult">x1.0</strong></span>
+              <span>阶段 <strong id="premium-chain-phase">I</strong></span>
+              <span>炼成 <strong id="premium-chain-goal">连锁 7+</strong></span>
+              <span>提示 <strong id="premium-chain-hint">SCAN</strong></span>
               <span>目标 <strong id="premium-chain-target">9000</strong></span>
             </div>
             <div class="mini-actions">
@@ -7379,16 +7383,56 @@ function init() {
       score: 0,
       moves: 30,
       combo: 0,
+      streak: 0,
+      mult: 1,
       target: 9000,
+      phaseIndex: 0,
+      bestMove: null,
+      feedback: '寻找 3+ 同色能量团',
+      lastGain: 0,
+      lastClear: 0,
+      lastSpecial: '',
+      specialsTriggered: 0,
       finished: false,
       recorded: false
     };
+    const chainPhaseDefs = [
+      { label: 'I', goal: '连锁 7+', reward: 420, check: result => result.cleared >= 7 },
+      { label: 'II', goal: '制造核心', reward: 520, check: result => !!result.specialCreated },
+      { label: 'III', goal: '触发核心', reward: 640, check: result => result.specialsTriggered >= 1 },
+      { label: 'IV', goal: '爆破 14+', reward: 860, check: result => result.cleared >= 14 }
+    ];
+    const chainSpecialLabels = { bomb: 'BOMB', prism: 'PRISM', wild: 'FLUX' };
 
     function randomChainCell() {
       const roll = Math.random();
-      if (roll < 0.035) return 'bomb';
-      if (roll < 0.06) return 'prism';
+      if (roll < 0.012) return 'bomb';
+      if (roll < 0.02) return 'wild';
+      if (roll < 0.026) return 'prism';
       return chain.colors[Math.floor(Math.random() * chain.colors.length)];
+    }
+
+    function isChainSpecial(value) {
+      return value === 'bomb' || value === 'prism' || value === 'wild';
+    }
+
+    function chainKey(r, c) {
+      return `${r},${c}`;
+    }
+
+    function chainInBounds(r, c) {
+      return r >= 0 && c >= 0 && r < 7 && c < 7;
+    }
+
+    function chainPhaseDef() {
+      return chainPhaseDefs[chain.phaseIndex] || null;
+    }
+
+    function chainCreatedSpecial(size) {
+      if (size >= 13) return 'prism';
+      if (size >= 9) return 'bomb';
+      if (size >= 6) return 'wild';
+      return '';
     }
 
     function newChain() {
@@ -7397,7 +7441,16 @@ function init() {
       chain.score = 0;
       chain.moves = Math.max(20, 30 + Number(bonuses.chainMoves || 0) + Number(tuning.chainMoves || 0));
       chain.combo = 0;
+      chain.streak = 0;
+      chain.mult = 1;
       chain.target = Math.round(9000 * Number(tuning.chainTarget || 1));
+      chain.phaseIndex = 0;
+      chain.bestMove = null;
+      chain.feedback = '寻找 3+ 同色能量团';
+      chain.lastGain = 0;
+      chain.lastClear = 0;
+      chain.lastSpecial = '';
+      chain.specialsTriggered = 0;
       chain.finished = false;
       chain.recorded = false;
       chain.grid = Array.from({ length: 7 }, () => Array.from({ length: 7 }, randomChainCell));
@@ -7405,6 +7458,14 @@ function init() {
       chain.grid[2][3] = 'cyan';
       chain.grid[2][4] = 'cyan';
       chain.grid[3][3] = 'bomb';
+      chain.grid[4][1] = 'wild';
+      chain.grid[0][1] = 'gold';
+      chain.grid[1][1] = 'violet';
+      chain.grid[2][1] = 'pink';
+      chain.grid[3][1] = 'green';
+      chain.grid[4] = ['violet', 'wild', 'pink', 'gold', 'green', 'cyan', 'violet'];
+      chain.grid[5][1] = 'gold';
+      chain.grid[6][1] = 'pink';
       focusStage();
       renderChain();
     }
@@ -7420,21 +7481,104 @@ function init() {
       return seen;
     }
 
+    function dominantChainColor() {
+      const counts = chain.colors.map(color => ({
+        color,
+        count: chain.grid.reduce((sum, row) => sum + row.filter(value => value === color).length, 0)
+      }));
+      counts.sort((a, b) => b.count - a.count);
+      return counts[0]?.color || pick(chain.colors);
+    }
+
     function collectChainBlast(r, c, kind) {
       const cells = new Set();
       if (kind === 'bomb') {
         for (let y = r - 1; y <= r + 1; y++) {
           for (let x = c - 1; x <= c + 1; x++) {
-            if (y >= 0 && x >= 0 && y < 7 && x < 7) cells.add(`${y},${x}`);
+            if (chainInBounds(y, x)) cells.add(chainKey(y, x));
           }
         }
+      } else if (kind === 'wild') {
+        for (let i = 0; i < 7; i++) {
+          cells.add(chainKey(r, i));
+          cells.add(chainKey(i, c));
+        }
       } else {
-        const color = pick(chain.colors);
+        const color = dominantChainColor();
         chain.grid.forEach((row, rowIndex) => row.forEach((value, colIndex) => {
-          if (value === color) cells.add(`${rowIndex},${colIndex}`);
+          if (value === color) cells.add(chainKey(rowIndex, colIndex));
         }));
       }
       return [...cells];
+    }
+
+    function collectChainCascade(startCells) {
+      const cells = new Set(startCells);
+      const queue = [...startCells];
+      const processed = new Set();
+      let specialsTriggered = 0;
+      while (queue.length) {
+        const key = queue.shift();
+        if (processed.has(key)) continue;
+        processed.add(key);
+        const [r, c] = key.split(',').map(Number);
+        const value = chain.grid[r]?.[c];
+        if (!isChainSpecial(value)) continue;
+        specialsTriggered++;
+        collectChainBlast(r, c, value).forEach(nextKey => {
+          if (!cells.has(nextKey)) {
+            cells.add(nextKey);
+            queue.push(nextKey);
+          }
+        });
+      }
+      return {
+        cells: [...cells].filter(key => {
+          const [r, c] = key.split(',').map(Number);
+          return chainInBounds(r, c) && !!chain.grid[r]?.[c];
+        }),
+        specialsTriggered
+      };
+    }
+
+    function evaluateChainMove(r, c) {
+      const value = chain.grid[r]?.[c];
+      if (!value) return { valid: false, cells: [], cleared: 0, gain: 0, value: '' };
+      const special = isChainSpecial(value);
+      const source = special ? [chainKey(r, c)] : [...floodChain(r, c, value)];
+      if (!special && source.length < 3) {
+        return { valid: false, cells: source, cleared: source.length, gain: 0, value };
+      }
+      const cascade = collectChainCascade(source);
+      const cleared = cascade.cells.length;
+      const specialCreated = special ? '' : chainCreatedSpecial(cleared);
+      const base = cleared * cleared * (special ? 20 : 12) + cascade.specialsTriggered * 160 + (specialCreated ? 220 : 0);
+      return {
+        valid: cleared > 0,
+        r,
+        c,
+        value,
+        cells: cascade.cells,
+        cleared,
+        sourceSize: source.length,
+        gain: Math.round(base * chain.mult),
+        specialCreated,
+        specialsTriggered: cascade.specialsTriggered
+      };
+    }
+
+    function bestChainMove() {
+      const moves = [];
+      chain.grid.forEach((row, r) => row.forEach((_, c) => {
+        const move = evaluateChainMove(r, c);
+        if (move.valid) moves.push(move);
+      }));
+      moves.sort((a, b) =>
+        b.gain - a.gain ||
+        b.cleared - a.cleared ||
+        Number(isChainSpecial(b.value)) - Number(isChainSpecial(a.value))
+      );
+      return moves[0] || null;
     }
 
     function settleChain() {
@@ -7454,53 +7598,168 @@ function init() {
         if (!chain.recorded) {
           chain.recorded = true;
           if (chain.score >= chain.target) unlockAchievement('chain_clear');
-          recordPremiumResult('chain', chain.score, { movesLeft: chain.moves, combo: chain.combo });
+          recordPremiumResult('chain', chain.score, { movesLeft: chain.moves, combo: chain.combo, mult: chain.mult, phase: chain.phaseIndex });
         }
       }
     }
 
     function popChain(r, c) {
       if (chain.moves <= 0 || chain.finished) return;
-      const value = chain.grid[r][c];
-      const group = value === 'bomb' || value === 'prism' ? collectChainBlast(r, c, value) : [...floodChain(r, c, value)];
-      if (group.length < 3) {
+      const result = evaluateChainMove(r, c);
+      if (!result.valid) {
         chain.combo = 0;
+        chain.streak = 0;
+        chain.mult = 1;
+        chain.lastGain = 0;
+        chain.lastClear = 0;
+        chain.lastSpecial = '';
+        chain.specialsTriggered = 0;
+        chain.feedback = '需要 3+ 相邻能量';
         renderChain();
         return;
       }
       chain.moves--;
-      chain.combo = group.length;
-      if (group.length >= 9) unlockAchievement('chain_combo_9');
-      chain.score += group.length * group.length * (value === 'bomb' || value === 'prism' ? 18 : 12);
-      group.forEach(item => {
+      chain.combo = result.cleared;
+      chain.streak++;
+      chain.mult = clamp(1 + chain.streak * 0.18 + Math.max(0, result.cleared - 6) * 0.025, 1, 3.5);
+      chain.lastGain = result.gain;
+      chain.lastClear = result.cleared;
+      chain.lastSpecial = result.specialCreated || '';
+      chain.specialsTriggered = result.specialsTriggered;
+      if (result.cleared >= 9) unlockAchievement('chain_combo_9');
+      chain.score += result.gain;
+      result.cells.forEach(item => {
         const [row, col] = item.split(',').map(Number);
         chain.grid[row][col] = null;
       });
-      if (group.length >= 7) {
-        const [row, col] = group[0].split(',').map(Number);
-        chain.grid[row][col] = group.length >= 11 ? 'prism' : 'bomb';
+      if (result.specialCreated) {
+        const [row, col] = result.cells[0].split(',').map(Number);
+        chain.grid[row][col] = result.specialCreated;
+      }
+      const phase = chainPhaseDef();
+      if (phase?.check(result)) {
+        chain.score += phase.reward;
+        chain.feedback = `${phase.goal} 完成 +${phase.reward}`;
+        chain.phaseIndex++;
+      } else {
+        const label = isChainSpecial(result.value) ? chainSpecialLabels[result.value] : result.value.toUpperCase();
+        chain.feedback = `${label} 清除 ${result.cleared} · +${result.gain}`;
       }
       settleChain();
       finishChainIfNeeded();
       renderChain();
     }
 
+    function chainDebugState() {
+      const best = bestChainMove();
+      const phase = chainPhaseDef();
+      const specials = chain.grid.flat().filter(isChainSpecial);
+      return {
+        score: chain.score,
+        moves: chain.moves,
+        combo: chain.combo,
+        streak: chain.streak,
+        mult: Number(chain.mult.toFixed(2)),
+        target: chain.target,
+        phase: phase?.label || 'MASTER',
+        goal: phase?.goal || '目标分数',
+        phaseIndex: chain.phaseIndex,
+        feedback: chain.feedback,
+        lastGain: chain.lastGain,
+        lastClear: chain.lastClear,
+        lastSpecial: chain.lastSpecial,
+        specialsTriggered: chain.specialsTriggered,
+        finished: chain.finished,
+        bestMove: best ? {
+          r: best.r,
+          c: best.c,
+          value: best.value,
+          cleared: best.cleared,
+          gain: best.gain,
+          specialCreated: best.specialCreated,
+          specialsTriggered: best.specialsTriggered,
+          cells: best.cells.slice(0, 24)
+        } : null,
+        specials: {
+          total: specials.length,
+          bomb: specials.filter(value => value === 'bomb').length,
+          prism: specials.filter(value => value === 'prism').length,
+          wild: specials.filter(value => value === 'wild').length
+        },
+        hud: {
+          mult: document.getElementById('premium-chain-mult')?.textContent || '',
+          phase: document.getElementById('premium-chain-phase')?.textContent || '',
+          goal: document.getElementById('premium-chain-goal')?.textContent || '',
+          hint: document.getElementById('premium-chain-hint')?.textContent || ''
+        },
+        highlighted: chain.board?.querySelectorAll('.chain-hint,.chain-preview').length || 0
+      };
+    }
+
+    function seedChainComboBoard() {
+      chain.score = 0;
+      chain.moves = Math.max(22, chain.moves || 30);
+      chain.combo = 0;
+      chain.streak = 0;
+      chain.mult = 1;
+      chain.phaseIndex = 0;
+      chain.feedback = '实验矩阵已装载';
+      chain.lastGain = 0;
+      chain.lastClear = 0;
+      chain.lastSpecial = '';
+      chain.specialsTriggered = 0;
+      chain.finished = false;
+      chain.recorded = false;
+      chain.grid = [
+        ['cyan', 'cyan', 'cyan', 'cyan', 'gold', 'green', 'pink'],
+        ['cyan', 'cyan', 'cyan', 'cyan', 'gold', 'green', 'pink'],
+        ['cyan', 'cyan', 'cyan', 'cyan', 'bomb', 'green', 'pink'],
+        ['violet', 'violet', 'wild', 'gold', 'gold', 'prism', 'green'],
+        ['violet', 'pink', 'pink', 'gold', 'green', 'green', 'green'],
+        ['gold', 'pink', 'violet', 'violet', 'violet', 'cyan', 'cyan'],
+        ['gold', 'gold', 'pink', 'green', 'cyan', 'cyan', 'cyan']
+      ];
+      renderChain();
+      return chainDebugState();
+    }
+
+    function forceChainCombo() {
+      const before = seedChainComboBoard();
+      popChain(0, 0);
+      return { before, after: chainDebugState() };
+    }
+
     function renderChain() {
+      chain.bestMove = bestChainMove();
+      const preview = new Set(chain.bestMove?.cells || []);
+      const phase = chainPhaseDef();
       chain.board.innerHTML = '';
       chain.grid.forEach((row, r) => row.forEach((color, c) => {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = `chain-cell chain-${color}`;
-        btn.setAttribute('aria-label', color === 'bomb' ? '爆裂核心' : color === 'prism' ? '棱镜核心' : `${color} 能量`);
+        const key = chainKey(r, c);
+        const isHint = chain.bestMove?.r === r && chain.bestMove?.c === c;
+        btn.className = `chain-cell chain-${color}${isHint ? ' chain-hint' : ''}${preview.has(key) && !isHint ? ' chain-preview' : ''}`;
+        btn.dataset.chainRow = String(r);
+        btn.dataset.chainCol = String(c);
+        btn.dataset.chainValue = color;
+        if (isHint) btn.dataset.chainGain = String(chain.bestMove?.gain || 0);
+        btn.textContent = chainSpecialLabels[color] ? chainSpecialLabels[color][0] : '';
+        btn.setAttribute('aria-label', color === 'bomb' ? '爆裂核心' : color === 'prism' ? '棱镜核心' : color === 'wild' ? '通量核心' : `${color} 能量`);
         btn.addEventListener('click', () => popChain(r, c));
         chain.board.appendChild(btn);
       }));
       document.getElementById('premium-chain-moves').textContent = chain.moves;
       document.getElementById('premium-chain-score').textContent = chain.score;
       document.getElementById('premium-chain-best').textContent = localStorage.getItem(chain.bestKey) || '0';
-      document.getElementById('premium-chain-combo').textContent = chain.combo;
+      document.getElementById('premium-chain-combo').textContent = chain.combo ? `${chain.combo}` : '0';
+      document.getElementById('premium-chain-mult').textContent = `x${chain.mult.toFixed(1)}`;
+      document.getElementById('premium-chain-phase').textContent = phase?.label || 'MASTER';
+      document.getElementById('premium-chain-goal').textContent = phase?.goal || '冲刺目标';
+      document.getElementById('premium-chain-hint').textContent = chain.bestMove ? `${chain.bestMove.cleared}格 +${chain.bestMove.gain}` : 'RESHUFFLE';
       document.getElementById('premium-chain-target').textContent = chain.score >= chain.target ? 'CLEAR' : chain.target;
       chain.board.classList.toggle('chain-cleared', chain.finished && chain.score >= chain.target);
+      chain.board.dataset.feedback = chain.feedback;
     }
 
     document.getElementById('premium-chain-new').addEventListener('click', newChain);
@@ -8133,6 +8392,8 @@ function init() {
           heistSteps: () => heist.steps,
           heistIntel: () => heistDebugState(),
           stepHeistRoute: () => stepHeistRoute(),
+          chainState: () => chainDebugState(),
+          forceChainCombo: () => forceChainCombo(),
           tacticsTurn: () => tactics.turn,
           tacticsForecast: () => {
             const forecast = tacticsForecast();
