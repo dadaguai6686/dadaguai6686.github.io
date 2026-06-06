@@ -49,6 +49,11 @@ const overlay = document.querySelector<HTMLDivElement>("#overlay")!;
 const objectiveTitle = document.querySelector<HTMLElement>("#objective-title")!;
 const objectiveDetail = document.querySelector<HTMLElement>("#objective-detail")!;
 const startButton = document.querySelector<HTMLButtonElement>("#start-button")!;
+const sessionTools = document.querySelector<HTMLDivElement>("#session-tools")!;
+const copyRouteButton = document.querySelector<HTMLButtonElement>("#copy-route-button")!;
+const restartRouteButton = document.querySelector<HTMLButtonElement>("#restart-route-button")!;
+const resetSaveButton = document.querySelector<HTMLButtonElement>("#reset-save-button")!;
+const sessionFeedback = document.querySelector<HTMLElement>("#session-feedback")!;
 const chargeFill = document.querySelector<HTMLElement>("#charge-fill")!;
 const hullFill = document.querySelector<HTMLElement>("#hull-fill")!;
 const chargeValue = document.querySelector<HTMLElement>("#charge-value")!;
@@ -87,6 +92,7 @@ const pilotTipDetail = document.querySelector<HTMLElement>("#pilot-tip-detail")!
 const missionText = document.querySelector<HTMLElement>("#mission-text")!;
 const upgradeChoices = document.querySelector<HTMLDivElement>("#upgrade-choices")!;
 const helpButton = document.querySelector<HTMLButtonElement>("#help-button")!;
+const mobilePauseButton = document.querySelector<HTMLButtonElement>("#mobile-pause-button")!;
 const resumeButton = document.querySelector<HTMLButtonElement>("#resume-button")!;
 const difficultyPicker = document.querySelector<HTMLDivElement>("#difficulty-picker")!;
 const difficultyButtons = document.querySelectorAll<HTMLButtonElement>("[data-difficulty]");
@@ -151,9 +157,12 @@ let latestScore = 0;
 let latestWave = 1;
 let latestBestCombo = 1;
 let latestDifficulty: DifficultyId = "standard";
+let latestRoutePlan: RoutePlan | undefined;
 let saveData = loadSave();
 let selectedDifficulty: DifficultyId = saveData.selectedDifficulty;
 let audioBus: AudioBus;
+let resetSaveArmed = false;
+let resetSaveTimer: number | undefined;
 
 window.__lumenVirtualInput = {
   move: { x: 0, y: 0 },
@@ -169,10 +178,16 @@ startButton.addEventListener("click", () => {
 resumeButton.addEventListener("click", () => {
   audioBus.play("button");
   overlay.classList.remove("show");
+  disarmResetSave();
   window.dispatchEvent(new CustomEvent("game:resume"));
 });
 
 helpButton.addEventListener("click", () => {
+  audioBus.play("button");
+  showHelpOverlay();
+});
+
+mobilePauseButton.addEventListener("click", () => {
   audioBus.play("button");
   showHelpOverlay();
 });
@@ -198,10 +213,48 @@ audioToggle.addEventListener("click", () => {
   }
 });
 
+copyRouteButton.addEventListener("click", () => {
+  audioBus.play("button");
+  void copyRouteLink();
+});
+
+restartRouteButton.addEventListener("click", () => {
+  if (!latestRoutePlan) return;
+  audioBus.play("start");
+  disarmResetSave();
+  overlay.classList.remove("show");
+  runRecap.hidden = true;
+  achievementUnlocks.hidden = true;
+  upgradeChoices.hidden = true;
+  window.dispatchEvent(
+    new CustomEvent("game:start", {
+      detail: { difficulty: latestDifficulty, routeSeed: latestRoutePlan.seed }
+    })
+  );
+});
+
+resetSaveButton.addEventListener("click", () => {
+  audioBus.play("button");
+  if (!resetSaveArmed) {
+    armResetSave();
+    return;
+  }
+  saveData = createDefaultSave();
+  selectedDifficulty = saveData.selectedDifficulty;
+  saveSave(saveData);
+  updateAudioUi();
+  updateDifficultyUi();
+  updateRecordUi();
+  updateAchievementUi();
+  disarmResetSave();
+  setSessionFeedback("本地存档已清空。");
+});
+
 function launchRun(upgradeId?: UpgradeId): void {
   void audioBus.unlock();
   audioBus.play("start");
   overlay.classList.remove("show");
+  disarmResetSave();
   runRecap.hidden = true;
   achievementUnlocks.hidden = true;
   upgradeChoices.hidden = true;
@@ -245,6 +298,7 @@ window.addEventListener("game:hud", (event) => {
   latestWave = detail.wave;
   latestBestCombo = detail.bestCombo;
   latestDifficulty = detail.difficulty;
+  latestRoutePlan = detail.routePlan;
   chargeFill.style.width = `${ratio(detail.charge, detail.maxCharge)}%`;
   hullFill.style.width = `${ratio(detail.hull, detail.maxHull)}%`;
   chargeMeter.dataset.alert = detail.resourceAlerts.charge;
@@ -293,6 +347,7 @@ window.addEventListener("game:ended", (event) => {
   latestWave = detail.wave;
   latestBestCombo = detail.bestCombo;
   latestDifficulty = detail.difficulty;
+  latestRoutePlan = detail.routePlan;
   const newlyUnlocked = persistRunResult(detail);
   overlay.classList.add("show");
   howToPlay.hidden = true;
@@ -306,6 +361,7 @@ window.addEventListener("game:ended", (event) => {
     detail.status === "completed" ? "五波完成" : detail.status === "won" ? "光网稳定" : "信号中断";
   overlayCopy.textContent = detail.message;
   renderRunRecap(detail, newlyUnlocked);
+  updateSessionTools();
   startButton.textContent =
     detail.status === "completed" ? "再次救援" : detail.status === "won" ? "不升级，进入下一波" : "重新救援";
   upgradeChoices.hidden = detail.status !== "won";
@@ -394,6 +450,7 @@ function showHelpOverlay(): void {
   upgradeChoices.hidden = true;
   startButton.hidden = latestStatus === "paused";
   resumeButton.hidden = latestStatus !== "paused";
+  updateSessionTools();
   if (latestStatus !== "paused") {
     startButton.textContent = "开始救援";
   }
@@ -405,6 +462,7 @@ window.addEventListener("keydown", (event) => {
   }
   if (event.key === "Escape" && latestStatus === "paused") {
     overlay.classList.remove("show");
+    disarmResetSave();
     window.dispatchEvent(new CustomEvent("game:resume"));
   }
 });
@@ -497,6 +555,71 @@ function setShellStatus(status: GameStatus): void {
 function setDifficultyPickerVisible(visible: boolean): void {
   difficultyPicker.hidden = !visible;
   difficultyDetail.hidden = !visible;
+}
+
+function updateSessionTools(message?: string): void {
+  const overlayVisible = overlay.classList.contains("show");
+  const inUpgradeChoice = latestStatus === "won";
+  sessionTools.hidden = !overlayVisible;
+  copyRouteButton.hidden = !latestRoutePlan;
+  restartRouteButton.hidden = !(latestStatus === "paused" && latestRoutePlan);
+  resetSaveButton.hidden = inUpgradeChoice;
+  if (message) {
+    setSessionFeedback(message);
+    return;
+  }
+  if (latestRoutePlan) {
+    setSessionFeedback(`救援代号 ${latestRoutePlan.name}`);
+  } else {
+    setSessionFeedback("本地设置");
+  }
+}
+
+function buildRouteLink(): string | undefined {
+  if (!latestRoutePlan) return undefined;
+  const url = new URL(window.location.origin + window.location.pathname);
+  url.searchParams.set("route", latestRoutePlan.name);
+  return url.toString();
+}
+
+async function copyRouteLink(): Promise<void> {
+  const link = buildRouteLink();
+  if (!link) {
+    setSessionFeedback("还没有可复制的救援代号。");
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(link);
+    setSessionFeedback("路线链接已复制。");
+  } catch {
+    setSessionFeedback(link);
+  }
+}
+
+function armResetSave(): void {
+  resetSaveArmed = true;
+  resetSaveButton.textContent = "再次点击确认清空";
+  setSessionFeedback("将清空本地成绩、成就和设置。");
+  if (resetSaveTimer) {
+    window.clearTimeout(resetSaveTimer);
+  }
+  resetSaveTimer = window.setTimeout(() => {
+    disarmResetSave();
+    updateSessionTools();
+  }, 4200);
+}
+
+function disarmResetSave(): void {
+  resetSaveArmed = false;
+  resetSaveButton.textContent = "清空本地存档";
+  if (resetSaveTimer) {
+    window.clearTimeout(resetSaveTimer);
+    resetSaveTimer = undefined;
+  }
+}
+
+function setSessionFeedback(message: string): void {
+  sessionFeedback.textContent = message;
 }
 
 function persistRunResult(detail: RunEndDetail): AchievementId[] {
@@ -672,8 +795,8 @@ function getRequestedRouteSeed(): number | undefined {
   return parseRouteSeed(params.get("route") ?? params.get("seed"));
 }
 
-function loadSave(): SaveData {
-  const fallback: SaveData = {
+function createDefaultSave(): SaveData {
+  return {
     achievements: [],
     audioEnabled: true,
     bestCombo: 1,
@@ -684,6 +807,10 @@ function loadSave(): SaveData {
     selectedDifficulty: "standard",
     totalContracts: 0
   };
+}
+
+function loadSave(): SaveData {
+  const fallback = createDefaultSave();
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return fallback;
@@ -793,3 +920,4 @@ updateDifficultyUi();
 updateAudioUi();
 updateRecordUi();
 updateAchievementUi();
+updateSessionTools();

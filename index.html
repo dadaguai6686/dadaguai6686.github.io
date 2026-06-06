@@ -114,6 +114,12 @@
           </div>
           <button id="start-button" type="button">开始救援</button>
           <button id="resume-button" type="button" hidden>继续游戏</button>
+          <div id="session-tools" hidden>
+            <button id="copy-route-button" type="button" hidden>复制路线链接</button>
+            <button id="restart-route-button" type="button" hidden>重开当前代号</button>
+            <button id="reset-save-button" type="button">清空本地存档</button>
+            <span id="session-feedback">本地设置</span>
+          </div>
           <div id="upgrade-choices" hidden></div>
           <div id="how-to-play">
             <article>
@@ -152,6 +158,7 @@
           <button type="button" data-touch-action="pulse">脉冲</button>
         </div>
       </div>
+      <button id="mobile-pause-button" type="button" aria-label="暂停说明">暂停</button>
     </main>
     <script type="module">
       const isPagesBuild = location.hostname.endsWith("github.io");
