@@ -119,6 +119,29 @@ button {
   font-size: 12px;
 }
 
+#record-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+#record-strip span {
+  padding: 7px 8px;
+  border: 1px solid rgba(255, 226, 122, 0.12);
+  border-radius: 6px;
+  color: #aebfd0;
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 11px;
+}
+
+#record-strip b {
+  display: block;
+  margin-top: 2px;
+  color: #fff0a8;
+  font-size: 13px;
+}
+
 .mark {
   width: 28px;
   height: 28px;
@@ -287,6 +310,66 @@ h1 {
   color: #c8d9e8;
   font-size: clamp(15px, 2.4vw, 18px);
   line-height: 1.55;
+}
+
+#menu-options {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 auto 12px;
+}
+
+#difficulty-picker {
+  display: inline-grid;
+  grid-template-columns: repeat(3, minmax(64px, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(126, 239, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+#difficulty-picker[hidden],
+#difficulty-detail[hidden] {
+  display: none;
+}
+
+#difficulty-picker button,
+#audio-toggle {
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #d8e8f4;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+#difficulty-picker button.active {
+  color: #061018;
+  background: linear-gradient(90deg, var(--ui-cyan), var(--ui-gold));
+  box-shadow: 0 6px 18px rgba(103, 244, 255, 0.18);
+}
+
+#difficulty-picker button:focus-visible,
+#audio-toggle:focus-visible {
+  outline: none;
+  border-color: rgba(255, 226, 122, 0.68);
+}
+
+#audio-toggle {
+  padding: 7px 11px;
+  border-color: rgba(255, 226, 122, 0.16);
+  background: rgba(255, 226, 122, 0.08);
+}
+
+#difficulty-detail {
+  margin-bottom: 18px;
+  color: #ffefb4;
+  font-size: 12px;
 }
 
 #how-to-play {
@@ -503,6 +586,11 @@ h1 {
     gap: 5px;
   }
 
+  #record-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-bottom: 8px;
+  }
+
   .stats div {
     padding: 7px 5px;
   }
@@ -530,6 +618,10 @@ h1 {
 
   #how-to-play {
     grid-template-columns: 1fr;
+  }
+
+  #difficulty-picker {
+    width: 100%;
   }
 }
 

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  CAMPAIGN_WAVES,
   createInitialState,
   getUpgradeChoices,
   pauseRun,
@@ -19,6 +20,8 @@ const idle: InputState = {
 
 let state = restartRun(createInitialState());
 assert.equal(state.status, "playing");
+assert.equal(state.difficulty, "standard");
+assert.equal(state.campaignWaves, CAMPAIGN_WAVES);
 assert.equal(state.relays.length, 4);
 assert.equal(state.gate.open, false);
 
@@ -62,9 +65,27 @@ const upgraded = restartRun(state, "engine");
 assert.equal(upgraded.wave, 2, "winning and restarting should advance the wave");
 assert.equal(upgraded.upgrades.engine, 1, "chosen upgrade should be installed");
 
+const training = updateSimulation(restartRun(createInitialState(), undefined, { difficulty: "training" }), idle, 1);
+const hardcore = updateSimulation(restartRun(createInitialState(), undefined, { difficulty: "hardcore" }), idle, 1);
+assert.ok(training.player.charge > hardcore.player.charge, "training should drain less charge than hardcore");
+
 const paused = pauseRun(upgraded);
 assert.equal(paused.status, "paused", "pause should freeze an active run");
 assert.equal(resumeRun(paused).status, "playing", "resume should return to active play");
+
+let finalWave = restartRun(createInitialState());
+finalWave.wave = CAMPAIGN_WAVES;
+finalWave.relays.forEach((relay) => {
+  relay.repaired = true;
+  relay.progress = 1;
+});
+finalWave = movePlayerTo(finalWave, finalWave.gate.position.x, finalWave.gate.position.y);
+finalWave = updateSimulation(finalWave, idle, 0.016);
+assert.equal(finalWave.status, "completed", "clearing the final wave should complete the campaign");
+finalWave.upgrades.engine = 2;
+const newCampaign = restartRun(finalWave);
+assert.equal(newCampaign.wave, 1, "restarting after completion should begin a new campaign");
+assert.equal(newCampaign.upgrades.engine, 0, "a new campaign should not keep old upgrades");
 
 let drained = restartRun(createInitialState());
 drained.player.charge = 0.01;

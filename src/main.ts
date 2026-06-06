@@ -1,6 +1,13 @@
 import Phaser from "phaser";
 import { GameScene } from "./game/GameScene";
-import { UPGRADE_CATALOG, type Upgrade, type UpgradeId } from "./game/simulation";
+import {
+  DIFFICULTY_SETTINGS,
+  UPGRADE_CATALOG,
+  type DifficultyId,
+  type GameStatus,
+  type Upgrade,
+  type UpgradeId
+} from "./game/simulation";
 import "./styles.css";
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -22,6 +29,8 @@ const config: Phaser.Types.Core.GameConfig = {
 new Phaser.Game(config);
 
 const overlay = document.querySelector<HTMLDivElement>("#overlay")!;
+const objectiveTitle = document.querySelector<HTMLElement>("#objective-title")!;
+const objectiveDetail = document.querySelector<HTMLElement>("#objective-detail")!;
 const startButton = document.querySelector<HTMLButtonElement>("#start-button")!;
 const chargeFill = document.querySelector<HTMLElement>("#charge-fill")!;
 const hullFill = document.querySelector<HTMLElement>("#hull-fill")!;
@@ -33,12 +42,18 @@ const waveValue = document.querySelector<HTMLElement>("#wave-value")!;
 const scoreValue = document.querySelector<HTMLElement>("#score-value")!;
 const comboValue = document.querySelector<HTMLElement>("#combo-value")!;
 const bestComboValue = document.querySelector<HTMLElement>("#best-combo-value")!;
+const recordScore = document.querySelector<HTMLElement>("#record-score")!;
+const recordWave = document.querySelector<HTMLElement>("#record-wave")!;
 const boostPill = document.querySelector<HTMLElement>("#boost-pill")!;
 const pulsePill = document.querySelector<HTMLElement>("#pulse-pill")!;
 const missionText = document.querySelector<HTMLElement>("#mission-text")!;
 const upgradeChoices = document.querySelector<HTMLDivElement>("#upgrade-choices")!;
 const helpButton = document.querySelector<HTMLButtonElement>("#help-button")!;
 const resumeButton = document.querySelector<HTMLButtonElement>("#resume-button")!;
+const difficultyPicker = document.querySelector<HTMLDivElement>("#difficulty-picker")!;
+const difficultyButtons = document.querySelectorAll<HTMLButtonElement>("[data-difficulty]");
+const difficultyDetail = document.querySelector<HTMLElement>("#difficulty-detail")!;
+const audioToggle = document.querySelector<HTMLButtonElement>("#audio-toggle")!;
 const overlayEyebrow = overlay.querySelector<HTMLElement>(".eyebrow")!;
 const overlayTitle = overlay.querySelector<HTMLElement>("h1")!;
 const overlayCopy = overlay.querySelector<HTMLElement>("p")!;
@@ -46,8 +61,26 @@ const howToPlay = document.querySelector<HTMLDivElement>("#how-to-play")!;
 const touchStick = document.querySelector<HTMLDivElement>("#touch-stick")!;
 const touchStickKnob = document.querySelector<HTMLSpanElement>("#touch-stick span")!;
 const touchButtons = document.querySelectorAll<HTMLButtonElement>("[data-touch-action]");
+const STORAGE_KEY = "lumen-drift-save-v1";
+
+type SaveData = {
+  audioEnabled: boolean;
+  bestCombo: number;
+  bestScore: number;
+  bestWave: number;
+  clears: number;
+  selectedDifficulty: DifficultyId;
+};
+
 let latestUpgradeChoices: Upgrade[] = [];
-let latestStatus: "menu" | "playing" | "paused" | "won" | "lost" = "menu";
+let latestStatus: GameStatus = "menu";
+let latestScore = 0;
+let latestWave = 1;
+let latestBestCombo = 1;
+let latestDifficulty: DifficultyId = "standard";
+let saveData = loadSave();
+let selectedDifficulty: DifficultyId = saveData.selectedDifficulty;
+let audioBus: AudioBus;
 
 window.__lumenVirtualInput = {
   move: { x: 0, y: 0 },
@@ -61,18 +94,44 @@ startButton.addEventListener("click", () => {
 });
 
 resumeButton.addEventListener("click", () => {
+  audioBus.play("button");
   overlay.classList.remove("show");
   window.dispatchEvent(new CustomEvent("game:resume"));
 });
 
 helpButton.addEventListener("click", () => {
+  audioBus.play("button");
   showHelpOverlay();
 });
 
+difficultyButtons.forEach((button) => {
+  const difficulty = button.dataset.difficulty as DifficultyId;
+  button.addEventListener("click", () => {
+    selectedDifficulty = difficulty;
+    saveData.selectedDifficulty = selectedDifficulty;
+    saveSave(saveData);
+    updateDifficultyUi();
+    audioBus.play("button");
+  });
+});
+
+audioToggle.addEventListener("click", () => {
+  saveData.audioEnabled = !saveData.audioEnabled;
+  saveSave(saveData);
+  updateAudioUi();
+  if (saveData.audioEnabled) {
+    void audioBus.unlock();
+    audioBus.play("button");
+  }
+});
+
 function launchRun(upgradeId?: UpgradeId): void {
+  void audioBus.unlock();
+  audioBus.play("start");
   overlay.classList.remove("show");
   upgradeChoices.hidden = true;
-  window.dispatchEvent(new CustomEvent("game:start", { detail: { upgradeId } }));
+  const runDifficulty = latestStatus === "won" ? latestDifficulty : selectedDifficulty;
+  window.dispatchEvent(new CustomEvent("game:start", { detail: { difficulty: runDifficulty, upgradeId } }));
 }
 
 window.addEventListener("game:hud", (event) => {
@@ -90,11 +149,17 @@ window.addEventListener("game:hud", (event) => {
     boostReady: boolean;
     pulseReady: boolean;
     message: string;
-    status: "menu" | "playing" | "paused" | "won" | "lost";
+    difficulty: DifficultyId;
+    campaignWaves: number;
+    status: GameStatus;
     upgradeChoices: Upgrade[];
   };
 
   latestStatus = detail.status;
+  latestScore = detail.score;
+  latestWave = detail.wave;
+  latestBestCombo = detail.bestCombo;
+  latestDifficulty = detail.difficulty;
   chargeFill.style.width = `${ratio(detail.charge, detail.maxCharge)}%`;
   hullFill.style.width = `${ratio(detail.hull, detail.maxHull)}%`;
   chargeValue.textContent = String(Math.ceil(detail.charge));
@@ -110,24 +175,47 @@ window.addEventListener("game:hud", (event) => {
   boostPill.classList.toggle("cooling", !detail.boostReady);
   pulsePill.classList.toggle("cooling", !detail.pulseReady);
   missionText.textContent = detail.message;
+  objectiveTitle.textContent = `目标：第 ${detail.wave}/${detail.campaignWaves} 波，修复 ${detail.relays} 座信标`;
+  objectiveDetail.textContent = `${DIFFICULTY_SETTINGS[detail.difficulty].name}模式：收集流明补电，避开风暴和虚空碎片。`;
   latestUpgradeChoices = detail.upgradeChoices;
 });
 
 window.addEventListener("game:ended", (event) => {
-  const detail = (event as CustomEvent).detail as { status: "won" | "lost"; message: string };
+  const detail = (event as CustomEvent).detail as {
+    bestCombo: number;
+    difficulty: DifficultyId;
+    message: string;
+    score: number;
+    status: "won" | "completed" | "lost";
+    wave: number;
+  };
   latestStatus = detail.status;
+  latestScore = detail.score;
+  latestWave = detail.wave;
+  latestBestCombo = detail.bestCombo;
+  latestDifficulty = detail.difficulty;
+  persistRunResult(detail.status);
   overlay.classList.add("show");
   howToPlay.hidden = detail.status === "won";
+  setDifficultyPickerVisible(detail.status !== "won");
   resumeButton.hidden = true;
   startButton.hidden = false;
-  overlayEyebrow.textContent = detail.status === "won" ? "救援成功" : "救援失败";
-  overlayTitle.textContent = detail.status === "won" ? "光网稳定" : "信号中断";
+  overlayEyebrow.textContent =
+    detail.status === "completed" ? "全域稳定" : detail.status === "won" ? "救援成功" : "救援失败";
+  overlayTitle.textContent =
+    detail.status === "completed" ? "五波完成" : detail.status === "won" ? "光网稳定" : "信号中断";
   overlayCopy.textContent = detail.message;
-  startButton.textContent = detail.status === "won" ? "不升级，进入下一波" : "重新救援";
+  startButton.textContent =
+    detail.status === "completed" ? "再次救援" : detail.status === "won" ? "不升级，进入下一波" : "重新救援";
   upgradeChoices.hidden = detail.status !== "won";
   if (detail.status === "won") {
     renderUpgradeChoices();
   }
+});
+
+window.addEventListener("game:feedback", (event) => {
+  const detail = (event as CustomEvent).detail as { kind: SoundKind };
+  audioBus.play(detail.kind);
 });
 
 function renderUpgradeChoices(): void {
@@ -150,6 +238,7 @@ function showHelpOverlay(): void {
     latestStatus = "paused";
   }
   overlay.classList.add("show");
+  setDifficultyPickerVisible(latestStatus === "menu" || latestStatus === "lost" || latestStatus === "completed");
   overlayEyebrow.textContent = "玩法说明";
   overlayTitle.textContent = "维修、连锁、撤离";
   overlayCopy.textContent =
@@ -231,3 +320,137 @@ function resetStick(): void {
   touchStickKnob.style.setProperty("--stick-y", "0px");
   window.__lumenVirtualInput!.move = { x: 0, y: 0 };
 }
+
+function updateDifficultyUi(): void {
+  difficultyButtons.forEach((button) => {
+    const active = button.dataset.difficulty === selectedDifficulty;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  const difficulty = DIFFICULTY_SETTINGS[selectedDifficulty];
+  difficultyDetail.textContent = `${difficulty.name}模式：${difficulty.description}`;
+}
+
+function updateAudioUi(): void {
+  audioToggle.textContent = saveData.audioEnabled ? "音效 开" : "音效 关";
+  audioToggle.setAttribute("aria-pressed", String(saveData.audioEnabled));
+}
+
+function updateRecordUi(): void {
+  recordScore.textContent = saveData.bestScore.toLocaleString();
+  recordWave.textContent = `${Math.max(1, saveData.bestWave)}/5`;
+}
+
+function setDifficultyPickerVisible(visible: boolean): void {
+  difficultyPicker.hidden = !visible;
+  difficultyDetail.hidden = !visible;
+}
+
+function persistRunResult(status: "won" | "completed" | "lost"): void {
+  saveData.bestScore = Math.max(saveData.bestScore, latestScore);
+  saveData.bestWave = Math.max(saveData.bestWave, latestWave);
+  saveData.bestCombo = Math.max(saveData.bestCombo, latestBestCombo);
+  if (status === "completed") {
+    saveData.clears += 1;
+  }
+  saveSave(saveData);
+  updateRecordUi();
+}
+
+function loadSave(): SaveData {
+  const fallback: SaveData = {
+    audioEnabled: true,
+    bestCombo: 1,
+    bestScore: 0,
+    bestWave: 1,
+    clears: 0,
+    selectedDifficulty: "standard"
+  };
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as Partial<SaveData>;
+    const selected =
+      parsed.selectedDifficulty && parsed.selectedDifficulty in DIFFICULTY_SETTINGS
+        ? parsed.selectedDifficulty
+        : fallback.selectedDifficulty;
+    return {
+      audioEnabled: parsed.audioEnabled ?? fallback.audioEnabled,
+      bestCombo: finiteNumber(parsed.bestCombo, fallback.bestCombo),
+      bestScore: finiteNumber(parsed.bestScore, fallback.bestScore),
+      bestWave: finiteNumber(parsed.bestWave, fallback.bestWave),
+      clears: finiteNumber(parsed.clears, fallback.clears),
+      selectedDifficulty: selected
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function saveSave(next: SaveData): void {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    // Storage is optional; gameplay should keep working if the browser blocks it.
+  }
+}
+
+function finiteNumber(value: unknown, fallback: number): number {
+  const numberValue = Number(value ?? fallback);
+  return Number.isFinite(numberValue) ? numberValue : fallback;
+}
+
+type SoundKind = "boost" | "button" | "hit" | "loss" | "pickup" | "pulse" | "repair" | "start" | "win";
+
+class AudioBus {
+  private context?: AudioContext;
+
+  constructor(private readonly enabled: () => boolean) {}
+
+  async unlock(): Promise<void> {
+    if (!this.enabled()) return;
+    this.context ??= new AudioContext();
+    if (this.context.state === "suspended") {
+      await this.context.resume();
+    }
+  }
+
+  play(kind: SoundKind): void {
+    if (!this.enabled() || !this.context) return;
+    const sounds: Record<SoundKind, Array<[number, number, number]>> = {
+      boost: [[160, 0.07, 0.035], [260, 0.06, 0.026]],
+      button: [[520, 0.04, 0.02]],
+      hit: [[130, 0.11, 0.05], [82, 0.13, 0.035]],
+      loss: [[180, 0.12, 0.04], [120, 0.18, 0.035]],
+      pickup: [[660, 0.05, 0.035], [980, 0.07, 0.028]],
+      pulse: [[260, 0.06, 0.035], [720, 0.12, 0.025]],
+      repair: [[420, 0.08, 0.03], [760, 0.1, 0.03]],
+      start: [[300, 0.05, 0.025], [540, 0.08, 0.025]],
+      win: [[520, 0.08, 0.035], [760, 0.09, 0.03], [1120, 0.12, 0.025]]
+    };
+    sounds[kind].forEach(([frequency, duration, volume], index) => {
+      this.tone(frequency, duration, volume, index * 0.055);
+    });
+  }
+
+  private tone(frequency: number, duration: number, volume: number, delay: number): void {
+    if (!this.context) return;
+    const oscillator = this.context.createOscillator();
+    const gain = this.context.createGain();
+    const start = this.context.currentTime + delay;
+    oscillator.frequency.value = frequency;
+    oscillator.type = "sine";
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(volume, start + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+    oscillator.connect(gain);
+    gain.connect(this.context.destination);
+    oscillator.start(start);
+    oscillator.stop(start + duration + 0.02);
+  }
+}
+
+audioBus = new AudioBus(() => saveData.audioEnabled);
+updateDifficultyUi();
+updateAudioUi();
+updateRecordUi();

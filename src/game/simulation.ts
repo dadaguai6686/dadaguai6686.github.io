@@ -35,7 +35,21 @@ export type Gate = {
   open: boolean;
 };
 
-export type GameStatus = "menu" | "playing" | "paused" | "won" | "lost";
+export type GameStatus = "menu" | "playing" | "paused" | "won" | "completed" | "lost";
+
+export type DifficultyId = "training" | "standard" | "hardcore";
+
+export type Difficulty = {
+  id: DifficultyId;
+  name: string;
+  description: string;
+  drainScale: number;
+  damageScale: number;
+  repairScale: number;
+  scoreScale: number;
+  hazardBonus: number;
+  stormBonus: number;
+};
 
 export type UpgradeId = "engine" | "repair" | "capacitor" | "pulse" | "shield";
 
@@ -46,6 +60,44 @@ export type Upgrade = {
 };
 
 export type UpgradeState = Record<UpgradeId, number>;
+
+export const CAMPAIGN_WAVES = 5;
+
+export const DIFFICULTY_SETTINGS: Record<DifficultyId, Difficulty> = {
+  training: {
+    id: "training",
+    name: "练习",
+    description: "电量消耗更慢，维修更快，适合先熟悉路线。",
+    drainScale: 0.74,
+    damageScale: 0.78,
+    repairScale: 1.16,
+    scoreScale: 0.78,
+    hazardBonus: -1,
+    stormBonus: -1
+  },
+  standard: {
+    id: "standard",
+    name: "标准",
+    description: "推荐第一次游玩，完整体验风险、连锁和升级。",
+    drainScale: 1,
+    damageScale: 1,
+    repairScale: 1,
+    scoreScale: 1,
+    hazardBonus: 0,
+    stormBonus: 0
+  },
+  hardcore: {
+    id: "hardcore",
+    name: "硬核",
+    description: "更高电量压力和伤害，分数倍率更高。",
+    drainScale: 1.18,
+    damageScale: 1.18,
+    repairScale: 0.9,
+    scoreScale: 1.28,
+    hazardBonus: 1,
+    stormBonus: 1
+  }
+};
 
 export const UPGRADE_CATALOG: Record<UpgradeId, Upgrade> = {
   engine: {
@@ -77,6 +129,7 @@ export const UPGRADE_CATALOG: Record<UpgradeId, Upgrade> = {
 
 export type GameState = {
   status: GameStatus;
+  difficulty: DifficultyId;
   arena: { width: number; height: number };
   player: {
     position: Vec2;
@@ -97,6 +150,7 @@ export type GameState = {
   gate: Gate;
   upgrades: UpgradeState;
   wave: number;
+  campaignWaves: number;
   score: number;
   combo: number;
   comboTimer: number;
@@ -111,6 +165,10 @@ export type InputState = {
   boost: boolean;
   repair: boolean;
   pulse: boolean;
+};
+
+export type RestartOptions = {
+  difficulty?: DifficultyId;
 };
 
 const relayPositions: Vec2[] = [
@@ -138,6 +196,7 @@ export function createInitialState(): GameState {
   const maxCharge = 100;
   return {
     status: "menu",
+    difficulty: "standard",
     arena: { width: 1000, height: 700 },
     player: {
       position: { x: 500, y: 350 },
@@ -171,6 +230,7 @@ export function createInitialState(): GameState {
     gate: { position: { x: 500, y: 55 }, open: false },
     upgrades: createUpgradeState(),
     wave: 1,
+    campaignWaves: CAMPAIGN_WAVES,
     score: 0,
     combo: 1,
     comboTimer: 0,
@@ -181,12 +241,13 @@ export function createInitialState(): GameState {
   };
 }
 
-export function restartRun(state: GameState, upgradeId?: UpgradeId): GameState {
+export function restartRun(state: GameState, upgradeId?: UpgradeId, options: RestartOptions = {}): GameState {
   const next = createInitialState();
   const wonPreviousWave = state.status === "won";
+  next.difficulty = options.difficulty ?? state.difficulty ?? "standard";
   next.status = "playing";
-  next.wave = wonPreviousWave ? state.wave + 1 : Math.max(1, state.wave);
-  next.upgrades = { ...state.upgrades };
+  next.wave = wonPreviousWave ? state.wave + 1 : 1;
+  next.upgrades = wonPreviousWave ? { ...state.upgrades } : createUpgradeState();
   if (wonPreviousWave && upgradeId && next.upgrades[upgradeId] < 3) {
     next.upgrades[upgradeId] += 1;
   }
@@ -197,18 +258,20 @@ export function restartRun(state: GameState, upgradeId?: UpgradeId): GameState {
   next.player.lumen = wonPreviousWave ? Math.floor(state.player.lumen * 0.35) : 0;
   next.score = wonPreviousWave ? state.score + state.wave * 500 : 0;
   next.bestCombo = wonPreviousWave ? state.bestCombo : 1;
+  const difficulty = DIFFICULTY_SETTINGS[next.difficulty];
+  const extraHazards = clampInt(next.wave - 1 + difficulty.hazardBonus, 0, 4);
   next.hazards = next.hazards.concat(
-    Array.from({ length: Math.min(3, next.wave - 1) }, (_, i) => ({
+    Array.from({ length: extraHazards }, (_, i) => ({
       id: 10 + i,
       position: { x: 220 + i * 245, y: 260 + ((i * 133) % 280) },
       velocity: { x: 54 + i * 18, y: i % 2 === 0 ? 72 : -66 },
       radius: 22 + i * 3
     }))
   );
-  next.storms = createStorms(next.wave);
+  next.storms = createStorms(next.wave, next.difficulty);
   next.message = wonPreviousWave
-    ? `升级已安装。第 ${next.wave} 波：光网反抗更猛烈。`
-    : `第 ${next.wave} 波：连续收集流明和修信标，提高连锁倍率。`;
+    ? `升级已安装。第 ${next.wave}/${next.campaignWaves} 波：光网反抗更猛烈。`
+    : `${DIFFICULTY_SETTINGS[next.difficulty].name}模式，第 ${next.wave}/${next.campaignWaves} 波：保持连锁，修复信标。`;
   return next;
 }
 
@@ -219,6 +282,7 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
 
   const next = structuredClone(state);
   const player = next.player;
+  const difficulty = DIFFICULTY_SETTINGS[next.difficulty];
   next.elapsed += dt;
   next.comboTimer = Math.max(0, next.comboTimer - dt);
   if (next.comboTimer <= 0) {
@@ -260,7 +324,7 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
     (relay) => !relay.repaired && distance(relay.position, player.position) < 76
   );
   if (repairTarget && input.repair) {
-    const repairSpeed = 0.26 + next.upgrades.repair * 0.07 + player.lumen * 0.005;
+    const repairSpeed = (0.26 + next.upgrades.repair * 0.07 + player.lumen * 0.005) * difficulty.repairScale;
     repairTarget.progress = Math.min(1, repairTarget.progress + dt * repairSpeed);
     player.charge = Math.max(0, player.charge - dt * 3.2);
     next.message = "保持在信标旁，维修光束正在充能。";
@@ -316,7 +380,7 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
     }
     if (distance(hazard.position, player.position) < hazard.radius + 28 && player.invulnerable <= 0) {
       const damageScale = 1 - next.upgrades.shield * 0.12;
-      player.hull = Math.max(0, player.hull - 16 * damageScale);
+      player.hull = Math.max(0, player.hull - 16 * damageScale * difficulty.damageScale);
       player.charge = Math.max(0, player.charge - 7);
       player.invulnerable = 0.85;
       next.combo = 1;
@@ -335,24 +399,27 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
     storm.phase += dt * (0.8 + next.wave * 0.04);
     const activeRadius = getStormActiveRadius(storm);
     if (distance(storm.position, player.position) < activeRadius) {
-      player.charge = Math.max(0, player.charge - dt * (9 + next.wave * 0.7));
+      player.charge = Math.max(0, player.charge - dt * (9 + next.wave * 0.7) * difficulty.drainScale);
       if (player.invulnerable <= 0 && storm.phase % (Math.PI * 2) > Math.PI * 1.35) {
-        player.hull = Math.max(0, player.hull - dt * (5.5 - next.upgrades.shield));
+        player.hull = Math.max(0, player.hull - dt * (5.5 - next.upgrades.shield) * difficulty.damageScale);
       }
       next.shake = Math.max(next.shake, 0.08);
       next.message = "风暴场正在吸走电量，立刻脱离范围。";
     }
   });
 
-  player.charge = Math.max(0, player.charge - dt * (2.05 + next.wave * 0.22));
+  player.charge = Math.max(0, player.charge - dt * (2.05 + next.wave * 0.22) * difficulty.drainScale);
   next.gate.open = next.relays.every((relay) => relay.repaired);
 
   if (next.gate.open) {
     next.message = "光门已开启，飞向北侧出口。";
     if (distance(next.gate.position, player.position) < 58) {
       awardScore(next, 900 + player.lumen * 45 + Math.ceil(player.charge) * 8, 0.35);
-      next.status = "won";
-      next.message = `光网稳定，得分 ${next.score.toLocaleString()}。请选择一项升级。`;
+      next.status = next.wave >= next.campaignWaves ? "completed" : "won";
+      next.message =
+        next.status === "completed"
+          ? `五波光网全部稳定，最终得分 ${next.score.toLocaleString()}。`
+          : `光网稳定，得分 ${next.score.toLocaleString()}。请选择一项升级。`;
     }
   }
 
@@ -403,20 +470,21 @@ function createUpgradeState(): UpgradeState {
   };
 }
 
-function createStorms(wave: number): Storm[] {
+function createStorms(wave: number, difficulty: DifficultyId): Storm[] {
   const baseStorms: Storm[] = [
     { id: 0, position: { x: 495, y: 235 }, radius: 82, phase: 0.8 },
     { id: 1, position: { x: 655, y: 520 }, radius: 74, phase: 2.2 },
     { id: 2, position: { x: 230, y: 395 }, radius: 66, phase: 4.1 }
   ];
-  return baseStorms.slice(0, Math.min(baseStorms.length, Math.max(1, Math.ceil(wave / 2))));
+  const stormCount = clampInt(Math.ceil(wave / 2) + DIFFICULTY_SETTINGS[difficulty].stormBonus, 0, baseStorms.length);
+  return baseStorms.slice(0, stormCount);
 }
 
 function awardScore(state: GameState, base: number, comboGain: number): void {
   state.combo = Math.min(5, state.combo + comboGain);
   state.comboTimer = 3.4;
   state.bestCombo = Math.max(state.bestCombo, state.combo);
-  state.score += Math.round(base * state.combo);
+  state.score += Math.round(base * state.combo * DIFFICULTY_SETTINGS[state.difficulty].scoreScale);
 }
 
 function formatCombo(combo: number): string {
@@ -433,4 +501,8 @@ function subtract(a: Vec2, b: Vec2): Vec2 {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function clampInt(value: number, min: number, max: number): number {
+  return Math.round(clamp(value, min, max));
 }

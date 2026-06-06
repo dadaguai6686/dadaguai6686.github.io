@@ -8,6 +8,7 @@ import {
   resumeRun,
   restartRun,
   updateSimulation,
+  type DifficultyId,
   type GameState,
   type Hazard,
   type Lumen,
@@ -26,6 +27,8 @@ type HudSnapshot = {
   score: number;
   combo: number;
   bestCombo: number;
+  difficulty: DifficultyId;
+  campaignWaves: number;
   maxHull: number;
   maxCharge: number;
   boostReady: boolean;
@@ -59,13 +62,34 @@ export class GameScene extends Phaser.Scene {
   update(_: number, deltaMs: number): void {
     if (!this.inputMapper) return;
     const previousStatus = this.state.status;
-    this.state = updateSimulation(this.state, this.inputMapper.read(), Math.min(deltaMs / 1000, 0.033));
+    const previousCollected = this.state.lumen.filter((drop) => drop.collected).length;
+    const previousRepaired = this.state.relays.filter((relay) => relay.repaired).length;
+    const previousHull = this.state.player.hull;
+    const previousBoostCooldown = this.state.player.boostCooldown;
+    const previousPulseCooldown = this.state.player.pulseCooldown;
+    const input = this.inputMapper.read();
+    this.state = updateSimulation(this.state, input, Math.min(deltaMs / 1000, 0.033));
     this.renderState();
     this.emitHud();
+    this.emitFeedback({
+      previousBoostCooldown,
+      previousCollected,
+      previousHull,
+      previousPulseCooldown,
+      previousRepaired,
+      previousStatus
+    });
     if (previousStatus === "playing" && this.state.status !== "playing") {
       window.dispatchEvent(
         new CustomEvent("game:ended", {
-          detail: { status: this.state.status, message: this.state.message }
+          detail: {
+            bestCombo: this.state.bestCombo,
+            difficulty: this.state.difficulty,
+            message: this.state.message,
+            score: this.state.score,
+            status: this.state.status,
+            wave: this.state.wave
+          }
         })
       );
     }
@@ -75,8 +99,8 @@ export class GameScene extends Phaser.Scene {
     this.startRunWithUpgrade();
   }
 
-  startRunWithUpgrade(upgradeId?: UpgradeId): void {
-    this.state = restartRun(this.state, upgradeId);
+  startRunWithUpgrade(upgradeId?: UpgradeId, difficulty?: DifficultyId): void {
+    this.state = restartRun(this.state, upgradeId, { difficulty });
     this.createWorld();
     this.renderState();
     this.emitHud();
@@ -84,8 +108,8 @@ export class GameScene extends Phaser.Scene {
 
   private createHudBridge(): void {
     window.addEventListener("game:start", (event) => {
-      const detail = (event as CustomEvent<{ upgradeId?: UpgradeId }>).detail;
-      this.startRunWithUpgrade(detail?.upgradeId);
+      const detail = (event as CustomEvent<{ difficulty?: DifficultyId; upgradeId?: UpgradeId }>).detail;
+      this.startRunWithUpgrade(detail?.upgradeId, detail?.difficulty);
     });
     window.addEventListener("game:pause", () => {
       this.state = pauseRun(this.state);
@@ -353,6 +377,8 @@ export class GameScene extends Phaser.Scene {
       score: this.state.score,
       combo: this.state.combo,
       bestCombo: this.state.bestCombo,
+      difficulty: this.state.difficulty,
+      campaignWaves: this.state.campaignWaves,
       maxHull: this.state.player.maxHull,
       maxCharge: this.state.player.maxCharge,
       boostReady: this.state.player.boostCooldown <= 0,
@@ -362,6 +388,44 @@ export class GameScene extends Phaser.Scene {
       upgradeChoices: this.state.status === "won" ? getUpgradeChoices(this.state) : []
     };
     window.dispatchEvent(new CustomEvent("game:hud", { detail: snapshot }));
+  }
+
+  private emitFeedback(previous: {
+    previousBoostCooldown: number;
+    previousCollected: number;
+    previousHull: number;
+    previousPulseCooldown: number;
+    previousRepaired: number;
+    previousStatus: GameState["status"];
+  }): void {
+    if (previous.previousStatus !== "playing") return;
+    const collected = this.state.lumen.filter((drop) => drop.collected).length;
+    const repaired = this.state.relays.filter((relay) => relay.repaired).length;
+    if (previous.previousBoostCooldown <= 0 && this.state.player.boostCooldown > 0) {
+      this.dispatchFeedback("boost");
+    }
+    if (previous.previousPulseCooldown <= 0 && this.state.player.pulseCooldown > 0) {
+      this.dispatchFeedback("pulse");
+    }
+    if (collected > previous.previousCollected) {
+      this.dispatchFeedback("pickup");
+    }
+    if (repaired > previous.previousRepaired) {
+      this.dispatchFeedback("repair");
+    }
+    if (previous.previousHull - this.state.player.hull >= 5) {
+      this.dispatchFeedback("hit");
+    }
+    if (this.state.status === "won" || this.state.status === "completed") {
+      this.dispatchFeedback("win");
+    }
+    if (this.state.status === "lost") {
+      this.dispatchFeedback("loss");
+    }
+  }
+
+  private dispatchFeedback(kind: string): void {
+    window.dispatchEvent(new CustomEvent("game:feedback", { detail: { kind } }));
   }
 
   private onResize(): void {
