@@ -393,6 +393,239 @@ function init() {
   }
 
   // ==========================================
+  // GLOBAL COMMAND PALETTE
+  // ==========================================
+  const commandPalette = document.getElementById('command-palette');
+  const commandTrigger = document.getElementById('command-palette-trigger');
+  const commandCloseBtn = document.getElementById('command-palette-close');
+  const commandSearchInput = document.getElementById('command-search-input');
+  const commandResults = document.getElementById('command-results');
+  const commandResultCount = document.getElementById('command-result-count');
+  let commandItems = [];
+  let commandMatches = [];
+  let commandActiveIndex = 0;
+
+  function normalizeCommandText(value) {
+    return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
+  function escapeCommandSelectorValue(value) {
+    if (window.CSS?.escape) return window.CSS.escape(value);
+    return String(value || '').replace(/["\\]/g, '\\$&');
+  }
+
+  function activateToolPanel(toolId) {
+    navigateTo('toolbox');
+    setTimeout(() => {
+      const btn = document.querySelector(`.tool-nav-btn[data-tool="${escapeCommandSelectorValue(toolId)}"]`);
+      if (btn) btn.click();
+    }, 120);
+  }
+
+  function activatePremiumGame(gameId) {
+    navigateTo('game');
+    setTimeout(() => {
+      const btn = document.querySelector(`[data-premium-game="${escapeCommandSelectorValue(gameId)}"]`);
+      if (btn) btn.click();
+    }, 160);
+  }
+
+  function buildCommandItems() {
+    const routeItems = [
+      { type: '导航', icon: 'layout-grid', title: '首页', desc: '返回 Bento 数字仪表盘', keywords: 'home dashboard bento 首页', action: () => navigateTo('home') },
+      { type: '导航', icon: 'book-open', title: '博客', desc: '浏览文章列表与推荐阅读', keywords: 'blog article post 博客 文章', action: () => navigateTo('blog') },
+      { type: '导航', icon: 'wrench', title: '工具箱', desc: '打开本地开发与创作工具', keywords: 'toolbox tools 工具 json markdown', action: () => navigateTo('toolbox') },
+      { type: '导航', icon: 'gamepad-2', title: '街机游戏', desc: '进入主线跑酷与高级街机实验室', keywords: 'game arcade runner 游戏 街机', action: () => navigateTo('game') },
+      { type: '导航', icon: 'folder-git-2', title: '项目', desc: '查看项目卡片与技术亮点', keywords: 'project portfolio 项目', action: () => navigateTo('projects') },
+      { type: '导航', icon: 'message-square', title: '留言', desc: '打开留言板与访客互动墙', keywords: 'guestbook comments message 留言', action: () => navigateTo('guestbook') }
+    ];
+    const toolItems = [
+      { id: 'json', icon: 'file-json', title: 'JSON 格式化树', desc: '校验、格式化、折叠 JSON 数据', keywords: 'json formatter tree 格式化' },
+      { id: 'markdown', icon: 'edit-3', title: 'Markdown 预览', desc: '实时预览、复制 HTML、导出文档', keywords: 'markdown md preview editor' },
+      { id: 'image', icon: 'image', title: '图片转换压缩', desc: '本地压缩图片并导出 WebP / JPEG / PNG', keywords: 'image webp compress 图片 压缩' },
+      { id: 'pomodoro', icon: 'timer', title: '番茄工作钟', desc: '专注计时与合成白噪音', keywords: 'pomodoro timer focus 番茄钟' },
+      { id: 'codec', icon: 'hash', title: '哈希与编解码', desc: 'Base64、URL、MD5、SHA-256 处理', keywords: 'hash base64 url md5 sha256 codec' },
+      { id: 'devkit', icon: 'square-terminal', title: '开发速查工具', desc: '时间戳、UUID、JWT 解码', keywords: 'devkit uuid jwt timestamp 开发' },
+      { id: 'piano', icon: 'music-4', title: '极客合成器琴', desc: 'Web Audio 合成器与节奏挑战', keywords: 'piano synth rhythm audio 音乐 节奏' }
+    ].map(item => ({ ...item, type: '工具', action: () => activateToolPanel(item.id) }));
+    const gameItems = [
+      { id: 'runner', icon: 'rocket', title: 'Cyber Astro-Runner', desc: '8 关主线街机远征', keywords: 'runner platform main astro 跑酷 主线', action: () => navigateTo('game') },
+      { id: 'survivor', icon: 'sparkles', title: 'Starcore Survivor', desc: '生存构筑与自动射击', keywords: 'survivor starcore roguelite 生存' },
+      { id: 'boss', icon: 'crosshair', title: 'Prism Boss Rush', desc: '三阶段 Boss 弹幕战', keywords: 'boss bullet prism 弹幕' },
+      { id: 'heist', icon: 'scan-eye', title: 'Cyber Heist', desc: '潜入、隐身、终端与撤离', keywords: 'heist stealth cloak 潜入' },
+      { id: 'chain', icon: 'gem', title: 'Alchemy Chain', desc: '大连锁消除与特殊核心', keywords: 'chain alchemy puzzle 消除 连锁' },
+      { id: 'tactics', icon: 'shield', title: 'Rift Tactics', desc: '行动点、敌人 AI 与核心撤离', keywords: 'tactics rift strategy turn 战术 回合' }
+    ].map(item => ({
+      ...item,
+      type: '游戏',
+      action: item.id === 'runner' ? item.action : () => activatePremiumGame(item.id)
+    }));
+    const postItems = blogPosts.map(post => ({
+      type: '文章',
+      icon: 'file-text',
+      title: post.title || '未命名文章',
+      desc: post.excerpt || post.tag || '打开文章阅读器',
+      keywords: `${post.title || ''} ${post.excerpt || ''} ${post.content || ''} ${post.tag || ''}`,
+      action: () => readArticle(post.id)
+    }));
+    const projectItems = projectsData.map(project => ({
+      type: '项目',
+      icon: 'folder-open',
+      title: project.title || '未命名项目',
+      desc: project.desc || project.tag || '打开项目详情',
+      keywords: `${project.title || ''} ${project.desc || ''} ${project.tag || ''} ${Array.isArray(project.tags) ? project.tags.join(' ') : ''}`,
+      action: () => {
+        navigateTo('projects');
+        setTimeout(() => openProjectDetails(project.id), 160);
+      }
+    }));
+    commandItems = [...routeItems, ...gameItems, ...toolItems, ...postItems, ...projectItems]
+      .map((item, index) => ({ ...item, id: `command-${index}`, haystack: normalizeCommandText(`${item.title} ${item.desc} ${item.keywords}`) }));
+  }
+
+  function filterCommandItems() {
+    const query = normalizeCommandText(commandSearchInput?.value || '');
+    commandMatches = commandItems
+      .map(item => {
+        if (!query) return { item, score: item.type === '导航' ? 4 : 1 };
+        const title = normalizeCommandText(item.title);
+        let score = 0;
+        if (title === query) score += 12;
+        if (title.includes(query)) score += 8;
+        if (item.haystack.includes(query)) score += 4;
+        query.split(' ').filter(Boolean).forEach(part => {
+          if (item.haystack.includes(part)) score += 1;
+        });
+        return { item, score };
+      })
+      .filter(match => match.score > 0)
+      .sort((a, b) => b.score - a.score || a.item.title.localeCompare(b.item.title, 'zh-Hans-CN'))
+      .slice(0, 18)
+      .map(match => match.item);
+    commandActiveIndex = Math.min(commandActiveIndex, Math.max(0, commandMatches.length - 1));
+  }
+
+  function renderCommandResults() {
+    if (!commandResults) return;
+    filterCommandItems();
+    if (commandResultCount) commandResultCount.textContent = `${commandMatches.length} 项结果`;
+    commandResults.innerHTML = '';
+    if (!commandMatches.length) {
+      const empty = document.createElement('div');
+      empty.className = 'command-empty-state';
+      empty.textContent = '没有找到匹配内容。';
+      commandResults.appendChild(empty);
+      return;
+    }
+    commandMatches.forEach((item, index) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `command-result-item${index === commandActiveIndex ? ' active' : ''}`;
+      btn.setAttribute('role', 'option');
+      btn.setAttribute('aria-selected', index === commandActiveIndex ? 'true' : 'false');
+
+      const iconWrap = document.createElement('span');
+      iconWrap.className = 'command-result-icon';
+      const icon = document.createElement('i');
+      icon.setAttribute('data-lucide', item.icon || 'search');
+      iconWrap.appendChild(icon);
+
+      const copy = document.createElement('span');
+      copy.className = 'command-result-copy';
+      const title = document.createElement('span');
+      title.className = 'command-result-title';
+      title.textContent = item.title;
+      const desc = document.createElement('span');
+      desc.className = 'command-result-desc';
+      desc.textContent = item.desc;
+      copy.append(title, desc);
+
+      const type = document.createElement('span');
+      type.className = 'command-result-type';
+      type.textContent = item.type;
+
+      btn.append(iconWrap, copy, type);
+      btn.addEventListener('mouseenter', () => {
+        commandActiveIndex = index;
+        renderCommandResults();
+      });
+      btn.addEventListener('click', () => executeCommandItem(index));
+      commandResults.appendChild(btn);
+    });
+    safeCreateIcons();
+  }
+
+  function openCommandPalette(initialQuery = '') {
+    if (!commandPalette || !commandSearchInput) return;
+    buildCommandItems();
+    commandSearchInput.value = initialQuery;
+    commandActiveIndex = 0;
+    commandPalette.classList.add('active');
+    commandPalette.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('command-open');
+    renderCommandResults();
+    setTimeout(() => commandSearchInput.focus(), 30);
+  }
+
+  function closeCommandPalette() {
+    if (!commandPalette) return;
+    commandPalette.classList.remove('active');
+    commandPalette.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('command-open');
+  }
+
+  function executeCommandItem(index = commandActiveIndex) {
+    const item = commandMatches[index];
+    if (!item) return;
+    closeCommandPalette();
+    setTimeout(() => item.action?.(), 40);
+  }
+
+  if (commandTrigger) {
+    commandTrigger.addEventListener('click', () => openCommandPalette());
+  }
+  if (commandCloseBtn) {
+    commandCloseBtn.addEventListener('click', closeCommandPalette);
+  }
+  if (commandPalette) {
+    commandPalette.addEventListener('click', (event) => {
+      if (event.target === commandPalette) closeCommandPalette();
+    });
+  }
+  if (commandSearchInput) {
+    commandSearchInput.addEventListener('input', () => {
+      commandActiveIndex = 0;
+      renderCommandResults();
+    });
+    commandSearchInput.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        commandActiveIndex = Math.min(commandActiveIndex + 1, commandMatches.length - 1);
+        renderCommandResults();
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        commandActiveIndex = Math.max(commandActiveIndex - 1, 0);
+        renderCommandResults();
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        executeCommandItem();
+      }
+    });
+  }
+  window.addEventListener('keydown', (event) => {
+    const wantsCommand = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k';
+    if (wantsCommand) {
+      event.preventDefault();
+      openCommandPalette();
+      return;
+    }
+    if (event.key === 'Escape' && commandPalette?.classList.contains('active')) {
+      event.preventDefault();
+      closeCommandPalette();
+    }
+  });
+
+  // ==========================================
   // THEME SWITCHER
   // ==========================================
   const themeToggle = document.getElementById('theme-toggle');

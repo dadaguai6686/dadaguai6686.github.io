@@ -15,7 +15,7 @@
   <meta property="og:image" content="https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=1200">
   <meta name="twitter:card" content="summary_large_image">
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="style.css?v=20260606-tactics-v1">
+  <link rel="stylesheet" href="style.css?v=20260606-command-v1">
   <link rel="manifest" href="/manifest.webmanifest">
   <!-- Lucide Icons Local -->
   <script src="lucide.min.js"></script>
@@ -71,6 +71,9 @@
           <span>留言</span>
         </button>
       </div>
+      <button class="theme-toggle-btn command-toggle-btn" id="command-palette-trigger" title="全站搜索">
+        <i data-lucide="search" style="font-style: normal;">🔎</i>
+      </button>
       <button class="theme-toggle-btn" id="theme-toggle" title="切换主题">
         <i data-lucide="sun" id="theme-icon" style="font-style: normal;">☀️</i>
       </button>
@@ -1211,10 +1214,27 @@
   </div>
 
 
+  <!-- Command Palette -->
+  <div class="command-palette" id="command-palette" aria-hidden="true">
+    <div class="command-panel" role="dialog" aria-modal="true" aria-labelledby="command-palette-title">
+      <div class="command-search-row">
+        <i data-lucide="search"></i>
+        <input type="search" id="command-search-input" autocomplete="off" placeholder="搜索文章、项目、工具、游戏..." aria-label="搜索站点内容">
+        <button type="button" class="command-close-btn" id="command-palette-close" aria-label="关闭">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="command-meta-row">
+        <h2 id="command-palette-title">Atherix Command Center</h2>
+        <span id="command-result-count">0 项结果</span>
+      </div>
+      <div class="command-results" id="command-results" role="listbox" aria-label="全站搜索结果"></div>
+    </div>
+  </div>
 
   <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <!-- Main JavaScript File -->
-  <script src="app.js?v=20260606-tactics-v1"></script>
+  <script src="app.js?v=20260606-command-v1"></script>
 </body>
 </html>

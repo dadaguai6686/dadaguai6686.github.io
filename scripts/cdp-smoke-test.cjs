@@ -253,6 +253,30 @@ async function run() {
     };
   })()`);
 
+  await click('#command-palette-trigger');
+  await waitFor('#command-palette.active');
+  await evaluate(`(() => {
+    const input = document.querySelector('#command-search-input');
+    input.value = 'tactics';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await wait(200);
+  const commandBeforeExecute = await evaluate(`(() => ({
+    open: document.querySelector('#command-palette')?.classList.contains('active') || false,
+    results: document.querySelectorAll('.command-result-item').length,
+    firstTitle: document.querySelector('.command-result-title')?.textContent || '',
+    countText: document.querySelector('#command-result-count')?.textContent || ''
+  }))()`);
+  await evaluate(`document.querySelector('.command-result-item')?.click()`);
+  await wait(900);
+  const commandState = await evaluate(`(() => ({
+    closed: !document.querySelector('#command-palette')?.classList.contains('active'),
+    hash: location.hash,
+    gameActive: document.querySelector('#game')?.classList.contains('active') || false,
+    activeTitle: document.querySelector('#premium-active-title')?.textContent || '',
+    tacticsActive: document.querySelector('#premium-tactics')?.classList.contains('active') || false
+  }))()`);
+
   await click('.nav-item[data-target="blog"]');
   await waitFor('.blog-post-card');
   await click('.blog-post-card');
@@ -500,6 +524,8 @@ async function run() {
 
   assert(blogState.visibleArticle && blogState.articleChars > 100, 'blog reader should open a populated article');
   assert(!adminStartupState.token && !adminStartupState.blogActionsVisible && !adminStartupState.projectActionsVisible, 'invalid cached admin token should be cleared on startup');
+  assert(commandBeforeExecute.open && commandBeforeExecute.results >= 1 && /Rift Tactics/.test(commandBeforeExecute.firstTitle), `command palette should find tactics mode: ${JSON.stringify(commandBeforeExecute)}`);
+  assert(commandState.closed && commandState.gameActive && commandState.tacticsActive && /Rift Tactics/.test(commandState.activeTitle), `command palette should execute game navigation: ${JSON.stringify(commandState)}`);
   assert(blogState.toolbar && blogState.bookmarkPressed, 'blog reader toolbar should render and toggle bookmark state');
   assert(blogState.tocActive && blogState.tocLinks >= 2, 'blog reader should build a table of contents from article headings');
   assert(/^\d+%$/.test(blogState.progress), 'blog reader should report reading progress');
@@ -549,6 +575,8 @@ async function run() {
     cdpPort,
     appUrl,
     adminStartupState,
+    commandBeforeExecute,
+    commandState,
     blogState,
     projectViewportState,
     projectState,
