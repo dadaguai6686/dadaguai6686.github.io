@@ -53,7 +53,22 @@ const publicRootFiles = new Set([
   '/sitemap.xml'
 ]);
 const publicPathPrefixes = ['/assets/', '/uploads/'];
+const blockedPathPrefixes = [
+  '/.git/',
+  '/.github/',
+  '/.vscode/',
+  '/node_modules/',
+  '/scripts/',
+  '/data/',
+  '/coverage/',
+  '/dist/',
+  '/tmp/'
+];
 const blockedRootFiles = new Set([
+  '/.env',
+  '/.env.example',
+  '/.gitignore',
+  '/.dockerignore',
   '/Dockerfile',
   '/docker-compose.yml',
   '/package.json',
@@ -61,7 +76,9 @@ const blockedRootFiles = new Set([
   '/server.js',
   '/db.js',
   '/auth.js',
-  '/DEPLOYMENT.md'
+  '/DEPLOYMENT.md',
+  '/README.md',
+  '/SECURITY.md'
 ]);
 const allowedCommentAvatars = new Set(['👨‍💻', '👩‍💻', '🚀', '🐱', '🦊', '🦄', '🤖', '🎨', '☕', '🐼', '👤']);
 
@@ -231,13 +248,21 @@ app.use('/uploads', express.static(uploadDir, {
 app.use((req, res, next) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') return next();
   if (req.path.startsWith('/api/')) return next();
-  if (publicRootFiles.has(req.path) || publicPathPrefixes.some(prefix => req.path.startsWith(prefix))) {
+  let requestPath = req.path;
+  try {
+    requestPath = decodeURIComponent(req.path);
+  } catch (err) {
+    return res.status(400).send('Bad request');
+  }
+  if (publicRootFiles.has(requestPath) || publicPathPrefixes.some(prefix => requestPath.startsWith(prefix))) {
     return next();
   }
-  if (blockedRootFiles.has(req.path)) {
+  if (blockedRootFiles.has(requestPath) ||
+      blockedPathPrefixes.some(prefix => requestPath.startsWith(prefix)) ||
+      requestPath.split('/').some(part => part.startsWith('.') && part.length > 1)) {
     return res.status(404).send('Not found');
   }
-  if (path.extname(req.path)) {
+  if (path.extname(requestPath)) {
     return res.status(404).send('Not found');
   }
   next();

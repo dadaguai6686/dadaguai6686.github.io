@@ -124,7 +124,22 @@ async function run() {
     assert(serviceWorkerScript.status === 200, 'service worker should be publicly served');
     assert((serviceWorkerScript.headers.get('content-type') || '').includes('javascript'), 'service worker should be served as javascript');
 
-    const sensitivePaths = ['/server.js', '/db.js', '/auth.js', '/package.json', '/package-lock.json', '/scripts/api-smoke-test.cjs', '/Dockerfile'];
+    const sensitivePaths = [
+      '/server.js',
+      '/db.js',
+      '/auth.js',
+      '/package.json',
+      '/package-lock.json',
+      '/scripts/api-smoke-test.cjs',
+      '/Dockerfile',
+      '/.env',
+      '/.git/config',
+      '/.github/workflows/ci.yml',
+      '/node_modules/sqlite3/package.json',
+      '/data/blog.db',
+      '/README.md',
+      '/SECURITY.md'
+    ];
     const sensitiveResults = {};
     for (const pathname of sensitivePaths) {
       const response = await fetch(`${baseUrl}${pathname}`);
