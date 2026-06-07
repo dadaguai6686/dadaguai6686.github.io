@@ -4410,6 +4410,8 @@ function init() {
               <span>等级 <strong id="premium-survivor-level">1</strong></span>
               <span>生命 <strong id="premium-survivor-hp">100</strong></span>
               <span>构筑 <strong id="premium-survivor-build">Pulse I</strong></span>
+              <span>连段 <strong id="premium-survivor-chain">0x</strong></span>
+              <span>超载 <strong id="premium-survivor-overdrive">0%</strong></span>
               <span>危机 <strong id="premium-survivor-threat">WAVE 1</strong></span>
             </div>
             <div class="mini-actions">
@@ -5574,6 +5576,12 @@ function init() {
       spawn: 0,
       shot: 0,
       score: 0,
+      chain: 0,
+      chainTimer: 0,
+      bestChain: 0,
+      overdrive: 0,
+      overdriveFlash: 0,
+      overdriveText: 'SYNC',
       player: null,
       enemies: [],
       bullets: [],
@@ -5713,6 +5721,16 @@ function init() {
       document.getElementById('premium-survivor-level').textContent = survivor.player?.level || 1;
       document.getElementById('premium-survivor-hp').textContent = Math.max(0, Math.ceil(survivor.player?.hp || 100));
       document.getElementById('premium-survivor-build').textContent = survivorBuildSummary();
+      const chainEl = document.getElementById('premium-survivor-chain');
+      if (chainEl) {
+        chainEl.textContent = `${survivor.chain}x`;
+        chainEl.style.color = survivor.chain >= 12 ? '#FDE68A' : survivor.chain >= 5 ? '#A7F3D0' : '#fff';
+      }
+      const overdriveEl = document.getElementById('premium-survivor-overdrive');
+      if (overdriveEl) {
+        overdriveEl.textContent = survivor.overdrive >= 100 ? 'READY' : `${Math.floor(survivor.overdrive)}%`;
+        overdriveEl.style.color = survivor.overdrive >= 100 ? '#FDE68A' : survivor.overdrive >= 65 ? '#BAE6FD' : '#fff';
+      }
       document.getElementById('premium-survivor-threat').textContent = `WAVE ${Math.max(1, Math.floor(survivor.elapsed / 18000) + 1)}`;
     }
 
@@ -5726,6 +5744,12 @@ function init() {
       survivor.spawn = 0;
       survivor.shot = 0;
       survivor.score = 0;
+      survivor.chain = 0;
+      survivor.chainTimer = 0;
+      survivor.bestChain = 0;
+      survivor.overdrive = 0;
+      survivor.overdriveFlash = 0;
+      survivor.overdriveText = 'SYNC';
       survivor.draftOpen = false;
       survivor.draftChoices = [];
       hideSurvivorDraft();
@@ -5805,6 +5829,39 @@ function init() {
       for (let i = 0; i < count; i++) {
         survivor.particles.push({ x, y, vx: (Math.random() - 0.5) * 190, vy: (Math.random() - 0.5) * 190, life: 420, color, r: Math.random() * 2.8 + 1 });
       }
+    }
+
+    function addSurvivorOverdrive(amount = 0, reason = 'SYNC') {
+      survivor.overdrive = clamp(survivor.overdrive + amount, 0, 100);
+      survivor.overdriveText = survivor.overdrive >= 100 ? 'OMEGA READY' : reason;
+    }
+
+    function awardSurvivorChain(value = 0, x = 0, y = 0, reason = 'core') {
+      if (survivor.chainTimer <= 0) survivor.chain = 0;
+      survivor.chain = Math.min(99, survivor.chain + 1);
+      survivor.bestChain = Math.max(survivor.bestChain, survivor.chain);
+      survivor.chainTimer = 2400;
+      const bonus = Math.floor(value * Math.min(2.35, 0.16 + survivor.chain * 0.085));
+      addSurvivorOverdrive(value * 0.18 + survivor.chain * 0.72, reason);
+      if (survivor.chain % 6 === 0) survivorBurst(x, y, '#FDE68A', 26);
+      return bonus;
+    }
+
+    function defeatSurvivorEnemy(enemy, reason = 'weapon') {
+      const p = survivor.player;
+      survivor.score += enemy.value;
+      survivor.orbs.push({ x: enemy.x, y: enemy.y, r: enemy.elite ? 7 : 6, value: enemy.value });
+      if (enemy.elite) {
+        addSurvivorOverdrive(18, 'ELITE BREAK');
+        survivor.chainTimer = Math.max(survivor.chainTimer, 1800);
+      }
+      const pickupChance = enemy.elite ? 0.48 : 0.08;
+      if (Math.random() < pickupChance) {
+        const pool = enemy.elite ? ['heal', 'bomb', 'haste', 'surge'] : ['heal', 'bomb', 'haste'];
+        survivor.pickups.push({ x: enemy.x, y: enemy.y, r: enemy.elite ? 9 : 8, type: pick(pool) });
+      }
+      if (p && reason === 'nova' && enemy.elite) p.hp = Math.min(p.maxHp, p.hp + 4);
+      survivorBurst(enemy.x, enemy.y, enemy.color, enemy.elite ? 22 : 14);
     }
 
     function pickSurvivorUpgrades() {
@@ -5917,14 +5974,36 @@ function init() {
 
     function triggerSurvivorNova() {
       const p = survivor.player;
-      if (!p || p.novaCooldown > 0) return;
-      p.novaCooldown = p.novaCooldownMax || 6200;
-      p.novaFlash = 320;
+      if (!p) return;
+      const overdrive = survivor.overdrive >= 100;
+      if (p.novaCooldown > 0 && !overdrive) return;
+      if (overdrive) {
+        survivor.overdrive = 0;
+        survivor.overdriveFlash = 740;
+        survivor.overdriveText = 'OMEGA BURST';
+        survivor.chain = Math.max(survivor.chain, 3);
+        survivor.chainTimer = Math.max(survivor.chainTimer, 2800);
+        survivor.score += 220 + survivor.chain * 18;
+        p.novaCooldown = Math.max(1600, Math.min(p.novaCooldown || 0, p.novaCooldownMax * 0.45));
+      } else {
+        p.novaCooldown = p.novaCooldownMax || 6200;
+      }
+      p.novaFlash = overdrive ? 520 : 320;
+      const radius = (p.novaRadius || 138) * (overdrive ? 1.48 : 1);
+      const damage = (p.novaDamage || 95) * (overdrive ? 1.72 : 1);
       survivor.enemies.forEach(enemy => {
         const d = Math.hypot(enemy.x - p.x, enemy.y - p.y);
-        if (d < (p.novaRadius || 138)) enemy.hp -= (p.novaDamage || 95);
+        if (d < radius) {
+          enemy.hp -= damage;
+          if (overdrive) {
+            enemy.slow = Math.max(enemy.slow || 0, 1300);
+            const angle = Math.atan2(enemy.y - p.y, enemy.x - p.x);
+            enemy.x += Math.cos(angle) * 18;
+            enemy.y += Math.sin(angle) * 18;
+          }
+        }
       });
-      survivorBurst(p.x, p.y, '#BAE6FD', 68);
+      survivorBurst(p.x, p.y, overdrive ? '#FDE68A' : '#BAE6FD', overdrive ? 110 : 68);
     }
 
     function finishSurvivor(text) {
@@ -5933,10 +6012,10 @@ function init() {
       survivor.draftChoices = [];
       hideSurvivorDraft();
       cancelAnimationFrame(survivor.raf);
-      const finalScore = Math.floor(survivor.score + survivor.elapsed / 120);
+      const finalScore = Math.floor(survivor.score + survivor.elapsed / 120 + survivor.bestChain * 42 + survivor.overdrive * 3);
       localStorage.setItem(survivor.bestKey, String(Math.max(Number(localStorage.getItem(survivor.bestKey) || 0), finalScore)));
       if (survivor.elapsed >= 90000) unlockAchievement('survivor_90');
-      recordPremiumResult('survivor', finalScore, { elapsed: survivor.elapsed, level: survivor.player?.level || 1 });
+      recordPremiumResult('survivor', finalScore, { elapsed: survivor.elapsed, level: survivor.player?.level || 1, bestChain: survivor.bestChain, overdrive: Math.floor(survivor.overdrive) });
       setSurvivorUi();
       drawSurvivor();
       overlay(survivor.ctx, survivor.canvas.width, survivor.canvas.height, text, `Score ${finalScore} · 点击部署再来一局`);
@@ -5964,6 +6043,9 @@ function init() {
       const c = survivor.canvas;
       p.novaCooldown = Math.max(0, p.novaCooldown - dt);
       p.novaFlash = Math.max(0, p.novaFlash - dt);
+      survivor.chainTimer = Math.max(0, survivor.chainTimer - dt);
+      if (survivor.chainTimer <= 0) survivor.chain = 0;
+      survivor.overdriveFlash = Math.max(0, survivor.overdriveFlash - dt);
       if (premiumKeys.action) triggerSurvivorNova();
       let mx = (premiumKeys.right ? 1 : 0) - (premiumKeys.left ? 1 : 0);
       let my = (premiumKeys.down ? 1 : 0) - (premiumKeys.up ? 1 : 0);
@@ -5983,9 +6065,11 @@ function init() {
       survivor.enemies.forEach(enemy => {
         const a = Math.atan2(p.y - enemy.y, p.x - enemy.x);
         enemy.pulse += dt / 280;
+        enemy.slow = Math.max(0, (enemy.slow || 0) - dt);
+        const slowFactor = enemy.slow > 0 ? 0.48 : 1;
         const strafe = enemy.type === 'charger' ? Math.sin(enemy.pulse) * 0.85 : enemy.type === 'warden' ? Math.sin(enemy.pulse) * 0.35 : 0;
-        enemy.x += (Math.cos(a) * enemy.speed + Math.cos(a + Math.PI / 2) * enemy.speed * strafe) * dt / 1000;
-        enemy.y += (Math.sin(a) * enemy.speed + Math.sin(a + Math.PI / 2) * enemy.speed * strafe) * dt / 1000;
+        enemy.x += (Math.cos(a) * enemy.speed + Math.cos(a + Math.PI / 2) * enemy.speed * strafe) * slowFactor * dt / 1000;
+        enemy.y += (Math.sin(a) * enemy.speed + Math.sin(a + Math.PI / 2) * enemy.speed * strafe) * slowFactor * dt / 1000;
         if (Math.hypot(enemy.x - p.x, enemy.y - p.y) < enemy.r + p.r) p.hp -= (enemy.elite ? 28 : 18) * dt / 1000;
       });
       for (let i = survivor.enemies.length - 1; i >= 0; i--) {
@@ -5998,10 +6082,7 @@ function init() {
             else survivor.bullets.splice(j, 1);
             survivorBurst(b.x, b.y, enemy.color, 4);
             if (enemy.hp <= 0) {
-              survivor.score += enemy.value;
-              survivor.orbs.push({ x: enemy.x, y: enemy.y, r: 6, value: enemy.value });
-              if (Math.random() < (enemy.elite ? 0.42 : 0.08)) survivor.pickups.push({ x: enemy.x, y: enemy.y, r: 8, type: pick(['heal', 'bomb', 'haste']) });
-              survivorBurst(enemy.x, enemy.y, enemy.color, 14);
+              defeatSurvivorEnemy(enemy, 'weapon');
               survivor.enemies.splice(i, 1);
             }
             break;
@@ -6010,8 +6091,7 @@ function init() {
       }
       survivor.enemies = survivor.enemies.filter(enemy => {
         if (enemy.hp > 0) return true;
-        survivor.orbs.push({ x: enemy.x, y: enemy.y, r: 6, value: enemy.value });
-        survivorBurst(enemy.x, enemy.y, enemy.color, 18);
+        defeatSurvivorEnemy(enemy, 'nova');
         return false;
       });
       survivor.orbs.forEach(orb => {
@@ -6028,19 +6108,21 @@ function init() {
       });
       survivor.pickups = survivor.pickups.filter(item => {
         if (Math.hypot(p.x - item.x, p.y - item.y) >= p.r + item.r) return true;
-        if (item.type === 'heal') p.hp = Math.min(115, p.hp + 24);
+        if (item.type === 'heal') p.hp = Math.min(p.maxHp || 115, p.hp + 24);
         if (item.type === 'bomb') survivor.enemies.forEach(enemy => enemy.hp -= 72);
+        if (item.type === 'surge') addSurvivorOverdrive(35, 'SURGE PICKUP');
         if (item.type === 'haste') {
           p.fireRate = Math.max(70, p.fireRate - 12);
           p.speed += 8;
         }
-        survivorBurst(item.x, item.y, item.type === 'heal' ? '#34D399' : item.type === 'bomb' ? '#F97316' : '#BAE6FD', 26);
+        survivorBurst(item.x, item.y, item.type === 'heal' ? '#34D399' : item.type === 'bomb' ? '#F97316' : item.type === 'surge' ? '#FDE68A' : '#BAE6FD', 26);
         return false;
       });
       survivor.orbs = survivor.orbs.filter(orb => {
         if (Math.hypot(p.x - orb.x, p.y - orb.y) < p.r + orb.r) {
-          p.xp += orb.value;
-          survivor.score += orb.value;
+          const chainBonus = awardSurvivorChain(orb.value, orb.x, orb.y, 'CORE CHAIN');
+          p.xp += orb.value + Math.floor(chainBonus * 0.25);
+          survivor.score += orb.value + chainBonus;
           if (p.xp >= survivorXpTarget() && !survivor.draftOpen) {
             openSurvivorDraft();
           }
@@ -6065,7 +6147,7 @@ function init() {
       drawGrid(ctx, c.width, c.height, 'rgba(6, 182, 212, 0.07)');
       survivor.orbs.forEach(o => { ctx.fillStyle = '#FBBF24'; ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, Math.PI * 2); ctx.fill(); });
       survivor.pickups.forEach(item => {
-        ctx.fillStyle = item.type === 'heal' ? '#34D399' : item.type === 'bomb' ? '#F97316' : '#BAE6FD';
+        ctx.fillStyle = item.type === 'heal' ? '#34D399' : item.type === 'bomb' ? '#F97316' : item.type === 'surge' ? '#FDE68A' : '#BAE6FD';
         ctx.beginPath();
         ctx.moveTo(item.x, item.y - 10);
         ctx.lineTo(item.x + 10, item.y);
@@ -6080,6 +6162,13 @@ function init() {
         ctx.beginPath();
         ctx.arc(e.x, e.y, e.r + (e.elite ? Math.sin(e.pulse) * 2 : 0), 0, Math.PI * 2);
         ctx.fill();
+        if (e.slow > 0) {
+          ctx.strokeStyle = 'rgba(186, 230, 253, 0.72)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(e.x, e.y, e.r + 7, 0, Math.PI * 2);
+          ctx.stroke();
+        }
         if (e.elite || e.type === 'warden') {
           ctx.fillStyle = 'rgba(255,255,255,0.22)';
           ctx.fillRect(e.x - e.r, e.y - e.r - 8, e.r * 2, 3);
@@ -6091,10 +6180,18 @@ function init() {
       const p = survivor.player || { x: 280, y: 180, r: 12, hp: 100 };
       if (p.novaFlash > 0) {
         const radius = p.novaRadius || 138;
-        ctx.strokeStyle = `rgba(186, 230, 253, ${p.novaFlash / 320})`;
-        ctx.lineWidth = 4;
+        const overdriveAlpha = clamp(survivor.overdriveFlash / 740, 0, 1);
+        ctx.strokeStyle = overdriveAlpha > 0 ? `rgba(253, 230, 138, ${Math.max(0.25, overdriveAlpha)})` : `rgba(186, 230, 253, ${p.novaFlash / 320})`;
+        ctx.lineWidth = overdriveAlpha > 0 ? 7 : 4;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, radius * (1 - p.novaFlash / 480), 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, radius * (overdriveAlpha > 0 ? 1.45 : 1) * (1 - p.novaFlash / 620), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      if (survivor.overdrive >= 100 || survivor.overdriveFlash > 0) {
+        ctx.strokeStyle = survivor.overdriveFlash > 0 ? 'rgba(253, 230, 138, 0.92)' : 'rgba(253, 230, 138, 0.58)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r + 14 + Math.sin(survivor.elapsed / 120) * 2, 0, Math.PI * 2);
         ctx.stroke();
       }
       ctx.shadowColor = '#34D399';
@@ -6113,6 +6210,8 @@ function init() {
       ctx.font = '700 12px JetBrains Mono, monospace';
       ctx.fillText(`${Math.max(0, 90 - survivor.elapsed / 1000).toFixed(0)}s`, 14, 22);
       ctx.fillText(`NOVA ${p.novaCooldown > 0 ? Math.ceil(p.novaCooldown / 1000) : 'READY'}`, 14, 40);
+      ctx.fillStyle = survivor.overdrive >= 100 ? '#FDE68A' : '#BAE6FD';
+      ctx.fillText(`CHAIN ${survivor.chain}x · OVR ${survivor.overdrive >= 100 ? 'READY' : Math.floor(survivor.overdrive) + '%'}`, 14, 58);
     }
 
     function updateSurvivorPauseButton() {
@@ -6127,6 +6226,71 @@ function init() {
       updateSurvivorPauseButton();
       focusStage();
       return true;
+    }
+
+    function survivorDebugState() {
+      const p = survivor.player || {};
+      return {
+        running: survivor.running,
+        paused: survivor.paused,
+        draftOpen: survivor.draftOpen,
+        elapsed: Math.round(survivor.elapsed),
+        score: Math.floor(survivor.score),
+        chain: survivor.chain,
+        chainTimer: Math.ceil(survivor.chainTimer),
+        bestChain: survivor.bestChain,
+        overdrive: Math.floor(survivor.overdrive),
+        overdriveFlash: Math.ceil(survivor.overdriveFlash),
+        build: survivorBuildSummary(),
+        player: {
+          hp: Math.ceil(p.hp || 0),
+          maxHp: Math.ceil(p.maxHp || 0),
+          level: p.level || 1,
+          novaCooldown: Math.ceil(p.novaCooldown || 0),
+          novaRadius: Math.ceil(p.novaRadius || 0),
+          novaDamage: Math.ceil(p.novaDamage || 0)
+        },
+        enemies: survivor.enemies.length,
+        slowed: survivor.enemies.filter(enemy => enemy.slow > 0).length,
+        pickups: survivor.pickups.map(item => item.type),
+        hud: {
+          chain: document.getElementById('premium-survivor-chain')?.textContent || '',
+          overdrive: document.getElementById('premium-survivor-overdrive')?.textContent || '',
+          build: document.getElementById('premium-survivor-build')?.textContent || '',
+          threat: document.getElementById('premium-survivor-threat')?.textContent || ''
+        }
+      };
+    }
+
+    function forceSurvivorOverdrive() {
+      switchPremiumGame('survivor');
+      startSurvivor();
+      const p = survivor.player;
+      survivor.overdrive = 100;
+      survivor.chain = 6;
+      survivor.chainTimer = 2400;
+      survivor.bestChain = Math.max(survivor.bestChain, survivor.chain);
+      p.novaCooldown = 1600;
+      survivor.enemies = [
+        { x: p.x + 60, y: p.y, r: 12, hp: 70, maxHp: 70, speed: 82, value: 28, color: '#06B6D4', type: 'charger', elite: false, pulse: 0, slow: 0 },
+        { x: p.x - 64, y: p.y + 28, r: 18, hp: 260, maxHp: 260, speed: 68, value: 80, color: '#F97316', type: 'brute', elite: true, pulse: 1.2, slow: 0 },
+        { x: p.x + 36, y: p.y - 58, r: 10, hp: 45, maxHp: 45, speed: 110, value: 18, color: '#EC4899', type: 'swarm', elite: false, pulse: 2.1, slow: 0 }
+      ];
+      setSurvivorUi();
+      drawSurvivor();
+      const before = survivorDebugState();
+      triggerSurvivorNova();
+      survivor.enemies = survivor.enemies.filter(enemy => {
+        if (enemy.hp > 0) return true;
+        defeatSurvivorEnemy(enemy, 'nova');
+        return false;
+      });
+      setSurvivorUi();
+      drawSurvivor();
+      return {
+        before,
+        after: survivorDebugState()
+      };
     }
 
     document.getElementById('premium-survivor-start').addEventListener('click', startSurvivor);
@@ -8953,6 +9117,8 @@ function init() {
           },
           chooseSurvivorUpgrade: (id) => selectSurvivorUpgrade(id || survivor.draftChoices[0]?.id),
           survivorBuild: () => survivorBuildSummary(),
+          survivorState: () => survivorDebugState(),
+          forceSurvivorOverdrive: () => forceSurvivorOverdrive(),
           bossRunning: () => bossMode.running,
           bossPaused: () => bossMode.paused,
           bossPhase: () => bossMode.boss.phase,
