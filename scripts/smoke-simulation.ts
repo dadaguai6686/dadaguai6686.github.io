@@ -121,6 +121,15 @@ assert.equal(lumenContract.contract.status, "completed", "collecting four lumen 
 assert.equal(getContractFocus(lumenContract).active, false, "completed contracts should stop drawing battlefield focus markers");
 assert.equal(lumenContract.stats.contractsCompleted, 1, "completed contracts should be counted");
 assert.equal(getCoachDirective(lumenContract).id, "reachRelay", "after first lumen route, the coach should send players to relays");
+assert.ok(
+  getCoachDirective(lumenContract).title.includes("合约完成"),
+  "completed contracts should clearly transition the coach back to the main objective"
+);
+assert.equal(
+  getObjectiveHint(lumenContract).title,
+  "合约已完成，去修信标",
+  "completed contracts should clearly transition the objective strip back to relay repair"
+);
 assert.ok(lumenContract.score > lumenContractScore, "completed contracts should award score");
 assert.ok(getRunPerformance(lumenContract).points > getRunPerformance(state).points, "completed contracts should improve live rating pressure");
 const afterContractReward = lumenContract.score;
@@ -133,8 +142,21 @@ rushContract.briefingActive = false;
 rushContract.contract = createContractState("relayRush", rushContract.elapsed, rushContract.stats);
 assert.equal(getContractFocus(rushContract).kind, "relay", "relay rush should focus an unrepaired relay");
 assert.ok(getContractFocus(rushContract).targets.length > 0, "relay rush should expose a relay target");
+rushContract.player.maxCharge = 220;
+rushContract.player.charge = 220;
 rushContract = updateSimulation(rushContract, idle, 38.1);
 assert.equal(rushContract.contract.status, "failed", "relay rush should fail after the time limit without a repair");
+const failedContractGuidance = structuredClone(rushContract);
+failedContractGuidance.player.charge = 90;
+assert.ok(
+  getCoachDirective(failedContractGuidance).title.includes("主目标优先"),
+  "failed contracts should tell players to keep playing the main objective"
+);
+assert.equal(
+  getObjectiveHint(failedContractGuidance).title,
+  "合约失败，清主目标",
+  "failed contracts should not leave players thinking the run is over"
+);
 
 let cleanContract = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
 cleanContract.briefingActive = false;

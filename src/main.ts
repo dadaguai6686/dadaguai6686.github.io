@@ -55,6 +55,9 @@ const waveIntro = document.querySelector<HTMLDivElement>("#wave-intro")!;
 const waveIntroTitle = document.querySelector<HTMLElement>("#wave-intro-title")!;
 const waveIntroDetail = document.querySelector<HTMLElement>("#wave-intro-detail")!;
 const waveIntroContract = document.querySelector<HTMLElement>("#wave-intro-contract")!;
+const missionToast = document.querySelector<HTMLDivElement>("#mission-toast")!;
+const missionToastTitle = document.querySelector<HTMLElement>("#mission-toast-title")!;
+const missionToastDetail = document.querySelector<HTMLElement>("#mission-toast-detail")!;
 const startButton = document.querySelector<HTMLButtonElement>("#start-button")!;
 const sessionTools = document.querySelector<HTMLDivElement>("#session-tools")!;
 const copyRouteButton = document.querySelector<HTMLButtonElement>("#copy-route-button")!;
@@ -127,6 +130,7 @@ const overlayEyebrow = overlay.querySelector<HTMLElement>(".eyebrow")!;
 const overlayTitle = overlay.querySelector<HTMLElement>("h1")!;
 const overlayCopy = overlay.querySelector<HTMLElement>("p")!;
 const gameDossier = document.querySelector<HTMLDivElement>("#game-dossier")!;
+const launchBrief = document.querySelector<HTMLDivElement>("#launch-brief")!;
 const firstMinuteRoute = document.querySelector<HTMLDivElement>("#first-minute-route")!;
 const missionBrief = document.querySelector<HTMLDivElement>("#mission-brief")!;
 const fieldGuide = document.querySelector<HTMLDivElement>("#field-guide")!;
@@ -153,6 +157,8 @@ const touchStick = document.querySelector<HTMLDivElement>("#touch-stick")!;
 const touchStickKnob = document.querySelector<HTMLSpanElement>("#touch-stick span")!;
 const touchButtons = document.querySelectorAll<HTMLButtonElement>("[data-touch-action]");
 const STORAGE_KEY = "lumen-drift-save-v1";
+
+type MissionToastTone = "danger" | "primary" | "success" | "warning";
 
 type SaveData = {
   achievements: AchievementId[];
@@ -261,6 +267,8 @@ let resetSaveTimer: number | undefined;
 let latestWaveIntroKey = "";
 let waveIntroExpiresAt = 0;
 let waveIntroTimer: number | undefined;
+let latestMissionToastKey = "";
+let missionToastTimer: number | undefined;
 
 window.__lumenVirtualInput = {
   move: { x: 0, y: 0 },
@@ -383,6 +391,8 @@ function launchRun(upgradeId?: UpgradeId): void {
   overlay.classList.remove("show");
   hideTacticalScan();
   latestWaveIntroKey = "";
+  latestMissionToastKey = "";
+  hideMissionToast(true);
   hideWaveIntro(true);
   disarmResetSave();
   runRecap.hidden = true;
@@ -404,6 +414,8 @@ function launchDailyChallenge(): void {
   overlay.classList.remove("show");
   hideTacticalScan();
   latestWaveIntroKey = "";
+  latestMissionToastKey = "";
+  hideMissionToast(true);
   hideWaveIntro(true);
   disarmResetSave();
   runRecap.hidden = true;
@@ -498,6 +510,7 @@ window.addEventListener("game:hud", (event) => {
   objectiveTitle.textContent = buildObjectiveStripTitle(detail.objectiveHint);
   objectiveDetail.textContent = buildObjectiveStripDetail(detail);
   updateWaveIntro(detail);
+  renderMissionToast(detail);
   latestUpgradeChoices = detail.upgradeChoices;
 });
 
@@ -513,6 +526,7 @@ window.addEventListener("game:ended", (event) => {
   const newlyUnlocked = persistRunResult(detail);
   overlay.classList.add("show");
   hideTacticalScan();
+  hideMissionToast(true);
   hideWaveIntro(true);
   howToPlay.hidden = true;
   achievementStrip.hidden = true;
@@ -526,6 +540,7 @@ window.addEventListener("game:ended", (event) => {
     detail.status === "completed" ? "五波完成" : detail.status === "won" ? "光网稳定" : "信号中断";
   overlayCopy.textContent = detail.message;
   gameDossier.hidden = true;
+  launchBrief.hidden = true;
   firstMinuteRoute.hidden = true;
   missionBrief.hidden = true;
   fieldGuide.hidden = true;
@@ -637,6 +652,114 @@ function renderCoachRail(directive: CoachDirective): void {
       item.removeAttribute("aria-current");
     }
   });
+}
+
+function renderMissionToast(detail: {
+  campaignWaves: number;
+  contract: ContractSnapshot;
+  objectiveHint: ObjectiveHint;
+  radar: RadarSnapshot;
+  routePlan: RoutePlan;
+  status: GameStatus;
+  wave: number;
+}): void {
+  if (detail.status !== "playing") {
+    hideMissionToast();
+    return;
+  }
+
+  const toast = buildMissionToast(detail);
+  if (!toast) return;
+  if (toast.key === latestMissionToastKey) return;
+  latestMissionToastKey = toast.key;
+  showMissionToast(toast.title, toast.detail, toast.tone);
+}
+
+function buildMissionToast(detail: {
+  campaignWaves: number;
+  contract: ContractSnapshot;
+  objectiveHint: ObjectiveHint;
+  radar: RadarSnapshot;
+  routePlan: RoutePlan;
+  wave: number;
+}): { detail: string; key: string; title: string; tone: MissionToastTone } | undefined {
+  const baseKey = `${detail.routePlan.seed}-${detail.wave}`;
+  if (detail.objectiveHint.urgent) {
+    return {
+      key: `${baseKey}-urgent-${detail.objectiveHint.kind}-${detail.objectiveHint.title}`,
+      title: detail.objectiveHint.kind === "danger" ? "紧急避险" : "路线优先级改变",
+      detail: detail.objectiveHint.detail,
+      tone: "danger"
+    };
+  }
+  if (detail.radar.gate.open) {
+    return {
+      key: `${baseKey}-gate-open`,
+      title: "光门开启",
+      detail: `第 ${detail.wave}/${detail.campaignWaves} 波主目标完成。现在向北侧光门撤离，保留电量会提高评级。`,
+      tone: "success"
+    };
+  }
+  if (detail.contract.status === "completed") {
+    return {
+      key: `${baseKey}-contract-complete-${detail.contract.id}`,
+      title: "合约完成，切回主目标",
+      detail: `${detail.contract.name}奖励已结算。现在继续修剩余蓝色信标；全部亮起后从北侧光门撤离。`,
+      tone: "success"
+    };
+  }
+  if (detail.contract.status === "failed") {
+    return {
+      key: `${baseKey}-contract-failed-${detail.contract.id}`,
+      title: "合约失败，主目标仍可完成",
+      detail: "别重开也别乱飞，继续按导航修信标并撤离，本波依然能过。",
+      tone: "warning"
+    };
+  }
+  if (detail.objectiveHint.kind === "repair") {
+    return {
+      key: `${baseKey}-repair-lock`,
+      title: "维修圈已锁定",
+      detail: "按住 E / 修复键保持维修光束。危险靠近时先松手撤出，进度不会立刻清空。",
+      tone: "primary"
+    };
+  }
+  if (detail.objectiveHint.title === "先读图再出发") {
+    return {
+      key: `${baseKey}-briefing`,
+      title: "安全读图缓冲",
+      detail: "现在不会耗电或受击。先看金色流明、蓝色信标和本波合约，再移动出发。",
+      tone: "primary"
+    };
+  }
+  return undefined;
+}
+
+function showMissionToast(title: string, detail: string, tone: MissionToastTone): void {
+  window.clearTimeout(missionToastTimer);
+  missionToast.dataset.tone = tone;
+  missionToastTitle.textContent = title;
+  missionToastDetail.textContent = detail;
+  missionToast.hidden = false;
+  window.requestAnimationFrame(() => {
+    missionToast.classList.add("show");
+  });
+  missionToastTimer = window.setTimeout(() => hideMissionToast(), tone === "danger" ? 3000 : 3800);
+}
+
+function hideMissionToast(immediate = false): void {
+  window.clearTimeout(missionToastTimer);
+  if (missionToast.hidden) return;
+  missionToast.classList.remove("show");
+  if (immediate) {
+    missionToast.hidden = true;
+    return;
+  }
+  missionToastTimer = window.setTimeout(() => {
+    if (!missionToast.classList.contains("show")) {
+      missionToast.hidden = true;
+    }
+  }, 220);
 }
 
 function buildObjectiveStripTitle(hint: ObjectiveHint): string {
@@ -901,6 +1024,7 @@ function showHelpOverlay(reason: "manual" | "interruption" = "manual"): void {
     : "目标不是乱飞，而是在电量压力下规划路线：先补流明，再修信标，最后从北侧光门撤离。";
   runRecap.hidden = true;
   gameDossier.hidden = false;
+  launchBrief.hidden = false;
   firstMinuteRoute.hidden = false;
   missionBrief.hidden = false;
   fieldGuide.hidden = false;

@@ -11,10 +11,16 @@ const styles = readFileSync("src/styles.css", "utf8");
 assert.ok(html.includes('id="radar-panel"'), "desktop radar panel should exist in HTML");
 assert.ok(html.includes('id="tactical-scan"'), "pause tactical scan should exist in HTML");
 assert.ok(html.includes('id="wave-intro"'), "wave intro briefing should exist in HTML");
+assert.ok(html.includes('id="mission-toast"'), "in-run mission transition toast should exist in HTML");
 assert.ok(html.includes('id="game-dossier"'), "menu should explain the game fantasy and win/loss loop");
+assert.ok(html.includes('id="launch-brief"'), "menu should include an illustrated launch briefing");
+assert.ok(html.includes('id="launch-map"'), "launch briefing should include a route map");
 assert.ok(html.includes('id="first-minute-route"'), "menu should give players an actionable first-minute route");
 assert.ok(html.includes('id="coach-rail"'), "route coach should expose a visible four-step progress rail");
 assert.ok(html.includes('role="list"'), "route coach progress rail should expose list semantics");
+assert.ok(html.includes("首局作战令"), "launch briefing should provide first-run orders in Chinese");
+assert.ok(html.includes("安全读图"), "launch briefing should explain the safe opening read phase");
+assert.ok(html.includes("北侧撤离"), "launch briefing should explain the evacuation target");
 assert.ok(html.includes("读图补电"), "first-minute route should explain the opening supply step in Chinese");
 assert.ok(html.includes("E / 修复键"), "visible control copy should support keyboard and touch repair controls");
 assert.ok(html.includes("Space / 推进键"), "visible control copy should support keyboard and touch boost controls");
@@ -25,12 +31,19 @@ assert.ok(
   "primary start action should appear before long mission copy on mobile"
 );
 assert.ok(
+  html.indexOf('id="start-button"') < html.indexOf('id="launch-brief"'),
+  "primary start action should appear before the illustrated launch briefing on mobile"
+);
+assert.ok(
   html.indexOf('id="start-button"') < html.indexOf('id="field-guide"'),
   "primary start action should appear before detailed field guide on mobile"
 );
 assert.ok(main.includes("renderRadar(detail.radar"), "HUD updates should render the live radar");
 assert.ok(main.includes("renderTacticalScan()"), "pause overlay should render the tactical scan");
 assert.ok(main.includes("updateWaveIntro(detail)"), "HUD updates should render wave intro briefing");
+assert.ok(main.includes("renderMissionToast(detail)"), "HUD updates should render in-run mission transition toasts");
+assert.ok(main.includes("合约完成，切回主目标"), "mission toast should clearly transition completed contracts back to the main objective");
+assert.ok(main.includes("合约失败，主目标仍可完成"), "mission toast should keep failed contracts from feeling like run failure");
 assert.ok(main.includes("buildObjectiveStripTitle"), "HUD objective strip should use contextual mission copy");
 assert.ok(main.includes("renderCoachRail"), "route coach should render the current four-step progress state");
 assert.ok(main.includes("COACH_STEP_LABELS"), "route coach should use localized step labels");
@@ -65,12 +78,17 @@ assert.ok(gameScene.includes("toLocaleString()}分"), "score feedback should sho
 assert.ok(gameScene.includes("renderHazardTrajectories"), "Phaser scene should telegraph moving hazard paths");
 assert.ok(gameScene.includes("projectHazardPosition"), "hazard telegraphs should project future shard positions");
 assert.ok(simulation.includes("按住 E / 修复键"), "runtime objective copy should support keyboard and touch repair controls");
+assert.ok(simulation.includes("合约完成：继续修信标"), "coach should clearly guide after completed contracts");
+assert.ok(simulation.includes("合约失败，清主目标"), "objective copy should clearly guide after failed contracts");
 assert.ok(main.includes('"data-kind": "relay"'), "radar nodes should expose stable data-kind markers");
 assert.ok(main.includes('"data-kind": "player"'), "radar nodes should expose player marker for QA");
 assert.ok(main.includes('"data-kind": "guide"'), "radar nodes should expose guide markers for QA");
 assert.ok(main.includes("score:"), "audio bus should include a score feedback sound");
 assert.ok(styles.includes("#radar-panel"), "desktop radar should have CSS");
 assert.ok(styles.includes("#tactical-scan"), "pause tactical scan should have CSS");
+assert.ok(styles.includes("#mission-toast"), "mission transition toast should have CSS");
+assert.ok(styles.includes("#launch-brief"), "launch briefing should have CSS");
+assert.ok(styles.includes(".launch-route-line"), "launch route map should render an obvious route line");
 assert.ok(styles.includes(".radar-guide"), "radar guide should have CSS");
 assert.ok(styles.includes(".tactical-scan-legend"), "pause tactical scan should have a legend style");
 assert.ok(styles.includes("#coach-rail"), "route coach progress rail should have CSS");

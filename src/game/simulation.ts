@@ -1544,6 +1544,33 @@ export function getCoachDirective(state: GameState): CoachDirective {
     };
   }
 
+  const nearestRelay = nearest(state.relays.filter((relay) => !relay.repaired), player.position);
+  if (nearestRelay && state.contract.status === "completed") {
+    return {
+      id: "reachRelay",
+      step: 2,
+      totalSteps,
+      title: "合约完成：继续修信标",
+      detail: "副目标奖励已经结算。现在回到主路线，靠近剩余蓝色信标并按住 E / 修复键。",
+      progress: `已修复 ${state.stats.relaysRepaired}/${state.relays.length}`,
+      target: nearestRelay.item.position,
+      urgent: false
+    };
+  }
+
+  if (nearestRelay && state.contract.status === "failed") {
+    return {
+      id: "reachRelay",
+      step: 2,
+      totalSteps,
+      title: "主目标优先：继续修信标",
+      detail: "本波合约已经失败，但主目标仍可完成。先清剩余信标，再从北侧光门撤离。",
+      progress: `已修复 ${state.stats.relaysRepaired}/${state.relays.length}`,
+      target: nearestRelay.item.position,
+      urgent: false
+    };
+  }
+
   if (state.wave === 1 && state.stats.lumenCollected < 2 && nearestLumen) {
     return {
       id: "collectLumen",
@@ -1557,7 +1584,6 @@ export function getCoachDirective(state: GameState): CoachDirective {
     };
   }
 
-  const nearestRelay = nearest(state.relays.filter((relay) => !relay.repaired), player.position);
   if (nearestRelay) {
     return {
       id: "reachRelay",
@@ -1662,6 +1688,25 @@ export function getObjectiveHint(state: GameState): ObjectiveHint {
     };
   }
 
+  const nearestRelay = nearest(state.relays.filter((relay) => !relay.repaired), player.position);
+  if (nearestRelay && state.contract.status === "completed") {
+    return {
+      kind: "relay",
+      title: "合约已完成，去修信标",
+      detail: `副目标奖励已结算。继续靠近蓝色信标，距离 ${formatDistance(nearestRelay.distance)}。`,
+      target: nearestRelay.item.position,
+      urgent: false
+    };
+  }
+  if (nearestRelay && state.contract.status === "failed") {
+    return {
+      kind: "relay",
+      title: "合约失败，清主目标",
+      detail: `本波仍可过关。继续靠近蓝色信标，距离 ${formatDistance(nearestRelay.distance)}。`,
+      target: nearestRelay.item.position,
+      urgent: false
+    };
+  }
   if (state.wave === 1 && state.stats.lumenCollected < 2 && nearestLumen) {
     return {
       kind: "lumen",
@@ -1671,8 +1716,6 @@ export function getObjectiveHint(state: GameState): ObjectiveHint {
       urgent: false
     };
   }
-
-  const nearestRelay = nearest(state.relays.filter((relay) => !relay.repaired), player.position);
   if (nearestRelay) {
     return {
       kind: "relay",
