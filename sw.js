@@ -1,10 +1,10 @@
-const CACHE_VERSION = 'atherix-static-v26-offline-polish';
+const CACHE_VERSION = 'atherix-static-v27-mobile-controls';
 const NAVIGATION_FALLBACK_URL = '/index.html';
 const STATIC_ASSETS = [
   '/',
   NAVIGATION_FALLBACK_URL,
-  '/style.css?v=20260608-offline-polish-v4',
-  '/app.js?v=20260608-offline-polish-v4',
+  '/style.css?v=20260608-mobile-controls-v6',
+  '/app.js?v=20260608-mobile-controls-v6',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',

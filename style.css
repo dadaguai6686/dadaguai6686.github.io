@@ -7171,6 +7171,15 @@ body.command-open {
   }
   .mini-game-stage {
     order: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    padding: 0.35rem;
+  }
+  #game.view-section.active,
+  #game.active .arcade-page-container {
+    animation: none;
+    transform: none;
   }
   .arcade-career-panel,
   .arcade-profile-panel,
@@ -7284,6 +7293,7 @@ body.command-open {
     text-align: left;
   }
   .mini-game-panel {
+    order: 1;
     grid-template-columns: 1fr;
   }
   .mini-canvas {
@@ -7304,6 +7314,64 @@ body.command-open {
   }
   .premium-touch-controls {
     display: flex;
+  }
+  #game.active .premium-touch-controls {
+    order: 0;
+    position: sticky;
+    top: 0.55rem;
+    z-index: 20;
+    display: grid;
+    grid-template-columns: auto minmax(136px, 1fr) auto;
+    align-items: center;
+    gap: 0.3rem;
+    margin: 0 0 0.35rem;
+    padding: 0.25rem 0.45rem;
+    border: 1px solid rgba(139, 92, 246, 0.26);
+    border-radius: 16px;
+    background:
+      linear-gradient(135deg, rgba(14, 10, 28, 0.92), rgba(6, 16, 32, 0.88)),
+      rgba(5, 8, 22, 0.9);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+  #game.active .premium-gamepad-status {
+    justify-self: start;
+    padding: 0.3rem 0.42rem;
+    font-size: 0.62rem;
+    white-space: nowrap;
+  }
+  #game.active .premium-dpad {
+    justify-self: center;
+    grid-template-columns: repeat(3, 44px);
+    grid-template-rows: repeat(2, 44px);
+    gap: 0.1rem;
+  }
+  #game.active .premium-dpad [data-premium-control="up"] { grid-column: 2; grid-row: 1; }
+  #game.active .premium-dpad [data-premium-control="left"] { grid-column: 1; grid-row: 2; }
+  #game.active .premium-dpad [data-premium-control="down"] { grid-column: 2; grid-row: 2; }
+  #game.active .premium-dpad [data-premium-control="right"] { grid-column: 3; grid-row: 2; }
+  #game.active .premium-dpad button {
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 11px;
+  }
+  #game.active .premium-action-stack {
+    grid-template-columns: repeat(2, auto);
+    justify-self: end;
+    gap: 0.38rem;
+  }
+  #game.active .premium-action-pad {
+    width: 70px;
+    height: 70px;
+    min-width: 70px;
+    min-height: 70px;
+  }
+  #game.active .premium-tool-pad {
+    width: 50px;
+    height: 50px;
+    min-width: 50px;
+    min-height: 50px;
   }
 }
 
