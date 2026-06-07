@@ -5657,6 +5657,23 @@ body.command-open {
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.28), 0 10px 26px rgba(236, 72, 153, 0.28);
 }
 
+.premium-action-stack {
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+}
+
+.premium-tool-pad {
+  width: 54px;
+  height: 54px;
+  min-width: 54px;
+  min-height: 54px;
+  border-color: rgba(34, 211, 238, 0.42);
+  background: radial-gradient(circle at 45% 25%, #bae6fd, #06b6d4 52%, #164e63);
+  font-size: 0.72rem;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.24), 0 8px 20px rgba(34, 211, 238, 0.22);
+}
+
 .premium-dpad button:active,
 .premium-action-pad:active {
   transform: translateY(2px) scale(0.97);

@@ -4483,7 +4483,7 @@ function init() {
         </div>
         <div class="arcade-director-meters" aria-label="街机完成度">
           <span>奖牌 <strong id="premium-director-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-director-achievements">0/19</strong></span>
+          <span>成就 <strong id="premium-director-achievements">0/20</strong></span>
           <span>完成度 <strong id="premium-director-completion">0%</strong></span>
         </div>
         <button type="button" class="arcade-director-action" id="premium-director-start" data-target-game="survivor">
@@ -4619,15 +4619,18 @@ function init() {
         <div class="mini-game-panel" id="premium-heist">
           <div class="mini-game-copy">
             <h3>Cyber Heist</h3>
-            <p>潜入数据金库。WASD / 方向键移动，Space 启动短暂隐身；黑入终端、绕过视野锥，偷走 4 枚密钥后撤离。</p>
+            <p>潜入数据金库。WASD / 方向键移动，Space 启动短暂隐身，Q 部署诱饵；黑入终端、绕开摄像头与视野锥，偷走 4 枚密钥后撤离。</p>
             <div class="mini-stats">
               <span>密钥 <strong id="premium-heist-keys">0</strong>/4</span>
               <span>最佳 <strong id="premium-heist-best">0</strong></span>
               <span>警戒 <strong id="premium-heist-alert">LOW</strong></span>
+              <span>安防 <strong id="premium-heist-security">0%</strong></span>
               <span>步数 <strong id="premium-heist-steps">0</strong></span>
               <span>路线 <strong id="premium-heist-route">SCAN</strong></span>
               <span>连段 <strong id="premium-heist-chain">0x</strong></span>
               <span>工具 <strong id="premium-heist-tools">CLOAK 2</strong></span>
+              <span>诱饵 <strong id="premium-heist-decoys">2</strong></span>
+              <span>战利品 <strong id="premium-heist-loot">0</strong></span>
             </div>
             <div class="mini-actions">
               <button type="button" class="action-btn action-btn-primary" id="premium-heist-new">生成任务</button>
@@ -4687,7 +4690,10 @@ function init() {
             <button type="button" data-premium-control="right" aria-label="右">▶</button>
             <button type="button" data-premium-control="down" aria-label="下">▼</button>
           </div>
-          <button type="button" class="premium-action-pad" data-premium-control="action" aria-label="动作">ACT</button>
+          <div class="premium-action-stack">
+            <button type="button" class="premium-action-pad" data-premium-control="action" aria-label="动作">ACT</button>
+            <button type="button" class="premium-action-pad premium-tool-pad" data-premium-control="tool" aria-label="工具">TOOL</button>
+          </div>
         </div>
       </div>`;
 
@@ -4695,7 +4701,7 @@ function init() {
 
     const stage = document.getElementById('premium-game-stage');
     const title = document.getElementById('premium-active-title');
-    const premiumKeys = { up: false, down: false, left: false, right: false, action: false };
+    const premiumKeys = { up: false, down: false, left: false, right: false, action: false, tool: false };
     let premiumActive = 'survivor';
     const titles = {
       survivor: '星核幸存者 Starcore Survivor',
@@ -4767,6 +4773,7 @@ function init() {
       { id: 'drift_combo', label: '量子倍率', desc: 'Neon Drift 倍率达到 x3.0' },
       { id: 'heist_ghost', label: '幽影协议', desc: '成功启动隐身装置' },
       { id: 'heist_clean', label: '无声撤离', desc: '低步数完成潜入' },
+      { id: 'heist_cache', label: '金库猎手', desc: '赛博潜入中取得高价值缓存' },
       { id: 'chain_combo_9', label: '九连炼成', desc: '一次连锁爆破 9 格以上' },
       { id: 'chain_clear', label: '贤者能场', desc: '完成连锁炼金目标' },
       { id: 'tactics_clear', label: '裂隙撤离', desc: '完成裂隙战术撤离' },
@@ -5637,12 +5644,14 @@ function init() {
       if (control === 'left') premiumKeys.left = pressed;
       if (control === 'right') premiumKeys.right = pressed;
       if (control === 'action') premiumKeys.action = pressed;
+      if (control === 'tool') premiumKeys.tool = pressed;
       if (pressed && premiumActive === 'heist') {
         if (control === 'up') moveHeist(0, -1);
         if (control === 'down') moveHeist(0, 1);
         if (control === 'left') moveHeist(-1, 0);
         if (control === 'right') moveHeist(1, 0);
         if (control === 'action') triggerHeistCloak();
+        if (control === 'tool') triggerHeistDecoy();
       }
       if (pressed && premiumActive === 'tactics') {
         if (control === 'up') moveTactics(0, -1);
@@ -7959,13 +7968,22 @@ function init() {
       keys: [],
       exit: { x: 18, y: 11 },
       guards: [],
+      cameras: [],
       terminals: [],
       doors: [],
+      caches: [],
       collected: 0,
+      loot: 0,
       steps: 0,
+      security: 0,
+      securityPeak: 0,
       cloaks: 2,
       cloakTurns: 0,
+      decoys: 2,
+      decoy: null,
       alert: 'LOW',
+      lastTactic: 'INFILTRATE',
+      alarmFlash: 0,
       routeLabel: 'SCAN',
       routeRisk: 0,
       chain: 0,
@@ -7980,6 +7998,13 @@ function init() {
       document.getElementById('premium-heist-best').textContent = localStorage.getItem(heist.bestKey) || '0';
       document.getElementById('premium-heist-steps').textContent = heist.steps;
       document.getElementById('premium-heist-tools').textContent = heist.cloakTurns > 0 ? `GHOST ${heist.cloakTurns}` : `CLOAK ${heist.cloaks}`;
+      document.getElementById('premium-heist-decoys').textContent = heist.decoy?.timer > 0 ? `LIVE ${heist.decoy.timer}` : heist.decoys;
+      document.getElementById('premium-heist-loot').textContent = heist.loot;
+      const securityEl = document.getElementById('premium-heist-security');
+      if (securityEl) {
+        securityEl.textContent = `${Math.round(heist.security)}%`;
+        securityEl.style.color = heist.security >= 82 ? '#EF4444' : heist.security >= 48 ? '#FBBF24' : '#34D399';
+      }
       const intel = heistIntel();
       heist.routeLabel = intel.label;
       heist.routeRisk = intel.risk;
@@ -7997,7 +8022,9 @@ function init() {
       }
       const alertEl = document.getElementById('premium-heist-alert');
       alertEl.textContent = heist.alert;
-      alertEl.style.color = heist.alert === 'HIGH' ? '#EF4444' : (heist.alert === 'MID' ? '#FBBF24' : '#34D399');
+      alertEl.style.color = ['HIGH', 'LOCK', 'CAM'].includes(heist.alert)
+        ? '#EF4444'
+        : (['MID', 'GHOST'].includes(heist.alert) ? '#FBBF24' : '#34D399');
     }
 
     function newHeist() {
@@ -8014,13 +8041,33 @@ function init() {
         { x: 2, y: 10, dir: 1, axis: 'x', min: 2, max: 8, cone: Math.max(2, 3 + coneDelta) },
         { x: 11, y: 2, dir: 1, axis: 'y', min: 2, max: 7, cone: Math.max(2, 2 + coneDelta) }
       ];
+      heist.guards.forEach(guard => {
+        guard.patrolAxis = guard.axis;
+      });
+      heist.cameras = [
+        { x: 6, y: 1, dir: 1, axis: 'y', cone: Math.max(2, 4 + coneDelta), sweep: 0, disabled: false },
+        { x: 18, y: 5, dir: -1, axis: 'x', cone: Math.max(2, 4 + coneDelta), sweep: 1, disabled: false },
+        { x: 5, y: 11, dir: 1, axis: 'x', cone: Math.max(2, 3 + coneDelta), sweep: 2, disabled: false }
+      ];
       heist.terminals = [{ x: 3, y: 5, used: false }, { x: 17, y: 9, used: false }];
       heist.doors = [{ x: 9, y: 8, open: false }, { x: 12, y: 4, open: false }];
+      heist.caches = [
+        { x: 6, y: 6, value: 180, tier: 'S', taken: false },
+        { x: 14, y: 8, value: 240, tier: 'A', taken: false },
+        { x: 18, y: 2, value: 320, tier: 'X', taken: false }
+      ];
       heist.collected = 0;
+      heist.loot = 0;
       heist.steps = 0;
+      heist.security = 0;
+      heist.securityPeak = 0;
       heist.cloaks = Math.max(1, 2 + Number(bonuses.heistCloaks || 0) + (activeDifficultyDef().id === 'training' ? 1 : 0));
       heist.cloakTurns = 0;
+      heist.decoys = Math.max(1, 2 + (activeDifficultyDef().id === 'training' ? 1 : 0));
+      heist.decoy = null;
       heist.alert = 'LOW';
+      heist.lastTactic = 'INFILTRATE';
+      heist.alarmFlash = 0;
       heist.routeLabel = 'SCAN';
       heist.routeRisk = 0;
       heist.chain = 0;
@@ -8044,6 +8091,32 @@ function init() {
       return `${x},${y}`;
     }
 
+    function heistDistance(a, b) {
+      return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+    }
+
+    function heistRaiseSecurity(amount, tactic = '') {
+      heist.security = clamp(heist.security + amount, 0, 100);
+      heist.securityPeak = Math.max(heist.securityPeak, heist.security);
+      if (amount > 0) heist.alarmFlash = Math.max(heist.alarmFlash, 3);
+      if (tactic) heist.lastTactic = tactic;
+    }
+
+    function heistCameraVector(camera) {
+      const vectors = [
+        { axis: 'x', dir: 1 },
+        { axis: 'y', dir: 1 },
+        { axis: 'x', dir: -1 },
+        { axis: 'y', dir: -1 }
+      ];
+      return vectors[Math.abs(camera.sweep || 0) % vectors.length];
+    }
+
+    function heistCameraSensor(camera) {
+      const vector = heistCameraVector(camera);
+      return { ...camera, axis: vector.axis, dir: vector.dir };
+    }
+
     function heistVisionReach(g) {
       for (let i = 1; i <= g.cone; i++) {
         const x = g.axis === 'x' ? g.x + g.dir * i : g.x;
@@ -8053,18 +8126,73 @@ function init() {
       return g.cone;
     }
 
-    function guardSeesPlayer(g) {
-      if (heist.cloakTurns > 0) return false;
-      const dx = heist.player.x - g.x;
-      const dy = heist.player.y - g.y;
-      if (g.axis === 'x') {
-        const forwardDistance = dx * g.dir;
-        if (forwardDistance <= 0 || forwardDistance > g.cone || Math.abs(dy) > 1) return false;
-        return forwardDistance <= heistVisionReach(g);
+    function heistSensorSeesPlayer(sensor) {
+      if (heist.cloakTurns > 0 || sensor.disabled) return false;
+      const s = sensor.sweep !== undefined ? heistCameraSensor(sensor) : sensor;
+      const dx = heist.player.x - s.x;
+      const dy = heist.player.y - s.y;
+      if (s.axis === 'x') {
+        const forwardDistance = dx * s.dir;
+        if (forwardDistance <= 0 || forwardDistance > s.cone || Math.abs(dy) > 1) return false;
+        return forwardDistance <= heistVisionReach(s);
       }
-      const forwardDistance = dy * g.dir;
-      if (forwardDistance <= 0 || forwardDistance > g.cone || Math.abs(dx) > 1) return false;
-      return forwardDistance <= heistVisionReach(g);
+      const forwardDistance = dy * s.dir;
+      if (forwardDistance <= 0 || forwardDistance > s.cone || Math.abs(dx) > 1) return false;
+      return forwardDistance <= heistVisionReach(s);
+    }
+
+    function guardSeesPlayer(g) {
+      return heistSensorSeesPlayer(g);
+    }
+
+    function heistGuardOccupied(x, y, self) {
+      return heist.guards.some(guard => guard !== self && guard.x === x && guard.y === y);
+    }
+
+    function heistMoveGuardTowardDecoy(g) {
+      if (!heist.decoy || heist.decoy.timer <= 0 || heistDistance(g, heist.decoy) > 7) return false;
+      const dirs = [
+        { dx: Math.sign(heist.decoy.x - g.x), dy: 0, axis: 'x' },
+        { dx: 0, dy: Math.sign(heist.decoy.y - g.y), axis: 'y' },
+        { dx: -g.dir, dy: 0, axis: 'x' },
+        { dx: 0, dy: -g.dir, axis: 'y' }
+      ].filter(dir => dir.dx || dir.dy);
+      for (const dir of dirs) {
+        const nx = g.x + dir.dx;
+        const ny = g.y + dir.dy;
+        if (heistTileBlocked(nx, ny) || heistGuardOccupied(nx, ny, g)) continue;
+        g.x = nx;
+        g.y = ny;
+        g.axis = dir.axis;
+        g.dir = dir.dx || dir.dy;
+        g.distracted = Math.max(g.distracted || 0, heist.decoy.timer);
+        return true;
+      }
+      g.distracted = Math.max(g.distracted || 0, heist.decoy.timer);
+      return true;
+    }
+
+    function heistPatrolGuard(g) {
+      if (heistMoveGuardTowardDecoy(g)) return;
+      g.axis = g.patrolAxis || g.axis;
+      g[g.axis] += g.dir;
+      if (g[g.axis] < g.min || g[g.axis] > g.max || heistTileBlocked(g.x, g.y)) {
+        g.dir *= -1;
+        g[g.axis] += g.dir * 2;
+      }
+      g.distracted = Math.max(0, (g.distracted || 0) - 1);
+    }
+
+    function heistAdvanceSensors() {
+      heist.guards.forEach(heistPatrolGuard);
+      heist.cameras.forEach(camera => {
+        if (!camera.disabled) camera.sweep = (camera.sweep + 1) % 4;
+      });
+      if (heist.decoy) {
+        heist.decoy.timer -= 1;
+        if (heist.decoy.timer <= 0) heist.decoy = null;
+      }
+      heist.alarmFlash = Math.max(0, heist.alarmFlash - 1);
     }
 
     function heistHeatMap() {
@@ -8087,6 +8215,24 @@ function init() {
           } else {
             add(cx - 1, cy, 2);
             add(cx + 1, cy, 2);
+          }
+        }
+      });
+      heist.cameras.forEach(camera => {
+        if (camera.disabled) return;
+        const sensor = heistCameraSensor(camera);
+        add(sensor.x, sensor.y, 3);
+        const reach = heistVisionReach(sensor);
+        for (let i = 1; i <= reach; i++) {
+          const cx = sensor.axis === 'x' ? sensor.x + sensor.dir * i : sensor.x;
+          const cy = sensor.axis === 'y' ? sensor.y + sensor.dir * i : sensor.y;
+          add(cx, cy, 3);
+          if (sensor.axis === 'x') {
+            add(cx, cy - 1, 1);
+            add(cx, cy + 1, 1);
+          } else {
+            add(cx - 1, cy, 1);
+            add(cx + 1, cy, 1);
           }
         }
       });
@@ -8122,9 +8268,11 @@ function init() {
     function heistObjectiveCandidates() {
       if (heist.collected >= 4) return [{ ...heist.exit, kind: 'EXIT' }];
       const keyTargets = heist.keys.map(key => ({ ...key, kind: 'KEY' }));
-      if (keyTargets.length) return keyTargets;
       const terminals = heist.terminals.filter(t => !t.used).map(t => ({ ...t, kind: 'TERMINAL' }));
-      return terminals.length ? terminals : [{ ...heist.exit, kind: 'EXIT' }];
+      const caches = heist.caches
+        .filter(cache => !cache.taken)
+        .map(cache => ({ ...cache, kind: 'CACHE' }));
+      return [...keyTargets, ...caches, ...terminals];
     }
 
     function heistIntel() {
@@ -8135,7 +8283,14 @@ function init() {
         .sort((a, b) => {
           const ar = a.route.reduce((sum, cell) => sum + (cell.risk || 0), 0);
           const br = b.route.reduce((sum, cell) => sum + (cell.risk || 0), 0);
-          return (a.route.length + ar * 2) - (b.route.length + br * 2);
+          const objectiveWeight = target => {
+            if (target.kind === 'KEY') return -3;
+            if (target.kind === 'TERMINAL') return heist.security >= 45 ? -5 : -1;
+            if (target.kind === 'CACHE') return -Math.min(4, Math.floor((target.value || 0) / 95));
+            return 0;
+          };
+          return (a.route.length + ar * 2 + objectiveWeight(a.target)) -
+            (b.route.length + br * 2 + objectiveWeight(b.target));
         });
       const best = candidates[0] || { target: { kind: 'NO ROUTE' }, route: [] };
       const risk = best.route.reduce((sum, cell) => sum + (cell.risk || 0), 0);
@@ -8147,6 +8302,13 @@ function init() {
         risk,
         target: best.target,
         route: best.route.slice(0, 18),
+        cameras: heist.cameras.map(camera => ({
+          x: camera.x,
+          y: camera.y,
+          disabled: !!camera.disabled,
+          sensor: heistCameraSensor(camera)
+        })),
+        caches: heist.caches.map(cache => ({ ...cache })),
         heatCells: [...heat.entries()].map(([key, value]) => {
           const [x, y] = key.split(',').map(Number);
           return { x, y, risk: value };
@@ -8162,18 +8324,36 @@ function init() {
         target: intel.target,
         route: intel.route,
         heatCells: intel.heatCells,
+        cameras: intel.cameras,
+        caches: intel.caches,
         chain: heist.chain,
         bestChain: heist.bestChain,
         routeHud: document.getElementById('premium-heist-route')?.textContent || '',
         chainHud: document.getElementById('premium-heist-chain')?.textContent || '',
+        securityHud: document.getElementById('premium-heist-security')?.textContent || '',
+        decoyHud: document.getElementById('premium-heist-decoys')?.textContent || '',
+        lootHud: document.getElementById('premium-heist-loot')?.textContent || '',
         alert: heist.alert,
         steps: heist.steps,
         tools: document.getElementById('premium-heist-tools')?.textContent || '',
         player: { ...heist.player },
+        guards: heist.guards.map(guard => ({
+          x: guard.x,
+          y: guard.y,
+          axis: guard.axis,
+          dir: guard.dir,
+          distracted: guard.distracted || 0
+        })),
         keys: heist.collected,
         remainingKeys: heist.keys.length,
+        loot: heist.loot,
+        security: Math.round(heist.security),
+        securityPeak: Math.round(heist.securityPeak),
         cloaks: heist.cloaks,
         cloakTurns: heist.cloakTurns,
+        decoys: heist.decoys,
+        decoy: heist.decoy ? { ...heist.decoy } : null,
+        lastTactic: heist.lastTactic,
         won: heist.won
       };
     }
@@ -8189,59 +8369,119 @@ function init() {
       heist.cloaks--;
       heist.cloakTurns = 4;
       heist.alert = 'GHOST';
+      heist.lastTactic = 'CLOAK';
       unlockAchievement('heist_ghost');
       setHeistUi();
       drawHeist();
+    }
+
+    function triggerHeistDecoy() {
+      if (premiumActive !== 'heist' || heist.won || heist.decoys <= 0 || heist.decoy?.timer > 0) return;
+      heist.decoys--;
+      heist.decoy = {
+        x: heist.player.x,
+        y: heist.player.y,
+        timer: 5,
+        pulse: 5
+      };
+      heistRaiseSecurity(6, 'DECOY');
+      heist.alert = heist.cloakTurns > 0 ? 'GHOST' : 'DECOY';
+      heist.chain = Math.max(heist.chain, 1);
+      heist.bestChain = Math.max(heist.bestChain, heist.chain);
+      setHeistUi();
+      drawHeist();
+    }
+
+    function heistCaught(cause = 'HIGH') {
+      heist.player = { x: 1, y: 1 };
+      heist.cloakTurns = 0;
+      heist.alert = cause;
+      heist.chain = 0;
+      heist.decoy = null;
+      heistRaiseSecurity(cause === 'LOCK' ? 26 : 18, cause === 'LOCK' ? 'LOCKDOWN' : 'SPOTTED');
+    }
+
+    function collectHeistTile(risk) {
+      heist.keys = heist.keys.filter(k => {
+        const got = k.x === heist.player.x && k.y === heist.player.y;
+        if (got) {
+          heist.collected++;
+          heist.loot += 55 + Math.max(0, heist.chain * 3);
+          heist.lastTactic = 'KEY';
+        }
+        return !got;
+      });
+      heist.caches.forEach(cache => {
+        if (cache.taken || cache.x !== heist.player.x || cache.y !== heist.player.y) return;
+        cache.taken = true;
+        const chainBonus = Math.max(0, heist.chain * 6);
+        heist.loot += cache.value + chainBonus;
+        heistRaiseSecurity(10 + Math.min(14, Math.floor(cache.value / 28)) + risk, `CACHE ${cache.tier}`);
+        if (cache.value >= 240) unlockAchievement('heist_cache');
+      });
+      heist.terminals.forEach(t => {
+        if (t.used || t.x !== heist.player.x || t.y !== heist.player.y) return;
+        t.used = true;
+        const door = heist.doors.find(d => !d.open);
+        if (door) door.open = true;
+        const camera = heist.cameras.find(item => !item.disabled);
+        if (camera) camera.disabled = true;
+        heist.cloaks = Math.min(3, heist.cloaks + 1);
+        heist.decoys = Math.min(3, heist.decoys + 1);
+        heist.security = Math.max(0, heist.security - 22);
+        heist.lastTactic = camera ? 'TERMINAL CAM-OFF' : 'TERMINAL DOOR';
+      });
     }
 
     function moveHeist(dx, dy) {
       if (premiumActive !== 'heist' || heist.won) return;
       const nx = heist.player.x + dx;
       const ny = heist.player.y + dy;
-      if (!heist.grid[ny] || heist.grid[ny][nx]) return;
-      if (heist.doors.some(door => !door.open && door.x === nx && door.y === ny)) return;
+      if (heistTileBlocked(nx, ny)) return;
       heist.player = { x: nx, y: ny };
       heist.steps++;
       heist.cloakTurns = Math.max(0, heist.cloakTurns - 1);
-      heist.guards.forEach(g => {
-        g[g.axis] += g.dir;
-        if (g[g.axis] < g.min || g[g.axis] > g.max) {
-          g.dir *= -1;
-          g[g.axis] += g.dir * 2;
-        }
-      });
-      const seen = heist.guards.some(guardSeesPlayer);
-      heist.alert = heist.cloakTurns > 0 ? 'GHOST' : seen ? 'HIGH' : (heist.guards.some(g => Math.abs(g.x - heist.player.x) + Math.abs(g.y - heist.player.y) <= 4) ? 'MID' : 'LOW');
-      if (heist.guards.some(g => g.x === heist.player.x && g.y === heist.player.y) || seen) {
-        heist.player = { x: 1, y: 1 };
-        heist.cloakTurns = 0;
-        heist.alert = 'HIGH';
-        heist.chain = 0;
+      heist.security = clamp(heist.security - (heist.cloakTurns > 0 ? 1.6 : 0.9), 0, 100);
+      heistAdvanceSensors();
+
+      const heat = heistHeatMap();
+      const risk = heat.get(heistKey(heist.player.x, heist.player.y)) || 0;
+      const guardSeen = heist.guards.some(guardSeesPlayer);
+      const cameraSeen = heist.cameras.some(heistSensorSeesPlayer);
+      const guardCollision = heist.guards.some(g => g.x === heist.player.x && g.y === heist.player.y);
+      if (cameraSeen) {
+        heistRaiseSecurity(18 + risk, 'CAMERA');
+      }
+      if (guardCollision || guardSeen || (cameraSeen && heist.security >= 96)) {
+        heistCaught(cameraSeen && heist.security >= 96 ? 'LOCK' : 'HIGH');
       } else {
-        const risk = heistHeatMap().get(heistKey(heist.player.x, heist.player.y)) || 0;
         heist.chain += heist.cloakTurns > 0 ? 2 : 1;
         if (risk === 0) heist.chain++;
         heist.bestChain = Math.max(heist.bestChain, heist.chain);
-        heist.keys = heist.keys.filter(k => {
-          const got = k.x === heist.player.x && k.y === heist.player.y;
-          if (got) heist.collected++;
-          return !got;
-        });
-        heist.terminals.forEach(t => {
-          if (!t.used && t.x === heist.player.x && t.y === heist.player.y) {
-            t.used = true;
-            const door = heist.doors.find(d => !d.open);
-            if (door) door.open = true;
-            heist.cloaks = Math.min(3, heist.cloaks + 1);
-          }
-        });
+        if (risk >= 3) heistRaiseSecurity(risk * 1.35, 'HOT ROUTE');
+        collectHeistTile(risk);
+        const nearby = heist.guards.some(g => heistDistance(g, heist.player) <= 4);
+        heist.alert = heist.cloakTurns > 0
+          ? 'GHOST'
+          : cameraSeen
+            ? 'CAM'
+            : nearby || heist.security >= 48
+              ? 'MID'
+              : 'LOW';
       }
       if (heist.collected >= 4 && heist.player.x === heist.exit.x && heist.player.y === heist.exit.y) {
         heist.won = true;
-        const score = Math.max(100, 1200 - heist.steps * 18 + heist.bestChain * 28 + heist.cloaks * 35);
+        const securityPenalty = Math.round(heist.securityPeak * 2.2);
+        const score = Math.max(100, 1200 - heist.steps * 18 + heist.bestChain * 28 + heist.cloaks * 35 + heist.loot - securityPenalty);
         localStorage.setItem(heist.bestKey, String(Math.max(Number(localStorage.getItem(heist.bestKey) || 0), score)));
         if (heist.steps <= 42) unlockAchievement('heist_clean');
-        recordPremiumResult('heist', score, { steps: heist.steps, bestChain: heist.bestChain, route: heist.routeLabel });
+        recordPremiumResult('heist', score, {
+          steps: heist.steps,
+          bestChain: heist.bestChain,
+          route: heist.routeLabel,
+          loot: heist.loot,
+          security: Math.round(heist.securityPeak)
+        });
         heist.alert = 'CLEAR';
       }
       setHeistUi();
@@ -8295,14 +8535,62 @@ function init() {
         ctx.fillStyle = t.used ? '#34D399' : '#BAE6FD';
         ctx.fillRect(t.x * tile + 6, t.y * tile + 8, tile - 12, tile - 14);
       });
+      heist.caches.forEach(cache => {
+        if (cache.taken) return;
+        ctx.save();
+        ctx.fillStyle = cache.tier === 'X' ? '#F0ABFC' : cache.tier === 'A' ? '#FDE68A' : '#A7F3D0';
+        ctx.globalAlpha = 0.88;
+        ctx.fillRect(cache.x * tile + 6, cache.y * tile + 6, tile - 12, tile - 12);
+        ctx.fillStyle = '#020617';
+        ctx.font = '800 8px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(cache.tier, cache.x * tile + tile / 2, cache.y * tile + 18);
+        ctx.restore();
+      });
+      heist.cameras.forEach(camera => {
+        const sensor = heistCameraSensor(camera);
+        const reach = camera.disabled ? 0 : heistVisionReach(sensor);
+        ctx.save();
+        ctx.fillStyle = camera.disabled ? 'rgba(52, 211, 153, 0.38)' : 'rgba(34, 211, 238, 0.28)';
+        ctx.fillRect(camera.x * tile + 7, camera.y * tile + 7, tile - 14, tile - 14);
+        if (!camera.disabled) {
+          ctx.strokeStyle = 'rgba(34, 211, 238, 0.42)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(camera.x * tile + tile / 2, camera.y * tile + tile / 2);
+          ctx.lineTo(
+            (camera.x + (sensor.axis === 'x' ? sensor.dir * reach : 0)) * tile + tile / 2,
+            (camera.y + (sensor.axis === 'y' ? sensor.dir * reach : 0)) * tile + tile / 2
+          );
+          ctx.stroke();
+          ctx.fillStyle = 'rgba(34, 211, 238, 0.1)';
+          for (let i = 1; i <= reach; i++) {
+            const sx = sensor.axis === 'x' ? sensor.x + sensor.dir * i : sensor.x;
+            const sy = sensor.axis === 'y' ? sensor.y + sensor.dir * i : sensor.y;
+            ctx.fillRect(sx * tile + 3, sy * tile + 3, tile - 7, tile - 7);
+          }
+        }
+        ctx.restore();
+      });
       heist.keys.forEach(k => { ctx.fillStyle = '#FBBF24'; ctx.beginPath(); ctx.arc(k.x * tile + 14, k.y * tile + 14, 7, 0, Math.PI * 2); ctx.fill(); });
+      if (heist.decoy?.timer > 0) {
+        ctx.save();
+        ctx.strokeStyle = '#DDD6FE';
+        ctx.fillStyle = 'rgba(167, 139, 250, 0.3)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(heist.decoy.x * tile + 14, heist.decoy.y * tile + 14, 7 + heist.decoy.timer, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
       heist.guards.forEach(g => {
         const reach = heistVisionReach(g);
-        ctx.fillStyle = 'rgba(239, 68, 68, 0.14)';
+        ctx.fillStyle = g.distracted > 0 ? 'rgba(167, 139, 250, 0.18)' : 'rgba(239, 68, 68, 0.14)';
         ctx.beginPath();
         ctx.arc(g.x * tile + 14, g.y * tile + 14, tile * Math.max(1.25, reach * 0.72), 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = 'rgba(239, 68, 68, 0.18)';
+        ctx.fillStyle = g.distracted > 0 ? 'rgba(167, 139, 250, 0.2)' : 'rgba(239, 68, 68, 0.18)';
         ctx.beginPath();
         ctx.moveTo(g.x * tile + 14, g.y * tile + 14);
         if (g.axis === 'x') {
@@ -8314,7 +8602,7 @@ function init() {
         }
         ctx.closePath();
         ctx.fill();
-        ctx.fillStyle = '#EF4444';
+        ctx.fillStyle = g.distracted > 0 ? '#A78BFA' : '#EF4444';
         ctx.fillRect(g.x * tile + 6, g.y * tile + 6, 16, 16);
       });
       ctx.fillStyle = heist.cloakTurns > 0 ? '#A78BFA' : '#06B6D4';
@@ -8322,14 +8610,27 @@ function init() {
       ctx.save();
       const hudX = c.width - 252;
       ctx.fillStyle = 'rgba(5, 8, 22, 0.68)';
-      ctx.fillRect(hudX, 10, 238, 39);
+      ctx.fillRect(hudX, 10, 238, 65);
       ctx.fillStyle = heist.routeRisk >= 3 ? '#FCA5A5' : heist.routeRisk > 0 ? '#FDE68A' : '#A7F3D0';
       ctx.font = '800 11px JetBrains Mono, monospace';
       ctx.textAlign = 'left';
       ctx.fillText(`ROUTE ${heist.routeLabel}`, hudX + 10, 26);
       ctx.fillStyle = heist.chain >= 8 ? '#FDE68A' : heist.chain >= 4 ? '#A7F3D0' : '#BAE6FD';
       ctx.fillText(`CHAIN ${heist.chain}x · BEST ${heist.bestChain}x`, hudX + 10, 42);
+      ctx.fillStyle = heist.security >= 82 ? '#FCA5A5' : heist.security >= 48 ? '#FDE68A' : '#A7F3D0';
+      ctx.fillText(`SEC ${Math.round(heist.security)}% · LOOT ${heist.loot}`, hudX + 10, 58);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
+      ctx.fillRect(hudX + 10, 63, 214, 4);
+      ctx.fillStyle = heist.security >= 82 ? '#EF4444' : heist.security >= 48 ? '#F59E0B' : '#34D399';
+      ctx.fillRect(hudX + 10, 63, 214 * (heist.security / 100), 4);
       ctx.restore();
+      if (heist.lastTactic && heist.lastTactic !== 'INFILTRATE') {
+        ctx.save();
+        ctx.fillStyle = heist.alarmFlash > 0 ? '#FDE68A' : '#93C5FD';
+        ctx.font = '800 10px JetBrains Mono, monospace';
+        ctx.fillText(`TACTIC ${heist.lastTactic}`, 14, 346);
+        ctx.restore();
+      }
       if (heist.won) overlay(ctx, c.width, c.height, 'VAULT CLEAR', '高分已保存 · 点击生成任务再来一局');
     }
 
@@ -9707,6 +10008,46 @@ function init() {
           heistSteps: () => heist.steps,
           heistIntel: () => heistDebugState(),
           stepHeistRoute: () => stepHeistRoute(),
+          forceHeistDecoy: () => {
+            switchPremiumGame('heist');
+            if (!heist.grid.length) newHeist();
+            heist.player = { x: 6, y: 8 };
+            heist.decoy = null;
+            heist.decoys = Math.max(1, heist.decoys);
+            const before = heistDebugState();
+            triggerHeistDecoy();
+            heistAdvanceSensors();
+            setHeistUi();
+            drawHeist();
+            return {
+              before,
+              after: heistDebugState()
+            };
+          },
+          forceHeistCache: () => {
+            switchPremiumGame('heist');
+            if (!heist.grid.length) newHeist();
+            const target = heist.caches.find(cache => !cache.taken && cache.value >= 240) ||
+              heist.caches.find(cache => !cache.taken);
+            if (!target) return { before: heistDebugState(), after: heistDebugState(), achieved: false };
+            const starts = [
+              { x: target.x - 1, y: target.y },
+              { x: target.x + 1, y: target.y },
+              { x: target.x, y: target.y - 1 },
+              { x: target.x, y: target.y + 1 }
+            ];
+            const start = starts.find(pos => !heistTileBlocked(pos.x, pos.y)) || { x: target.x, y: target.y };
+            heist.player = start;
+            heist.cloakTurns = Math.max(heist.cloakTurns, 2);
+            heist.chain = Math.max(heist.chain, 5);
+            const before = heistDebugState();
+            moveHeist(target.x - start.x, target.y - start.y);
+            return {
+              before,
+              after: heistDebugState(),
+              achieved: (career.achievements || []).includes('heist_cache')
+            };
+          },
           chainState: () => chainDebugState(),
           forceChainCombo: () => forceChainCombo(),
           tacticsTurn: () => tactics.turn,
@@ -9783,7 +10124,7 @@ function init() {
 
     window.addEventListener('keydown', (e) => {
       if (!isGameSectionActive() || isEditableTarget(e.target) || !document.activeElement?.closest?.('#premium-game-stage')) return;
-      const codes = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyP', 'Escape', 'Digit1', 'Digit2', 'Digit3'];
+      const codes = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyQ', 'KeyP', 'Escape', 'Digit1', 'Digit2', 'Digit3'];
       if (!codes.includes(e.code)) return;
       e.preventDefault();
       if (premiumActive === 'survivor' && survivor.draftOpen) {
@@ -9803,12 +10144,14 @@ function init() {
       if (e.code === 'ArrowLeft' || e.code === 'KeyA') premiumKeys.left = true;
       if (e.code === 'ArrowRight' || e.code === 'KeyD') premiumKeys.right = true;
       if (e.code === 'Space') premiumKeys.action = true;
+      if (e.code === 'KeyQ') premiumKeys.tool = true;
       if (premiumActive === 'heist') {
         if (e.code === 'ArrowUp' || e.code === 'KeyW') moveHeist(0, -1);
         if (e.code === 'ArrowDown' || e.code === 'KeyS') moveHeist(0, 1);
         if (e.code === 'ArrowLeft' || e.code === 'KeyA') moveHeist(-1, 0);
         if (e.code === 'ArrowRight' || e.code === 'KeyD') moveHeist(1, 0);
         if (e.code === 'Space') triggerHeistCloak();
+        if (e.code === 'KeyQ') triggerHeistDecoy();
       }
       if (premiumActive === 'tactics') {
         if (e.code === 'ArrowUp' || e.code === 'KeyW') moveTactics(0, -1);
@@ -9825,6 +10168,7 @@ function init() {
       if (e.code === 'ArrowLeft' || e.code === 'KeyA') premiumKeys.left = false;
       if (e.code === 'ArrowRight' || e.code === 'KeyD') premiumKeys.right = false;
       if (e.code === 'Space') premiumKeys.action = false;
+      if (e.code === 'KeyQ') premiumKeys.tool = false;
     });
 
     window.addEventListener('blur', clearPremiumKeys);

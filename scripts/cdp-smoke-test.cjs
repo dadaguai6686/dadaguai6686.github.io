@@ -1129,6 +1129,8 @@ async function run() {
   await key('keyUp', 'ArrowRight', 'ArrowRight');
   await wait(160);
   const heistRouteStepState = await evaluate(`(() => window.__atherixDebug?.premium?.stepHeistRoute?.() || {})()`);
+  const heistDecoyState = await evaluate(`(() => window.__atherixDebug?.premium?.forceHeistDecoy?.() || {})()`);
+  const heistCacheState = await evaluate(`(() => window.__atherixDebug?.premium?.forceHeistCache?.() || {})()`);
   await wait(260);
   const heistState = await evaluate(`(() => {
     const c = document.querySelector('#premium-heist-canvas');
@@ -1143,9 +1145,14 @@ async function run() {
       alert: document.querySelector('#premium-heist-alert')?.textContent,
       route: document.querySelector('#premium-heist-route')?.textContent,
       chain: document.querySelector('#premium-heist-chain')?.textContent,
+      security: document.querySelector('#premium-heist-security')?.textContent,
+      decoys: document.querySelector('#premium-heist-decoys')?.textContent,
+      loot: document.querySelector('#premium-heist-loot')?.textContent,
       debug,
       before: ${JSON.stringify(heistIntelBefore)},
       routeStep: ${JSON.stringify(heistRouteStepState)},
+      decoyState: ${JSON.stringify(heistDecoyState)},
+      cacheState: ${JSON.stringify(heistCacheState)},
       achievementBadges: document.querySelectorAll('#premium-achievement-feed .career-badge').length,
       rating: document.querySelector('#premium-career-rating')?.textContent
     };
@@ -1395,10 +1402,12 @@ async function run() {
   assert(driftResumeState.running && !driftResumeState.paused && driftResumeState.pauseButton === '暂停', `drift mode should resume from keyboard pause: ${JSON.stringify(driftResumeState)}`);
   assert(heistState.nonBlank && Number(heistState.steps) >= 2, 'heist should accept keyboard movement and debug route stepping');
   assert(heistState.achievementBadges >= 1, 'heist cloak should unlock at least one achievement badge');
-  assert(/^(KEY|EXIT|TERMINAL)\s+\d+\s+(SAFE|R\d+)$/.test(heistState.route), `heist route HUD should expose a readable objective and risk: ${JSON.stringify(heistState)}`);
-  assert(Array.isArray(heistState.before.route) && heistState.before.route.length > 0 && Array.isArray(heistState.before.heatCells) && heistState.before.heatCells.length > 0, `heist debug intel should expose route and heat map: ${JSON.stringify(heistState.before)}`);
+  assert(/^(KEY|EXIT|TERMINAL|CACHE)\s+\d+\s+(SAFE|R\d+)$/.test(heistState.route), `heist route HUD should expose a readable objective and risk: ${JSON.stringify(heistState)}`);
+  assert(Array.isArray(heistState.before.route) && heistState.before.route.length > 0 && Array.isArray(heistState.before.heatCells) && heistState.before.heatCells.length > 0 && Array.isArray(heistState.before.cameras) && heistState.before.cameras.length >= 3 && Array.isArray(heistState.before.caches) && heistState.before.caches.length >= 3, `heist debug intel should expose route, cameras, caches, and heat map: ${JSON.stringify(heistState.before)}`);
   assert(heistState.routeStep.steps >= 2 && heistState.routeStep.chain > heistState.before.chain && Array.isArray(heistState.routeStep.route), `heist route stepping should advance chain and refresh route: ${JSON.stringify(heistState.routeStep)}`);
-  assert(/^\d+x$/.test(heistState.chain) && heistState.debug.chainHud === heistState.chain && heistState.debug.routeHud === heistState.route, `heist HUD should stay in sync with debug state: ${JSON.stringify(heistState)}`);
+  assert(heistState.decoyState.after?.decoy?.timer > 0 && heistState.decoyState.after?.decoys < heistState.decoyState.before?.decoys && heistState.decoyState.after?.guards?.some(guard => Number(guard.distracted || 0) > 0) && /DECOY/.test(heistState.decoyState.after?.lastTactic || ''), `heist decoy should distract guards and consume a tool: ${JSON.stringify(heistState.decoyState)}`);
+  assert(heistState.cacheState.after?.loot > heistState.cacheState.before?.loot && heistState.cacheState.after?.securityPeak >= heistState.cacheState.before?.securityPeak && heistState.cacheState.after?.caches?.some(cache => cache.taken) && heistState.cacheState.achieved, `heist cache should add loot, raise security pressure, and unlock achievement: ${JSON.stringify(heistState.cacheState)}`);
+  assert(/^\d+x$/.test(heistState.chain) && /^\d+%$/.test(heistState.security) && /^\d+$/.test(heistState.loot) && heistState.debug.chainHud === heistState.chain && heistState.debug.routeHud === heistState.route && heistState.debug.securityHud === heistState.security && heistState.debug.lootHud === heistState.loot, `heist HUD should stay in sync with debug state: ${JSON.stringify(heistState)}`);
   assert(careerDialogState.open && careerDialogState.ariaHidden === 'false', `career dialog should open: ${JSON.stringify(careerDialogState)}`);
   assert(careerDialogState.medalCards >= 7 && careerDialogState.achievements >= 16 && careerDialogState.unlocked >= 1, `career dialog should show medals and achievements: ${JSON.stringify(careerDialogState)}`);
   assert(/RANK/.test(careerDialogState.summary) && careerDialogState.daily.length > 10 && careerDialogState.visibleInViewport && !careerDialogState.horizontalOverflow, `career dialog should show readable summary and daily challenge: ${JSON.stringify(careerDialogState)}`);
