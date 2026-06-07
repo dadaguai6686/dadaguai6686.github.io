@@ -5,6 +5,7 @@ const html = readFileSync("index.html", "utf8");
 const gameScene = readFileSync("src/game/GameScene.ts", "utf8");
 const input = readFileSync("src/game/input.ts", "utf8");
 const main = readFileSync("src/main.ts", "utf8");
+const simulation = readFileSync("src/game/simulation.ts", "utf8");
 const styles = readFileSync("src/styles.css", "utf8");
 
 assert.ok(html.includes('id="radar-panel"'), "desktop radar panel should exist in HTML");
@@ -13,6 +14,9 @@ assert.ok(html.includes('id="wave-intro"'), "wave intro briefing should exist in
 assert.ok(html.includes('id="game-dossier"'), "menu should explain the game fantasy and win/loss loop");
 assert.ok(html.includes('id="first-minute-route"'), "menu should give players an actionable first-minute route");
 assert.ok(html.includes("读图补电"), "first-minute route should explain the opening supply step in Chinese");
+assert.ok(html.includes("E / 修复键"), "visible control copy should support keyboard and touch repair controls");
+assert.ok(html.includes("Space / 推进键"), "visible control copy should support keyboard and touch boost controls");
+assert.ok(html.includes("Q / 脉冲键"), "visible control copy should support keyboard and touch pulse controls");
 assert.ok(!html.includes("Roguelite"), "visible genre copy should be localized to Chinese");
 assert.ok(
   html.indexOf('id="start-button"') < html.indexOf('id="mission-brief"'),
@@ -45,8 +49,10 @@ assert.ok(gameScene.includes("drawSectorField"), "Phaser scene should render sec
 assert.ok(gameScene.includes("renderContractFocus"), "Phaser scene should render contract focus markers");
 assert.ok(gameScene.includes("renderOpeningRoutePreview"), "Phaser scene should draw the opening route preview");
 assert.ok(gameScene.includes("buildOpeningRoutePreview"), "opening route preview should derive route targets from game state");
+assert.ok(gameScene.includes("syncRepairPromptLabel"), "Phaser scene should show an in-world repair control prompt");
 assert.ok(gameScene.includes("renderHazardTrajectories"), "Phaser scene should telegraph moving hazard paths");
 assert.ok(gameScene.includes("projectHazardPosition"), "hazard telegraphs should project future shard positions");
+assert.ok(simulation.includes("按住 E / 修复键"), "runtime objective copy should support keyboard and touch repair controls");
 assert.ok(main.includes('"data-kind": "relay"'), "radar nodes should expose stable data-kind markers");
 assert.ok(main.includes('"data-kind": "player"'), "radar nodes should expose player marker for QA");
 assert.ok(styles.includes("#radar-panel"), "desktop radar should have CSS");

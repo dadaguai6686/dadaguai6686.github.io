@@ -161,6 +161,7 @@ export class GameScene extends Phaser.Scene {
   private gateView?: Phaser.GameObjects.Container;
   private navigatorView?: Phaser.GameObjects.Graphics;
   private readabilityView?: Phaser.GameObjects.Graphics;
+  private repairPromptLabel?: Phaser.GameObjects.Text;
   private routePreviewLabels: Phaser.GameObjects.Text[] = [];
   private starLayer?: Phaser.GameObjects.Graphics;
   private trail?: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -273,6 +274,7 @@ export class GameScene extends Phaser.Scene {
     this.lumenViews.clear();
     this.hazardViews.clear();
     this.stormViews.clear();
+    this.repairPromptLabel = undefined;
     this.routePreviewLabels = [];
 
     this.worldLayer = this.add.container(0, 0);
@@ -906,6 +908,7 @@ export class GameScene extends Phaser.Scene {
     if (!graphics) return;
     graphics.clear();
     if (this.state.status !== "playing") {
+      this.hideRepairPromptLabel();
       this.hideRoutePreviewLabels();
       return;
     }
@@ -1009,7 +1012,10 @@ export class GameScene extends Phaser.Scene {
 
   private renderRepairReadability(graphics: Phaser.GameObjects.Graphics, player: { x: number; y: number }, pulse: number): void {
     const repairTarget = getActiveRepairTarget(this.state);
-    if (!repairTarget) return;
+    if (!repairTarget) {
+      this.hideRepairPromptLabel();
+      return;
+    }
 
     const isCharging = repairTarget.progress > 0;
     const alpha = isCharging ? 0.52 + pulse * 0.24 : 0.28 + pulse * 0.12;
@@ -1019,6 +1025,34 @@ export class GameScene extends Phaser.Scene {
     graphics.strokeCircle(repairTarget.position.x, repairTarget.position.y, 58 + pulse * 10);
     graphics.lineStyle(2, 0x67f4ff, 0.22 + pulse * 0.18);
     graphics.strokeCircle(player.x, player.y, 34 + pulse * 7);
+    this.syncRepairPromptLabel(repairTarget, pulse);
+  }
+
+  private syncRepairPromptLabel(repairTarget: Relay, pulse: number): void {
+    if (!this.repairPromptLabel) {
+      this.repairPromptLabel = this.add.text(0, 0, "", {
+        align: "center",
+        color: "#f7fbff",
+        fontFamily: "Inter, Segoe UI, sans-serif",
+        fontSize: this.largeLabels ? "16px" : "13px",
+        fontStyle: "900",
+        stroke: "#07111c",
+        strokeThickness: this.largeLabels ? 5 : 4
+      });
+      this.repairPromptLabel.setOrigin(0.5);
+      this.worldLayer?.add(this.repairPromptLabel);
+    }
+
+    const progress = Math.round(repairTarget.progress * 100);
+    this.repairPromptLabel.setVisible(true);
+    this.repairPromptLabel.setText(progress > 0 ? `维修中 ${progress}%` : "按住 E / 修复键");
+    this.repairPromptLabel.setPosition(repairTarget.position.x, repairTarget.position.y - 72);
+    this.repairPromptLabel.setAlpha(0.86 + pulse * 0.14);
+    this.repairPromptLabel.setScale(this.largeLabels ? 1.06 : 1);
+  }
+
+  private hideRepairPromptLabel(): void {
+    this.repairPromptLabel?.setVisible(false);
   }
 
   private renderHazardReadability(graphics: Phaser.GameObjects.Graphics, player: { x: number; y: number }, pulse: number): void {

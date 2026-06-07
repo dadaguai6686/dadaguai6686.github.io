@@ -1481,7 +1481,7 @@ export function getCoachDirective(state: GameState): CoachDirective {
       id: "pulseDanger",
       step: Math.max(1, Math.min(totalSteps, state.stats.relaysRepaired + 1)),
       totalSteps,
-      title: ready ? "紧急：按 Q 脉冲" : "紧急：推进拉开距离",
+      title: ready ? "紧急：Q / 脉冲键" : "紧急：推进拉开距离",
       detail: ready ? "粉色碎片已经贴近，立刻释放脉冲把它推开。" : "脉冲还在冷却，先横向推进，别原地硬修。",
       progress: ready ? "脉冲就绪" : `脉冲冷却 ${Math.ceil(player.pulseCooldown)} 秒`,
       urgent: true
@@ -1520,8 +1520,8 @@ export function getCoachDirective(state: GameState): CoachDirective {
       id: "repairRelay",
       step: 3,
       totalSteps,
-      title: "第 3 步：按住 E 维修",
-      detail: "留在蓝色信标旁保持维修光束；离开会慢慢掉进度。",
+      title: "第 3 步：按住 E / 修复键",
+      detail: "留在蓝色信标旁保持维修光束；键盘按 E，触控按修复键，离开会慢慢掉进度。",
       progress: `维修进度 ${Math.round(repairTarget.progress * 100)}%`,
       target: repairTarget.position,
       urgent: true
@@ -1564,7 +1564,7 @@ export function getCoachDirective(state: GameState): CoachDirective {
       step: 2,
       totalSteps,
       title: "第 2 步：靠近蓝色信标",
-      detail: "贴近信标后按住 E，边看危险圈边修，不要站在碎片路径上。",
+      detail: "贴近信标后按住 E / 修复键，边看危险圈边修，不要站在碎片路径上。",
       progress: `已修复 ${state.stats.relaysRepaired}/${state.relays.length}`,
       target: nearestRelay.item.position,
       urgent: false
@@ -1644,8 +1644,8 @@ export function getObjectiveHint(state: GameState): ObjectiveHint {
   if (repairTarget) {
     return {
       kind: "repair",
-      title: "按住 E 修复",
-      detail: `信标已锁定，当前进度 ${Math.round(repairTarget.progress * 100)}%。离开会慢慢掉进度。`,
+      title: "按住 E / 修复键",
+      detail: `信标已锁定，当前进度 ${Math.round(repairTarget.progress * 100)}%。键盘按 E，触控按修复键，离开会慢慢掉进度。`,
       target: repairTarget.position,
       urgent: true
     };
@@ -1677,7 +1677,7 @@ export function getObjectiveHint(state: GameState): ObjectiveHint {
     return {
       kind: "relay",
       title: "前往最近信标",
-      detail: `靠近后按 E 修复，距离 ${formatDistance(nearestRelay.distance)}。`,
+      detail: `靠近后按住 E / 修复键，距离 ${formatDistance(nearestRelay.distance)}。`,
       target: nearestRelay.item.position,
       urgent: false
     };

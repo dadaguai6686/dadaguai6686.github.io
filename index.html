@@ -95,7 +95,7 @@
         </div>
         <div id="pilot-tip" hidden>
           <strong id="pilot-tip-title">导航提示</strong>
-          <span id="pilot-tip-detail">前往最近信标，靠近后按 E 修复。</span>
+          <span id="pilot-tip-detail">前往最近信标，靠近后按住 E / 修复键。</span>
         </div>
         <p id="mission-text">修复全部信标，收集流明，最后从北侧光门撤离。</p>
         <button id="help-button" type="button">玩法说明 / 暂停</button>
@@ -176,12 +176,12 @@
             <article>
               <b>2</b>
               <strong>贴近维修</strong>
-              <span>靠近蓝色信标按住 E；电量低就先撤出来补给。</span>
+              <span>靠近蓝色信标按住 E / 修复键；电量低就先撤出来补给。</span>
             </article>
             <article>
               <b>3</b>
               <strong>保命续分</strong>
-              <span>Space 穿出风暴，Q 把贴脸碎片推开。</span>
+              <span>Space / 推进键穿出风暴，Q / 脉冲键把贴脸碎片推开。</span>
             </article>
             <article>
               <b>4</b>
@@ -191,13 +191,13 @@
           </div>
           <div id="mission-brief" aria-label="核心循环">
             <strong>核心循环：补流明 → 修信标 → 撤离升级</strong>
-            <span>开局先捡金色流明补电，靠近蓝色信标按住 E 修复；全部信标亮起后，从北侧光门撤离并选择升级。想冲高评级，就完成战术合约、少受击、保留电量和连锁。</span>
+            <span>开局先捡金色流明补电，靠近蓝色信标按住 E / 修复键；全部信标亮起后，从北侧光门撤离并选择升级。想冲高评级，就完成战术合约、少受击、保留电量和连锁。</span>
           </div>
           <div id="field-guide" aria-label="战场图例">
             <article data-kind="relay">
               <i></i>
               <strong>蓝色信标</strong>
-              <span>靠近后按住 E 修复</span>
+              <span>靠近后按住 E / 修复键</span>
             </article>
             <article data-kind="lumen">
               <i></i>
@@ -258,7 +258,7 @@
             </article>
             <article>
               <strong>第三步：躲危险</strong>
-              <span>Space 推进，Q 脉冲推开粉色碎片；不要站在紫色风暴里。</span>
+              <span>Space / 推进键冲出危险，Q / 脉冲键推开粉色碎片；不要站在紫色风暴里。</span>
             </article>
             <article>
               <strong>第四步：撤离升级</strong>
@@ -267,9 +267,9 @@
           </div>
           <div class="keys">
             <span>WASD / 方向键 移动</span>
-            <span>Space 推进</span>
-            <span>E 修复</span>
-            <span>Q 脉冲</span>
+            <span>Space / 推进键</span>
+            <span>E / 修复键</span>
+            <span>Q / 脉冲键</span>
             <span>H 暂停说明</span>
           </div>
         </div>
@@ -279,9 +279,9 @@
           <span></span>
         </div>
         <div class="touch-actions">
-          <button type="button" data-touch-action="repair">修复</button>
-          <button type="button" data-touch-action="boost">推进</button>
-          <button type="button" data-touch-action="pulse">脉冲</button>
+          <button type="button" data-touch-action="repair" aria-label="按住修复">修复</button>
+          <button type="button" data-touch-action="boost" aria-label="推进">推进</button>
+          <button type="button" data-touch-action="pulse" aria-label="释放脉冲">脉冲</button>
         </div>
       </div>
       <button id="mobile-pause-button" type="button" aria-label="暂停说明">暂停</button>

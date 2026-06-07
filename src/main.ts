@@ -1155,7 +1155,7 @@ function buildLossCorrection(detail: RunEndDetail): string {
   }
   if (detail.endReason === "hullDestroyed") {
     return detail.stats.pulseUses === 0
-      ? "机体损毁：粉色碎片贴近时用 Q 脉冲，不要把技能留到失败。"
+      ? "机体损毁：粉色碎片贴近时用 Q / 脉冲键，不要把技能留到失败。"
       : "机体损毁：减少穿越碎片线，推进用于脱离危险，不只用于赶路。";
   }
   return "信号中断：先保命完成主目标，再追求合约、连锁和 S 级评价。";
@@ -1480,7 +1480,7 @@ function buildRunAdvice(detail: RunEndDetail): string {
   }
   if (detail.endReason === "hullDestroyed") {
     if (stats.pulseUses === 0) {
-      return "下一次建议：粉色碎片靠近时按 Q 脉冲推开，别把脉冲留到机体见底。";
+      return "下一次建议：粉色碎片靠近时按 Q / 脉冲键推开，别把脉冲留到机体见底。";
     }
     if (stats.hitsTaken >= 3) {
       return "下一次建议：碰撞过多会清空连锁，先绕开碎片密集区，再用推进切入信标。";
