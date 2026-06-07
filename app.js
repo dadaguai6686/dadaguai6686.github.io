@@ -4533,6 +4533,19 @@ function init() {
         </div>
         <div class="arcade-run-log-list" id="premium-run-log-list"></div>
       </div>
+      <div class="arcade-leaderboard-panel" id="premium-leaderboard-panel" data-empty="true" aria-label="街机个人名人堂">
+        <div class="arcade-leaderboard-heading">
+          <span><i data-lucide="crown"></i> HALL OF FAME</span>
+          <strong id="premium-leaderboard-title">等待个人纪录</strong>
+          <small id="premium-leaderboard-summary">个人最高纪录会跨模式排序，展示奖牌、难度、战术芯片和下一突破目标。</small>
+        </div>
+        <div class="arcade-leaderboard-stats">
+          <span>总 PB <strong id="premium-leaderboard-total">0</strong></span>
+          <span>金牌 <strong id="premium-leaderboard-golds">0/7</strong></span>
+          <span>最近刷新 <strong id="premium-leaderboard-latest">--</strong></span>
+        </div>
+        <div class="arcade-leaderboard-list" id="premium-leaderboard-list"></div>
+      </div>
       <div class="arcade-coach-panel" id="premium-run-coach-panel" data-empty="true" aria-label="街机赛后教练">
         <div class="arcade-coach-heading">
           <span><i data-lucide="sparkles"></i> POST-RUN COACH</span>
@@ -5362,6 +5375,92 @@ function init() {
       };
     }
 
+    function careerLeaderboard() {
+      const runs = Array.isArray(career.runs) ? career.runs : [];
+      const entries = careerGameOrder.map((game, index) => {
+        const score = Number(career.best?.[game] || 0);
+        if (!score) return null;
+        const medal = medalClass(career.medals?.[game] || medalFor(game, score));
+        const rules = [...(medalRules[game] || [])].sort((a, b) => a.threshold - b.threshold);
+        const gold = rules.find(rule => rule.name === 'gold') || rules[rules.length - 1] || { threshold: Math.max(1, score) };
+        const next = nextMedalTarget(game, score);
+        const progress = Math.min(100, Math.round(score / Math.max(1, gold.threshold) * 100));
+        const exactRun = runs.find(run => run?.game === game && Number(run.score || 0) === score) || null;
+        const prestige = (medalRank[medal] || 0) * 1000 + Math.min(999, Math.round(score / Math.max(1, gold.threshold) * 1000));
+        return {
+          game,
+          index,
+          label: premiumTabLabels[game] || titles[game] || game,
+          score,
+          medal,
+          progress,
+          prestige,
+          nextLabel: next ? `${medalLabels[next.name] || next.name}牌 ${next.threshold}` : '金牌完成',
+          delta: next ? Math.max(0, next.threshold - score) : 0,
+          difficulty: exactRun ? runDifficultyLabel(exactRun.difficulty) : '历史',
+          loadout: exactRun ? runLoadoutLabel(exactRun.loadout) : '存档纪录',
+          at: exactRun?.at || ''
+        };
+      }).filter(Boolean)
+        .sort((a, b) => b.prestige - a.prestige || b.score - a.score || a.index - b.index)
+        .map((entry, rank) => ({ ...entry, rank: rank + 1 }));
+      const latestBest = runs.find(run => Number(run.score || 0) > Number(run.previousBest || 0)) || null;
+      const totalBest = entries.reduce((sum, entry) => sum + entry.score, 0);
+      const golds = entries.filter(entry => entry.medal === 'gold').length;
+      return {
+        entries,
+        totalBest,
+        golds,
+        latestBest: latestBest ? {
+          game: latestBest.game,
+          label: premiumTabLabels[latestBest.game] || titles[latestBest.game] || latestBest.game,
+          score: Number(latestBest.score || 0),
+          delta: Math.max(0, Number(latestBest.score || 0) - Number(latestBest.previousBest || 0)),
+          at: latestBest.at
+        } : null
+      };
+    }
+
+    function renderArcadeLeaderboard() {
+      const panel = document.getElementById('premium-leaderboard-panel');
+      const list = document.getElementById('premium-leaderboard-list');
+      if (!panel || !list) return;
+      const board = careerLeaderboard();
+      const titleEl = document.getElementById('premium-leaderboard-title');
+      const summaryEl = document.getElementById('premium-leaderboard-summary');
+      const totalEl = document.getElementById('premium-leaderboard-total');
+      const goldEl = document.getElementById('premium-leaderboard-golds');
+      const latestEl = document.getElementById('premium-leaderboard-latest');
+      const top = board.entries[0];
+      panel.dataset.empty = top ? 'false' : 'true';
+      if (titleEl) titleEl.textContent = top ? `#1 ${top.label} · ${top.score}` : '等待个人纪录';
+      if (summaryEl) {
+        summaryEl.textContent = top
+          ? `${medalLabels[top.medal] || medalLabels.none}牌 · ${top.delta ? `下一目标 ${top.nextLabel}，还差 ${top.delta}` : '金牌完成，开始冲击极限分'}。`
+          : '完成任意高级街机模式后，个人最高纪录会在这里组成名人堂。';
+      }
+      if (totalEl) totalEl.textContent = String(board.totalBest);
+      if (goldEl) goldEl.textContent = `${board.golds}/${careerGameOrder.length}`;
+      if (latestEl) latestEl.textContent = board.latestBest ? `${board.latestBest.label} +${board.latestBest.delta}` : '--';
+      list.innerHTML = board.entries.length
+        ? board.entries.slice(0, careerGameOrder.length).map(entry => `
+          <button type="button" class="arcade-leaderboard-card" data-leaderboard-game="${escapeHTML(entry.game)}" data-medal="${escapeHTML(entry.medal)}">
+            <span class="arcade-leaderboard-rank">#${entry.rank}</span>
+            <div>
+              <strong>${escapeHTML(entry.label)}</strong>
+              <small>${escapeHTML(entry.difficulty)} · ${escapeHTML(entry.loadout)}${entry.at ? ` · ${escapeHTML(formatRunTime(entry.at))}` : ''}</small>
+            </div>
+            <b>${escapeHTML(String(entry.score))}</b>
+            <em>${entry.delta ? `${escapeHTML(entry.nextLabel)} · 差 ${escapeHTML(String(entry.delta))}` : '金牌完成 · 刷新极限'}</em>
+            <i style="width: ${entry.progress}%"></i>
+          </button>
+        `).join('')
+        : '<div class="arcade-leaderboard-empty">暂无个人纪录。先完成一局高级街机，名人堂会自动点亮。</div>';
+      list.querySelectorAll('[data-leaderboard-game]').forEach(btn => {
+        btn.addEventListener('click', () => launchMasteryTarget(btn.dataset.leaderboardGame));
+      });
+    }
+
     function renderArcadeRunLog() {
       const panel = document.getElementById('premium-run-log-panel');
       const titleEl = document.getElementById('premium-run-log-title');
@@ -5945,6 +6044,7 @@ function init() {
       }
       renderAchievementFeed();
       renderArcadeRunLog();
+      renderArcadeLeaderboard();
       renderArcadeCoach();
       renderArcadeDirector();
       renderArcadeMasteryMap();
@@ -6025,6 +6125,7 @@ function init() {
       }),
       setDifficulty: setArcadeDifficulty,
       mastery: () => careerGameOrder.map(masteryStatusForGame),
+      leaderboard: () => careerLeaderboard(),
       runs: () => (Array.isArray(career.runs) ? career.runs : []).map(run => ({ ...run })),
       coach: () => latestRunCoach(),
       league: () => leagueSnapshot(),
@@ -11281,6 +11382,7 @@ function init() {
           runs: () => window.atherixArcadeCareer?.runs?.() || [],
           coach: () => window.atherixArcadeCareer?.coach?.() || null,
           league: () => window.atherixArcadeCareer?.league?.() || {},
+          leaderboard: () => window.atherixArcadeCareer?.leaderboard?.() || {},
           loadout: () => window.atherixArcadeCareer?.loadout?.() || {},
           difficulty: () => window.atherixArcadeCareer?.difficulty?.() || {},
           mastery: () => window.atherixArcadeCareer?.mastery?.() || []

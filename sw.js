@@ -1,9 +1,9 @@
-const CACHE_VERSION = 'atherix-static-v16-arcade-league';
+const CACHE_VERSION = 'atherix-static-v17-arcade-leaderboard';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/style.css?v=20260607-arcade-league-v1',
-  '/app.js?v=20260607-arcade-league-v1',
+  '/style.css?v=20260607-arcade-leaderboard-v1',
+  '/app.js?v=20260607-arcade-leaderboard-v1',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',

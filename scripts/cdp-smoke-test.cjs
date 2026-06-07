@@ -830,6 +830,12 @@ async function run() {
     runLogEmpty: document.querySelector('#premium-run-log-panel')?.dataset.empty || '',
     runLogCards: document.querySelectorAll('.arcade-run-log-item').length,
     debugRuns: window.__atherixDebug?.premium?.runs?.().length || 0,
+    leaderboardPanel: !!document.querySelector('#premium-leaderboard-panel'),
+    leaderboardEmpty: document.querySelector('#premium-leaderboard-panel')?.dataset.empty || '',
+    leaderboardCards: document.querySelectorAll('.arcade-leaderboard-card').length,
+    leaderboardTitle: document.querySelector('#premium-leaderboard-title')?.textContent || '',
+    leaderboardTotal: document.querySelector('#premium-leaderboard-total')?.textContent || '',
+    debugLeaderboard: window.__atherixDebug?.premium?.leaderboard?.() || {},
     coachPanel: !!document.querySelector('#premium-run-coach-panel'),
     coachEmpty: document.querySelector('#premium-run-coach-panel')?.dataset.empty || '',
     difficultyPanel: !!document.querySelector('#premium-difficulty-panel'),
@@ -867,6 +873,12 @@ async function run() {
       runLastScore: document.querySelector('#premium-run-last-score')?.textContent || '',
       runAverage: document.querySelector('#premium-run-average')?.textContent || '',
       runBestMode: document.querySelector('#premium-run-best-mode')?.textContent || '',
+      leaderboard: window.__atherixDebug?.premium?.leaderboard?.() || {},
+      leaderboardCards: document.querySelectorAll('.arcade-leaderboard-card').length,
+      leaderboardTopGame: window.__atherixDebug?.premium?.leaderboard?.().entries?.[0]?.game || '',
+      leaderboardTitle: document.querySelector('#premium-leaderboard-title')?.textContent || '',
+      leaderboardTotal: document.querySelector('#premium-leaderboard-total')?.textContent || '',
+      leaderboardLatest: document.querySelector('#premium-leaderboard-latest')?.textContent || '',
       masteryAfter: window.__atherixDebug?.premium?.mastery?.().find(item => item.game === 'survivor') || {},
       masteryCardText: document.querySelector('[data-mastery-game="survivor"]')?.textContent || '',
       coach: window.__atherixDebug?.premium?.coach?.() || null,
@@ -932,6 +944,11 @@ async function run() {
       summary: document.querySelector('#premium-difficulty-summary')?.textContent || '',
       totalDelta: Number(afterCareer.totalScore || 0) - beforeTotal,
       bossBest: Number(afterCareer.best?.boss || 0),
+      leaderboard: window.__atherixDebug?.premium?.leaderboard?.() || {},
+      leaderboardCards: document.querySelectorAll('.arcade-leaderboard-card').length,
+      leaderboardTopGame: window.__atherixDebug?.premium?.leaderboard?.().entries?.[0]?.game || '',
+      leaderboardTitle: document.querySelector('#premium-leaderboard-title')?.textContent || '',
+      leaderboardTotal: document.querySelector('#premium-leaderboard-total')?.textContent || '',
       totalText: document.querySelector('#premium-career-total')?.textContent || '',
       toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || ''
     };
@@ -1465,6 +1482,7 @@ async function run() {
   assert(arcadeInitial.oldPrototypeCount === 0, 'old prototype mini-games should be replaced');
   assert(arcadeInitial.premiumTabs >= 6 && arcadeInitial.driftPanel && arcadeInitial.tacticsPanel, 'premium arcade should include drift and tactics modes');
   assert(arcadeInitial.runLogPanel && arcadeInitial.runLogEmpty === 'true' && arcadeInitial.runLogCards === 0 && arcadeInitial.debugRuns === 0, `premium arcade run telemetry should start empty: ${JSON.stringify(arcadeInitial)}`);
+  assert(arcadeInitial.leaderboardPanel && arcadeInitial.leaderboardEmpty === 'true' && arcadeInitial.leaderboardCards === 0 && arcadeInitial.debugLeaderboard?.entries?.length === 0 && arcadeInitial.leaderboardTotal === '0', `premium arcade hall of fame should start empty: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.coachPanel && arcadeInitial.coachEmpty === 'true', `premium arcade post-run coach should start empty: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.directorPanel && arcadeInitial.directorTarget && arcadeInitial.directorTitle.length > 5 && arcadeInitial.directorReason.length > 10 && /^\d+%$/.test(arcadeInitial.directorCompletion) && arcadeInitial.tabBadges >= 6, `premium arcade director should render actionable progression guidance: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.masteryPanel && arcadeInitial.masteryCards === 7 && arcadeInitial.debugMastery === 7 && /奖牌路线/.test(arcadeInitial.masteryTitle) && arcadeInitial.masterySummary.length > 10, `premium arcade mastery map should render all mode goals: ${JSON.stringify(arcadeInitial)}`);
@@ -1474,6 +1492,7 @@ async function run() {
   assert(arcadeInitial.loadoutPanel && arcadeInitial.loadoutCards === 4 && arcadeInitial.activeLoadout === 'pulse' && arcadeInitial.loadoutUnlocked >= 1, `premium arcade loadout chips should render with a default build: ${JSON.stringify(arcadeInitial)}`);
   assert(contractProgressState.afterContracts === 3 && contractProgressState.cards === 3 && contractProgressState.afterFirst > contractProgressState.beforeFirst && /总声望/.test(contractProgressState.total), `premium arcade contracts should advance after a scored run: ${JSON.stringify(contractProgressState)}`);
   assert(contractProgressState.runCards >= 1 && contractProgressState.debugRuns === 1 && contractProgressState.latestRunGame === 'survivor' && contractProgressState.latestRunScore >= 900 && contractProgressState.latestRunDifficulty === 'standard', `premium arcade should record a replayable run log after scoring: ${JSON.stringify(contractProgressState)}`);
+  assert(contractProgressState.leaderboardCards >= 1 && contractProgressState.leaderboard?.entries?.[0]?.game === 'survivor' && contractProgressState.leaderboardTopGame === 'survivor' && /幸存者/.test(contractProgressState.leaderboardTitle) && Number(contractProgressState.leaderboardTotal) >= contractProgressState.latestRunScore && /幸存者/.test(contractProgressState.leaderboardLatest), `premium arcade hall of fame should rank and summarize the first personal best: ${JSON.stringify(contractProgressState)}`);
   assert(contractProgressState.coach?.game === 'survivor' && /星核幸存者/.test(contractProgressState.coachTitle) && /铜牌/.test(contractProgressState.coachMedal) && /^\+/.test(contractProgressState.coachDelta) && /银牌/.test(contractProgressState.coachTarget) && contractProgressState.coachLaunchTarget === 'survivor' && contractProgressState.coachDifficulty === 'elite' && contractProgressState.coachLoadout === 'overdrive', `premium arcade coach should provide actionable post-run guidance: ${JSON.stringify(contractProgressState)}`);
   assert(
     contractProgressState.masteryAfter.score >= 900 &&
@@ -1486,6 +1505,7 @@ async function run() {
   assert(loadoutProgressState.active === 'aegis' && loadoutProgressState.equippedCards === 1 && loadoutProgressState.unlocked.includes('aegis') && /棱镜护盾/.test(loadoutProgressState.activeLabel), `premium arcade loadouts should unlock and equip after career progress: ${JSON.stringify(loadoutProgressState)}`);
   assert(difficultyProgressState.active === 'elite' && difficultyProgressState.selectedCards === 1 && /精英/.test(difficultyProgressState.activeLabel) && difficultyProgressState.pressure > 1 && difficultyProgressState.scoreBoost > 0.15, `premium arcade difficulty should switch to elite with visible pressure and score boost: ${JSON.stringify(difficultyProgressState)}`);
   assert(difficultyProgressState.totalDelta >= 1180 && difficultyProgressState.bossBest >= 1180 && /难度 精英/.test(difficultyProgressState.totalText), `premium arcade difficulty should affect scoring and career summary: ${JSON.stringify(difficultyProgressState)}`);
+  assert(difficultyProgressState.leaderboardCards >= 2 && difficultyProgressState.leaderboard?.entries?.some(entry => entry.game === 'boss' && entry.score >= 1180) && difficultyProgressState.leaderboardTopGame === 'boss' && /Boss/.test(difficultyProgressState.leaderboardTitle) && Number(difficultyProgressState.leaderboardTotal) >= difficultyProgressState.bossBest, `premium arcade hall of fame should sort stronger records after elite scoring: ${JSON.stringify(difficultyProgressState)}`);
   assert(['runner', 'survivor', 'boss', 'drift', 'heist', 'chain', 'tactics'].includes(directorLaunchState.target) && (directorLaunchState.target === 'runner' || directorLaunchState.active === directorLaunchState.target) && !directorLaunchState.horizontalOverflow, `premium arcade director should launch the recommended target: ${JSON.stringify(directorLaunchState)}`);
   assert(arcadeInitial.touchControls >= 5, 'premium touch controls should be available');
   assert(survivorState.nonBlank && survivorState.threat && /\dx$/.test(survivorState.chain) && survivorState.overdrive && survivorState.bounty && survivorState.debug?.hud?.chain === survivorState.chain && survivorState.debug?.hud?.bounty === survivorState.bounty, `survivor canvas should render active state with chain, overdrive, and bounty HUD: ${JSON.stringify(survivorState)}`);
