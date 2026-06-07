@@ -1157,107 +1157,134 @@ async function run() {
     };
   })()`, 3000);
   await evaluate(`window.__atherixDebug?.premium?.resetFeedback?.(false)`);
-  const arcadeInitial = await evaluate(`(() => ({
-    premium: !!document.querySelector('#premium-game-stage'),
-    careerPanel: !!document.querySelector('#premium-career-rating'),
-    dailyChallenge: document.querySelector('#premium-daily-challenge')?.textContent || '',
-    cockpitPanel: !!document.querySelector('#premium-cockpit-panel'),
-    cockpitTitle: document.querySelector('#premium-cockpit-title')?.textContent || '',
-    cockpitSummary: document.querySelector('#premium-cockpit-summary')?.textContent || '',
-    cockpitMode: document.querySelector('#premium-cockpit-mode')?.textContent || '',
-    cockpitDifficulty: document.querySelector('#premium-cockpit-difficulty')?.textContent || '',
-    cockpitLoadout: document.querySelector('#premium-cockpit-loadout')?.textContent || '',
-    cockpitSeason: document.querySelector('#premium-cockpit-season')?.textContent || '',
-    cockpitTarget: document.querySelector('#premium-cockpit-target')?.dataset.cockpitTargetGame || '',
-    cockpitActionLabel: document.querySelector('#premium-cockpit-play')?.getAttribute('aria-label') || '',
-    debugCockpit: window.__atherixDebug?.premium?.cockpit?.() || {},
-    directorPanel: !!document.querySelector('#premium-arcade-director'),
-    directorTarget: document.querySelector('#premium-director-start')?.dataset.targetGame || '',
-    directorTitle: document.querySelector('#premium-director-title')?.textContent || '',
-    directorReason: document.querySelector('#premium-director-reason')?.textContent || '',
-    directorMedals: document.querySelector('#premium-director-medals')?.textContent || '',
-    directorAchievements: document.querySelector('#premium-director-achievements')?.textContent || '',
-    directorCompletion: document.querySelector('#premium-director-completion')?.textContent || '',
-    profilePanel: !!document.querySelector('#premium-profile-panel'),
-    profileTitle: document.querySelector('#premium-profile-title')?.textContent || '',
-    profileCompletion: document.querySelector('#premium-profile-completion')?.textContent || '',
-    profileMedals: document.querySelector('#premium-profile-medals')?.textContent || '',
-    profileAchievements: document.querySelector('#premium-profile-achievements')?.textContent || '',
-    profileTarget: document.querySelector('#premium-profile-target')?.dataset.profileTargetGame || '',
-    profileProgressRole: document.querySelector('#premium-profile-progressbar')?.getAttribute('role') || '',
-    profileProgressNow: document.querySelector('#premium-profile-progressbar')?.getAttribute('aria-valuenow') || '',
-    debugProfile: window.__atherixDebug?.premium?.profile?.() || {},
-    prizePanel: !!document.querySelector('#premium-prize-track'),
-    prizeTitle: document.querySelector('#premium-prize-title')?.textContent || '',
-    prizeSummary: document.querySelector('#premium-prize-summary')?.textContent || '',
-    prizeNodes: document.querySelectorAll('.arcade-prize-node').length,
-    prizeClaimedNodes: document.querySelectorAll('.arcade-prize-node[data-state="claimed"]').length,
-    prizeNextNodes: document.querySelectorAll('.arcade-prize-node[data-state="next"]').length,
-    prizeTarget: document.querySelector('#premium-prize-target')?.dataset.prizeTargetGame || '',
-    prizeProgressRole: document.querySelector('#premium-prize-progressbar')?.getAttribute('role') || '',
-    prizeProgressNow: document.querySelector('#premium-prize-progressbar')?.getAttribute('aria-valuenow') || '',
-    debugPrize: window.__atherixDebug?.premium?.prizeTrack?.() || {},
-    masteryPanel: !!document.querySelector('#premium-mastery-panel'),
-    masteryCards: document.querySelectorAll('.arcade-mastery-card').length,
-    debugMastery: window.__atherixDebug?.premium?.mastery?.().length || 0,
-    masteryTitle: document.querySelector('#premium-mastery-title')?.textContent || '',
-    masterySummary: document.querySelector('#premium-mastery-summary')?.textContent || '',
-    contractBoard: !!document.querySelector('#premium-contract-board'),
-    contractCards: document.querySelectorAll('.arcade-contract-card').length,
-    debugContracts: window.__atherixDebug?.premium?.contracts?.().length || 0,
-    firstContractProgress: window.__atherixDebug?.premium?.contracts?.()[0]?.progress ?? -1,
-    leaguePanel: !!document.querySelector('#premium-league-panel'),
-    leagueCards: document.querySelectorAll('.arcade-league-stage').length,
-    leagueTitle: document.querySelector('#premium-league-title')?.textContent || '',
-    leagueSummary: document.querySelector('#premium-league-summary')?.textContent || '',
-    leagueProgress: document.querySelector('#premium-league-progress')?.textContent || '',
-    leagueReward: document.querySelector('#premium-league-reward')?.textContent || '',
-    leagueTarget: document.querySelector('#premium-league-start')?.dataset.leagueTargetGame || '',
-    debugLeague: window.__atherixDebug?.premium?.league?.() || {},
-    runLogPanel: !!document.querySelector('#premium-run-log-panel'),
-    runLogEmpty: document.querySelector('#premium-run-log-panel')?.dataset.empty || '',
-    runLogCards: document.querySelectorAll('.arcade-run-log-item').length,
-    debugRuns: window.__atherixDebug?.premium?.runs?.().length || 0,
-    leaderboardPanel: !!document.querySelector('#premium-leaderboard-panel'),
-    leaderboardEmpty: document.querySelector('#premium-leaderboard-panel')?.dataset.empty || '',
-    leaderboardCards: document.querySelectorAll('.arcade-leaderboard-card').length,
-    leaderboardTitle: document.querySelector('#premium-leaderboard-title')?.textContent || '',
-    leaderboardTotal: document.querySelector('#premium-leaderboard-total')?.textContent || '',
-    debugLeaderboard: window.__atherixDebug?.premium?.leaderboard?.() || {},
-    rivalPanel: !!document.querySelector('#premium-rival-panel'),
-    rivalTitle: document.querySelector('#premium-rival-title')?.textContent || '',
-    rivalTarget: document.querySelector('#premium-rival-target')?.textContent || '',
-    rivalGap: document.querySelector('#premium-rival-gap')?.textContent || '',
-    rivalPressure: document.querySelector('#premium-rival-pressure')?.textContent || '',
-    rivalActionTarget: document.querySelector('#premium-rival-start')?.dataset.rivalTargetGame || '',
-    debugRival: window.__atherixDebug?.premium?.rival?.() || {},
-    coachPanel: !!document.querySelector('#premium-run-coach-panel'),
-    coachEmpty: document.querySelector('#premium-run-coach-panel')?.dataset.empty || '',
-    coachLaunchDisabled: !!document.querySelector('#premium-coach-launch')?.disabled,
-    coachDifficultyDisabled: !!document.querySelector('#premium-coach-difficulty')?.disabled,
-    coachLoadoutDisabled: !!document.querySelector('#premium-coach-loadout')?.disabled,
-    difficultyPanel: !!document.querySelector('#premium-difficulty-panel'),
-    difficultyCards: document.querySelectorAll('.arcade-difficulty-card').length,
-    activeDifficulty: window.__atherixDebug?.premium?.difficulty?.().active || '',
-    loadoutPanel: !!document.querySelector('#premium-loadout-panel'),
-    loadoutCards: document.querySelectorAll('.arcade-loadout-card').length,
-    activeLoadout: window.__atherixDebug?.premium?.loadout?.().active || '',
-    loadoutUnlocked: window.__atherixDebug?.premium?.loadout?.().unlocked?.length || 0,
-    premiumTabs: document.querySelectorAll('[data-premium-game]').length,
-    tabBadges: document.querySelectorAll('.mini-game-medal-chip').length,
-    driftPanel: !!document.querySelector('#premium-drift-canvas'),
-    tacticsPanel: !!document.querySelector('#premium-tactics-canvas'),
-    oldPrototypeCount: document.querySelectorAll('#snake-canvas,#breakout-canvas,#tile-board,#memory-board').length,
-    touchControls: document.querySelectorAll('[data-premium-control]').length,
-    gamepadStatus: document.querySelector('#premium-gamepad-status')?.textContent || '',
-    chainCells: document.querySelectorAll('#premium-chain-board .chain-cell').length,
-    chainTarget: document.querySelector('#premium-chain-target')?.textContent,
-    feedbackPanel: !!document.querySelector('#premium-feedback-console'),
-    feedbackStage: !!document.querySelector('#premium-stage-feedback'),
-    feedbackStatus: document.querySelector('#premium-feedback-status')?.textContent || '',
-    feedbackTogglePressed: document.querySelector('#premium-feedback-toggle')?.getAttribute('aria-pressed') || '',
-    feedbackDebug: window.__atherixDebug?.premium?.feedback?.() || {}
-  }))()`);
+  const arcadeInitial = await evaluate(`(() => {
+    const rectFor = selector => {
+      const el = document.querySelector(selector);
+      if (!el) return null;
+      const rect = el.getBoundingClientRect();
+      return {
+        top: Math.round(rect.top + scrollY),
+        bottom: Math.round(rect.bottom + scrollY),
+        height: Math.round(rect.height),
+        order: Number(getComputedStyle(el).order || 0)
+      };
+    };
+    return {
+      premium: !!document.querySelector('#premium-game-stage'),
+      careerPanel: !!document.querySelector('#premium-career-rating'),
+      dailyChallenge: document.querySelector('#premium-daily-challenge')?.textContent || '',
+      cockpitPanel: !!document.querySelector('#premium-cockpit-panel'),
+      cockpitTitle: document.querySelector('#premium-cockpit-title')?.textContent || '',
+      cockpitSummary: document.querySelector('#premium-cockpit-summary')?.textContent || '',
+      cockpitMode: document.querySelector('#premium-cockpit-mode')?.textContent || '',
+      cockpitDifficulty: document.querySelector('#premium-cockpit-difficulty')?.textContent || '',
+      cockpitLoadout: document.querySelector('#premium-cockpit-loadout')?.textContent || '',
+      cockpitSeason: document.querySelector('#premium-cockpit-season')?.textContent || '',
+      cockpitTarget: document.querySelector('#premium-cockpit-target')?.dataset.cockpitTargetGame || '',
+      cockpitActionLabel: document.querySelector('#premium-cockpit-play')?.getAttribute('aria-label') || '',
+      debugCockpit: window.__atherixDebug?.premium?.cockpit?.() || {},
+      directorPanel: !!document.querySelector('#premium-arcade-director'),
+      directorTarget: document.querySelector('#premium-director-start')?.dataset.targetGame || '',
+      directorTitle: document.querySelector('#premium-director-title')?.textContent || '',
+      directorReason: document.querySelector('#premium-director-reason')?.textContent || '',
+      directorMedals: document.querySelector('#premium-director-medals')?.textContent || '',
+      directorAchievements: document.querySelector('#premium-director-achievements')?.textContent || '',
+      directorCompletion: document.querySelector('#premium-director-completion')?.textContent || '',
+      profilePanel: !!document.querySelector('#premium-profile-panel'),
+      profileTitle: document.querySelector('#premium-profile-title')?.textContent || '',
+      profileCompletion: document.querySelector('#premium-profile-completion')?.textContent || '',
+      profileMedals: document.querySelector('#premium-profile-medals')?.textContent || '',
+      profileAchievements: document.querySelector('#premium-profile-achievements')?.textContent || '',
+      profileTarget: document.querySelector('#premium-profile-target')?.dataset.profileTargetGame || '',
+      profileProgressRole: document.querySelector('#premium-profile-progressbar')?.getAttribute('role') || '',
+      profileProgressNow: document.querySelector('#premium-profile-progressbar')?.getAttribute('aria-valuenow') || '',
+      debugProfile: window.__atherixDebug?.premium?.profile?.() || {},
+      prizePanel: !!document.querySelector('#premium-prize-track'),
+      prizeTitle: document.querySelector('#premium-prize-title')?.textContent || '',
+      prizeSummary: document.querySelector('#premium-prize-summary')?.textContent || '',
+      prizeNodes: document.querySelectorAll('.arcade-prize-node').length,
+      prizeClaimedNodes: document.querySelectorAll('.arcade-prize-node[data-state="claimed"]').length,
+      prizeNextNodes: document.querySelectorAll('.arcade-prize-node[data-state="next"]').length,
+      prizeTarget: document.querySelector('#premium-prize-target')?.dataset.prizeTargetGame || '',
+      prizeProgressRole: document.querySelector('#premium-prize-progressbar')?.getAttribute('role') || '',
+      prizeProgressNow: document.querySelector('#premium-prize-progressbar')?.getAttribute('aria-valuenow') || '',
+      debugPrize: window.__atherixDebug?.premium?.prizeTrack?.() || {},
+      masteryPanel: !!document.querySelector('#premium-mastery-panel'),
+      masteryCards: document.querySelectorAll('.arcade-mastery-card').length,
+      debugMastery: window.__atherixDebug?.premium?.mastery?.().length || 0,
+      masteryTitle: document.querySelector('#premium-mastery-title')?.textContent || '',
+      masterySummary: document.querySelector('#premium-mastery-summary')?.textContent || '',
+      contractBoard: !!document.querySelector('#premium-contract-board'),
+      contractCards: document.querySelectorAll('.arcade-contract-card').length,
+      debugContracts: window.__atherixDebug?.premium?.contracts?.().length || 0,
+      firstContractProgress: window.__atherixDebug?.premium?.contracts?.()[0]?.progress ?? -1,
+      leaguePanel: !!document.querySelector('#premium-league-panel'),
+      leagueCards: document.querySelectorAll('.arcade-league-stage').length,
+      leagueTitle: document.querySelector('#premium-league-title')?.textContent || '',
+      leagueSummary: document.querySelector('#premium-league-summary')?.textContent || '',
+      leagueProgress: document.querySelector('#premium-league-progress')?.textContent || '',
+      leagueReward: document.querySelector('#premium-league-reward')?.textContent || '',
+      leagueTarget: document.querySelector('#premium-league-start')?.dataset.leagueTargetGame || '',
+      debugLeague: window.__atherixDebug?.premium?.league?.() || {},
+      runLogPanel: !!document.querySelector('#premium-run-log-panel'),
+      runLogEmpty: document.querySelector('#premium-run-log-panel')?.dataset.empty || '',
+      runLogCards: document.querySelectorAll('.arcade-run-log-item').length,
+      debugRuns: window.__atherixDebug?.premium?.runs?.().length || 0,
+      leaderboardPanel: !!document.querySelector('#premium-leaderboard-panel'),
+      leaderboardEmpty: document.querySelector('#premium-leaderboard-panel')?.dataset.empty || '',
+      leaderboardCards: document.querySelectorAll('.arcade-leaderboard-card').length,
+      leaderboardTitle: document.querySelector('#premium-leaderboard-title')?.textContent || '',
+      leaderboardTotal: document.querySelector('#premium-leaderboard-total')?.textContent || '',
+      debugLeaderboard: window.__atherixDebug?.premium?.leaderboard?.() || {},
+      rivalPanel: !!document.querySelector('#premium-rival-panel'),
+      rivalTitle: document.querySelector('#premium-rival-title')?.textContent || '',
+      rivalTarget: document.querySelector('#premium-rival-target')?.textContent || '',
+      rivalGap: document.querySelector('#premium-rival-gap')?.textContent || '',
+      rivalPressure: document.querySelector('#premium-rival-pressure')?.textContent || '',
+      rivalActionTarget: document.querySelector('#premium-rival-start')?.dataset.rivalTargetGame || '',
+      debugRival: window.__atherixDebug?.premium?.rival?.() || {},
+      coachPanel: !!document.querySelector('#premium-run-coach-panel'),
+      coachEmpty: document.querySelector('#premium-run-coach-panel')?.dataset.empty || '',
+      coachLaunchDisabled: !!document.querySelector('#premium-coach-launch')?.disabled,
+      coachDifficultyDisabled: !!document.querySelector('#premium-coach-difficulty')?.disabled,
+      coachLoadoutDisabled: !!document.querySelector('#premium-coach-loadout')?.disabled,
+      difficultyPanel: !!document.querySelector('#premium-difficulty-panel'),
+      difficultyCards: document.querySelectorAll('.arcade-difficulty-card').length,
+      activeDifficulty: window.__atherixDebug?.premium?.difficulty?.().active || '',
+      loadoutPanel: !!document.querySelector('#premium-loadout-panel'),
+      loadoutCards: document.querySelectorAll('.arcade-loadout-card').length,
+      activeLoadout: window.__atherixDebug?.premium?.loadout?.().active || '',
+      loadoutUnlocked: window.__atherixDebug?.premium?.loadout?.().unlocked?.length || 0,
+      premiumTabs: document.querySelectorAll('[data-premium-game]').length,
+      tabBadges: document.querySelectorAll('.mini-game-medal-chip').length,
+      driftPanel: !!document.querySelector('#premium-drift-canvas'),
+      tacticsPanel: !!document.querySelector('#premium-tactics-canvas'),
+      oldPrototypeCount: document.querySelectorAll('#snake-canvas,#breakout-canvas,#tile-board,#memory-board').length,
+      touchControls: document.querySelectorAll('[data-premium-control]').length,
+      gamepadStatus: document.querySelector('#premium-gamepad-status')?.textContent || '',
+      chainCells: document.querySelectorAll('#premium-chain-board .chain-cell').length,
+      chainTarget: document.querySelector('#premium-chain-target')?.textContent,
+      feedbackPanel: !!document.querySelector('#premium-feedback-console'),
+      feedbackStage: !!document.querySelector('#premium-stage-feedback'),
+      feedbackStatus: document.querySelector('#premium-feedback-status')?.textContent || '',
+      feedbackTogglePressed: document.querySelector('#premium-feedback-toggle')?.getAttribute('aria-pressed') || '',
+      feedbackDebug: window.__atherixDebug?.premium?.feedback?.() || {},
+      playfieldLayout: {
+        header: rectFor('.arcade-library-header'),
+        cockpit: rectFor('#premium-cockpit-panel'),
+        tabs: rectFor('#premium-game-tabs'),
+        stage: rectFor('#premium-game-stage'),
+        feedback: rectFor('#premium-feedback-console'),
+        career: rectFor('.arcade-career-panel'),
+        profile: rectFor('#premium-profile-panel'),
+        director: rectFor('#premium-arcade-director'),
+        mastery: rectFor('#premium-mastery-panel'),
+        league: rectFor('#premium-league-panel'),
+        difficulty: rectFor('#premium-difficulty-panel'),
+        loadout: rectFor('#premium-loadout-panel')
+      }
+    };
+  })()`);
   const premiumGamepadState = await evaluate(`(() => {
     const api = window.__atherixDebug?.premium;
     document.querySelector('[data-premium-game="tactics"]')?.click();
@@ -1931,7 +1958,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasArcadeShellVersion: swText.includes('atherix-static-v31-arcade-shell') && swText.includes('/style.css?v=20260608-arcade-shell-v1') && swText.includes('/app.js?v=20260608-arcade-shell-v1'),
+      swHasPlayfieldFirstVersion: swText.includes('atherix-static-v32-playfield-first') && swText.includes('/style.css?v=20260608-playfield-first-v1') && swText.includes('/app.js?v=20260608-playfield-first-v1'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
   })()`, 10000);
@@ -2080,6 +2107,20 @@ async function run() {
   assert(arcadeInitial.premium && arcadeInitial.careerPanel, 'premium arcade career panel should render');
   assert(arcadeInitial.oldPrototypeCount === 0, 'old prototype mini-games should be replaced');
   assert(arcadeInitial.premiumTabs >= 6 && arcadeInitial.driftPanel && arcadeInitial.tacticsPanel, 'premium arcade should include drift and tactics modes');
+  assert(
+    arcadeInitial.playfieldLayout?.cockpit
+      && arcadeInitial.playfieldLayout?.tabs
+      && arcadeInitial.playfieldLayout?.stage
+      && arcadeInitial.playfieldLayout?.career
+      && arcadeInitial.playfieldLayout?.director
+      && arcadeInitial.playfieldLayout?.mastery
+      && arcadeInitial.playfieldLayout.tabs.top >= arcadeInitial.playfieldLayout.cockpit.bottom - 8
+      && arcadeInitial.playfieldLayout.stage.top >= arcadeInitial.playfieldLayout.tabs.bottom - 8
+      && arcadeInitial.playfieldLayout.career.top >= arcadeInitial.playfieldLayout.stage.bottom - 8
+      && arcadeInitial.playfieldLayout.director.top >= arcadeInitial.playfieldLayout.stage.bottom - 8
+      && arcadeInitial.playfieldLayout.mastery.top >= arcadeInitial.playfieldLayout.stage.bottom - 8,
+    `premium arcade should prioritize playable tabs and canvas before meta panels: ${JSON.stringify(arcadeInitial.playfieldLayout)}`
+  );
   assert(arcadeInitial.feedbackPanel && arcadeInitial.feedbackStage && arcadeInitial.feedbackTogglePressed === 'true' && arcadeInitial.feedbackDebug?.muted === false && arcadeInitial.feedbackDebug?.total === 0 && /沉浸反馈/.test(arcadeInitial.feedbackStatus), `premium arcade feedback console should start enabled and observable: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.cockpitPanel && arcadeInitial.cockpitTarget === arcadeInitial.debugCockpit?.targetGame && arcadeInitial.cockpitMode === arcadeInitial.debugCockpit?.activeLabel && arcadeInitial.cockpitDifficulty && arcadeInitial.cockpitLoadout && (arcadeInitial.cockpitSeason === '完成' || /^\d+%$/.test(arcadeInitial.cockpitSeason)) && arcadeInitial.cockpitActionLabel.includes(arcadeInitial.cockpitMode), `premium arcade cockpit should summarize the next playable run: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.runLogPanel && arcadeInitial.runLogEmpty === 'true' && arcadeInitial.runLogCards === 0 && arcadeInitial.debugRuns === 0, `premium arcade run telemetry should start empty: ${JSON.stringify(arcadeInitial)}`);
@@ -2228,7 +2269,7 @@ async function run() {
   assert(tacticsForecastAfterAction.dangerCount > 0 && tacticsForecastAfterAction.coverHud && tacticsForecastAfterAction.momentumHud !== undefined && tacticsForecastAfterAction.routeHud && tacticsJammedIntent, `tactics mode should expose post-action JAM, cover, momentum, and route forecast: ${JSON.stringify(tacticsForecastAfterAction)}`);
   assert(tacticsState.nonBlank && Number(tacticsState.ap) >= 0 && tacticsState.action && tacticsState.cover && tacticsState.momentum !== undefined && tacticsState.route && tacticsState.debug?.route?.length > 0, `tactics mode should render and accept enhanced actions: ${JSON.stringify(tacticsState)}`);
   assert(Number(tacticsState.danger) > 0 && tacticsState.intel && tacticsState.debug?.hud?.route === tacticsState.route && tacticsState.debug?.hud?.cover === tacticsState.cover && tacticsState.debug?.hud?.momentum === tacticsState.momentum, `tactics HUD should stay in sync with enhanced debug state: ${JSON.stringify(tacticsState)}`);
-  assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /arcade-shell/.test(key)) && pwaState.swHasArcadeShellVersion, `service worker should register and cache the latest app shell: ${JSON.stringify(pwaState)}`);
+  assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /playfield-first/.test(key)) && pwaState.swHasPlayfieldFirstVersion, `service worker should register and cache the latest app shell: ${JSON.stringify(pwaState)}`);
   assert(pwaState.swHasLocalProjectAssets, `service worker should precache local portfolio assets: ${JSON.stringify(pwaState)}`);
   assert(pwaState.swHasNavigationPreload && pwaState.swHasOfflineShellHeader && pwaState.swHasFallbackUrl, `service worker should include robust offline navigation fallback: ${JSON.stringify(pwaState)}`);
   const diagnosticText = JSON.stringify(diagnostics);

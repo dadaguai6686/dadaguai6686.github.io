@@ -4233,6 +4233,40 @@ body.command-open {
 }
 
 .arcade-library-header {
+  order: 0;
+}
+
+.arcade-cockpit-panel {
+  order: 1;
+}
+
+#premium-game-tabs {
+  order: 2;
+}
+
+#premium-game-stage {
+  order: 3;
+  margin-bottom: 1rem;
+}
+
+.arcade-feedback-console,
+.arcade-career-panel,
+.arcade-profile-panel,
+.arcade-prize-track,
+.arcade-run-log-panel,
+.arcade-leaderboard-panel,
+.arcade-rival-panel,
+.arcade-coach-panel,
+.arcade-director-panel,
+.arcade-mastery-panel,
+.arcade-contract-board,
+.arcade-league-panel,
+.arcade-difficulty-panel,
+.arcade-loadout-panel {
+  order: 4;
+}
+
+.arcade-library-header {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -7525,12 +7559,19 @@ body.command-open {
     order: 1;
     margin-bottom: 0.75rem;
   }
+  #premium-game-tabs {
+    order: 1;
+  }
   .mini-game-stage {
     order: 2;
     display: flex;
     flex-direction: column;
     gap: 0.45rem;
     padding: 0.35rem;
+  }
+  #premium-game-stage {
+    order: 2;
+    margin-bottom: 0.8rem;
   }
   .arcade-shell-stage {
     display: grid;
