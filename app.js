@@ -292,6 +292,8 @@ function init() {
   ].join(',');
   const modalFocusOrigins = new WeakMap();
   const modalCloseTimers = new WeakMap();
+  let confirmationModal = null;
+  let activeConfirmation = null;
   let commandPaletteFocusOrigin = null;
 
   function isVisibleFocusableElement(element) {
@@ -1060,11 +1062,97 @@ function init() {
     modalEl.classList.remove('active');
     modalEl.setAttribute('aria-hidden', 'true');
     modalFocusOrigins.delete(modalEl);
+    modalEl.dispatchEvent(new CustomEvent('atherix:modal-closed', { detail: { restoreFocus } }));
     const timer = setTimeout(() => {
       modalEl.style.display = 'none';
       modalCloseTimers.delete(modalEl);
     }, 300);
     modalCloseTimers.set(modalEl, timer);
+  }
+
+  function getConfirmationModal() {
+    if (confirmationModal && document.body.contains(confirmationModal)) return confirmationModal;
+    confirmationModal = document.createElement('div');
+    confirmationModal.className = 'project-modal confirm-modal';
+    confirmationModal.id = 'site-confirm-modal';
+    confirmationModal.setAttribute('role', 'dialog');
+    confirmationModal.setAttribute('aria-modal', 'true');
+    confirmationModal.setAttribute('aria-hidden', 'true');
+    confirmationModal.setAttribute('aria-labelledby', 'site-confirm-title');
+    confirmationModal.setAttribute('aria-describedby', 'site-confirm-message');
+    confirmationModal.innerHTML = `
+      <div class="glass-card modal-content confirm-modal-content">
+        <span class="confirm-kicker" id="site-confirm-kicker">需要确认</span>
+        <h2 class="modal-title" id="site-confirm-title">确认操作</h2>
+        <p class="confirm-message" id="site-confirm-message">此操作需要确认后继续。</p>
+        <p class="confirm-detail" id="site-confirm-detail"></p>
+        <div class="confirm-actions">
+          <button type="button" class="action-btn confirm-cancel-btn" data-autofocus>取消</button>
+          <button type="button" class="action-btn action-btn-danger confirm-accept-btn">
+            <i data-lucide="trash-2"></i> 确认
+          </button>
+        </div>
+      </div>
+    `;
+    confirmationModal.addEventListener('click', (event) => {
+      if (event.target === confirmationModal && activeConfirmation) {
+        activeConfirmation.resolve(false);
+      }
+    });
+    document.body.appendChild(confirmationModal);
+    safeCreateIcons(confirmationModal);
+    return confirmationModal;
+  }
+
+  function requestConfirmation({
+    title = '确认操作',
+    message = '此操作需要确认后继续。',
+    detail = '',
+    confirmLabel = '确认',
+    cancelLabel = '取消',
+    tone = 'danger'
+  } = {}) {
+    const modal = getConfirmationModal();
+    if (activeConfirmation) {
+      activeConfirmation.resolve(false);
+      activeConfirmation = null;
+    }
+    modal.dataset.tone = tone;
+    modal.querySelector('#site-confirm-title').textContent = title;
+    modal.querySelector('#site-confirm-message').textContent = message;
+    const detailEl = modal.querySelector('#site-confirm-detail');
+    detailEl.textContent = detail;
+    detailEl.hidden = !detail;
+    const cancelBtn = modal.querySelector('.confirm-cancel-btn');
+    const acceptBtn = modal.querySelector('.confirm-accept-btn');
+    cancelBtn.textContent = cancelLabel;
+    acceptBtn.innerHTML = `${tone === 'danger' ? '<i data-lucide="trash-2"></i>' : '<i data-lucide="check"></i>'} ${escapeHTML(confirmLabel)}`;
+    safeCreateIcons(acceptBtn);
+
+    return new Promise(resolve => {
+      let settled = false;
+      const settle = (value, { close = true } = {}) => {
+        if (settled) return;
+        settled = true;
+        activeConfirmation = null;
+        cleanup();
+        resolve(Boolean(value));
+        if (close) closeModal(modal);
+      };
+      const onClosed = () => settle(false, { close: false });
+      const onCancel = () => settle(false);
+      const onAccept = () => settle(true);
+      const cleanup = () => {
+        cancelBtn.removeEventListener('click', onCancel);
+        acceptBtn.removeEventListener('click', onAccept);
+        modal.removeEventListener('atherix:modal-closed', onClosed);
+      };
+      activeConfirmation = { resolve: settle };
+      cancelBtn.addEventListener('click', onCancel);
+      acceptBtn.addEventListener('click', onAccept);
+      modal.addEventListener('atherix:modal-closed', onClosed);
+      openModal(modal);
+    });
   }
 
   function getActiveProjectModal() {
@@ -2298,7 +2386,14 @@ function init() {
   }
 
   async function deleteBlogPost(postId) {
-    if (!confirm('您确定要永久删除这篇博客文章吗？')) return;
+    const post = blogPosts.find(item => item.id === postId);
+    const confirmed = await requestConfirmation({
+      title: '删除博客文章？',
+      message: `确认永久删除「${post?.title || '这篇文章'}」吗？`,
+      detail: '删除后会从文章列表、置顶推荐和阅读入口中移除。此操作无法撤销。',
+      confirmLabel: '删除文章'
+    });
+    if (!confirmed) return;
     try {
       await fetchAPI(`/api/posts/${postId}`, {
         method: 'DELETE'
@@ -2540,7 +2635,14 @@ function init() {
   }
 
   async function deleteProject(projId) {
-    if (!confirm('您确认要永久删除这个项目卡片吗？')) return;
+    const project = projectsData.find(item => item.id === projId);
+    const confirmed = await requestConfirmation({
+      title: '删除项目卡片？',
+      message: `确认永久删除「${project?.title || '这个项目'}」吗？`,
+      detail: '项目详情、封面和首页展示入口会一起移除。此操作无法撤销。',
+      confirmLabel: '删除项目'
+    });
+    if (!confirmed) return;
     try {
       await fetchAPI(`/api/projects/${projId}`, {
         method: 'DELETE'
@@ -2679,7 +2781,13 @@ function init() {
   }
 
   async function deleteComment(id) {
-    if (!confirm('确定要删除这笔留言吗？')) return;
+    const confirmed = await requestConfirmation({
+      title: '删除留言？',
+      message: '确认删除这笔留言吗？',
+      detail: '留言删除后将从访客墙中移除。此操作无法撤销。',
+      confirmLabel: '删除留言'
+    });
+    if (!confirmed) return;
     try {
       await fetchAPI(`/api/comments/${id}`, {
         method: 'DELETE'
@@ -3076,13 +3184,19 @@ function init() {
     });
   }
   if (vaultClearBtn) {
-    vaultClearBtn.addEventListener('click', () => {
+    vaultClearBtn.addEventListener('click', async () => {
       const entries = getVaultEntries();
       if (!entries.length) {
         showToast('没有可清理的本地状态', 'info');
         return;
       }
-      if (!window.confirm(`确认清空 ${entries.length} 项 Atherix 本地状态？此操作不会影响服务器数据。`)) return;
+      const confirmed = await requestConfirmation({
+        title: '清空本地状态？',
+        message: `确认清空 ${entries.length} 项 Atherix 本地状态吗？`,
+        detail: '这只会清理当前浏览器里的阅读进度、工具草稿和街机档案，不会影响服务器数据。',
+        confirmLabel: '清空状态'
+      });
+      if (!confirmed) return;
       entries.forEach(([key]) => localStorage.removeItem(key));
       refreshImportedViews(entries.map(([key]) => key));
       showToast('本地状态已清空', 'warning');

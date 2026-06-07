@@ -1,10 +1,10 @@
-const CACHE_VERSION = 'atherix-static-v29-local-assets';
+const CACHE_VERSION = 'atherix-static-v30-confirm-cdp';
 const NAVIGATION_FALLBACK_URL = '/index.html';
 const STATIC_ASSETS = [
   '/',
   NAVIGATION_FALLBACK_URL,
-  '/style.css?v=20260608-local-assets-v1',
-  '/app.js?v=20260608-local-assets-v1',
+  '/style.css?v=20260608-confirm-cdp-v1',
+  '/app.js?v=20260608-confirm-cdp-v1',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',

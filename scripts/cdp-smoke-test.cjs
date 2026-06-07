@@ -12,6 +12,7 @@ const edgePath = process.env.EDGE_PATH || 'C:\\Program Files (x86)\\Microsoft\\E
 let activeAppServer = null;
 let activeAppTempDir = '';
 let activeBrowserProcess = null;
+let activeBrowserTempDir = '';
 
 function wait(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -31,6 +32,9 @@ async function waitForCdp() {
   const deadline = Date.now() + 30000;
   let lastError;
   while (Date.now() < deadline) {
+    if (activeBrowserProcess && activeBrowserProcess.exitCode !== null) {
+      throw new Error(`Headless browser exited before CDP became ready (exit ${activeBrowserProcess.exitCode})`);
+    }
     try {
       return await cdpJson('/json/version');
     } catch (error) {
@@ -45,7 +49,8 @@ function startHeadlessEdge() {
   if (!fs.existsSync(edgePath)) {
     throw new Error(`Edge not found at ${edgePath}`);
   }
-  const profile = path.join(os.tmpdir(), `codex-blog-cdp-${cdpPort}`);
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), `codex-blog-cdp-${cdpPort}-`));
+  activeBrowserTempDir = profile;
   fs.mkdirSync(profile, { recursive: true });
   const child = spawn(edgePath, [
     '--headless=new',
@@ -59,6 +64,8 @@ function startHeadlessEdge() {
     '--disable-default-apps',
     '--disable-extensions',
     '--disable-sync',
+    '--disable-background-timer-throttling',
+    '--disable-renderer-backgrounding',
     '--disable-features=Translate,BackForwardCache,OptimizationHints',
     '--no-first-run',
     '--no-default-browser-check',
@@ -118,6 +125,14 @@ async function cleanupBrowserProcess() {
       wait(1500)
     ]);
   }
+  if (activeBrowserTempDir) {
+    try {
+      fs.rmSync(activeBrowserTempDir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
+    } catch (error) {
+      console.warn(`[smoke:games] Could not remove browser profile ${activeBrowserTempDir}: ${error.message}`);
+    }
+  }
+  activeBrowserTempDir = '';
 }
 
 async function waitForAppServer() {
@@ -186,8 +201,12 @@ async function run() {
     console: [],
     exceptions: [],
     networkFailures: [],
-    logs: []
+    logs: [],
+    navigations: []
   };
+  let lastFrameNavigated = '';
+  let lastLoadEventAt = 0;
+  let lastDomContentEventAt = 0;
   function remember(list, item, limit = 12) {
     list.push(item);
     if (list.length > limit) list.splice(0, list.length - limit);
@@ -197,7 +216,17 @@ async function run() {
       console: diagnostics.console.slice(-5),
       exceptions: diagnostics.exceptions.slice(-5),
       networkFailures: diagnostics.networkFailures.slice(-5),
-      logs: diagnostics.logs.slice(-5)
+      logs: diagnostics.logs.slice(-5),
+      navigations: diagnostics.navigations.slice(-5),
+      pending: [...pending.values()].map(slot => ({
+        id: slot.callId,
+        method: slot.method,
+        ageMs: Date.now() - slot.startedAt
+      })).slice(-8),
+      lastFrameNavigated,
+      lastLoadEventAt,
+      lastDomContentEventAt,
+      socketReadyState: ws.readyState
     };
   }
   function rejectPending(reason) {
@@ -231,6 +260,18 @@ async function run() {
           errorText: message.params?.errorText || '',
           type: message.params?.type || ''
         });
+      } else if (message.method === 'Page.frameNavigated') {
+        lastFrameNavigated = message.params?.frame?.url || '';
+        remember(diagnostics.navigations, {
+          type: 'frameNavigated',
+          url: lastFrameNavigated.slice(0, 240)
+        });
+      } else if (message.method === 'Page.loadEventFired') {
+        lastLoadEventAt = Date.now();
+        remember(diagnostics.navigations, { type: 'loadEventFired', at: lastLoadEventAt });
+      } else if (message.method === 'Page.domContentEventFired') {
+        lastDomContentEventAt = Date.now();
+        remember(diagnostics.navigations, { type: 'domContentEventFired', at: lastDomContentEventAt });
       } else if (message.method === 'Log.entryAdded') {
         remember(diagnostics.logs, {
           level: message.params?.entry?.level || '',
@@ -264,9 +305,9 @@ async function run() {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.delete(callId);
-        reject(new Error(`${method} timeout; diagnostics=${JSON.stringify(diagnosticsSummary())}`));
+        reject(new Error(`${method} timeout after ${timeout}ms; diagnostics=${JSON.stringify(diagnosticsSummary())}`));
       }, timeout);
-      pending.set(callId, { resolve, reject, timer });
+      pending.set(callId, { callId, method, startedAt: Date.now(), resolve, reject, timer });
       try {
         ws.send(JSON.stringify({ id: callId, method, params }));
       } catch (error) {
@@ -286,15 +327,42 @@ async function run() {
   }
 
   async function evaluate(expression, timeout) {
-    const result = await send('Runtime.evaluate', {
-      expression,
-      awaitPromise: true,
-      returnByValue: true
-    }, timeout);
+    let result;
+    try {
+      result = await send('Runtime.evaluate', {
+        expression,
+        awaitPromise: true,
+        returnByValue: true
+      }, timeout);
+    } catch (error) {
+      if (!/timeout/i.test(error.message || '')) throw error;
+      await wait(250);
+      result = await send('Runtime.evaluate', {
+        expression,
+        awaitPromise: true,
+        returnByValue: true
+      }, Math.max(timeout || 30000, 45000));
+    }
     if (result.exceptionDetails) {
       throw new Error(result.exceptionDetails.text || 'Runtime exception');
     }
     return result.result.value;
+  }
+
+  async function waitForPageReady(timeout = 12000) {
+    return waitForCondition(`document.readyState === 'interactive' || document.readyState === 'complete'`, timeout);
+  }
+
+  async function navigate(url, timeout = 45000) {
+    await send('Page.navigate', { url }, timeout);
+    const ready = await waitForPageReady(timeout);
+    if (!ready) throw new Error(`Page did not become ready after navigation to ${url}; diagnostics=${JSON.stringify(diagnosticsSummary())}`);
+  }
+
+  async function reload(timeout = 45000) {
+    await send('Page.reload', {}, timeout);
+    const ready = await waitForPageReady(timeout);
+    if (!ready) throw new Error(`Page did not become ready after reload; diagnostics=${JSON.stringify(diagnosticsSummary())}`);
   }
 
   async function click(selector) {
@@ -365,10 +433,10 @@ async function run() {
   await send('Page.addScriptToEvaluateOnNewDocument', { source: smokeHarnessSource });
   await bestEffortSend('Network.enable');
   await bestEffortSend('Log.enable');
-  await send('Page.navigate', { url: appUrl }, 30000);
+  await navigate(appUrl);
   await waitFor('.nav-item[data-target="blog"]', 12000);
   await evaluate(`localStorage.setItem('admin_token', 'fake-token-for-smoke')`);
-  await send('Page.reload');
+  await reload();
   await waitFor('.nav-item[data-target="blog"]', 12000);
   await wait(800);
   const adminStartupState = await evaluate(`(() => {
@@ -577,6 +645,57 @@ async function run() {
     };
     localStorage.removeItem('admin_token');
     return state;
+  })()`, 5000);
+  const vaultClearConfirmState = await evaluate(`(async () => {
+    localStorage.setItem('atherix_reader_progress_clear-smoke', '31');
+    localStorage.setItem('atherix_todos', JSON.stringify([{ text: 'Clear smoke task', completed: false }]));
+    window.__atherixDebug.vault.summary();
+    document.querySelector('#vault-clear-btn')?.click();
+    await new Promise(resolve => setTimeout(resolve, 180));
+    const modal = document.querySelector('#site-confirm-modal');
+    const openBeforeCancel = modal?.classList.contains('active') || false;
+    const role = modal?.getAttribute('role') || '';
+    const ariaHiddenBeforeCancel = modal?.getAttribute('aria-hidden') || '';
+    const focusedCancel = document.activeElement?.classList.contains('confirm-cancel-btn') || false;
+    const title = modal?.querySelector('#site-confirm-title')?.textContent || '';
+    const message = modal?.querySelector('#site-confirm-message')?.textContent || '';
+    modal?.querySelector('.confirm-cancel-btn')?.click();
+    await new Promise(resolve => setTimeout(resolve, 360));
+    const stillStoredAfterCancel = localStorage.getItem('atherix_reader_progress_clear-smoke') || '';
+    const closedAfterCancel = !(modal?.classList.contains('active'));
+    document.querySelector('#vault-clear-btn')?.click();
+    await new Promise(resolve => setTimeout(resolve, 180));
+    const openBeforeAccept = modal?.classList.contains('active') || false;
+    modal?.querySelector('.confirm-accept-btn')?.click();
+    await new Promise(resolve => setTimeout(resolve, 420));
+    const clearedAfterAccept = !localStorage.getItem('atherix_reader_progress_clear-smoke') && !localStorage.getItem('atherix_todos');
+    const clearToast = document.querySelector('.toast-stack .toast:last-child')?.textContent || '';
+    window.__atherixDebug.vault.importText(JSON.stringify({
+      schema: 'atherix-vault-v1',
+      version: 1,
+      storage: {
+        theme: 'light',
+        'atherix_reader_progress_vault-smoke': '77',
+        'atherix_premium_survivor_best': '4321',
+        'atherix_todos': JSON.stringify([{ text: 'Vault restored task', completed: false }])
+      }
+    }));
+    await new Promise(resolve => setTimeout(resolve, 260));
+    return {
+      openBeforeCancel,
+      role,
+      ariaHiddenBeforeCancel,
+      focusedCancel,
+      title,
+      message,
+      stillStoredAfterCancel,
+      closedAfterCancel,
+      openBeforeAccept,
+      clearedAfterAccept,
+      ariaHiddenAfterAccept: modal?.getAttribute('aria-hidden') || '',
+      clearToast,
+      restoreToast: document.querySelector('.toast-stack .toast:last-child')?.textContent || ''
+    };
   })()`, 5000);
   const legacyVaultHydrationState = await evaluate(`(() => {
     const leaderboard = window.__atherixDebug?.premium?.leaderboard?.() || {};
@@ -1812,6 +1931,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
+      swHasConfirmCdpVersion: swText.includes('atherix-static-v30-confirm-cdp') && swText.includes('/style.css?v=20260608-confirm-cdp-v1') && swText.includes('/app.js?v=20260608-confirm-cdp-v1'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
   })()`, 10000);
@@ -1821,7 +1941,7 @@ async function run() {
     deviceScaleFactor: 1,
     mobile: true
   });
-  await send('Page.navigate', { url: `${appUrl}/#game` });
+  await navigate(`${appUrl}/#game`);
   await waitFor('#runner-touch-controls', 12000);
   await wait(700);
   const premiumMobileState = await evaluate(`(() => {
@@ -1898,6 +2018,8 @@ async function run() {
   assert(vaultImportState.progress === '77' && vaultImportState.survivorBest === '4321' && vaultImportState.theme === 'light' && vaultImportState.listHasProgress, `data vault import should restore whitelisted state and refresh UI: ${JSON.stringify(vaultImportState)}`);
   assert(vaultImportState.tokenAfter === 'vault-secret-preserved' && !vaultImportState.outsideKey && vaultImportState.ignored.includes('admin_token') && vaultImportState.ignored.includes('outside_key'), `data vault import should ignore unsafe or unknown keys: ${JSON.stringify(vaultImportState)}`);
   assert(/Vault restored task/.test(vaultImportState.todoStored), `data vault import should restore local tool state: ${JSON.stringify(vaultImportState)}`);
+  assert(vaultClearConfirmState.openBeforeCancel && vaultClearConfirmState.role === 'dialog' && vaultClearConfirmState.ariaHiddenBeforeCancel === 'false' && vaultClearConfirmState.focusedCancel && /清空本地状态/.test(vaultClearConfirmState.title) && /Atherix/.test(vaultClearConfirmState.message), `data vault clear should use the accessible in-app confirmation dialog: ${JSON.stringify(vaultClearConfirmState)}`);
+  assert(vaultClearConfirmState.stillStoredAfterCancel === '31' && vaultClearConfirmState.closedAfterCancel && vaultClearConfirmState.openBeforeAccept && vaultClearConfirmState.clearedAfterAccept && vaultClearConfirmState.ariaHiddenAfterAccept === 'true' && /本地状态已清空/.test(vaultClearConfirmState.clearToast), `data vault clear confirmation should cancel safely and only clear after explicit accept: ${JSON.stringify(vaultClearConfirmState)}`);
   assert(legacyVaultHydrationState.survivorBest === 4321 && legacyVaultHydrationState.survivorMedal === 'gold' && legacyVaultHydrationState.totalScore >= 4321 && legacyVaultHydrationState.leaderboardTopGame === 'survivor' && legacyVaultHydrationState.leaderboardTopScore === 4321 && legacyVaultHydrationState.profileTopGame === 'survivor' && legacyVaultHydrationState.profileMedals >= 1 && legacyVaultHydrationState.masterySurvivorScore === 4321 && legacyVaultHydrationState.prizeTotal >= 4321 && legacyVaultHydrationState.prizeProgress > 0 && legacyVaultHydrationState.prizeUnlocked >= 3 && /4321/.test(legacyVaultHydrationState.totalText), `legacy arcade best imports should hydrate the premium career profile and season track: ${JSON.stringify(legacyVaultHydrationState)}`);
   assert(blogHubBefore.panel && blogHubBefore.total >= 1 && blogHubBefore.filters >= 3 && blogHubBefore.cards >= 1, `blog reading hub should render stats and filters: ${JSON.stringify(blogHubBefore)}`);
   assert(blogHubBefore.cardLinks >= blogHubBefore.cards && /^\/\?post=/.test(blogHubBefore.firstCardHref) && blogHubBefore.pinnedLinks >= 1 && blogHubBefore.quickRole === 'link' && blogHubBefore.quickTabIndex === '0', `blog cards and featured entry should expose native article links: ${JSON.stringify(blogHubBefore)}`);
@@ -2106,7 +2228,7 @@ async function run() {
   assert(tacticsForecastAfterAction.dangerCount > 0 && tacticsForecastAfterAction.coverHud && tacticsForecastAfterAction.momentumHud !== undefined && tacticsForecastAfterAction.routeHud && tacticsJammedIntent, `tactics mode should expose post-action JAM, cover, momentum, and route forecast: ${JSON.stringify(tacticsForecastAfterAction)}`);
   assert(tacticsState.nonBlank && Number(tacticsState.ap) >= 0 && tacticsState.action && tacticsState.cover && tacticsState.momentum !== undefined && tacticsState.route && tacticsState.debug?.route?.length > 0, `tactics mode should render and accept enhanced actions: ${JSON.stringify(tacticsState)}`);
   assert(Number(tacticsState.danger) > 0 && tacticsState.intel && tacticsState.debug?.hud?.route === tacticsState.route && tacticsState.debug?.hud?.cover === tacticsState.cover && tacticsState.debug?.hud?.momentum === tacticsState.momentum, `tactics HUD should stay in sync with enhanced debug state: ${JSON.stringify(tacticsState)}`);
-  assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /local-assets/.test(key)), `service worker should register and cache the app shell: ${JSON.stringify(pwaState)}`);
+  assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /confirm-cdp/.test(key)) && pwaState.swHasConfirmCdpVersion, `service worker should register and cache the latest app shell: ${JSON.stringify(pwaState)}`);
   assert(pwaState.swHasLocalProjectAssets, `service worker should precache local portfolio assets: ${JSON.stringify(pwaState)}`);
   assert(pwaState.swHasNavigationPreload && pwaState.swHasOfflineShellHeader && pwaState.swHasFallbackUrl, `service worker should include robust offline navigation fallback: ${JSON.stringify(pwaState)}`);
   const diagnosticText = JSON.stringify(diagnostics);
@@ -2135,6 +2257,7 @@ async function run() {
     vaultCommandState,
     vaultExportState,
     vaultImportState,
+    vaultClearConfirmState,
     legacyVaultHydrationState,
     blogHubBefore,
     blogState,
