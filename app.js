@@ -4540,6 +4540,21 @@ function init() {
           <span>锁定下一突破</span>
         </button>
       </div>
+      <div class="arcade-prize-track" id="premium-prize-track" aria-label="街机赛季奖励轨道">
+        <div class="arcade-prize-main">
+          <span><i data-lucide="gem"></i> SEASON TRACK</span>
+          <strong id="premium-prize-title">赛季轨道初始化中...</strong>
+          <small id="premium-prize-summary">用总声望推进长期奖励节点，下一档会推荐最适合的挑战。</small>
+          <div class="arcade-prize-progress" id="premium-prize-progressbar" role="progressbar" aria-label="赛季轨道进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="赛季轨道进度 0%">
+            <i id="premium-prize-progress" style="width: 0%" aria-hidden="true"></i>
+          </div>
+        </div>
+        <div class="arcade-prize-nodes" id="premium-prize-nodes"></div>
+        <button type="button" class="arcade-prize-action" id="premium-prize-target" data-prize-target-game="survivor">
+          <i data-lucide="rocket"></i>
+          <span>冲刺下一奖励</span>
+        </button>
+      </div>
       <div class="arcade-run-log-panel" id="premium-run-log-panel" aria-label="街机战报复盘">
         <div class="arcade-run-log-heading">
           <span><i data-lucide="activity"></i> RUN TELEMETRY</span>
@@ -4905,6 +4920,14 @@ function init() {
     };
     const careerGameOrder = ['runner', 'survivor', 'boss', 'drift', 'heist', 'chain', 'tactics'];
     const careerKey = 'atherix_premium_arcade_career_v2';
+    const legacyPremiumBestKeys = {
+      survivor: 'atherix_premium_survivor_best',
+      boss: 'atherix_premium_boss_best',
+      drift: 'atherix_premium_drift_best',
+      heist: 'atherix_premium_heist_best',
+      chain: 'atherix_premium_chain_best',
+      tactics: 'atherix_premium_tactics_best'
+    };
     const medalRank = { none: 0, bronze: 1, silver: 2, gold: 3 };
     const medalLabels = { none: '无', bronze: '铜', silver: '银', gold: '金' };
     const medalRules = {
@@ -5192,6 +5215,37 @@ function init() {
       };
     }
 
+    function hydrateCareerFromLegacyBests(careerState) {
+      const target = careerState && typeof careerState === 'object' ? careerState : createDefaultCareer();
+      target.best = target.best && typeof target.best === 'object' ? target.best : {};
+      target.medals = target.medals && typeof target.medals === 'object' ? target.medals : {};
+      let changed = false;
+      Object.entries(legacyPremiumBestKeys).forEach(([game, key]) => {
+        const legacyScore = Math.max(0, Math.floor(Number(localStorage.getItem(key) || 0)));
+        if (!legacyScore) return;
+        const currentBest = Math.max(0, Math.floor(Number(target.best[game] || 0)));
+        if (legacyScore > currentBest) {
+          target.best[game] = legacyScore;
+          changed = true;
+        }
+        const storedMedal = medalClass(target.medals[game] || 'none');
+        const computedMedal = medalClass(medalFor(game, Number(target.best[game] || legacyScore)));
+        if ((medalRank[computedMedal] || 0) > (medalRank[storedMedal] || 0) || (computedMedal !== 'none' && target.medals[game] !== computedMedal)) {
+          target.medals[game] = computedMedal;
+          changed = true;
+        }
+      });
+      const bestTotal = careerGameOrder.reduce((sum, game) => sum + Math.max(0, Number(target.best?.[game] || 0)), 0);
+      if (bestTotal > Number(target.totalScore || 0)) {
+        target.totalScore = bestTotal;
+        changed = true;
+      }
+      if (changed) {
+        localStorage.setItem(careerKey, JSON.stringify(target));
+      }
+      return target;
+    }
+
     function loadCareer() {
       try {
         const parsed = JSON.parse(localStorage.getItem(careerKey) || 'null');
@@ -5214,9 +5268,9 @@ function init() {
         merged.league.rewarded = !!merged.league.rewarded;
         merged.totalScore = Number.isFinite(Number(merged.totalScore)) ? Number(merged.totalScore) : 0;
         merged.plays = Number.isFinite(Number(merged.plays)) ? Number(merged.plays) : 0;
-        return merged;
+        return hydrateCareerFromLegacyBests(merged);
       } catch {
-        return createDefaultCareer();
+        return hydrateCareerFromLegacyBests(createDefaultCareer());
       }
     }
 
@@ -5366,6 +5420,101 @@ function init() {
         const score = Number(career.best?.[game] || 0);
         return medalClass(career.medals?.[game] || medalFor(game, score)) !== 'none';
       }).length;
+    }
+
+    const prizeTrackMilestones = [
+      { id: 'rookie', threshold: 0, label: '入站许可', reward: '基础档案框' },
+      { id: 'spark', threshold: 1200, label: '霓虹补给', reward: '赛季目标提示' },
+      { id: 'bronze', threshold: 3200, label: '铜牌补给箱', reward: '奖牌路线强化' },
+      { id: 'rival', threshold: 7200, label: '宿敌猎手', reward: '宿敌情报增强' },
+      { id: 'league', threshold: 14000, label: '联赛王牌', reward: '联赛路线徽章' },
+      { id: 'master', threshold: 26000, label: '大师工坊', reward: '赛季金色边框' }
+    ];
+
+    function arcadePrizeTrackSnapshot() {
+      const bestTotal = careerGameOrder.reduce((sum, game) => sum + Math.max(0, Number(career.best?.[game] || 0)), 0);
+      const total = Math.max(0, Number(career.totalScore || 0), bestTotal);
+      const unlocked = prizeTrackMilestones.filter(node => total >= node.threshold);
+      const current = unlocked[unlocked.length - 1] || prizeTrackMilestones[0];
+      const next = prizeTrackMilestones.find(node => total < node.threshold) || null;
+      const previous = current || prizeTrackMilestones[0];
+      const span = next ? Math.max(1, next.threshold - previous.threshold) : 1;
+      const progress = next
+        ? Math.min(100, Math.max(0, Math.round((total - previous.threshold) / span * 100)))
+        : 100;
+      const focus = masteryFocusTarget();
+      const directive = arcadeDirective();
+      const targetGame = focus?.game || directive.game || 'survivor';
+      const nextDelta = next ? Math.max(0, next.threshold - total) : 0;
+      return {
+        total,
+        current,
+        next,
+        progress,
+        nextDelta,
+        unlocked: unlocked.length,
+        totalNodes: prizeTrackMilestones.length,
+        complete: !next,
+        targetGame,
+        nodes: prizeTrackMilestones.map(node => ({
+          ...node,
+          state: total >= node.threshold
+            ? 'claimed'
+            : next && node.id === next.id
+              ? 'next'
+              : 'locked'
+        }))
+      };
+    }
+
+    function renderArcadePrizeTrack() {
+      const panel = document.getElementById('premium-prize-track');
+      if (!panel) return;
+      const track = arcadePrizeTrackSnapshot();
+      const titleEl = document.getElementById('premium-prize-title');
+      const summaryEl = document.getElementById('premium-prize-summary');
+      const progressEl = document.getElementById('premium-prize-progress');
+      const progressBarEl = document.getElementById('premium-prize-progressbar');
+      const nodesEl = document.getElementById('premium-prize-nodes');
+      const actionBtn = document.getElementById('premium-prize-target');
+      panel.dataset.complete = track.complete ? 'true' : 'false';
+      if (titleEl) {
+        titleEl.textContent = track.complete
+          ? `赛季轨道完成 · ${track.current.label}`
+          : `${track.current.label} → ${track.next.label}`;
+      }
+      if (summaryEl) {
+        summaryEl.textContent = track.complete
+          ? `总声望 ${track.total}，全部奖励已点亮。继续刷新各模式金牌与个人极限。`
+          : `总声望 ${track.total}，距离「${track.next.label}」还差 ${track.nextDelta} 声望，奖励：${track.next.reward}。`;
+      }
+      if (progressEl) progressEl.style.width = `${track.progress}%`;
+      if (progressBarEl) {
+        progressBarEl.setAttribute('aria-valuenow', String(track.progress));
+        progressBarEl.setAttribute('aria-valuetext', `赛季轨道进度 ${track.progress}%`);
+      }
+      if (nodesEl) {
+        nodesEl.innerHTML = track.nodes.map(node => `
+          <span class="arcade-prize-node" data-state="${escapeHTML(node.state)}">
+            <b>${escapeHTML(node.label)}</b>
+            <small>${escapeHTML(String(node.threshold))}</small>
+            <em>${escapeHTML(node.reward)}</em>
+          </span>
+        `).join('');
+      }
+      if (actionBtn) {
+        actionBtn.dataset.prizeTargetGame = track.targetGame;
+        const targetLabel = track.targetGame === 'runner'
+          ? '主线远征'
+          : (premiumTabLabels[track.targetGame] || titles[track.targetGame] || track.targetGame);
+        actionBtn.querySelector('span').textContent = track.complete ? `刷新 ${targetLabel}` : `冲刺 ${targetLabel}`;
+      }
+    }
+
+    function prizeMilestoneUnlocks(beforeTotal, afterTotal) {
+      const before = Math.max(0, Number(beforeTotal || 0));
+      const after = Math.max(0, Number(afterTotal || 0));
+      return prizeTrackMilestones.filter(node => node.threshold > 0 && before < node.threshold && after >= node.threshold);
     }
 
     function arcadeRankTier(rating = careerRating()) {
@@ -5813,6 +5962,21 @@ function init() {
         if (medalEl) medalEl.textContent = '--';
         if (deltaEl) deltaEl.textContent = '--';
         if (targetEl) targetEl.textContent = '--';
+        if (launchBtn) {
+          launchBtn.dataset.coachTargetGame = '';
+          launchBtn.disabled = true;
+          launchBtn.querySelector('span').textContent = '等待复盘目标';
+        }
+        if (difficultyBtn) {
+          difficultyBtn.dataset.coachDifficulty = '';
+          difficultyBtn.disabled = true;
+          difficultyBtn.querySelector('span').textContent = '等待推荐难度';
+        }
+        if (loadoutBtn) {
+          loadoutBtn.dataset.coachLoadout = '';
+          loadoutBtn.disabled = true;
+          loadoutBtn.querySelector('span').textContent = '等待推荐芯片';
+        }
         return;
       }
 
@@ -5823,14 +5987,17 @@ function init() {
       if (deltaEl) deltaEl.textContent = coach.deltaText;
       if (targetEl) targetEl.textContent = coach.targetLabel;
       if (launchBtn) {
+        launchBtn.disabled = false;
         launchBtn.dataset.coachTargetGame = coach.game;
         launchBtn.querySelector('span').textContent = coach.game === 'runner' ? '前往主线复盘' : `再战 ${coach.gameLabel}`;
       }
       if (difficultyBtn) {
+        difficultyBtn.disabled = false;
         difficultyBtn.dataset.coachDifficulty = coach.difficulty;
         difficultyBtn.querySelector('span').textContent = `推荐难度：${coach.difficultyLabel}`;
       }
       if (loadoutBtn) {
+        loadoutBtn.disabled = false;
         loadoutBtn.dataset.coachLoadout = coach.loadout;
         loadoutBtn.querySelector('span').textContent = `推荐芯片：${coach.loadoutLabel}`;
       }
@@ -5853,16 +6020,17 @@ function init() {
       return { ...(activeLoadoutDef().bonuses || {}) };
     }
 
-    function setActiveLoadout(id) {
+    function setActiveLoadout(id, { announce = true } = {}) {
       const target = loadoutDefs.find(def => def.id === id);
       if (!target || !loadoutUnlocked(target)) {
-        showToast('该战术芯片尚未解锁', 'warning');
-        return;
+        if (announce) showToast('该战术芯片尚未解锁', 'warning');
+        return false;
       }
       career.loadout = { active: target.id };
       saveCareer();
       updateCareerPanel();
-      showToast(`已装备战术芯片：${target.label}`, 'success');
+      if (announce) showToast(`已装备战术芯片：${target.label}`, 'success');
+      return true;
     }
 
     function renderArcadeLoadouts() {
@@ -5904,13 +6072,14 @@ function init() {
       return { ...(activeDifficultyDef().tuning || {}) };
     }
 
-    function setArcadeDifficulty(id) {
+    function setArcadeDifficulty(id, { announce = true } = {}) {
       const target = difficultyDefs.find(def => def.id === id);
-      if (!target) return;
+      if (!target) return false;
       career.difficulty = target.id;
       saveCareer();
       updateCareerPanel();
-      showToast(`已切换难度：${target.label}`, 'success');
+      if (announce) showToast(`已切换难度：${target.label}`, 'success');
+      return true;
     }
 
     function renderArcadeDifficulty() {
@@ -6278,6 +6447,7 @@ function init() {
       }
       renderAchievementFeed();
       renderArcadeProfile();
+      renderArcadePrizeTrack();
       renderArcadeRunLog();
       renderArcadeLeaderboard();
       renderArcadeRival();
@@ -6306,6 +6476,7 @@ function init() {
       const loadout = activeLoadoutDef();
       const scoreBoost = Number(loadoutBonuses().scoreBoost || 0) + Number(difficulty.scoreBoost || 0);
       const value = Math.max(0, Math.floor(rawValue * (1 + scoreBoost)));
+      const totalBeforeRun = Number(career.totalScore || 0);
       career.totalScore = Math.max(0, (career.totalScore || 0) + value);
       career.plays = (career.plays || 0) + 1;
       const previousBest = Number(career.best[game] || 0);
@@ -6337,6 +6508,10 @@ function init() {
       }
       updateArcadeContracts(game, value, { ...details, rawScore: rawValue, loadout: loadout.id, difficulty: difficulty.id });
       updateArcadeLeague(game, value, { ...details, rawScore: rawValue, loadout: loadout.id, difficulty: difficulty.id });
+      const unlockedPrizes = prizeMilestoneUnlocks(totalBeforeRun, career.totalScore || 0);
+      if (unlockedPrizes.length) {
+        showToast(`赛季奖励解锁：${unlockedPrizes.map(node => node.label).join('、')}`, 'success');
+      }
       saveCareer();
       updateCareerPanel();
     }
@@ -6366,6 +6541,7 @@ function init() {
       runs: () => (Array.isArray(career.runs) ? career.runs : []).map(run => ({ ...run })),
       coach: () => latestRunCoach(),
       profile: () => arcadeProfileSnapshot(),
+      prizeTrack: () => arcadePrizeTrackSnapshot(),
       league: () => leagueSnapshot(),
       contracts: () => getDailyContracts().map(contract => ({
         id: contract.id,
@@ -6528,6 +6704,24 @@ function init() {
       showToast(`宿敌挑战：${intel.profile} · ${intel.label} ${intel.target}+`, 'info');
     }
 
+    function applyCoachPlanAndLaunch() {
+      const coach = latestRunCoach();
+      if (!coach) return;
+      const difficultyApplied = setArcadeDifficulty(coach.difficulty, { announce: false });
+      const loadoutApplied = setActiveLoadout(coach.loadout, { announce: false });
+      if (coach.game === 'runner') {
+        document.querySelector('.arcade-cabinet-bezel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        switchPremiumGame(coach.game);
+        stage?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      const activeDifficulty = activeDifficultyDef();
+      const activeLoadout = activeLoadoutDef();
+      const loadoutNote = loadoutApplied ? activeLoadout.label : '当前芯片';
+      const difficultyNote = difficultyApplied ? activeDifficulty.short : '当前难度';
+      showToast(`复盘计划已应用：${difficultyNote} · ${loadoutNote} · ${coach.gameLabel}`, 'success');
+    }
+
     document.getElementById('premium-director-start')?.addEventListener('click', launchDirectorChallenge);
     document.getElementById('premium-league-start')?.addEventListener('click', launchLeagueStage);
     document.getElementById('premium-rival-start')?.addEventListener('click', launchRivalChallenge);
@@ -6536,21 +6730,18 @@ function init() {
       launchMasteryTarget(target, { announce: false });
       showToast(`档案目标：${target === 'runner' ? '主线远征' : (titles[target] || target)}`, 'info');
     });
-    document.getElementById('premium-coach-launch')?.addEventListener('click', () => {
-      const target = document.getElementById('premium-coach-launch')?.dataset.coachTargetGame || latestRunCoach()?.game;
-      if (!target) return;
-      if (target === 'runner') {
-        document.querySelector('.arcade-cabinet-bezel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        showToast('已定位到主线复盘目标', 'info');
-        return;
-      }
-      switchPremiumGame(target);
-      showToast(`已进入复盘目标：${titles[target] || target}`, 'success');
+    document.getElementById('premium-prize-target')?.addEventListener('click', () => {
+      const target = document.getElementById('premium-prize-target')?.dataset.prizeTargetGame || arcadePrizeTrackSnapshot().targetGame;
+      launchMasteryTarget(target, { announce: false });
+      showToast(`赛季奖励目标：${target === 'runner' ? '主线远征' : (titles[target] || target)}`, 'info');
     });
+    document.getElementById('premium-coach-launch')?.addEventListener('click', applyCoachPlanAndLaunch);
     document.getElementById('premium-coach-difficulty')?.addEventListener('click', () => {
+      if (!latestRunCoach()) return;
       setArcadeDifficulty(document.getElementById('premium-coach-difficulty')?.dataset.coachDifficulty);
     });
     document.getElementById('premium-coach-loadout')?.addEventListener('click', () => {
+      if (!latestRunCoach()) return;
       setActiveLoadout(document.getElementById('premium-coach-loadout')?.dataset.coachLoadout);
     });
 
@@ -11823,6 +12014,7 @@ function init() {
           runs: () => window.atherixArcadeCareer?.runs?.() || [],
           coach: () => window.atherixArcadeCareer?.coach?.() || null,
           profile: () => window.atherixArcadeCareer?.profile?.() || {},
+          prizeTrack: () => window.atherixArcadeCareer?.prizeTrack?.() || {},
           league: () => window.atherixArcadeCareer?.league?.() || {},
           leaderboard: () => window.atherixArcadeCareer?.leaderboard?.() || {},
           rival: () => window.atherixArcadeCareer?.rival?.() || {},

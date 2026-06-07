@@ -456,6 +456,13 @@ async function run() {
   })()`, 5000);
 
   const vaultImportState = await evaluate(`(async () => {
+    const clearArcadeState = () => {
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i += 1) keys.push(localStorage.key(i));
+      keys
+        .filter(key => key && (key === 'atherix_premium_arcade_career_v2' || key.startsWith('atherix_premium_') || key.startsWith('atherix_astro_runner_best_lvl_')))
+        .forEach(key => localStorage.removeItem(key));
+    };
     const payload = {
       schema: 'atherix-vault-v1',
       version: 1,
@@ -468,6 +475,7 @@ async function run() {
         'atherix_todos': JSON.stringify([{ text: 'Vault restored task', completed: false }])
       }
     };
+    clearArcadeState();
     localStorage.setItem('admin_token', 'vault-secret-preserved');
     localStorage.removeItem('outside_key');
     localStorage.removeItem('atherix_reader_progress_vault-smoke');
@@ -491,6 +499,35 @@ async function run() {
     localStorage.removeItem('admin_token');
     return state;
   })()`, 5000);
+  const legacyVaultHydrationState = await evaluate(`(() => {
+    const leaderboard = window.__atherixDebug?.premium?.leaderboard?.() || {};
+    const profile = window.__atherixDebug?.premium?.profile?.() || {};
+    const mastery = window.__atherixDebug?.premium?.mastery?.() || [];
+    const prize = window.__atherixDebug?.premium?.prizeTrack?.() || {};
+    const stored = JSON.parse(localStorage.getItem('atherix_premium_arcade_career_v2') || '{}');
+    const state = {
+      survivorBest: Number(stored.best?.survivor || 0),
+      survivorMedal: stored.medals?.survivor || '',
+      totalScore: Number(stored.totalScore || 0),
+      leaderboardTopGame: leaderboard.entries?.[0]?.game || '',
+      leaderboardTopScore: Number(leaderboard.entries?.[0]?.score || 0),
+      profileTopGame: profile.top?.game || '',
+      profileMedals: profile.medalCount || 0,
+      masterySurvivorScore: Number(mastery.find(item => item.game === 'survivor')?.score || 0),
+      prizeTotal: Number(prize.total || 0),
+      prizeProgress: Number(prize.progress || 0),
+      prizeUnlocked: Number(prize.unlocked || 0),
+      totalText: document.querySelector('#premium-career-total')?.textContent || ''
+    };
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i += 1) keys.push(localStorage.key(i));
+    keys
+      .filter(key => key && (key === 'atherix_premium_arcade_career_v2' || key.startsWith('atherix_premium_') || key.startsWith('atherix_astro_runner_best_lvl_')))
+      .forEach(key => localStorage.removeItem(key));
+    document.dispatchEvent(new CustomEvent('atherix:vault-imported', { detail: { keys: [] } }));
+    window.__atherixDebug?.vault?.summary?.();
+    return state;
+  })()`);
 
   await click('.nav-item[data-target="blog"]');
   await waitFor('.blog-post-card');
@@ -841,6 +878,16 @@ async function run() {
     profileProgressRole: document.querySelector('#premium-profile-progressbar')?.getAttribute('role') || '',
     profileProgressNow: document.querySelector('#premium-profile-progressbar')?.getAttribute('aria-valuenow') || '',
     debugProfile: window.__atherixDebug?.premium?.profile?.() || {},
+    prizePanel: !!document.querySelector('#premium-prize-track'),
+    prizeTitle: document.querySelector('#premium-prize-title')?.textContent || '',
+    prizeSummary: document.querySelector('#premium-prize-summary')?.textContent || '',
+    prizeNodes: document.querySelectorAll('.arcade-prize-node').length,
+    prizeClaimedNodes: document.querySelectorAll('.arcade-prize-node[data-state="claimed"]').length,
+    prizeNextNodes: document.querySelectorAll('.arcade-prize-node[data-state="next"]').length,
+    prizeTarget: document.querySelector('#premium-prize-target')?.dataset.prizeTargetGame || '',
+    prizeProgressRole: document.querySelector('#premium-prize-progressbar')?.getAttribute('role') || '',
+    prizeProgressNow: document.querySelector('#premium-prize-progressbar')?.getAttribute('aria-valuenow') || '',
+    debugPrize: window.__atherixDebug?.premium?.prizeTrack?.() || {},
     masteryPanel: !!document.querySelector('#premium-mastery-panel'),
     masteryCards: document.querySelectorAll('.arcade-mastery-card').length,
     debugMastery: window.__atherixDebug?.premium?.mastery?.().length || 0,
@@ -877,6 +924,9 @@ async function run() {
     debugRival: window.__atherixDebug?.premium?.rival?.() || {},
     coachPanel: !!document.querySelector('#premium-run-coach-panel'),
     coachEmpty: document.querySelector('#premium-run-coach-panel')?.dataset.empty || '',
+    coachLaunchDisabled: !!document.querySelector('#premium-coach-launch')?.disabled,
+    coachDifficultyDisabled: !!document.querySelector('#premium-coach-difficulty')?.disabled,
+    coachLoadoutDisabled: !!document.querySelector('#premium-coach-loadout')?.disabled,
     difficultyPanel: !!document.querySelector('#premium-difficulty-panel'),
     difficultyCards: document.querySelectorAll('.arcade-difficulty-card').length,
     activeDifficulty: window.__atherixDebug?.premium?.difficulty?.().active || '',
@@ -961,14 +1011,44 @@ async function run() {
       profileAchievements: document.querySelector('#premium-profile-achievements')?.textContent || '',
       profileLatest: document.querySelector('#premium-profile-latest')?.textContent || '',
       profileTarget: document.querySelector('#premium-profile-target')?.dataset.profileTargetGame || '',
+      prizeTrack: window.__atherixDebug?.premium?.prizeTrack?.() || {},
+      prizeTitle: document.querySelector('#premium-prize-title')?.textContent || '',
+      prizeSummary: document.querySelector('#premium-prize-summary')?.textContent || '',
+      prizeNodes: document.querySelectorAll('.arcade-prize-node').length,
+      prizeClaimedNodes: document.querySelectorAll('.arcade-prize-node[data-state="claimed"]').length,
+      prizeNextNodes: document.querySelectorAll('.arcade-prize-node[data-state="next"]').length,
+      prizeTarget: document.querySelector('#premium-prize-target')?.dataset.prizeTargetGame || '',
+      prizeProgressNow: document.querySelector('#premium-prize-progressbar')?.getAttribute('aria-valuenow') || '',
       toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || '',
       total: document.querySelector('#premium-career-total')?.textContent || ''
     };
   })()`);
+  await click('#premium-coach-launch');
+  await wait(220);
+  const coachLaunchState = await evaluate(`(() => ({
+    target: document.querySelector('#premium-coach-launch')?.dataset.coachTargetGame || '',
+    active: window.__atherixDebug?.premium?.active?.() || '',
+    activeTitle: document.querySelector('#premium-active-title')?.textContent || '',
+    difficulty: window.__atherixDebug?.premium?.difficulty?.().active || '',
+    loadout: window.__atherixDebug?.premium?.loadout?.().active || '',
+    equippedCards: document.querySelectorAll('.arcade-loadout-card.is-equipped').length,
+    selectedDifficultyCards: document.querySelectorAll('.arcade-difficulty-card.is-selected').length,
+    toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || '',
+    horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+  }))()`);
   await click('#premium-profile-target');
   await wait(180);
   const profileLaunchState = await evaluate(`(() => ({
     target: document.querySelector('#premium-profile-target')?.dataset.profileTargetGame || '',
+    active: window.__atherixDebug?.premium?.active?.() || '',
+    activeTitle: document.querySelector('#premium-active-title')?.textContent || '',
+    toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || '',
+    horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+  }))()`);
+  await click('#premium-prize-target');
+  await wait(180);
+  const prizeLaunchState = await evaluate(`(() => ({
+    target: document.querySelector('#premium-prize-target')?.dataset.prizeTargetGame || '',
     active: window.__atherixDebug?.premium?.active?.() || '',
     activeTitle: document.querySelector('#premium-active-title')?.textContent || '',
     toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || '',
@@ -1529,6 +1609,7 @@ async function run() {
   assert(vaultImportState.progress === '77' && vaultImportState.survivorBest === '4321' && vaultImportState.theme === 'light' && vaultImportState.listHasProgress, `data vault import should restore whitelisted state and refresh UI: ${JSON.stringify(vaultImportState)}`);
   assert(vaultImportState.tokenAfter === 'vault-secret-preserved' && !vaultImportState.outsideKey && vaultImportState.ignored.includes('admin_token') && vaultImportState.ignored.includes('outside_key'), `data vault import should ignore unsafe or unknown keys: ${JSON.stringify(vaultImportState)}`);
   assert(/Vault restored task/.test(vaultImportState.todoStored), `data vault import should restore local tool state: ${JSON.stringify(vaultImportState)}`);
+  assert(legacyVaultHydrationState.survivorBest === 4321 && legacyVaultHydrationState.survivorMedal === 'gold' && legacyVaultHydrationState.totalScore >= 4321 && legacyVaultHydrationState.leaderboardTopGame === 'survivor' && legacyVaultHydrationState.leaderboardTopScore === 4321 && legacyVaultHydrationState.profileTopGame === 'survivor' && legacyVaultHydrationState.profileMedals >= 1 && legacyVaultHydrationState.masterySurvivorScore === 4321 && legacyVaultHydrationState.prizeTotal >= 4321 && legacyVaultHydrationState.prizeProgress > 0 && legacyVaultHydrationState.prizeUnlocked >= 3 && /4321/.test(legacyVaultHydrationState.totalText), `legacy arcade best imports should hydrate the premium career profile and season track: ${JSON.stringify(legacyVaultHydrationState)}`);
   assert(blogHubBefore.panel && blogHubBefore.total >= 1 && blogHubBefore.filters >= 3 && blogHubBefore.cards >= 1, `blog reading hub should render stats and filters: ${JSON.stringify(blogHubBefore)}`);
   assert(blogHubBefore.progressCards >= 1 && /42/.test(blogHubBefore.progressText) && !blogHubBefore.horizontalOverflow, `blog reading hub should show resumable progress without overflow: ${JSON.stringify(blogHubBefore)}`);
   assert(blogState.toolbar && blogState.bookmarkPressed, 'blog reader toolbar should render and toggle bookmark state');
@@ -1584,9 +1665,10 @@ async function run() {
   assert(arcadeInitial.runLogPanel && arcadeInitial.runLogEmpty === 'true' && arcadeInitial.runLogCards === 0 && arcadeInitial.debugRuns === 0, `premium arcade run telemetry should start empty: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.leaderboardPanel && arcadeInitial.leaderboardEmpty === 'true' && arcadeInitial.leaderboardCards === 0 && arcadeInitial.debugLeaderboard?.entries?.length === 0 && arcadeInitial.leaderboardTotal === '0', `premium arcade hall of fame should start empty: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.rivalPanel && arcadeInitial.debugRival?.game && arcadeInitial.rivalActionTarget === arcadeInitial.debugRival.game && Number(arcadeInitial.rivalTarget) === Number(arcadeInitial.debugRival.target) && Number(arcadeInitial.rivalTarget) > 0 && /·/.test(arcadeInitial.rivalTitle), `premium arcade rival intel should render an actionable opening rival: ${JSON.stringify(arcadeInitial)}`);
-  assert(arcadeInitial.coachPanel && arcadeInitial.coachEmpty === 'true', `premium arcade post-run coach should start empty: ${JSON.stringify(arcadeInitial)}`);
+  assert(arcadeInitial.coachPanel && arcadeInitial.coachEmpty === 'true' && arcadeInitial.coachLaunchDisabled && arcadeInitial.coachDifficultyDisabled && arcadeInitial.coachLoadoutDisabled, `premium arcade post-run coach should start empty with disabled stale actions: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.directorPanel && arcadeInitial.directorTarget && arcadeInitial.directorTitle.length > 5 && arcadeInitial.directorReason.length > 10 && /^\d+%$/.test(arcadeInitial.directorCompletion) && arcadeInitial.tabBadges >= 6, `premium arcade director should render actionable progression guidance: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.profilePanel && /RANK/.test(arcadeInitial.profileTitle) && /^\d+%$/.test(arcadeInitial.profileCompletion) && /^\d+\/7$/.test(arcadeInitial.profileMedals) && /^\d+\/\d+$/.test(arcadeInitial.profileAchievements) && arcadeInitial.profileProgressRole === 'progressbar' && arcadeInitial.profileProgressNow === String(arcadeInitial.debugProfile?.completion) && arcadeInitial.profileTarget && arcadeInitial.debugProfile?.targetGame === arcadeInitial.profileTarget, `premium arcade command profile should summarize player progress: ${JSON.stringify(arcadeInitial)}`);
+  assert(arcadeInitial.prizePanel && /入站许可/.test(arcadeInitial.prizeTitle) && arcadeInitial.prizeNodes === 6 && arcadeInitial.prizeClaimedNodes === 1 && arcadeInitial.prizeNextNodes === 1 && arcadeInitial.prizeProgressRole === 'progressbar' && arcadeInitial.prizeProgressNow === String(arcadeInitial.debugPrize?.progress) && arcadeInitial.prizeTarget === arcadeInitial.debugPrize?.targetGame, `premium arcade season track should render long-term rewards: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.masteryPanel && arcadeInitial.masteryCards === 7 && arcadeInitial.debugMastery === 7 && /奖牌路线/.test(arcadeInitial.masteryTitle) && arcadeInitial.masterySummary.length > 10, `premium arcade mastery map should render all mode goals: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.contractBoard && arcadeInitial.contractCards === 3 && arcadeInitial.debugContracts === 3 && arcadeInitial.firstContractProgress === 0, `premium arcade contracts should render as daily progression goals: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.leaguePanel && arcadeInitial.leagueCards === 3 && arcadeInitial.debugLeague?.stages?.length === 3 && arcadeInitial.debugLeague?.activeStage?.game && /^\d+\/3$/.test(arcadeInitial.leagueProgress) && /^\+\d+$/.test(arcadeInitial.leagueReward), `premium arcade challenge league should render a 3-stage daily route: ${JSON.stringify(arcadeInitial)}`);
@@ -1597,7 +1679,9 @@ async function run() {
   assert(contractProgressState.leaderboardCards >= 1 && contractProgressState.leaderboard?.entries?.[0]?.game === 'survivor' && contractProgressState.leaderboardTopGame === 'survivor' && /幸存者/.test(contractProgressState.leaderboardTitle) && Number(contractProgressState.leaderboardTotal) >= contractProgressState.latestRunScore && /幸存者/.test(contractProgressState.leaderboardLatest), `premium arcade hall of fame should rank and summarize the first personal best: ${JSON.stringify(contractProgressState)}`);
   assert(contractProgressState.rival?.game === 'survivor' && contractProgressState.rivalActionTarget === 'survivor' && Number(contractProgressState.rivalTarget) === Number(contractProgressState.rival.target) && Number(contractProgressState.rival.gap) > 0 && /NOVA-9/.test(contractProgressState.rivalTitle), `premium arcade rival intel should pivot to the latest scored mode: ${JSON.stringify(contractProgressState)}`);
   assert(contractProgressState.coach?.game === 'survivor' && /星核幸存者/.test(contractProgressState.coachTitle) && /铜牌/.test(contractProgressState.coachMedal) && /^\+/.test(contractProgressState.coachDelta) && /银牌/.test(contractProgressState.coachTarget) && contractProgressState.coachLaunchTarget === 'survivor' && contractProgressState.coachDifficulty === 'elite' && contractProgressState.coachLoadout === 'overdrive', `premium arcade coach should provide actionable post-run guidance: ${JSON.stringify(contractProgressState)}`);
+  assert(coachLaunchState.target === 'survivor' && coachLaunchState.active === 'survivor' && coachLaunchState.difficulty === 'elite' && coachLaunchState.loadout === 'overdrive' && coachLaunchState.equippedCards === 1 && coachLaunchState.selectedDifficultyCards === 1 && /复盘计划已应用/.test(coachLaunchState.toast) && !coachLaunchState.horizontalOverflow, `premium arcade coach launch should apply recommended plan and enter target mode: ${JSON.stringify(coachLaunchState)}`);
   assert(contractProgressState.profile?.latest?.game === 'survivor' && /RANK/.test(contractProgressState.profileTitle) && /幸存者/.test(contractProgressState.profileLatest) && contractProgressState.profileCompletion === `${contractProgressState.profile.completion}%` && contractProgressState.profileLatest.includes(String(contractProgressState.latestRunScore)) && contractProgressState.profileTarget === contractProgressState.profile.targetGame, `premium arcade command profile should update after scored runs: ${JSON.stringify(contractProgressState)}`);
+  assert(contractProgressState.prizeTrack?.total >= contractProgressState.latestRunScore && contractProgressState.prizeTrack?.progress > arcadeInitial.debugPrize?.progress && contractProgressState.prizeProgressNow === String(contractProgressState.prizeTrack?.progress) && contractProgressState.prizeNodes === contractProgressState.prizeTrack?.totalNodes && contractProgressState.prizeTarget === contractProgressState.prizeTrack?.targetGame, `premium arcade season track should advance after scored runs: ${JSON.stringify(contractProgressState)}`);
   assert(
     contractProgressState.masteryAfter.score >= 900 &&
     contractProgressState.masteryAfter.progress > 0 &&
@@ -1613,6 +1697,7 @@ async function run() {
   assert(difficultyProgressState.rival?.game === 'boss' && difficultyProgressState.rivalActionTarget === 'boss' && Number(difficultyProgressState.rivalTarget) === Number(difficultyProgressState.rival.target) && /PRISM-0/.test(difficultyProgressState.rivalTitle), `premium arcade rival intel should follow the latest elite boss result: ${JSON.stringify(difficultyProgressState)}`);
   assert(rivalLaunchState.target === 'boss' && rivalLaunchState.active === 'boss' && /Boss/.test(rivalLaunchState.activeTitle) && /宿敌挑战/.test(rivalLaunchState.toast) && !rivalLaunchState.horizontalOverflow, `premium arcade rival action should launch the current rival mode: ${JSON.stringify(rivalLaunchState)}`);
   assert(profileLaunchState.target && (profileLaunchState.target === 'runner' || profileLaunchState.active === profileLaunchState.target) && /档案目标/.test(profileLaunchState.toast) && !profileLaunchState.horizontalOverflow, `premium arcade command profile action should launch the profiled target: ${JSON.stringify(profileLaunchState)}`);
+  assert(prizeLaunchState.target && (prizeLaunchState.target === 'runner' || prizeLaunchState.active === prizeLaunchState.target) && /赛季奖励目标/.test(prizeLaunchState.toast) && !prizeLaunchState.horizontalOverflow, `premium arcade season track action should launch the reward target: ${JSON.stringify(prizeLaunchState)}`);
   assert(['runner', 'survivor', 'boss', 'drift', 'heist', 'chain', 'tactics'].includes(directorLaunchState.target) && (directorLaunchState.target === 'runner' || directorLaunchState.active === directorLaunchState.target) && !directorLaunchState.horizontalOverflow, `premium arcade director should launch the recommended target: ${JSON.stringify(directorLaunchState)}`);
   assert(arcadeInitial.touchControls >= 5, 'premium touch controls should be available');
   assert(/PAD/.test(arcadeInitial.gamepadStatus) && premiumGamepadState.after?.player?.x < premiumGamepadState.before?.player?.x && premiumGamepadState.held?.keys?.left && /PAD/.test(premiumGamepadState.statusText), `premium arcade gamepad bridge should drive tactics movement and status: ${JSON.stringify(premiumGamepadState)}`);
@@ -1740,6 +1825,7 @@ async function run() {
     vaultCommandState,
     vaultExportState,
     vaultImportState,
+    legacyVaultHydrationState,
     blogHubBefore,
     blogState,
     readerCompletionState,
@@ -1759,11 +1845,13 @@ async function run() {
     arcadeInitial,
     premiumGamepadState,
     contractProgressState,
+    coachLaunchState,
     leagueProgressState,
     loadoutProgressState,
     difficultyProgressState,
     rivalLaunchState,
     profileLaunchState,
+    prizeLaunchState,
     directorLaunchState,
     survivorState,
     survivorDraftOpenState,
