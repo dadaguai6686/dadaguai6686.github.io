@@ -4483,7 +4483,7 @@ function init() {
         </div>
         <div class="arcade-director-meters" aria-label="街机完成度">
           <span>奖牌 <strong id="premium-director-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-director-achievements">0/23</strong></span>
+          <span>成就 <strong id="premium-director-achievements">0/24</strong></span>
           <span>完成度 <strong id="premium-director-completion">0%</strong></span>
         </div>
         <button type="button" class="arcade-director-action" id="premium-director-start" data-target-game="survivor">
@@ -4552,6 +4552,7 @@ function init() {
               <span>超载 <strong id="premium-survivor-overdrive">0%</strong></span>
               <span>危机 <strong id="premium-survivor-threat">WAVE 1</strong></span>
               <span>事件 <strong id="premium-survivor-event">稳定</strong></span>
+              <span>赏金 <strong id="premium-survivor-bounty">ELITE 0/2</strong></span>
             </div>
             <div class="mini-actions">
               <button type="button" class="action-btn action-btn-primary" id="premium-survivor-start">部署 / 重开</button>
@@ -4773,6 +4774,7 @@ function init() {
       { id: 'survivor_level_4', label: '星核觉醒', desc: '星核幸存者达到 4 级' },
       { id: 'survivor_90', label: '深空存活', desc: '坚持完整 90 秒' },
       { id: 'survivor_anomaly', label: '裂隙调度', desc: '星核幸存者触发深空异常事件' },
+      { id: 'survivor_bounty', label: '赏金猎星', desc: '星核幸存者完成一项精英赏金' },
       { id: 'boss_phase_2', label: '棱镜破相', desc: 'Boss 进入第二阶段' },
       { id: 'boss_clear', label: '碎光终结', desc: '击破棱镜核心' },
       { id: 'boss_focus_surge', label: '擦弹专注', desc: 'Boss 战触发专注爆发' },
@@ -5758,7 +5760,12 @@ function init() {
       draftChoices: [],
       anomaly: null,
       anomalyCooldown: 0,
-      anomalyCount: 0
+      anomalyCount: 0,
+      bountyIndex: 0,
+      bountyProgress: 0,
+      bountiesCompleted: 0,
+      bountyFlash: 0,
+      lastBounty: ''
     };
 
     const survivorAnomalyDefs = {
@@ -5766,6 +5773,12 @@ function init() {
       cache: { label: '补给裂隙', short: 'CACHE', color: '#34D399', duration: 4200 },
       nemesis: { label: '精英跃迁', short: 'NEMESIS', color: '#A78BFA', duration: 6200 }
     };
+
+    const survivorBountyDefs = [
+      { id: 'elite', label: 'ELITE', target: 2, reward: 420, color: '#FDE68A', check: enemy => !!enemy.elite },
+      { id: 'heavy', label: 'HEAVY', target: 3, reward: 520, color: '#F97316', check: enemy => ['brute', 'warden'].includes(enemy.type) },
+      { id: 'nemesis', label: 'NEMESIS', target: 1, reward: 680, color: '#A78BFA', check: enemy => !!enemy.nemesis || enemy.type === 'nemesis' }
+    ];
 
     const survivorUpgradeDefs = [
       {
@@ -5890,6 +5903,49 @@ function init() {
       return p ? 90 + p.level * 38 : 128;
     }
 
+    function currentSurvivorBounty() {
+      return survivorBountyDefs[survivor.bountyIndex % survivorBountyDefs.length];
+    }
+
+    function formatSurvivorBounty() {
+      const bounty = currentSurvivorBounty();
+      if (!bounty) return 'CLEAR';
+      return `${bounty.label} ${Math.min(survivor.bountyProgress, bounty.target)}/${bounty.target}`;
+    }
+
+    function resetSurvivorBounty() {
+      survivor.bountyIndex = 0;
+      survivor.bountyProgress = 0;
+      survivor.bountiesCompleted = 0;
+      survivor.bountyFlash = 0;
+      survivor.lastBounty = '';
+    }
+
+    function resolveSurvivorBounty(enemy) {
+      const bounty = currentSurvivorBounty();
+      if (!bounty || !bounty.check(enemy)) return { completed: false, label: bounty?.label || '', reward: 0 };
+      survivor.bountyProgress++;
+      survivor.lastBounty = `${bounty.label} ${Math.min(survivor.bountyProgress, bounty.target)}/${bounty.target}`;
+      if (survivor.bountyProgress < bounty.target) {
+        setSurvivorUi();
+        return { completed: false, label: bounty.label, reward: 0 };
+      }
+      survivor.bountyProgress = 0;
+      survivor.bountyIndex++;
+      survivor.bountiesCompleted++;
+      survivor.bountyFlash = 1150;
+      survivor.lastBounty = `${bounty.label} CLEAR`;
+      survivor.score += bounty.reward;
+      addSurvivorOverdrive(24, `${bounty.label} BOUNTY`);
+      survivor.chainTimer = Math.max(survivor.chainTimer, 2600);
+      survivor.pickups.push({ x: enemy.x, y: enemy.y, r: 10, type: 'surge' });
+      survivor.orbs.push({ x: enemy.x + 18, y: enemy.y - 18, r: 8, value: Math.floor(bounty.reward * 0.16) });
+      survivorBurst(enemy.x, enemy.y, bounty.color, 42);
+      unlockAchievement('survivor_bounty');
+      setSurvivorUi();
+      return { completed: true, label: bounty.label, reward: bounty.reward };
+    }
+
     function setSurvivorUi() {
       document.getElementById('premium-survivor-score').textContent = Math.floor(survivor.score);
       document.getElementById('premium-survivor-best').textContent = localStorage.getItem(survivor.bestKey) || '0';
@@ -5913,6 +5969,12 @@ function init() {
         eventEl.textContent = eventDef ? eventDef.short : '稳定';
         eventEl.style.color = eventDef ? eventDef.color : '#fff';
       }
+      const bountyEl = document.getElementById('premium-survivor-bounty');
+      if (bountyEl) {
+        const bounty = currentSurvivorBounty();
+        bountyEl.textContent = formatSurvivorBounty();
+        bountyEl.style.color = survivor.bountyFlash > 0 ? '#FDE68A' : survivor.bountyProgress > 0 ? '#A7F3D0' : (bounty?.color || '#fff');
+      }
     }
 
     function startSurvivor() {
@@ -5934,6 +5996,7 @@ function init() {
       survivor.anomaly = null;
       survivor.anomalyCooldown = 9200;
       survivor.anomalyCount = 0;
+      resetSurvivorBounty();
       survivor.draftOpen = false;
       survivor.draftChoices = [];
       hideSurvivorDraft();
@@ -6204,6 +6267,7 @@ function init() {
         addSurvivorOverdrive(18, 'ELITE BREAK');
         survivor.chainTimer = Math.max(survivor.chainTimer, 1800);
       }
+      resolveSurvivorBounty(enemy);
       const pickupChance = enemy.elite ? 0.48 : 0.08;
       if (Math.random() < pickupChance) {
         const pool = enemy.elite ? ['heal', 'bomb', 'haste', 'surge'] : ['heal', 'bomb', 'haste'];
@@ -6361,10 +6425,10 @@ function init() {
       survivor.draftChoices = [];
       hideSurvivorDraft();
       cancelAnimationFrame(survivor.raf);
-      const finalScore = Math.floor(survivor.score + survivor.elapsed / 120 + survivor.bestChain * 42 + survivor.overdrive * 3 + survivor.anomalyCount * 95);
+      const finalScore = Math.floor(survivor.score + survivor.elapsed / 120 + survivor.bestChain * 42 + survivor.overdrive * 3 + survivor.anomalyCount * 95 + survivor.bountiesCompleted * 150);
       localStorage.setItem(survivor.bestKey, String(Math.max(Number(localStorage.getItem(survivor.bestKey) || 0), finalScore)));
       if (survivor.elapsed >= 90000) unlockAchievement('survivor_90');
-      recordPremiumResult('survivor', finalScore, { elapsed: survivor.elapsed, level: survivor.player?.level || 1, bestChain: survivor.bestChain, overdrive: Math.floor(survivor.overdrive), anomalies: survivor.anomalyCount });
+      recordPremiumResult('survivor', finalScore, { elapsed: survivor.elapsed, level: survivor.player?.level || 1, bestChain: survivor.bestChain, overdrive: Math.floor(survivor.overdrive), anomalies: survivor.anomalyCount, bounties: survivor.bountiesCompleted });
       setSurvivorUi();
       drawSurvivor();
       overlay(survivor.ctx, survivor.canvas.width, survivor.canvas.height, text, `Score ${finalScore} · 点击部署再来一局`);
@@ -6395,6 +6459,7 @@ function init() {
       survivor.chainTimer = Math.max(0, survivor.chainTimer - dt);
       if (survivor.chainTimer <= 0) survivor.chain = 0;
       survivor.overdriveFlash = Math.max(0, survivor.overdriveFlash - dt);
+      survivor.bountyFlash = Math.max(0, survivor.bountyFlash - dt);
       updateSurvivorAnomaly(dt);
       if (premiumKeys.action) triggerSurvivorNova();
       let mx = (premiumKeys.right ? 1 : 0) - (premiumKeys.left ? 1 : 0);
@@ -6527,6 +6592,7 @@ function init() {
         ctx.fill();
       });
       survivor.bullets.forEach(b => { ctx.fillStyle = '#BAE6FD'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill(); });
+      const activeBounty = currentSurvivorBounty();
       survivor.enemies.forEach(e => {
         ctx.fillStyle = e.color;
         ctx.beginPath();
@@ -6544,6 +6610,21 @@ function init() {
           ctx.fillRect(e.x - e.r, e.y - e.r - 8, e.r * 2, 3);
           ctx.fillStyle = '#fff';
           ctx.fillRect(e.x - e.r, e.y - e.r - 8, e.r * 2 * Math.max(0, e.hp / e.maxHp), 3);
+        }
+        if (activeBounty?.check(e)) {
+          ctx.save();
+          ctx.strokeStyle = activeBounty.color;
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 5]);
+          ctx.beginPath();
+          ctx.arc(e.x, e.y, e.r + 13 + Math.sin(e.pulse) * 2, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = activeBounty.color;
+          ctx.font = '900 9px JetBrains Mono, monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText('MARK', e.x, e.y - e.r - 14);
+          ctx.restore();
         }
       });
       survivor.particles.forEach(pt => { ctx.globalAlpha = Math.max(0, pt.life / 420); ctx.fillStyle = pt.color; ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.r, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; });
@@ -6591,6 +6672,17 @@ function init() {
         ctx.fillText(`${eventDef?.short || 'EVENT'} ${remaining}s`, c.width - 14, 22);
         ctx.textAlign = 'left';
       }
+      const bountyDef = currentSurvivorBounty();
+      if (bountyDef) {
+        ctx.fillStyle = survivor.bountyFlash > 0 ? '#FDE68A' : bountyDef.color;
+        ctx.font = '900 12px JetBrains Mono, monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(`BOUNTY ${formatSurvivorBounty()}`, c.width - 14, survivor.anomaly ? 42 : 22);
+        if (survivor.lastBounty && survivor.bountyFlash > 0) {
+          ctx.fillText(`${survivor.lastBounty} +${survivorBountyDefs[(survivor.bountyIndex + survivorBountyDefs.length - 1) % survivorBountyDefs.length]?.reward || 0}`, c.width - 14, survivor.anomaly ? 60 : 40);
+        }
+        ctx.textAlign = 'left';
+      }
     }
 
     function updateSurvivorPauseButton() {
@@ -6628,6 +6720,15 @@ function init() {
         } : null,
         anomalyCount: survivor.anomalyCount,
         anomalyCooldown: Math.ceil(survivor.anomalyCooldown),
+        bounty: {
+          id: currentSurvivorBounty()?.id || '',
+          label: currentSurvivorBounty()?.label || '',
+          progress: survivor.bountyProgress,
+          target: currentSurvivorBounty()?.target || 0,
+          completed: survivor.bountiesCompleted,
+          flash: Math.ceil(survivor.bountyFlash),
+          last: survivor.lastBounty
+        },
         hazards: survivor.hazards.map(hazard => ({
           type: hazard.type,
           exploded: !!hazard.exploded,
@@ -6651,7 +6752,8 @@ function init() {
           overdrive: document.getElementById('premium-survivor-overdrive')?.textContent || '',
           build: document.getElementById('premium-survivor-build')?.textContent || '',
           threat: document.getElementById('premium-survivor-threat')?.textContent || '',
-          event: document.getElementById('premium-survivor-event')?.textContent || ''
+          event: document.getElementById('premium-survivor-event')?.textContent || '',
+          bounty: document.getElementById('premium-survivor-bounty')?.textContent || ''
         }
       };
     }
@@ -6703,6 +6805,43 @@ function init() {
       return {
         before,
         after: survivorDebugState()
+      };
+    }
+
+    function forceSurvivorBounty() {
+      switchPremiumGame('survivor');
+      startSurvivor();
+      survivor.paused = false;
+      survivor.draftOpen = false;
+      hideSurvivorDraft();
+      const p = survivor.player;
+      const before = survivorDebugState();
+      let attempts = 0;
+      while (survivor.bountiesCompleted <= before.bounty.completed && attempts < 3) {
+        const enemy = {
+          x: p.x + 58 + attempts * 22,
+          y: p.y - 28 + attempts * 18,
+          r: 18,
+          hp: 0,
+          maxHp: 260,
+          speed: 0,
+          value: 150,
+          color: '#FDE68A',
+          type: 'brute',
+          elite: true,
+          pulse: attempts,
+          slow: 0
+        };
+        defeatSurvivorEnemy(enemy, 'debug-bounty');
+        attempts++;
+      }
+      setSurvivorUi();
+      drawSurvivor();
+      return {
+        attempts,
+        before,
+        after: survivorDebugState(),
+        achieved: (career.achievements || []).includes('survivor_bounty')
       };
     }
 
@@ -10337,6 +10476,7 @@ function init() {
           survivorState: () => survivorDebugState(),
           forceSurvivorAnomaly: (type = 'meteor') => forceSurvivorAnomaly(type),
           forceSurvivorOverdrive: () => forceSurvivorOverdrive(),
+          forceSurvivorBounty: () => forceSurvivorBounty(),
           bossRunning: () => bossMode.running,
           bossPaused: () => bossMode.paused,
           bossPhase: () => bossMode.boss.phase,
