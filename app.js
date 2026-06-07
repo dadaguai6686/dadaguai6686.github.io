@@ -4483,7 +4483,7 @@ function init() {
         </div>
         <div class="arcade-director-meters" aria-label="街机完成度">
           <span>奖牌 <strong id="premium-director-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-director-achievements">0/20</strong></span>
+          <span>成就 <strong id="premium-director-achievements">0/21</strong></span>
           <span>完成度 <strong id="premium-director-completion">0%</strong></span>
         </div>
         <button type="button" class="arcade-director-action" id="premium-director-start" data-target-game="survivor">
@@ -4651,10 +4651,14 @@ function init() {
               <span>阶段 <strong id="premium-chain-phase">I</strong></span>
               <span>炼成 <strong id="premium-chain-goal">连锁 7+</strong></span>
               <span>提示 <strong id="premium-chain-hint">SCAN</strong></span>
+              <span>精华 <strong id="premium-chain-essence">C0 V0 P0 G0 N0</strong></span>
+              <span>配方 <strong id="premium-chain-recipe">极光 0%</strong></span>
+              <span>超载 <strong id="premium-chain-overcharge">0%</strong></span>
               <span>目标 <strong id="premium-chain-target">9000</strong></span>
             </div>
             <div class="mini-actions">
               <button type="button" class="action-btn action-btn-primary" id="premium-chain-new">重置能量场</button>
+              <button type="button" class="action-btn" id="premium-chain-catalyst">Q 催化</button>
             </div>
           </div>
           <div class="memory-board chain-board" id="premium-chain-board" aria-label="连锁消除棋盘"></div>
@@ -4775,6 +4779,7 @@ function init() {
       { id: 'heist_clean', label: '无声撤离', desc: '低步数完成潜入' },
       { id: 'heist_cache', label: '金库猎手', desc: '赛博潜入中取得高价值缓存' },
       { id: 'chain_combo_9', label: '九连炼成', desc: '一次连锁爆破 9 格以上' },
+      { id: 'chain_recipe', label: '秘方共振', desc: '连锁炼金完成一张配方契约' },
       { id: 'chain_clear', label: '贤者能场', desc: '完成连锁炼金目标' },
       { id: 'tactics_clear', label: '裂隙撤离', desc: '完成裂隙战术撤离' },
       { id: 'tactics_sweep', label: '战术清场', desc: '裂隙战术中击破全部敌人' },
@@ -8655,6 +8660,12 @@ function init() {
       lastClear: 0,
       lastSpecial: '',
       specialsTriggered: 0,
+      essence: {},
+      recipeProgress: {},
+      recipeIndex: 0,
+      recipesCompleted: 0,
+      overcharge: 0,
+      catalystUsed: 0,
       finished: false,
       recorded: false
     };
@@ -8665,6 +8676,106 @@ function init() {
       { label: 'IV', goal: '爆破 14+', reward: 860, check: result => result.cleared >= 14 }
     ];
     const chainSpecialLabels = { bomb: 'BOMB', prism: 'PRISM', wild: 'FLUX' };
+    const chainColorShort = { cyan: 'C', violet: 'V', pink: 'P', gold: 'G', green: 'N' };
+    const chainColorNames = { cyan: '青', violet: '紫', pink: '绯', gold: '金', green: '翠' };
+    const chainRecipeDefs = [
+      { id: 'aurora', label: '极光谱', req: { cyan: 5, violet: 4, special: 1 }, reward: 640, charge: 38 },
+      { id: 'corona', label: '日冕环', req: { gold: 6, pink: 5, cleared: 16 }, reward: 760, charge: 44 },
+      { id: 'verdant', label: '翠焰核', req: { green: 7, cyan: 4, special: 2 }, reward: 840, charge: 50 }
+    ];
+
+    function freshChainLedger() {
+      return { cyan: 0, violet: 0, pink: 0, gold: 0, green: 0, special: 0, cleared: 0 };
+    }
+
+    function resetChainLedger() {
+      chain.essence = freshChainLedger();
+      chain.recipeProgress = freshChainLedger();
+      chain.recipeIndex = 0;
+      chain.recipesCompleted = 0;
+      chain.overcharge = 0;
+      chain.catalystUsed = 0;
+    }
+
+    function currentChainRecipe() {
+      return chainRecipeDefs[chain.recipeIndex % chainRecipeDefs.length];
+    }
+
+    function chainRecipePercent(recipe = currentChainRecipe()) {
+      const req = recipe?.req || {};
+      const total = Object.values(req).reduce((sum, value) => sum + value, 0);
+      const done = Object.entries(req).reduce((sum, [key, value]) => {
+        return sum + Math.min(Number(chain.recipeProgress[key] || 0), value);
+      }, 0);
+      return total ? Math.round((done / total) * 100) : 0;
+    }
+
+    function chainRecipeComplete(recipe = currentChainRecipe()) {
+      return Object.entries(recipe?.req || {}).every(([key, value]) => Number(chain.recipeProgress[key] || 0) >= value);
+    }
+
+    function formatChainEssence() {
+      return chain.colors.map(color => `${chainColorShort[color]}${Number(chain.essence[color] || 0)}`).join(' ');
+    }
+
+    function formatChainRecipe() {
+      const recipe = currentChainRecipe();
+      return `${recipe.label} ${chainRecipePercent(recipe)}%`;
+    }
+
+    function chainRecipeDetail() {
+      const recipe = currentChainRecipe();
+      const parts = Object.entries(recipe.req).map(([key, value]) => {
+        const label = chainColorNames[key] || (key === 'special' ? '核' : '量');
+        return `${label}${Math.min(Number(chain.recipeProgress[key] || 0), value)}/${value}`;
+      });
+      return `${recipe.label} ${parts.join(' ')}`;
+    }
+
+    function collectChainLedger(cells) {
+      const ledger = freshChainLedger();
+      cells.forEach(item => {
+        const [row, col] = item.split(',').map(Number);
+        const value = chain.grid[row]?.[col];
+        if (!value) return;
+        ledger.cleared++;
+        if (isChainSpecial(value)) {
+          ledger.special++;
+        } else if (Object.prototype.hasOwnProperty.call(ledger, value)) {
+          ledger[value]++;
+        }
+      });
+      return ledger;
+    }
+
+    function addChainMaterials(ledger) {
+      Object.keys(ledger).forEach(key => {
+        chain.essence[key] = Number(chain.essence[key] || 0) + Number(ledger[key] || 0);
+        chain.recipeProgress[key] = Number(chain.recipeProgress[key] || 0) + Number(ledger[key] || 0);
+      });
+    }
+
+    function resolveChainRecipes() {
+      const completed = [];
+      let reward = 0;
+      let guard = 0;
+      while (guard < chainRecipeDefs.length && chainRecipeComplete()) {
+        const recipe = currentChainRecipe();
+        const surplus = freshChainLedger();
+        Object.keys(surplus).forEach(key => {
+          surplus[key] = Math.max(0, Number(chain.recipeProgress[key] || 0) - Number(recipe.req[key] || 0));
+        });
+        completed.push(recipe.label);
+        reward += recipe.reward;
+        chain.recipesCompleted++;
+        chain.recipeIndex++;
+        chain.recipeProgress = surplus;
+        chain.overcharge = clamp(chain.overcharge + recipe.charge, 0, 100);
+        unlockAchievement('chain_recipe');
+        guard++;
+      }
+      return { completed, reward };
+    }
 
     function randomChainCell() {
       const roll = Math.random();
@@ -8713,6 +8824,7 @@ function init() {
       chain.lastClear = 0;
       chain.lastSpecial = '';
       chain.specialsTriggered = 0;
+      resetChainLedger();
       chain.finished = false;
       chain.recorded = false;
       chain.grid = Array.from({ length: 7 }, () => Array.from({ length: 7 }, randomChainCell));
@@ -8829,6 +8941,81 @@ function init() {
       };
     }
 
+    function evaluateChainCatalyst() {
+      const best = bestChainMove();
+      if (!best) return { valid: false, cells: [], cleared: 0, gain: 0, value: 'catalyst', catalyst: true };
+      const recipe = currentChainRecipe();
+      const source = new Set([...best.cells, ...collectChainBlast(best.r, best.c, 'wild')]);
+      const neededColor = Object.entries(recipe.req)
+        .filter(([key]) => chain.colors.includes(key))
+        .map(([key, value]) => ({ color: key, deficit: Math.max(0, value - Number(chain.recipeProgress[key] || 0)) }))
+        .sort((a, b) => b.deficit - a.deficit)[0]?.color;
+      if (neededColor) {
+        const matching = [];
+        chain.grid.forEach((row, rowIndex) => row.forEach((value, colIndex) => {
+          if (value === neededColor) matching.push(chainKey(rowIndex, colIndex));
+        }));
+        matching.slice(0, 8).forEach(key => source.add(key));
+      }
+      const cascade = collectChainCascade([...source]);
+      const cleared = cascade.cells.length;
+      const specialCreated = cleared >= 18 ? 'prism' : cleared >= 12 ? 'bomb' : '';
+      const base = cleared * cleared * 18 + cascade.specialsTriggered * 240 + 900 + (specialCreated ? 320 : 0);
+      return {
+        valid: cleared > 0,
+        r: best.r,
+        c: best.c,
+        value: 'catalyst',
+        cells: cascade.cells,
+        cleared,
+        sourceSize: source.size,
+        gain: Math.round(base * chain.mult),
+        specialCreated,
+        specialsTriggered: cascade.specialsTriggered,
+        catalyst: true
+      };
+    }
+
+    function applyChainResult(result, { catalyst = false } = {}) {
+      const ledger = collectChainLedger(result.cells);
+      chain.combo = result.cleared;
+      chain.streak += catalyst ? 2 : 1;
+      chain.mult = clamp(1 + chain.streak * 0.18 + Math.max(0, result.cleared - 6) * 0.025 + (catalyst ? 0.25 : 0), 1, 4.2);
+      chain.lastGain = result.gain;
+      chain.lastClear = result.cleared;
+      chain.lastSpecial = result.specialCreated || '';
+      chain.specialsTriggered = result.specialsTriggered;
+      addChainMaterials(ledger);
+      if (!catalyst) {
+        chain.overcharge = clamp(chain.overcharge + Math.min(36, result.cleared * 1.6 + result.specialsTriggered * 8 + (result.specialCreated ? 6 : 0)), 0, 100);
+      }
+      const recipeResult = resolveChainRecipes();
+      if (result.cleared >= 9) unlockAchievement('chain_combo_9');
+      chain.score += result.gain + recipeResult.reward;
+      result.cells.forEach(item => {
+        const [row, col] = item.split(',').map(Number);
+        chain.grid[row][col] = null;
+      });
+      if (result.specialCreated) {
+        const [row, col] = result.cells[0].split(',').map(Number);
+        chain.grid[row][col] = result.specialCreated;
+      }
+      const phase = chainPhaseDef();
+      if (phase?.check(result)) {
+        chain.score += phase.reward;
+        chain.feedback = `${phase.goal} 完成 +${phase.reward}`;
+        chain.phaseIndex++;
+      } else if (recipeResult.completed.length) {
+        chain.feedback = `${recipeResult.completed.join('/')} 配方完成 +${recipeResult.reward}`;
+      } else if (catalyst) {
+        chain.feedback = `超载催化 ${result.cleared} 格 · +${result.gain}`;
+      } else {
+        const label = isChainSpecial(result.value) ? chainSpecialLabels[result.value] : result.value.toUpperCase();
+        chain.feedback = `${label} 清除 ${result.cleared} · +${result.gain}`;
+      }
+      return { ledger, recipeResult };
+    }
+
     function bestChainMove() {
       const moves = [];
       chain.grid.forEach((row, r) => row.forEach((_, c) => {
@@ -8860,7 +9047,7 @@ function init() {
         if (!chain.recorded) {
           chain.recorded = true;
           if (chain.score >= chain.target) unlockAchievement('chain_clear');
-          recordPremiumResult('chain', chain.score, { movesLeft: chain.moves, combo: chain.combo, mult: chain.mult, phase: chain.phaseIndex });
+          recordPremiumResult('chain', chain.score, { movesLeft: chain.moves, combo: chain.combo, mult: chain.mult, phase: chain.phaseIndex, recipes: chain.recipesCompleted });
         }
       }
     }
@@ -8881,32 +9068,28 @@ function init() {
         return;
       }
       chain.moves--;
-      chain.combo = result.cleared;
-      chain.streak++;
-      chain.mult = clamp(1 + chain.streak * 0.18 + Math.max(0, result.cleared - 6) * 0.025, 1, 3.5);
-      chain.lastGain = result.gain;
-      chain.lastClear = result.cleared;
-      chain.lastSpecial = result.specialCreated || '';
-      chain.specialsTriggered = result.specialsTriggered;
-      if (result.cleared >= 9) unlockAchievement('chain_combo_9');
-      chain.score += result.gain;
-      result.cells.forEach(item => {
-        const [row, col] = item.split(',').map(Number);
-        chain.grid[row][col] = null;
-      });
-      if (result.specialCreated) {
-        const [row, col] = result.cells[0].split(',').map(Number);
-        chain.grid[row][col] = result.specialCreated;
+      applyChainResult(result);
+      settleChain();
+      finishChainIfNeeded();
+      renderChain();
+    }
+
+    function triggerChainCatalyst() {
+      if (chain.moves <= 0 || chain.finished) return;
+      if (chain.overcharge < 100) {
+        chain.feedback = `超载未满 ${Math.floor(chain.overcharge)}% · 继续完成配方`;
+        renderChain();
+        return;
       }
-      const phase = chainPhaseDef();
-      if (phase?.check(result)) {
-        chain.score += phase.reward;
-        chain.feedback = `${phase.goal} 完成 +${phase.reward}`;
-        chain.phaseIndex++;
-      } else {
-        const label = isChainSpecial(result.value) ? chainSpecialLabels[result.value] : result.value.toUpperCase();
-        chain.feedback = `${label} 清除 ${result.cleared} · +${result.gain}`;
+      const result = evaluateChainCatalyst();
+      if (!result.valid) {
+        chain.feedback = '催化失败：没有可炼成能量';
+        renderChain();
+        return;
       }
+      chain.overcharge = 0;
+      chain.catalystUsed++;
+      applyChainResult(result, { catalyst: true });
       settleChain();
       finishChainIfNeeded();
       renderChain();
@@ -8931,6 +9114,18 @@ function init() {
         lastClear: chain.lastClear,
         lastSpecial: chain.lastSpecial,
         specialsTriggered: chain.specialsTriggered,
+        essence: { ...chain.essence },
+        recipeProgress: { ...chain.recipeProgress },
+        recipe: {
+          id: currentChainRecipe().id,
+          label: currentChainRecipe().label,
+          percent: chainRecipePercent(),
+          detail: chainRecipeDetail()
+        },
+        recipesCompleted: chain.recipesCompleted,
+        overcharge: Math.floor(chain.overcharge),
+        catalystUsed: chain.catalystUsed,
+        achieved: (career.achievements || []).includes('chain_recipe'),
         finished: chain.finished,
         bestMove: best ? {
           r: best.r,
@@ -8952,7 +9147,10 @@ function init() {
           mult: document.getElementById('premium-chain-mult')?.textContent || '',
           phase: document.getElementById('premium-chain-phase')?.textContent || '',
           goal: document.getElementById('premium-chain-goal')?.textContent || '',
-          hint: document.getElementById('premium-chain-hint')?.textContent || ''
+          hint: document.getElementById('premium-chain-hint')?.textContent || '',
+          essence: document.getElementById('premium-chain-essence')?.textContent || '',
+          recipe: document.getElementById('premium-chain-recipe')?.textContent || '',
+          overcharge: document.getElementById('premium-chain-overcharge')?.textContent || ''
         },
         highlighted: chain.board?.querySelectorAll('.chain-hint,.chain-preview').length || 0
       };
@@ -8970,6 +9168,7 @@ function init() {
       chain.lastClear = 0;
       chain.lastSpecial = '';
       chain.specialsTriggered = 0;
+      resetChainLedger();
       chain.finished = false;
       chain.recorded = false;
       chain.grid = [
@@ -8988,6 +9187,50 @@ function init() {
     function forceChainCombo() {
       const before = seedChainComboBoard();
       popChain(0, 0);
+      return { before, after: chainDebugState() };
+    }
+
+    function seedChainRecipeBoard() {
+      chain.score = 0;
+      chain.moves = Math.max(22, chain.moves || 30);
+      chain.combo = 0;
+      chain.streak = 0;
+      chain.mult = 1;
+      chain.phaseIndex = 0;
+      chain.feedback = '秘方矩阵已装载';
+      chain.lastGain = 0;
+      chain.lastClear = 0;
+      chain.lastSpecial = '';
+      chain.specialsTriggered = 0;
+      resetChainLedger();
+      chain.finished = false;
+      chain.recorded = false;
+      chain.grid = [
+        ['cyan', 'cyan', 'wild', 'violet', 'violet', 'gold', 'green'],
+        ['cyan', 'bomb', 'violet', 'green', 'gold', 'pink', 'cyan'],
+        ['cyan', 'cyan', 'violet', 'violet', 'pink', 'gold', 'green'],
+        ['green', 'gold', 'violet', 'pink', 'pink', 'cyan', 'gold'],
+        ['violet', 'pink', 'gold', 'green', 'green', 'cyan', 'violet'],
+        ['gold', 'pink', 'violet', 'violet', 'green', 'cyan', 'cyan'],
+        ['gold', 'green', 'pink', 'green', 'cyan', 'pink', 'gold']
+      ];
+      renderChain();
+      return chainDebugState();
+    }
+
+    function forceChainRecipe() {
+      const before = seedChainRecipeBoard();
+      popChain(1, 1);
+      return { before, after: chainDebugState() };
+    }
+
+    function forceChainCatalyst() {
+      seedChainRecipeBoard();
+      chain.overcharge = 100;
+      chain.feedback = '超载调试已就绪';
+      renderChain();
+      const before = chainDebugState();
+      triggerChainCatalyst();
       return { before, after: chainDebugState() };
     }
 
@@ -9019,12 +9262,24 @@ function init() {
       document.getElementById('premium-chain-phase').textContent = phase?.label || 'MASTER';
       document.getElementById('premium-chain-goal').textContent = phase?.goal || '冲刺目标';
       document.getElementById('premium-chain-hint').textContent = chain.bestMove ? `${chain.bestMove.cleared}格 +${chain.bestMove.gain}` : 'RESHUFFLE';
+      document.getElementById('premium-chain-essence').textContent = formatChainEssence();
+      document.getElementById('premium-chain-recipe').textContent = formatChainRecipe();
+      document.getElementById('premium-chain-overcharge').textContent = chain.overcharge >= 100 ? 'READY' : `${Math.floor(chain.overcharge)}%`;
       document.getElementById('premium-chain-target').textContent = chain.score >= chain.target ? 'CLEAR' : chain.target;
+      const catalystBtn = document.getElementById('premium-chain-catalyst');
+      if (catalystBtn) {
+        catalystBtn.textContent = chain.overcharge >= 100 ? 'Q 催化 READY' : `Q 催化 ${Math.floor(chain.overcharge)}%`;
+        catalystBtn.dataset.ready = chain.overcharge >= 100 ? 'true' : 'false';
+        catalystBtn.setAttribute('aria-disabled', chain.finished ? 'true' : 'false');
+      }
       chain.board.classList.toggle('chain-cleared', chain.finished && chain.score >= chain.target);
+      chain.board.classList.toggle('chain-overcharged', chain.overcharge >= 100 && !chain.finished);
       chain.board.dataset.feedback = chain.feedback;
+      chain.board.dataset.recipe = chainRecipeDetail();
     }
 
     document.getElementById('premium-chain-new').addEventListener('click', newChain);
+    document.getElementById('premium-chain-catalyst').addEventListener('click', triggerChainCatalyst);
     newChain();
 
     const tactics = {
@@ -10050,6 +10305,8 @@ function init() {
           },
           chainState: () => chainDebugState(),
           forceChainCombo: () => forceChainCombo(),
+          forceChainRecipe: () => forceChainRecipe(),
+          forceChainCatalyst: () => forceChainCatalyst(),
           tacticsTurn: () => tactics.turn,
           tacticsState: () => tacticsDebugState(),
           tacticsForecast: () => {
@@ -10160,6 +10417,7 @@ function init() {
         if (e.code === 'ArrowRight' || e.code === 'KeyD') moveTactics(1, 0);
         if (e.code === 'Space') triggerTacticsAction();
       }
+      if (premiumActive === 'chain' && e.code === 'KeyQ') triggerChainCatalyst();
     });
 
     window.addEventListener('keyup', (e) => {

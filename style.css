@@ -5586,6 +5586,13 @@ body.command-open {
   border-color: rgba(186, 230, 253, 0.48);
   box-shadow: inset 0 0 0 2px rgba(34, 211, 238, 0.2);
 }
+.chain-overcharged {
+  border-color: rgba(253, 230, 138, 0.48);
+  box-shadow: 0 0 0 1px rgba(253, 230, 138, 0.12), 0 0 30px rgba(251, 191, 36, 0.18);
+}
+.chain-overcharged .chain-hint {
+  box-shadow: 0 0 0 2px rgba(253, 230, 138, 0.32), 0 0 30px rgba(251, 191, 36, 0.58);
+}
 .chain-board::after {
   content: attr(data-feedback);
   position: absolute;
@@ -5605,6 +5612,13 @@ body.command-open {
 .chain-cleared {
   border-color: rgba(52, 211, 153, 0.55);
   box-shadow: 0 0 26px rgba(52, 211, 153, 0.2);
+}
+
+#premium-chain-catalyst[data-ready="true"] {
+  border-color: rgba(253, 230, 138, 0.36);
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(34, 211, 238, 0.16));
+  color: #fff7ed;
+  box-shadow: 0 0 20px rgba(251, 191, 36, 0.16);
 }
 
 #premium-game-stage:focus {

@@ -1187,22 +1187,34 @@ async function run() {
   await wait(250);
   const chainState = await evaluate(`(() => {
     const debugBefore = window.__atherixDebug?.premium?.chainState?.() || {};
+    const initialDom = {
+      cells: document.querySelectorAll('#premium-chain-board .chain-cell').length,
+      specials: document.querySelectorAll('#premium-chain-board .chain-bomb,#premium-chain-board .chain-prism,#premium-chain-board .chain-wild').length,
+      wilds: document.querySelectorAll('#premium-chain-board .chain-wild').length,
+      hinted: document.querySelectorAll('#premium-chain-board .chain-hint').length,
+      previewed: document.querySelectorAll('#premium-chain-board .chain-preview').length
+    };
     const forced = window.__atherixDebug?.premium?.forceChainCombo?.() || {};
+    const recipeForced = window.__atherixDebug?.premium?.forceChainRecipe?.() || {};
+    const catalystForced = window.__atherixDebug?.premium?.forceChainCatalyst?.() || {};
     const debugAfter = window.__atherixDebug?.premium?.chainState?.() || {};
     return {
-      cells: document.querySelectorAll('#premium-chain-board .chain-cell').length,
-      specials: document.querySelectorAll('.chain-bomb,.chain-prism,.chain-wild').length,
-      wilds: document.querySelectorAll('.chain-wild').length,
-      hinted: document.querySelectorAll('#premium-chain-board .chain-hint').length,
-      previewed: document.querySelectorAll('#premium-chain-board .chain-preview').length,
+      ...initialDom,
       target: document.querySelector('#premium-chain-target')?.textContent,
       mult: document.querySelector('#premium-chain-mult')?.textContent,
       phase: document.querySelector('#premium-chain-phase')?.textContent,
       goal: document.querySelector('#premium-chain-goal')?.textContent,
       hint: document.querySelector('#premium-chain-hint')?.textContent,
+      essence: document.querySelector('#premium-chain-essence')?.textContent,
+      recipe: document.querySelector('#premium-chain-recipe')?.textContent,
+      overcharge: document.querySelector('#premium-chain-overcharge')?.textContent,
+      catalystReady: document.querySelector('#premium-chain-catalyst')?.dataset.ready || '',
+      recipeDetail: document.querySelector('#premium-chain-board')?.dataset.recipe || '',
       feedback: document.querySelector('#premium-chain-board')?.dataset.feedback || '',
       debugBefore,
       forced,
+      recipeForced,
+      catalystForced,
       debugAfter
     };
   })()`);
@@ -1416,7 +1428,10 @@ async function run() {
   assert(chainState.debugBefore.bestMove?.cleared >= 3 && chainState.hinted === 1 && chainState.previewed >= 2, `chain should expose a highlighted best move and preview: ${JSON.stringify(chainState)}`);
   assert(chainState.forced.before.bestMove?.cleared >= 12 && chainState.forced.after.combo >= 12 && chainState.forced.after.score > chainState.forced.before.score, `chain debug combo should clear a large deterministic cluster: ${JSON.stringify(chainState.forced)}`);
   assert(chainState.forced.after.phaseIndex >= 1 && chainState.forced.after.lastSpecial && chainState.forced.after.mult > 1, `chain combo should advance phase, create a core, and raise multiplier: ${JSON.stringify(chainState.forced.after)}`);
-  assert(/^x\d+(\.\d)?$/.test(chainState.mult) && chainState.debugAfter.hud.mult === chainState.mult && chainState.debugAfter.hud.phase === chainState.phase && chainState.debugAfter.hud.hint === chainState.hint, `chain HUD should stay in sync with debug state: ${JSON.stringify(chainState)}`);
+  assert(chainState.recipeForced.after?.recipesCompleted > chainState.recipeForced.before?.recipesCompleted && chainState.recipeForced.after?.score > chainState.recipeForced.before?.score && chainState.recipeForced.after?.overcharge > chainState.recipeForced.before?.overcharge && chainState.recipeForced.after?.achieved, `chain recipe contract should complete, score, charge overdrive, and unlock achievement: ${JSON.stringify(chainState.recipeForced)}`);
+  assert(chainState.catalystForced.before?.overcharge === 100 && chainState.catalystForced.before?.hud?.overcharge === 'READY' && chainState.catalystForced.after?.catalystUsed > chainState.catalystForced.before?.catalystUsed && chainState.catalystForced.after?.combo >= 12 && chainState.catalystForced.after?.score > chainState.catalystForced.before?.score && chainState.catalystForced.after?.overcharge < 100, `chain catalyst should consume READY overcharge and perform a major clear: ${JSON.stringify(chainState.catalystForced)}`);
+  assert(/^x\d+(\.\d)?$/.test(chainState.mult) && /^C\d+ V\d+ P\d+ G\d+ N\d+$/.test(chainState.essence) && /%$/.test(chainState.recipe) && (/^\d+%$/.test(chainState.overcharge) || chainState.overcharge === 'READY') && chainState.debugAfter.hud.mult === chainState.mult && chainState.debugAfter.hud.phase === chainState.phase && chainState.debugAfter.hud.hint === chainState.hint && chainState.debugAfter.hud.essence === chainState.essence && chainState.debugAfter.hud.recipe === chainState.recipe && chainState.debugAfter.hud.overcharge === chainState.overcharge, `chain HUD should stay in sync with debug state, recipe, essence, and overcharge: ${JSON.stringify(chainState)}`);
+  assert(chainState.recipeDetail && chainState.debugAfter.recipe?.detail === chainState.recipeDetail && chainState.catalystReady === 'false', `chain recipe detail and catalyst readiness should be exposed to the DOM: ${JSON.stringify(chainState)}`);
   const tacticsRouteNext = tacticsRouteState.before?.route?.next;
   const tacticsBlastBeforeTargets = tacticsBlastState.before?.forecast?.blastTargets || [];
   const tacticsBlastAfterEnemies = tacticsBlastState.after?.enemies || [];
