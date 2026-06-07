@@ -1067,6 +1067,10 @@ async function run() {
       combo: document.querySelector('#premium-drift-combo')?.textContent || '',
       rival: document.querySelector('#premium-drift-rival')?.textContent || '',
       overtake: document.querySelector('#premium-drift-overtake')?.textContent || '',
+      contract: document.querySelector('#premium-drift-contract')?.textContent || '',
+      heat: document.querySelector('#premium-drift-heat')?.textContent || '',
+      phase: document.querySelector('#premium-drift-phase')?.textContent || '',
+      phaseReady: document.querySelector('#premium-drift-phase-btn')?.dataset.ready || '',
       debug: window.__atherixDebug?.premium?.driftLineState?.() || {},
       activeTitle: document.querySelector('#premium-active-title')?.textContent || ''
     };
@@ -1085,6 +1089,8 @@ async function run() {
       score: Number(document.querySelector('#premium-drift-score')?.textContent || 0)
     };
   })()`);
+  const driftPhaseState = await evaluate(`(() => window.__atherixDebug?.premium?.forceDriftPhaseBrake?.() || {})()`);
+  const driftSponsorState = await evaluate(`(() => window.__atherixDebug?.premium?.forceDriftSponsor?.() || {})()`);
   await key('keyDown', 'p', 'KeyP');
   await key('keyUp', 'p', 'KeyP');
   await wait(180);
@@ -1400,8 +1406,10 @@ async function run() {
     `boss mode should freeze while paused: ${JSON.stringify({ bossPauseState, bossPauseFreezeState })}`
   );
   assert(bossResumeState.running && !bossResumeState.paused && bossResumeState.pauseButton === '暂停', `boss mode should resume from keyboard pause: ${JSON.stringify(bossResumeState)}`);
-  assert(driftState.nonBlank && driftState.running && !driftState.paused && driftState.score > 0 && /Neon Drift/.test(driftState.activeTitle) && driftState.boost !== 'READY' && /G$/.test(driftState.rival) && driftState.overtake && driftState.debug?.rivalHud === driftState.rival, `drift mode should render, move, score, spend boost, and expose rival HUD: ${JSON.stringify(driftState)}`);
-  assert(driftApexState.after.running && driftApexState.after.gates >= driftApexState.before.gates + 1 && driftApexState.after.label === 'PERFECT' && driftApexState.after.quality >= 86 && driftApexState.after.combo >= 1 && driftApexState.after.bestCombo >= driftApexState.after.combo && driftApexState.after.splits?.length >= 1 && driftApexState.after.lineBank > driftApexState.before.lineBank && driftApexState.after.overtakes > driftApexState.before.overtakes && driftApexState.after.rival?.flash > 0 && /PERFECT/.test(driftApexState.line) && /\dx/.test(driftApexState.combo) && driftApexState.rival && driftApexState.overtake, `drift mode should grade clean apex gates with combo, split, rival overtake, and HUD feedback: ${JSON.stringify(driftApexState)}`);
+  assert(driftState.nonBlank && driftState.running && !driftState.paused && driftState.score > 0 && /Neon Drift/.test(driftState.activeTitle) && driftState.boost !== 'READY' && /G$/.test(driftState.rival) && /^\d+%$/.test(driftState.heat) && driftState.phase && driftState.contract && driftState.overtake && driftState.debug?.rivalHud === driftState.rival && driftState.debug?.contractHud === driftState.contract && driftState.debug?.heatHud === driftState.heat && driftState.debug?.phaseHud === driftState.phase, `drift mode should render, move, score, spend boost, and expose synced rival/contract/heat/phase HUD: ${JSON.stringify(driftState)}`);
+  assert(driftApexState.after.running && driftApexState.after.gates >= driftApexState.before.gates + 1 && driftApexState.after.label === 'PERFECT' && driftApexState.after.quality >= 86 && driftApexState.after.combo >= 1 && driftApexState.after.bestCombo >= driftApexState.after.combo && driftApexState.after.splits?.length >= 1 && driftApexState.after.lineBank > driftApexState.before.lineBank && driftApexState.after.overtakes > driftApexState.before.overtakes && driftApexState.after.rival?.flash > 0 && driftApexState.after.contract?.progress > driftApexState.before.contract?.progress && driftApexState.after.heat <= driftApexState.before.heat && /PERFECT/.test(driftApexState.line) && /\dx/.test(driftApexState.combo) && driftApexState.rival && driftApexState.overtake, `drift mode should grade clean apex gates with combo, split, rival overtake, sponsor progress, heat control, and HUD feedback: ${JSON.stringify(driftApexState)}`);
+  assert(driftPhaseState.triggered && driftPhaseState.before?.phaseCharge === 100 && driftPhaseState.before?.phaseReady === 'true' && driftPhaseState.after?.phaseCharge === 0 && driftPhaseState.after?.phaseBrake > 0 && driftPhaseState.after?.phaseUses === driftPhaseState.before?.phaseUses + 1 && driftPhaseState.after?.heat < driftPhaseState.before?.heat && driftPhaseState.after?.phaseHud === 'BRAKE' && driftPhaseState.after?.phaseReady === 'false', `drift phase brake should consume READY charge, lower heat, and expose BRAKE HUD: ${JSON.stringify(driftPhaseState)}`);
+  assert(driftSponsorState.after?.contract?.completed > driftSponsorState.before?.contract?.completed && driftSponsorState.after?.score > driftSponsorState.before?.score && driftSponsorState.after?.lineBank > driftSponsorState.before?.lineBank && driftSponsorState.after?.lastContract === 'APEX' && driftSponsorState.achieved, `drift sponsor contract should complete, reward score/line bank, and unlock achievement: ${JSON.stringify(driftSponsorState)}`);
   assert(driftPauseState.running && driftPauseState.paused && driftPauseState.pauseButton === '继续', `drift mode should enter pause with keyboard: ${JSON.stringify(driftPauseState)}`);
   assert(
     driftPauseFreezeState.paused &&
@@ -1502,6 +1510,8 @@ async function run() {
     bossResumeState,
     driftState,
     driftApexState,
+    driftPhaseState,
+    driftSponsorState,
     driftPauseState,
     driftPauseFreezeState,
     driftResumeState,

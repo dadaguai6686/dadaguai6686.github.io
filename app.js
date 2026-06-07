@@ -4483,7 +4483,7 @@ function init() {
         </div>
         <div class="arcade-director-meters" aria-label="街机完成度">
           <span>奖牌 <strong id="premium-director-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-director-achievements">0/21</strong></span>
+          <span>成就 <strong id="premium-director-achievements">0/22</strong></span>
           <span>完成度 <strong id="premium-director-completion">0%</strong></span>
         </div>
         <button type="button" class="arcade-director-action" id="premium-director-start" data-target-game="survivor">
@@ -4596,7 +4596,7 @@ function init() {
         <div class="mini-game-panel" id="premium-drift">
           <div class="mini-game-copy">
             <h3>Neon Drift</h3>
-            <p>WASD / 方向键推进，Space 量子加速。穿越连续检查点、保持高速倍率，避开巡逻无人机与能量路障。</p>
+            <p>WASD / 方向键推进，Space 量子加速，Q 相位刹车。穿越连续检查点、完成赞助合约、压住赛道热度并甩开劲敌。</p>
             <div class="mini-stats">
               <span>分数 <strong id="premium-drift-score">0</strong></span>
               <span>检查点 <strong id="premium-drift-gates">0</strong>/8</span>
@@ -4608,10 +4608,14 @@ function init() {
               <span>劲敌 <strong id="premium-drift-rival">+0.0G</strong></span>
               <span>超车 <strong id="premium-drift-overtake">0</strong></span>
               <span>加速 <strong id="premium-drift-boost">READY</strong></span>
+              <span>合约 <strong id="premium-drift-contract">APEX 0/3</strong></span>
+              <span>热度 <strong id="premium-drift-heat">0%</strong></span>
+              <span>相位 <strong id="premium-drift-phase">READY</strong></span>
             </div>
             <div class="mini-actions">
               <button type="button" class="action-btn action-btn-primary" id="premium-drift-start">点火 / 重开</button>
               <button type="button" class="action-btn" id="premium-drift-pause">暂停</button>
+              <button type="button" class="action-btn" id="premium-drift-phase-btn">Q 相位刹车</button>
             </div>
           </div>
           <canvas class="mini-canvas mini-canvas-wide" id="premium-drift-canvas" width="560" height="340" aria-label="霓虹漂移赛道"></canvas>
@@ -4775,6 +4779,7 @@ function init() {
       { id: 'drift_clear', label: '霓虹完赛', desc: 'Neon Drift 穿越全部检查点' },
       { id: 'drift_clean', label: '零损漂移', desc: '高护盾完成 Neon Drift' },
       { id: 'drift_combo', label: '量子倍率', desc: 'Neon Drift 倍率达到 x3.0' },
+      { id: 'drift_sponsor', label: '赞助制霸', desc: 'Neon Drift 完成一张赞助合约' },
       { id: 'heist_ghost', label: '幽影协议', desc: '成功启动隐身装置' },
       { id: 'heist_clean', label: '无声撤离', desc: '低步数完成潜入' },
       { id: 'heist_cache', label: '金库猎手', desc: '赛博潜入中取得高价值缓存' },
@@ -5664,6 +5669,9 @@ function init() {
         if (control === 'left') moveTactics(-1, 0);
         if (control === 'right') moveTactics(1, 0);
         if (control === 'action') triggerTacticsAction();
+      }
+      if (pressed && premiumActive === 'drift' && control === 'tool') {
+        triggerDriftPhaseBrake();
       }
     }
 
@@ -7360,6 +7368,16 @@ function init() {
       draft: 0,
       draftBank: 0,
       overtakes: 0,
+      heat: 0,
+      heatPeak: 0,
+      phaseCharge: 100,
+      phaseBrake: 0,
+      phaseUses: 0,
+      contractIndex: 0,
+      contractProgress: 0,
+      contractsCompleted: 0,
+      lastContract: '',
+      lastTactic: '',
       splits: [],
       rival: { x: 132, y: 238, r: 13, segment: 0, progress: 0, speed: 0.000092, flash: 0, pressure: 0, gap: 0 },
       player: { x: 70, y: 276, vx: 0, vy: 0, angle: -0.62, r: 12, shield: 100, trail: [] },
@@ -7382,6 +7400,79 @@ function init() {
       drones: [],
       particles: []
     };
+    const driftSponsorDefs = [
+      { id: 'apex', label: 'APEX', target: 3, reward: 620, heatDrop: 8, charge: 24, check: ({ grade }) => grade.quality >= 70 },
+      { id: 'rival', label: 'RIVAL', target: 2, reward: 760, heatDrop: 10, charge: 30, check: ({ overtakeBonus }) => overtakeBonus > 0 },
+      { id: 'cool', label: 'COOL', target: 4, reward: 700, heatDrop: 18, charge: 28, check: ({ grade }) => grade.quality >= 52 && drift.heat <= 58 }
+    ];
+
+    function currentDriftSponsor() {
+      return driftSponsorDefs[drift.contractIndex % driftSponsorDefs.length];
+    }
+
+    function formatDriftSponsor() {
+      const sponsor = currentDriftSponsor();
+      return `${sponsor.label} ${Math.min(drift.contractProgress, sponsor.target)}/${sponsor.target}`;
+    }
+
+    function addDriftHeat(amount) {
+      drift.heat = clamp(Number(drift.heat || 0) + amount, 0, 100);
+      drift.heatPeak = Math.max(Number(drift.heatPeak || 0), drift.heat);
+    }
+
+    function chargeDriftPhase(amount) {
+      drift.phaseCharge = clamp(Number(drift.phaseCharge || 0) + amount, 0, 100);
+    }
+
+    function resolveDriftSponsor(context) {
+      const sponsor = currentDriftSponsor();
+      if (!sponsor?.check(context)) return { completed: false, label: sponsor?.label || '', reward: 0 };
+      drift.contractProgress++;
+      drift.lastContract = '';
+      if (drift.contractProgress < sponsor.target) {
+        drift.lastTactic = `${sponsor.label} 合约推进 ${drift.contractProgress}/${sponsor.target}`;
+        return { completed: false, label: sponsor.label, reward: 0 };
+      }
+      drift.contractProgress = 0;
+      drift.contractIndex++;
+      drift.contractsCompleted++;
+      drift.lastContract = sponsor.label;
+      drift.lastTactic = `${sponsor.label} 赞助达成 +${sponsor.reward}`;
+      drift.score += sponsor.reward;
+      drift.lineBank += Math.floor(sponsor.reward * 0.18);
+      addDriftHeat(-sponsor.heatDrop);
+      chargeDriftPhase(sponsor.charge);
+      unlockAchievement('drift_sponsor');
+      driftSpark(drift.player.x, drift.player.y, '#FDE68A', 42);
+      return { completed: true, label: sponsor.label, reward: sponsor.reward };
+    }
+
+    function triggerDriftPhaseBrake() {
+      if (!drift.running || drift.paused || drift.phaseBrake > 0) return false;
+      if (drift.phaseCharge < 100) {
+        drift.lastTactic = `相位充能 ${Math.floor(drift.phaseCharge)}%`;
+        setDriftUi();
+        return false;
+      }
+      drift.phaseCharge = 0;
+      drift.phaseBrake = 1450;
+      drift.phaseUses++;
+      drift.lastTactic = '相位刹车：路线锁定';
+      drift.lineLabel = 'PHASE';
+      drift.lineTone = 'perfect';
+      drift.lineQuality = Math.max(drift.lineQuality, 88);
+      drift.lineFlash = 980;
+      addDriftHeat(-22);
+      drift.boost = Math.min(drift.maxBoost, drift.boost + 22);
+      drift.player.vx *= 0.68;
+      drift.player.vy *= 0.68;
+      const angle = driftSegmentAngle(drift.gateIndex);
+      if (Number.isFinite(angle)) drift.player.angle = angle;
+      driftSpark(drift.player.x, drift.player.y, '#FDE68A', 34);
+      setDriftUi();
+      drawDrift();
+      return true;
+    }
 
     function setDriftUi() {
       document.getElementById('premium-drift-score').textContent = Math.floor(drift.score);
@@ -7411,6 +7502,27 @@ function init() {
         overtakeEl.textContent = drift.draft > 0.35 ? `DRAFT ${Math.round(drift.draft * 100)}` : String(drift.overtakes);
         overtakeEl.style.color = drift.overtakes >= 3 ? '#FDE68A' : drift.draft > 0.35 ? '#BAE6FD' : '#fff';
       }
+      const contractEl = document.getElementById('premium-drift-contract');
+      if (contractEl) {
+        contractEl.textContent = formatDriftSponsor();
+        contractEl.style.color = drift.lastContract ? '#FDE68A' : drift.contractProgress > 0 ? '#A7F3D0' : '#fff';
+      }
+      const heatEl = document.getElementById('premium-drift-heat');
+      if (heatEl) {
+        heatEl.textContent = `${Math.floor(drift.heat)}%`;
+        heatEl.style.color = drift.heat >= 75 ? '#FCA5A5' : drift.heat >= 45 ? '#FDE68A' : '#A7F3D0';
+      }
+      const phaseEl = document.getElementById('premium-drift-phase');
+      if (phaseEl) {
+        phaseEl.textContent = drift.phaseBrake > 0 ? 'BRAKE' : drift.phaseCharge >= 100 ? 'READY' : `${Math.floor(drift.phaseCharge)}%`;
+        phaseEl.style.color = drift.phaseBrake > 0 || drift.phaseCharge >= 100 ? '#FDE68A' : '#BAE6FD';
+      }
+      const phaseBtn = document.getElementById('premium-drift-phase-btn');
+      if (phaseBtn) {
+        phaseBtn.textContent = drift.phaseBrake > 0 ? 'Q 相位中' : drift.phaseCharge >= 100 ? 'Q 相位 READY' : `Q 相位 ${Math.floor(drift.phaseCharge)}%`;
+        phaseBtn.dataset.ready = drift.phaseCharge >= 100 && drift.phaseBrake <= 0 && drift.running && !drift.paused ? 'true' : 'false';
+        phaseBtn.setAttribute('aria-disabled', !drift.running || drift.paused || drift.phaseBrake > 0 || drift.phaseCharge < 100 ? 'true' : 'false');
+      }
     }
 
     function resetDriftState() {
@@ -7437,6 +7549,16 @@ function init() {
       drift.draft = 0;
       drift.draftBank = 0;
       drift.overtakes = 0;
+      drift.heat = 16;
+      drift.heatPeak = 16;
+      drift.phaseCharge = 100;
+      drift.phaseBrake = 0;
+      drift.phaseUses = 0;
+      drift.contractIndex = 0;
+      drift.contractProgress = 0;
+      drift.contractsCompleted = 0;
+      drift.lastContract = '';
+      drift.lastTactic = '起跑相位已就绪';
       drift.splits = [];
       drift.rival = { x: 132, y: 238, r: 13, segment: 0, progress: 0, speed: 0.000092 * pressure, flash: 0, pressure: 0, gap: -0.2 };
       drift.player = { x: 70, y: 276, vx: 0, vy: 0, angle: -0.62, r: 12, shield: 100 + Number(bonuses.driftShield || 0) + Number(tuning.shield || 0), trail: [] };
@@ -7488,17 +7610,23 @@ function init() {
 
     function damageDrift(amount, x, y) {
       if (drift.hitCooldown > 0) return;
-      drift.player.shield -= amount;
-      drift.multiplier = Math.max(1, drift.multiplier * 0.72);
+      const phaseGuard = drift.phaseBrake > 0;
+      const finalDamage = phaseGuard ? amount * 0.45 : amount;
+      drift.player.shield -= finalDamage;
+      const heatGain = phaseGuard ? 3 + amount * 0.22 : 10 + amount * 0.8;
+      addDriftHeat(heatGain);
+      chargeDriftPhase(phaseGuard ? 11 : 6);
+      drift.lastTactic = phaseGuard ? '相位擦碰：损伤降低' : `碰撞热度 +${Math.round(heatGain)}`;
+      drift.multiplier = Math.max(1, drift.multiplier * (phaseGuard ? 0.88 : 0.72));
       drift.combo = 0;
-      drift.lineLabel = 'BROKEN';
-      drift.lineTone = 'danger';
-      drift.lineQuality = 0;
+      drift.lineLabel = phaseGuard ? 'GLANCING' : 'BROKEN';
+      drift.lineTone = phaseGuard ? 'clean' : 'danger';
+      drift.lineQuality = phaseGuard ? 42 : 0;
       drift.lineFlash = 860;
-      drift.hitCooldown = 760;
-      drift.player.vx *= -0.36;
-      drift.player.vy *= -0.36;
-      driftSpark(x, y, '#EF4444', 28);
+      drift.hitCooldown = phaseGuard ? 420 : 760;
+      drift.player.vx *= phaseGuard ? -0.18 : -0.36;
+      drift.player.vy *= phaseGuard ? -0.18 : -0.36;
+      driftSpark(x, y, phaseGuard ? '#FDE68A' : '#EF4444', phaseGuard ? 18 : 28);
     }
 
     function driftRectCollision(rect) {
@@ -7630,12 +7758,17 @@ function init() {
       drift.lineBank += Math.max(0, grade.quality - 52) * 2 + drift.combo * 18;
       drift.score += splitScore;
       const overtakeBonus = awardDriftOvertake(grade, speed);
+      addDriftHeat(grade.quality >= 86 ? -9 : grade.quality >= 70 ? -4 : grade.quality >= 52 ? 5 : 13);
+      chargeDriftPhase(grade.quality * 0.16 + drift.combo * 2.5 + (overtakeBonus > 0 ? 16 : 0) + (drift.phaseBrake > 0 ? 12 : 0));
+      const sponsorResult = resolveDriftSponsor({ grade, gate, speed, overtakeBonus });
       drift.splits.unshift({
         gate: drift.gateIndex + 1,
         label: grade.label,
         quality: grade.quality,
         score: splitScore,
         overtakeBonus,
+        sponsor: sponsorResult.completed ? sponsorResult.label : '',
+        heat: Math.floor(drift.heat),
         combo: drift.combo,
         age: 1800
       });
@@ -7663,7 +7796,18 @@ function init() {
       localStorage.setItem(drift.bestKey, String(Math.max(Number(localStorage.getItem(drift.bestKey) || 0), finalScore)));
       if (complete) unlockAchievement('drift_clear');
       if (complete && drift.player.shield >= 75) unlockAchievement('drift_clean');
-      recordPremiumResult('drift', finalScore, { gates: drift.gateIndex, shield: drift.player.shield, elapsed: drift.elapsed, bestCombo: drift.bestCombo, line: drift.lineLabel, overtakes: drift.overtakes, draft: Math.floor(drift.draftBank) });
+      recordPremiumResult('drift', finalScore, {
+        gates: drift.gateIndex,
+        shield: drift.player.shield,
+        elapsed: drift.elapsed,
+        bestCombo: drift.bestCombo,
+        line: drift.lineLabel,
+        overtakes: drift.overtakes,
+        draft: Math.floor(drift.draftBank),
+        contractsCompleted: drift.contractsCompleted,
+        heatPeak: Math.floor(drift.heatPeak),
+        phaseUses: drift.phaseUses
+      });
       setDriftUi();
       updateDriftPauseButton();
       drawDrift();
@@ -7682,35 +7826,67 @@ function init() {
       }
 
       const p = drift.player;
+      const phaseActive = drift.phaseBrake > 0;
+      drift.phaseBrake = Math.max(0, drift.phaseBrake - dt);
       const turn = (premiumKeys.right ? 1 : 0) - (premiumKeys.left ? 1 : 0);
       const thrust = (premiumKeys.up ? 1 : 0) - (premiumKeys.down ? 0.55 : 0);
       const boostActive = premiumKeys.action && drift.boost > 2;
-      const turnRate = 0.0044 * dt * (boostActive ? 1.08 : 1);
+      const turnRate = 0.0044 * dt * (boostActive ? 1.08 : 1) * (phaseActive ? 1.55 : 1);
       p.angle += turn * turnRate;
+      if (phaseActive) {
+        const targetAngle = driftSegmentAngle(drift.gateIndex);
+        if (Number.isFinite(targetAngle)) {
+          p.angle -= driftAngleDelta(p.angle, targetAngle) * clamp(dt * 0.0055, 0, 0.24);
+        }
+      }
       if (thrust !== 0 || boostActive) {
-        const accel = (boostActive ? 520 : 285) * (thrust >= 0 ? 1 : 0.72);
+        const accel = (boostActive ? 520 : 285) * (thrust >= 0 ? 1 : 0.72) * (phaseActive ? 0.58 : 1);
         const dir = thrust >= 0 ? p.angle : p.angle + Math.PI;
         p.vx += Math.cos(dir) * accel * dt / 1000;
         p.vy += Math.sin(dir) * accel * dt / 1000;
       }
       if (boostActive) {
-        drift.boost = Math.max(0, drift.boost - dt * 0.08);
+        drift.boost = Math.max(0, drift.boost - dt * (phaseActive ? 0.045 : 0.08));
         drift.score += dt * 0.075 * drift.multiplier;
-        driftSpark(p.x - Math.cos(p.angle) * 12, p.y - Math.sin(p.angle) * 12, '#BAE6FD', 2);
+        driftSpark(p.x - Math.cos(p.angle) * 12, p.y - Math.sin(p.angle) * 12, phaseActive ? '#FDE68A' : '#BAE6FD', phaseActive ? 3 : 2);
       } else {
-        drift.boost = Math.min(drift.maxBoost, drift.boost + dt * 0.018);
+        drift.boost = Math.min(drift.maxBoost, drift.boost + dt * (phaseActive ? 0.03 : 0.018));
       }
 
       drift.elapsed += dt;
       drift.hitCooldown = Math.max(0, drift.hitCooldown - dt);
       drift.lineFlash = Math.max(0, drift.lineFlash - dt);
-      const drag = Math.pow(premiumKeys.down ? 0.955 : 0.982, dt / 16.67);
+      const drag = Math.pow(phaseActive ? 0.946 : premiumKeys.down ? 0.955 : 0.982, dt / 16.67);
       p.vx *= drag;
       p.vy *= drag;
       const speed = Math.hypot(p.vx, p.vy);
-      if (speed > 360) {
-        p.vx = p.vx / speed * 360;
-        p.vy = p.vy / speed * 360;
+      const maxSpeed = phaseActive ? 305 : 360;
+      if (speed > maxSpeed) {
+        p.vx = p.vx / speed * maxSpeed;
+        p.vy = p.vy / speed * maxSpeed;
+      }
+      const heatDelta =
+        (boostActive ? dt * 0.0065 : 0) +
+        (speed > 190 ? (speed - 190) * dt * 0.000018 : 0) +
+        Number(drift.rival?.pressure || 0) * dt * 0.0028;
+      if (phaseActive) {
+        addDriftHeat(-dt * 0.012);
+      } else if (heatDelta > 0) {
+        addDriftHeat(heatDelta);
+      } else if (!boostActive && speed < 135) {
+        addDriftHeat(-dt * 0.0035);
+      }
+      if (!phaseActive && drift.heat >= 88) {
+        const overheatDrain = dt * (0.0016 + Math.max(0, drift.heat - 88) * 0.00012);
+        p.shield -= overheatDrain;
+        drift.multiplier = Math.max(1, drift.multiplier - dt * 0.00032);
+        if (drift.heat >= 92 && drift.lineFlash <= 0) {
+          drift.lastTactic = '高热衰减：松开加速或使用相位';
+          drift.lineLabel = 'HEAT';
+          drift.lineTone = 'danger';
+          drift.lineQuality = Math.floor(drift.heat);
+          drift.lineFlash = 420;
+        }
       }
       p.x += p.vx * dt / 1000;
       p.y += p.vy * dt / 1000;
@@ -7746,7 +7922,7 @@ function init() {
       } else {
         drift.multiplier = Math.max(1, drift.multiplier - dt * 0.00023);
       }
-      p.trail.push({ x: p.x, y: p.y, life: 520, boost: boostActive });
+      p.trail.push({ x: p.x, y: p.y, life: 520, boost: boostActive, phase: phaseActive });
       if (p.trail.length > 42) p.trail.shift();
       p.trail.forEach(item => { item.life -= dt; });
       p.trail = p.trail.filter(item => item.life > 0);
@@ -7895,9 +8071,9 @@ function init() {
 
       p.trail.forEach(item => {
         ctx.globalAlpha = Math.max(0, item.life / 520) * 0.62;
-        ctx.fillStyle = item.boost ? '#BAE6FD' : '#A78BFA';
+        ctx.fillStyle = item.phase ? '#FDE68A' : item.boost ? '#BAE6FD' : '#A78BFA';
         ctx.beginPath();
-        ctx.arc(item.x, item.y, item.boost ? 5 : 3, 0, Math.PI * 2);
+        ctx.arc(item.x, item.y, item.phase ? 6 : item.boost ? 5 : 3, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalAlpha = 1;
       });
@@ -7913,9 +8089,9 @@ function init() {
       ctx.save();
       ctx.translate(p.x, p.y);
       ctx.rotate(p.angle);
-      ctx.shadowColor = drift.hitCooldown > 0 ? '#EF4444' : '#06B6D4';
-      ctx.shadowBlur = 16;
-      ctx.fillStyle = drift.hitCooldown > 0 ? '#FDE68A' : '#06B6D4';
+      ctx.shadowColor = drift.phaseBrake > 0 ? '#FDE68A' : drift.hitCooldown > 0 ? '#EF4444' : '#06B6D4';
+      ctx.shadowBlur = drift.phaseBrake > 0 ? 24 : 16;
+      ctx.fillStyle = drift.phaseBrake > 0 ? '#FDE68A' : drift.hitCooldown > 0 ? '#FDE68A' : '#06B6D4';
       ctx.beginPath();
       ctx.moveTo(17, 0);
       ctx.lineTo(-12, 12);
@@ -7926,11 +8102,30 @@ function init() {
       ctx.fillStyle = '#DFFAFF';
       ctx.fillRect(-4, -4, 11, 8);
       ctx.restore();
+      if (drift.phaseBrake > 0) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(253, 230, 138, 0.46)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 24 + Math.sin(drift.elapsed / 75) * 4, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
 
       ctx.fillStyle = '#fff';
       ctx.font = '700 12px JetBrains Mono, monospace';
       ctx.textAlign = 'left';
       ctx.fillText(`${Math.max(0, 76 - drift.elapsed / 1000).toFixed(0)}s · BOOST ${Math.ceil(drift.boost)}%`, 16, 24);
+      ctx.fillStyle = drift.heat >= 75 ? '#FCA5A5' : drift.heat >= 45 ? '#FDE68A' : '#A7F3D0';
+      ctx.fillRect(16, 34, 74 * clamp(drift.heat / 100, 0, 1), 4);
+      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+      ctx.strokeRect(16.5, 34.5, 74, 4);
+      ctx.fillStyle = drift.phaseBrake > 0 || drift.phaseCharge >= 100 ? '#FDE68A' : '#BAE6FD';
+      ctx.font = '800 10px JetBrains Mono, monospace';
+      ctx.fillText(`HEAT ${Math.floor(drift.heat)}% · PHASE ${drift.phaseBrake > 0 ? 'BRAKE' : drift.phaseCharge >= 100 ? 'READY' : `${Math.floor(drift.phaseCharge)}%`}`, 98, 39);
+      ctx.fillStyle = drift.lastContract ? '#FDE68A' : '#A7F3D0';
+      ctx.fillText(`${formatDriftSponsor()}${drift.lastTactic ? ` · ${drift.lastTactic}` : ''}`, 16, c.height - 16);
       if (drift.lineFlash > 0 && drift.lineLabel !== 'READY') {
         const alpha = clamp(drift.lineFlash / 920, 0, 1);
         ctx.save();
@@ -7949,7 +8144,8 @@ function init() {
         ctx.font = '800 10px JetBrains Mono, monospace';
         ctx.textAlign = 'right';
         const overtakeText = split.overtakeBonus > 0 ? ` OVERTAKE +${split.overtakeBonus}` : '';
-        ctx.fillText(`#${split.gate} ${split.label} ${split.quality} +${split.score} ${split.combo}x${overtakeText}`, c.width - 16, 24 + index * 15);
+        const sponsorText = split.sponsor ? ` ${split.sponsor} CONTRACT` : '';
+        ctx.fillText(`#${split.gate} ${split.label} ${split.quality} +${split.score} ${split.combo}x H${split.heat}${overtakeText}${sponsorText}`, c.width - 16, 24 + index * 15);
         ctx.restore();
       });
     }
@@ -7958,10 +8154,11 @@ function init() {
     document.getElementById('premium-drift-pause').addEventListener('click', () => {
       toggleDriftPause();
     });
+    document.getElementById('premium-drift-phase-btn').addEventListener('click', triggerDriftPhaseBrake);
     setDriftUi();
     updateDriftPauseButton();
     drawDrift();
-    overlay(drift.ctx, drift.canvas.width, drift.canvas.height, '霓虹航线待点火', 'WASD 转向推进 · Space 加速 · 穿越 8 个检查点');
+    overlay(drift.ctx, drift.canvas.width, drift.canvas.height, '霓虹航线待点火', 'WASD 转向推进 · Space 加速 · Q 相位刹车');
 
     const heist = {
       canvas: document.getElementById('premium-heist-canvas'),
@@ -10230,6 +10427,20 @@ function init() {
             draft: Number(drift.draft.toFixed(2)),
             draftBank: Math.floor(drift.draftBank),
             overtakes: drift.overtakes,
+            heat: Math.floor(drift.heat),
+            heatPeak: Math.floor(drift.heatPeak),
+            phaseCharge: Math.floor(drift.phaseCharge),
+            phaseBrake: Math.ceil(drift.phaseBrake),
+            phaseUses: drift.phaseUses,
+            contract: {
+              id: currentDriftSponsor()?.id || '',
+              label: currentDriftSponsor()?.label || '',
+              progress: drift.contractProgress,
+              target: currentDriftSponsor()?.target || 0,
+              completed: drift.contractsCompleted
+            },
+            lastContract: drift.lastContract,
+            lastTactic: drift.lastTactic,
             rival: {
               gap: Number((drift.rival?.gap || 0).toFixed(2)),
               segment: drift.rival?.segment || 0,
@@ -10243,8 +10454,28 @@ function init() {
             lineHud: document.getElementById('premium-drift-line')?.textContent || '',
             comboHud: document.getElementById('premium-drift-combo')?.textContent || '',
             rivalHud: document.getElementById('premium-drift-rival')?.textContent || '',
-            overtakeHud: document.getElementById('premium-drift-overtake')?.textContent || ''
+            overtakeHud: document.getElementById('premium-drift-overtake')?.textContent || '',
+            contractHud: document.getElementById('premium-drift-contract')?.textContent || '',
+            heatHud: document.getElementById('premium-drift-heat')?.textContent || '',
+            phaseHud: document.getElementById('premium-drift-phase')?.textContent || '',
+            phaseReady: document.getElementById('premium-drift-phase-btn')?.dataset.ready || ''
           }),
+          forceDriftPhaseBrake: () => {
+            if (!drift.running) startDrift();
+            drift.paused = false;
+            drift.phaseCharge = 100;
+            drift.phaseBrake = 0;
+            drift.heat = Math.max(72, drift.heat);
+            drift.heatPeak = Math.max(drift.heatPeak, drift.heat);
+            setDriftUi();
+            const before = window.__atherixDebug.premium.driftLineState();
+            const triggered = triggerDriftPhaseBrake();
+            return {
+              triggered,
+              before,
+              after: window.__atherixDebug.premium.driftLineState()
+            };
+          },
           forceDriftApex: () => {
             if (!drift.running) startDrift();
             drift.paused = false;
@@ -10259,6 +10490,28 @@ function init() {
             setDriftUi();
             drawDrift();
             return window.__atherixDebug.premium.driftLineState();
+          },
+          forceDriftSponsor: () => {
+            if (!drift.running) startDrift();
+            drift.paused = false;
+            drift.contractIndex = 0;
+            drift.contractProgress = 0;
+            drift.lastContract = '';
+            setDriftUi();
+            const before = window.__atherixDebug.premium.driftLineState();
+            let attempts = 0;
+            while (drift.running && drift.contractsCompleted <= before.contract.completed && attempts < 4) {
+              window.__atherixDebug.premium.forceDriftApex();
+              attempts++;
+            }
+            setDriftUi();
+            drawDrift();
+            return {
+              attempts,
+              before,
+              after: window.__atherixDebug.premium.driftLineState(),
+              achieved: (career.achievements || []).includes('drift_sponsor')
+            };
           },
           heistSteps: () => heist.steps,
           heistIntel: () => heistDebugState(),
@@ -10417,6 +10670,7 @@ function init() {
         if (e.code === 'ArrowRight' || e.code === 'KeyD') moveTactics(1, 0);
         if (e.code === 'Space') triggerTacticsAction();
       }
+      if (premiumActive === 'drift' && e.code === 'KeyQ') triggerDriftPhaseBrake();
       if (premiumActive === 'chain' && e.code === 'KeyQ') triggerChainCatalyst();
     });
 

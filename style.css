@@ -5614,7 +5614,8 @@ body.command-open {
   box-shadow: 0 0 26px rgba(52, 211, 153, 0.2);
 }
 
-#premium-chain-catalyst[data-ready="true"] {
+#premium-chain-catalyst[data-ready="true"],
+#premium-drift-phase-btn[data-ready="true"] {
   border-color: rgba(253, 230, 138, 0.36);
   background: linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(34, 211, 238, 0.16));
   color: #fff7ed;
