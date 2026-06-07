@@ -8,6 +8,9 @@ const main = readFileSync("src/main.ts", "utf8");
 const simulation = readFileSync("src/game/simulation.ts", "utf8");
 const styles = readFileSync("src/styles.css", "utf8");
 
+assert.ok(html.includes('id="boot-status"'), "HTML should include a boot loading status before the game bundle loads");
+assert.ok(html.includes("正在加载流明漂航"), "boot loading status should be localized in Chinese");
+assert.ok(html.includes("markBootError"), "boot loader should show a localized error if module loading fails");
 assert.ok(html.includes('id="radar-panel"'), "desktop radar panel should exist in HTML");
 assert.ok(html.includes('id="tactical-scan"'), "pause tactical scan should exist in HTML");
 assert.ok(html.includes('id="wave-intro"'), "wave intro briefing should exist in HTML");
@@ -55,6 +58,8 @@ assert.ok(
   "primary start action should appear before detailed field guide on mobile"
 );
 assert.ok(main.includes("renderRadar(detail.radar"), "HUD updates should render the live radar");
+assert.ok(main.includes("completeBootStatus"), "runtime should hide the boot loading status after initialization");
+assert.ok(main.includes('document.body.dataset.gameReady = "true"'), "runtime should mark the page as game-ready");
 assert.ok(main.includes("renderTacticalScan()"), "pause overlay should render the tactical scan");
 assert.ok(main.includes("updateWaveIntro(detail)"), "HUD updates should render wave intro briefing");
 assert.ok(main.includes("renderMissionToast(detail)"), "HUD updates should render in-run mission transition toasts");

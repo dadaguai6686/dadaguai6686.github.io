@@ -54,6 +54,7 @@ const config: Phaser.Types.Core.GameConfig = {
 new Phaser.Game(config);
 
 const shell = document.querySelector<HTMLDivElement>("#shell")!;
+const bootStatus = document.querySelector<HTMLDivElement>("#boot-status");
 const overlay = document.querySelector<HTMLDivElement>("#overlay")!;
 const overlayPanel = overlay.querySelector<HTMLDivElement>(".panel")!;
 const objectiveTitle = document.querySelector<HTMLElement>("#objective-title")!;
@@ -1662,6 +1663,15 @@ function updateSessionTools(message?: string): void {
   }
 }
 
+function completeBootStatus(): void {
+  document.body.dataset.gameReady = "true";
+  window.setTimeout(() => {
+    if (document.body.dataset.gameReady === "true") {
+      bootStatus?.setAttribute("hidden", "");
+    }
+  }, 240);
+}
+
 function buildRouteLink(): string | undefined {
   if (!latestRoutePlan) return undefined;
   const url = new URL(window.location.origin + window.location.pathname);
@@ -2475,3 +2485,4 @@ updateRecordUi();
 updateAchievementUi();
 updateRunHistoryUi();
 updateSessionTools();
+completeBootStatus();
