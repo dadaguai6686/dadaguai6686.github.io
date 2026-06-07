@@ -27,6 +27,11 @@ assert.ok(main.includes("updateWaveIntro(detail)"), "HUD updates should render w
 assert.ok(main.includes("buildObjectiveStripTitle"), "HUD objective strip should use contextual mission copy");
 assert.ok(main.includes("buildMissionStatusText"), "HUD mission text should prefer current objective state over stale event copy");
 assert.ok(main.includes("暂停战术说明"), "pause overlay should explain that the scan is safe to read");
+assert.ok(main.includes("pauseForInterruption"), "runtime should pause when the page is interrupted");
+assert.ok(main.includes("已自动暂停"), "auto-pause should tell players why the overlay appeared");
+assert.ok(main.includes('window.addEventListener("blur", pauseForInterruption)'), "window blur should trigger auto-pause");
+assert.ok(main.includes('window.addEventListener("pagehide", pauseForInterruption)'), "pagehide should trigger auto-pause");
+assert.ok(main.includes('document.addEventListener("visibilitychange"'), "page visibility changes should be handled");
 assert.ok(main.includes("resetVirtualInput"), "touch input should reset when pausing or losing focus");
 assert.ok(main.includes("lostpointercapture"), "touch controls should recover when pointer capture is lost");
 assert.ok(main.includes("setPointerCapture"), "touch controls should capture active pointers");

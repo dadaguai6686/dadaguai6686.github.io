@@ -820,7 +820,8 @@ function shortUpgradeName(id: UpgradeId): string {
   return names[id];
 }
 
-function showHelpOverlay(): void {
+function showHelpOverlay(reason: "manual" | "interruption" = "manual"): void {
+  resetVirtualInput();
   if (latestStatus === "playing") {
     window.dispatchEvent(new CustomEvent("game:pause"));
     latestStatus = "paused";
@@ -832,10 +833,12 @@ function showHelpOverlay(): void {
   runHistory.hidden = true;
   updateAchievementUi();
   setDifficultyPickerVisible(latestStatus === "menu" || latestStatus === "lost" || latestStatus === "completed");
-  overlayEyebrow.textContent = paused ? "暂停战术说明" : "玩法说明";
+  overlayEyebrow.textContent = paused ? (reason === "interruption" ? "已自动暂停" : "暂停战术说明") : "玩法说明";
   overlayTitle.textContent = paused ? "先看路线，再继续" : "维修、连锁、撤离";
   overlayCopy.textContent = paused
-    ? "游戏已暂停，不会耗电或受击。先看战术扫描确认流明、信标、危险和光门，再继续执行当前目标。"
+    ? reason === "interruption"
+      ? "页面失焦或切后台时已自动暂停，不会继续耗电或受击。先看战术扫描确认路线，再继续游戏。"
+      : "游戏已暂停，不会耗电或受击。先看战术扫描确认流明、信标、危险和光门，再继续执行当前目标。"
     : "目标不是乱飞，而是在电量压力下规划路线：先补流明，再修信标，最后从北侧光门撤离。";
   runRecap.hidden = true;
   gameDossier.hidden = false;
@@ -877,6 +880,13 @@ window.addEventListener("keydown", (event) => {
     window.dispatchEvent(new CustomEvent("game:resume"));
   }
 });
+
+function pauseForInterruption(): void {
+  resetVirtualInput();
+  if (latestStatus !== "playing") return;
+  showHelpOverlay("interruption");
+  setSessionFeedback("已自动暂停：页面失焦或切后台。");
+}
 
 function ratio(value: number, max: number): number {
   return Math.max(0, Math.min(100, (value / Math.max(1, max)) * 100));
@@ -922,11 +932,11 @@ touchButtons.forEach((button) => {
   button.addEventListener("contextmenu", (event) => event.preventDefault());
 });
 
-window.addEventListener("blur", resetVirtualInput);
-window.addEventListener("pagehide", resetVirtualInput);
+window.addEventListener("blur", pauseForInterruption);
+window.addEventListener("pagehide", pauseForInterruption);
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
-    resetVirtualInput();
+    pauseForInterruption();
   }
 });
 
