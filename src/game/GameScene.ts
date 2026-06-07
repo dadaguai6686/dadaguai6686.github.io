@@ -80,11 +80,19 @@ type HudSnapshot = {
 type RadarSnapshot = {
   arena: { width: number; height: number };
   gate: { open: boolean; position: { x: number; y: number } };
+  guide?: RadarGuide;
   hazards: Array<{ id: number; position: { x: number; y: number }; radius: number }>;
   lumen: Array<{ collected: boolean; id: number; position: { x: number; y: number } }>;
   player: { position: { x: number; y: number } };
   relays: Array<{ id: number; position: { x: number; y: number }; progress: number; repaired: boolean }>;
   storms: Array<{ activeRadius: number; id: number; position: { x: number; y: number }; radius: number }>;
+};
+
+type RadarGuide = {
+  kind: "gate" | "lumen" | "relay" | "repair";
+  position: { x: number; y: number };
+  title: string;
+  urgent: boolean;
 };
 
 type FeedbackKind = "boost" | "contract" | "hit" | "loss" | "pickup" | "pulse" | "repair" | "score" | "win";
@@ -699,6 +707,7 @@ export class GameScene extends Phaser.Scene {
     return {
       arena: { ...this.state.arena },
       gate: { open: this.state.gate.open, position: { ...this.state.gate.position } },
+      guide: buildRadarGuide(this.state),
       hazards: this.state.hazards.map((hazard) => ({
         id: hazard.id,
         position: { ...hazard.position },
@@ -1242,6 +1251,87 @@ function selectNearestWaypoints(
   }
 
   return selected;
+}
+
+function buildRadarGuide(state: GameState): RadarGuide | undefined {
+  const player = state.player.position;
+  const repairTarget = getActiveRepairTarget(state);
+  if (repairTarget) {
+    return {
+      kind: "repair",
+      position: { ...repairTarget.position },
+      title: "维修",
+      urgent: true
+    };
+  }
+
+  const nearestLumen = nearestRadarPoint(
+    state.lumen.filter((drop) => !drop.collected).map((drop) => drop.position),
+    player
+  );
+  if (state.player.charge < state.player.maxCharge * 0.34 && nearestLumen) {
+    return {
+      kind: "lumen",
+      position: nearestLumen,
+      title: "补电",
+      urgent: true
+    };
+  }
+  if (state.gate.open) {
+    return {
+      kind: "gate",
+      position: { ...state.gate.position },
+      title: "撤离",
+      urgent: false
+    };
+  }
+  if (state.wave === 1 && state.stats.lumenCollected < 2 && nearestLumen) {
+    return {
+      kind: "lumen",
+      position: nearestLumen,
+      title: "流明",
+      urgent: false
+    };
+  }
+
+  const nearestRelay = nearestRadarPoint(
+    state.relays.filter((relay) => !relay.repaired).map((relay) => relay.position),
+    player
+  );
+  if (nearestRelay) {
+    return {
+      kind: "relay",
+      position: nearestRelay,
+      title: "信标",
+      urgent: false
+    };
+  }
+  if (nearestLumen) {
+    return {
+      kind: "lumen",
+      position: nearestLumen,
+      title: "流明",
+      urgent: false
+    };
+  }
+
+  return undefined;
+}
+
+function nearestRadarPoint(
+  points: Array<{ x: number; y: number }>,
+  origin: { x: number; y: number }
+): { x: number; y: number } | undefined {
+  let nearestPoint: { x: number; y: number } | undefined;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  points.forEach((point) => {
+    const pointDistance = Math.hypot(point.x - origin.x, point.y - origin.y);
+    if (pointDistance < nearestDistance) {
+      nearestDistance = pointDistance;
+      nearestPoint = { ...point };
+    }
+  });
+  return nearestPoint;
 }
 
 function drawDashedLine(

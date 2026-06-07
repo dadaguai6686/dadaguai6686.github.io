@@ -695,7 +695,7 @@ button {
 #radar-legend,
 .tactical-scan-legend {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 4px;
   margin-top: 7px;
 }
@@ -749,6 +749,12 @@ button {
   box-shadow: 0 0 10px rgba(134, 255, 189, 0.48);
 }
 
+#radar-legend span[data-kind="guide"]::before,
+.tactical-scan-legend span[data-kind="guide"]::before {
+  background: var(--ui-gold);
+  box-shadow: 0 0 12px rgba(255, 226, 122, 0.58);
+}
+
 .radar-bg {
   fill: rgba(5, 10, 18, 0.22);
   stroke: rgba(126, 239, 255, 0.16);
@@ -765,6 +771,40 @@ button {
 .radar-link.repaired {
   stroke: rgba(255, 226, 122, 0.64);
   stroke-dasharray: none;
+}
+
+.radar-guide {
+  stroke: rgba(255, 226, 122, 0.78);
+  stroke-dasharray: 24 12;
+  stroke-linecap: round;
+  stroke-width: 8;
+}
+
+.radar-guide.urgent {
+  stroke: rgba(255, 95, 155, 0.86);
+  stroke-dasharray: 18 10;
+}
+
+.radar-guide-target {
+  fill: rgba(255, 226, 122, 0.1);
+  stroke: rgba(255, 226, 122, 0.9);
+  stroke-width: 7;
+}
+
+.radar-guide-target.relay,
+.radar-guide-target.repair {
+  fill: rgba(103, 244, 255, 0.14);
+  stroke: rgba(103, 244, 255, 0.9);
+}
+
+.radar-guide-target.gate {
+  fill: rgba(134, 255, 189, 0.14);
+  stroke: rgba(134, 255, 189, 0.9);
+}
+
+.radar-guide-target.urgent {
+  fill: rgba(255, 95, 155, 0.12);
+  stroke: rgba(255, 95, 155, 0.94);
 }
 
 .radar-storm {

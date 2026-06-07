@@ -44,6 +44,8 @@ assert.ok(input.includes("resetKeys()"), "keyboard input should expose a full Ph
 assert.ok(gameScene.includes("this.resetInput();"), "scene should reset keyboard state at run and pause boundaries");
 assert.ok(!main.includes("<small>Lv "), "upgrade cards should use localized level labels");
 assert.ok(main.includes("createRadarNodes"), "radar and scan should share SVG node construction");
+assert.ok(main.includes("radar-guide"), "radar and scan should draw the current navigation guide");
+assert.ok(main.includes("导航 "), "radar summary should name the current guide target");
 assert.ok(gameScene.includes("SECTOR_VISUALS"), "Phaser scene should define sector-specific visual styles");
 assert.ok(gameScene.includes("drawSectorField"), "Phaser scene should render sector-specific backdrops");
 assert.ok(gameScene.includes("renderContractFocus"), "Phaser scene should render contract focus markers");
@@ -57,9 +59,11 @@ assert.ok(gameScene.includes("projectHazardPosition"), "hazard telegraphs should
 assert.ok(simulation.includes("按住 E / 修复键"), "runtime objective copy should support keyboard and touch repair controls");
 assert.ok(main.includes('"data-kind": "relay"'), "radar nodes should expose stable data-kind markers");
 assert.ok(main.includes('"data-kind": "player"'), "radar nodes should expose player marker for QA");
+assert.ok(main.includes('"data-kind": "guide"'), "radar nodes should expose guide markers for QA");
 assert.ok(main.includes("score:"), "audio bus should include a score feedback sound");
 assert.ok(styles.includes("#radar-panel"), "desktop radar should have CSS");
 assert.ok(styles.includes("#tactical-scan"), "pause tactical scan should have CSS");
+assert.ok(styles.includes(".radar-guide"), "radar guide should have CSS");
 assert.ok(styles.includes(".tactical-scan-legend"), "pause tactical scan should have a legend style");
 assert.ok(styles.includes("#game-dossier"), "mission dossier should have CSS");
 assert.ok(styles.includes("#first-minute-route"), "first-minute route should have CSS");

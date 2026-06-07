@@ -208,6 +208,12 @@ type NextRunGoal = {
 type RadarSnapshot = {
   arena: { width: number; height: number };
   gate: { open: boolean; position: { x: number; y: number } };
+  guide?: {
+    kind: "gate" | "lumen" | "relay" | "repair";
+    position: { x: number; y: number };
+    title: string;
+    urgent: boolean;
+  };
   hazards: Array<{ id: number; position: { x: number; y: number }; radius: number }>;
   lumen: Array<{ collected: boolean; id: number; position: { x: number; y: number } }>;
   player: { position: { x: number; y: number } };
@@ -719,7 +725,8 @@ function hideTacticalScan(): void {
 function buildRadarSummary(radar: RadarSnapshot): string {
   const repairedRelays = radar.relays.filter((relay) => relay.repaired).length;
   const remainingLumen = radar.lumen.filter((drop) => !drop.collected).length;
-  return `${repairedRelays}/${radar.relays.length} 信标 · ${remainingLumen} 流明 · ${radar.storms.length} 风暴`;
+  const guide = radar.guide ? ` · 导航 ${radar.guide.title}` : "";
+  return `${repairedRelays}/${radar.relays.length} 信标 · ${remainingLumen} 流明 · ${radar.storms.length} 风暴${guide}`;
 }
 
 function createRadarNodes(radar: RadarSnapshot): SVGElement[] {
@@ -748,6 +755,25 @@ function createRadarNodes(radar: RadarSnapshot): SVGElement[] {
           ]
         : [];
     }),
+    ...(radar.guide
+      ? [
+          createSvgNode("line", {
+            class: radar.guide.urgent ? "radar-guide urgent" : "radar-guide",
+            "data-kind": "guide",
+            x1: radar.player.position.x,
+            y1: radar.player.position.y,
+            x2: radar.guide.position.x,
+            y2: radar.guide.position.y
+          }),
+          createSvgNode("circle", {
+            class: `radar-guide-target ${radar.guide.kind}${radar.guide.urgent ? " urgent" : ""}`,
+            "data-kind": "guide",
+            cx: radar.guide.position.x,
+            cy: radar.guide.position.y,
+            r: radar.guide.urgent ? 44 : 38
+          })
+        ]
+      : []),
     ...radar.storms.map((storm) =>
       createSvgNode("circle", {
         class: "radar-storm",
