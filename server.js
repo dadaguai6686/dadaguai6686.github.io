@@ -37,6 +37,30 @@ const contentSecurityPolicy = [
   "frame-ancestors 'self'",
   "manifest-src 'self'"
 ].join('; ');
+const permissionsPolicy = [
+  'accelerometer=()',
+  'ambient-light-sensor=()',
+  'autoplay=(self)',
+  'battery=()',
+  'camera=()',
+  'display-capture=()',
+  'document-domain=()',
+  'encrypted-media=()',
+  'fullscreen=(self)',
+  'geolocation=()',
+  'gyroscope=()',
+  'magnetometer=()',
+  'microphone=()',
+  'midi=()',
+  'payment=()',
+  'picture-in-picture=()',
+  'publickey-credentials-get=()',
+  'screen-wake-lock=()',
+  'sync-xhr=()',
+  'usb=()',
+  'web-share=(self)',
+  'xr-spatial-tracking=()'
+].join(', ');
 
 const allowedImageMimeTypes = new Map([
   ['image/jpeg', '.jpg'],
@@ -281,14 +305,17 @@ app.use(cors({
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Permissions-Policy', permissionsPolicy);
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
   res.setHeader('Origin-Agent-Cluster', '?1');
   res.setHeader('X-DNS-Prefetch-Control', 'off');
   res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
+  res.setHeader('X-Download-Options', 'noopen');
+  res.setHeader('X-XSS-Protection', '0');
   res.setHeader('Content-Security-Policy', contentSecurityPolicy);
+  res.vary('Origin');
   if (isProduction) {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   }
@@ -436,6 +463,11 @@ app.use(express.static(__dirname, {
   etag: true,
   maxAge: '1h',
   setHeaders: (res, filePath) => {
+    if (path.basename(filePath) === 'sw.js') {
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Service-Worker-Allowed', '/');
+      return;
+    }
     if (/\.(?:js|css)$/i.test(filePath)) {
       res.setHeader('Cache-Control', 'no-cache');
     } else if (/\.(?:png|jpg|jpeg|gif|webp|svg|ico|woff2?)$/i.test(filePath)) {
@@ -449,6 +481,7 @@ app.use(express.static(__dirname, {
 
 app.use('/api', (req, res, next) => {
   res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
   next();
 });
 

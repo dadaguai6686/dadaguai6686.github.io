@@ -114,6 +114,12 @@ async function run() {
     assert(health.headers.get('origin-agent-cluster') === '?1', 'origin isolation header missing');
     assert(health.headers.get('x-dns-prefetch-control') === 'off', 'DNS prefetch control header missing');
     assert(health.headers.get('x-permitted-cross-domain-policies') === 'none', 'cross-domain policy header missing');
+    assert(health.headers.get('x-download-options') === 'noopen', 'download noopen header missing');
+    assert(health.headers.get('x-xss-protection') === '0', 'legacy XSS auditor should be disabled');
+    assert(health.headers.get('vary')?.toLowerCase().includes('origin'), 'CORS responses should vary by Origin');
+    const permissionsPolicy = health.headers.get('permissions-policy') || '';
+    assert(permissionsPolicy.includes('camera=()') && permissionsPolicy.includes('microphone=()') && permissionsPolicy.includes('geolocation=()'), 'Permissions-Policy should block sensitive sensors');
+    assert(permissionsPolicy.includes('payment=()') && permissionsPolicy.includes('usb=()') && permissionsPolicy.includes('fullscreen=(self)') && permissionsPolicy.includes('web-share=(self)'), 'Permissions-Policy should define high-risk browser features');
     assert(health.headers.get('content-security-policy')?.includes("object-src 'none'"), 'CSP object-src guard missing');
     assert(health.headers.get('content-security-policy')?.includes('https://fonts.googleapis.com'), 'CSP should allow configured web font stylesheet');
     assert(health.headers.get('content-security-policy')?.includes('https://fonts.gstatic.com'), 'CSP should allow configured web font files');
@@ -130,6 +136,7 @@ async function run() {
     const serviceWorkerScript = await fetch(`${baseUrl}/sw.js`);
     assert(serviceWorkerScript.status === 200, 'service worker should be publicly served');
     assert((serviceWorkerScript.headers.get('content-type') || '').includes('javascript'), 'service worker should be served as javascript');
+    assert(serviceWorkerScript.headers.get('service-worker-allowed') === '/', 'service worker should explicitly scope to the site root');
     const serviceWorkerText = await serviceWorkerScript.text();
     assert(serviceWorkerText.includes('/feed.xml') && serviceWorkerText.includes('/sitemap.xml'), 'service worker should precache discovery metadata');
     assert(serviceWorkerText.includes('/assets/atherix-og-card.png') && serviceWorkerText.includes('/assets/atherix-icon-512.png'), 'service worker should precache branded PWA assets');
@@ -159,6 +166,8 @@ async function run() {
     const unknownApi = await fetch(`${baseUrl}/api/does-not-exist`);
     const unknownApiBody = await unknownApi.json();
     assert(unknownApi.status === 404 && unknownApiBody.error === 'API endpoint not found.', 'unknown API routes should return a JSON 404');
+    assert(unknownApi.headers.get('x-robots-tag')?.includes('noindex'), 'API routes should not be indexed');
+    assert(unknownApi.headers.get('cache-control') === 'no-store', 'unknown API routes should not be cached');
 
     const malformedJson = await fetch(`${baseUrl}/api/comments`, {
       method: 'POST',
