@@ -87,7 +87,7 @@ type RadarSnapshot = {
   storms: Array<{ activeRadius: number; id: number; position: { x: number; y: number }; radius: number }>;
 };
 
-type FeedbackKind = "boost" | "contract" | "hit" | "loss" | "pickup" | "pulse" | "repair" | "win";
+type FeedbackKind = "boost" | "contract" | "hit" | "loss" | "pickup" | "pulse" | "repair" | "score" | "win";
 
 type FeedbackCue = {
   kind: FeedbackKind;
@@ -187,6 +187,7 @@ export class GameScene extends Phaser.Scene {
     const previousContractStatus = this.state.contract.status;
     const previousPulseCooldown = this.state.player.pulseCooldown;
     const input = this.inputMapper.read();
+    const previousScore = this.state.score;
     this.state = updateSimulation(this.state, input, Math.min(deltaMs / 1000, 0.033));
     this.renderState();
     this.emitHud();
@@ -197,6 +198,7 @@ export class GameScene extends Phaser.Scene {
       previousHull,
       previousPulseCooldown,
       previousRepairedIds,
+      previousScore,
       previousStatus
     });
     if (previousStatus === "playing" && this.state.status !== "playing") {
@@ -730,6 +732,7 @@ export class GameScene extends Phaser.Scene {
     previousHull: number;
     previousPulseCooldown: number;
     previousRepairedIds: Set<number>;
+    previousScore: number;
     previousStatus: GameState["status"];
   }): void {
     if (previous.previousStatus !== "playing") return;
@@ -780,6 +783,16 @@ export class GameScene extends Phaser.Scene {
         position: this.state.player.position,
         color: 0xffd76e,
         scale: 1.16
+      });
+    }
+    const scoreDelta = this.state.score - previous.previousScore;
+    if (scoreDelta !== 0) {
+      this.dispatchFeedback({
+        kind: "score",
+        text: `${scoreDelta > 0 ? "+" : "-"}${Math.abs(scoreDelta).toLocaleString()}分`,
+        position: this.state.player.position,
+        color: scoreDelta > 0 ? 0xffd76e : 0xff5f9b,
+        scale: scoreDelta > 0 ? 1.08 : 1
       });
     }
     if (previous.previousHull - this.state.player.hull >= 5) {

@@ -50,11 +50,14 @@ assert.ok(gameScene.includes("renderContractFocus"), "Phaser scene should render
 assert.ok(gameScene.includes("renderOpeningRoutePreview"), "Phaser scene should draw the opening route preview");
 assert.ok(gameScene.includes("buildOpeningRoutePreview"), "opening route preview should derive route targets from game state");
 assert.ok(gameScene.includes("syncRepairPromptLabel"), "Phaser scene should show an in-world repair control prompt");
+assert.ok(gameScene.includes('"score"'), "Phaser scene should emit score change feedback cues");
+assert.ok(gameScene.includes("toLocaleString()}分"), "score feedback should show localized point deltas");
 assert.ok(gameScene.includes("renderHazardTrajectories"), "Phaser scene should telegraph moving hazard paths");
 assert.ok(gameScene.includes("projectHazardPosition"), "hazard telegraphs should project future shard positions");
 assert.ok(simulation.includes("按住 E / 修复键"), "runtime objective copy should support keyboard and touch repair controls");
 assert.ok(main.includes('"data-kind": "relay"'), "radar nodes should expose stable data-kind markers");
 assert.ok(main.includes('"data-kind": "player"'), "radar nodes should expose player marker for QA");
+assert.ok(main.includes("score:"), "audio bus should include a score feedback sound");
 assert.ok(styles.includes("#radar-panel"), "desktop radar should have CSS");
 assert.ok(styles.includes("#tactical-scan"), "pause tactical scan should have CSS");
 assert.ok(styles.includes(".tactical-scan-legend"), "pause tactical scan should have a legend style");
