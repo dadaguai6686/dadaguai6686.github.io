@@ -66,6 +66,7 @@ const allowedImageMimeTypes = new Map([
   ['image/webp', '.webp']
 ]);
 const safeUploadUrlPattern = /^\/uploads\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.(?:jpe?g|png|gif|webp)$/i;
+const safeAssetImageUrlPattern = /^\/assets\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.(?:jpe?g|png|gif|webp|svg)$/i;
 const publicRootFiles = new Set([
   '/',
   '/index.html',
@@ -130,13 +131,18 @@ function readTextField(res, label, value, { required = false, max = 1000, fallba
   return text || fallback;
 }
 
-function readUrlField(res, label, value, { max = 2048, allowLocalUploads = false } = {}) {
+function readUrlField(res, label, value, { max = 2048, allowLocalUploads = false, allowLocalAssets = false } = {}) {
   const raw = readTextField(res, label, value, { max });
   if (raw === undefined) return undefined;
   if (!raw) return '';
   if (allowLocalUploads && raw.startsWith('/uploads/')) {
     if (safeUploadUrlPattern.test(raw)) return raw;
     res.status(400).json({ error: `${label} must be a safe uploaded image URL.` });
+    return undefined;
+  }
+  if (allowLocalAssets && raw.startsWith('/assets/')) {
+    if (safeAssetImageUrlPattern.test(raw)) return raw;
+    res.status(400).json({ error: `${label} must be a safe local asset image URL.` });
     return undefined;
   }
   try {
@@ -443,12 +449,17 @@ app.use((req, res, next) => {
   } catch (err) {
     return res.status(400).send('Bad request');
   }
+  const suspiciousPathPart = requestPath
+    .split('/')
+    .some(part => part === '..' || (part.startsWith('.') && part.length > 1));
+  if (suspiciousPathPart) {
+    return res.status(404).send('Not found');
+  }
   if (publicRootFiles.has(requestPath) || publicPathPrefixes.some(prefix => requestPath.startsWith(prefix))) {
     return next();
   }
   if (blockedRootFiles.has(requestPath) ||
-      blockedPathPrefixes.some(prefix => requestPath.startsWith(prefix)) ||
-      requestPath.split('/').some(part => part.startsWith('.') && part.length > 1)) {
+      blockedPathPrefixes.some(prefix => requestPath.startsWith(prefix))) {
     return res.status(404).send('Not found');
   }
   if (path.extname(requestPath)) {
@@ -645,7 +656,7 @@ app.post('/api/projects', authenticateToken, writeLimiter, (req, res) => {
   const tag = readTextField(res, 'Tag', req.body.tag, { max: 80, fallback: '前端开发' });
   const pain = readTextField(res, 'Pain point', req.body.pain, { max: 1200 });
   const solution = readTextField(res, 'Solution', req.body.solution, { max: 1200 });
-  const img = readUrlField(res, 'Image URL', req.body.img, { allowLocalUploads: true });
+  const img = readUrlField(res, 'Image URL', req.body.img, { allowLocalUploads: true, allowLocalAssets: true });
   const github = readUrlField(res, 'GitHub URL', req.body.github);
   const live = readUrlField(res, 'Live URL', req.body.live);
   const rawId = readTextField(res, 'Project id', req.body.id, { max: 80 });
@@ -674,7 +685,7 @@ app.put('/api/projects/:id', authenticateToken, writeLimiter, (req, res) => {
   const tag = readTextField(res, 'Tag', req.body.tag, { max: 80, fallback: '前端开发' });
   const pain = readTextField(res, 'Pain point', req.body.pain, { max: 1200 });
   const solution = readTextField(res, 'Solution', req.body.solution, { max: 1200 });
-  const img = readUrlField(res, 'Image URL', req.body.img, { allowLocalUploads: true });
+  const img = readUrlField(res, 'Image URL', req.body.img, { allowLocalUploads: true, allowLocalAssets: true });
   const github = readUrlField(res, 'GitHub URL', req.body.github);
   const live = readUrlField(res, 'Live URL', req.body.live);
   if ([title, desc, tag, pain, solution, img, github, live].some(value => value === undefined)) return;

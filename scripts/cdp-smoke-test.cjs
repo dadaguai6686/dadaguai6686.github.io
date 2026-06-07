@@ -845,17 +845,36 @@ async function run() {
   })()`);
   await click('.modal-trigger-btn');
   await wait(250);
-  const projectState = await evaluate(`(() => ({
-    cards: document.querySelectorAll('.project-card').length,
-    disabledLiveButtons: document.querySelectorAll('.project-card .project-btn-disabled[aria-disabled="true"]').length,
-    modalOpen: document.querySelector('#project-modal')?.classList.contains('active') || false,
-    modalAriaHidden: document.querySelector('#project-modal')?.getAttribute('aria-hidden') || '',
-    modalRole: document.querySelector('#project-modal')?.getAttribute('role') || '',
-    modalFocusInside: document.querySelector('#project-modal')?.contains(document.activeElement) || false,
-    modalFocusId: document.activeElement?.id || '',
-    modalLiveDisabled: document.querySelector('#modal-live-link')?.getAttribute('aria-disabled') === 'true',
-    fakeHashLinks: [...document.querySelectorAll('.project-card a[href$="/#"], .project-card a[href="#"]')].length
-  }))()`);
+  const projectState = await evaluate(`(() => {
+    const isLocalAsset = value => {
+      try {
+        const url = new URL(value || '', location.href);
+        return url.origin === location.origin && url.pathname.startsWith('/assets/');
+      } catch {
+        return false;
+      }
+    };
+    const projectImageSources = [...document.querySelectorAll('.project-banner-img')]
+      .map(img => img.getAttribute('src') || img.currentSrc || img.src || '');
+    const modalImage = document.querySelector('#modal-project-img')?.getAttribute('src') || document.querySelector('#modal-project-img')?.currentSrc || '';
+    return {
+      cards: document.querySelectorAll('.project-card').length,
+      disabledLiveButtons: document.querySelectorAll('.project-card .project-btn-disabled[aria-disabled="true"]').length,
+      modalOpen: document.querySelector('#project-modal')?.classList.contains('active') || false,
+      modalAriaHidden: document.querySelector('#project-modal')?.getAttribute('aria-hidden') || '',
+      modalRole: document.querySelector('#project-modal')?.getAttribute('role') || '',
+      modalFocusInside: document.querySelector('#project-modal')?.contains(document.activeElement) || false,
+      modalFocusId: document.activeElement?.id || '',
+      modalLiveDisabled: document.querySelector('#modal-live-link')?.getAttribute('aria-disabled') === 'true',
+      fakeHashLinks: [...document.querySelectorAll('.project-card a[href$="/#"], .project-card a[href="#"]')].length,
+      projectImageSources,
+      localProjectImages: projectImageSources.filter(isLocalAsset).length,
+      externalProjectImages: projectImageSources.filter(src => /images\\.unsplash/i.test(src)).length,
+      arcadeProjectCard: [...document.querySelectorAll('.project-card')].some(card => /Premium Arcade Suite/.test(card.textContent || '')),
+      modalImage,
+      modalImageLocal: isLocalAsset(modalImage)
+    };
+  })()`);
   await key('keyDown', 'Escape', 'Escape');
   await key('keyUp', 'Escape', 'Escape');
   await wait(380);
@@ -1792,7 +1811,8 @@ async function run() {
       shellCached: !!shell,
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
-      swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL')
+      swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
+      swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
   })()`, 10000);
   await send('Emulation.setDeviceMetricsOverride', {
@@ -1907,9 +1927,11 @@ async function run() {
     projectViewportState.scrollY <= 80 && projectViewportState.sectionVisible,
     `project navigation should reset scroll into visible content: ${JSON.stringify(projectViewportState)}`
   );
-  assert(projectState.cards >= 1, 'project cards should render');
+  assert(projectState.cards >= 4, 'expanded project cards should render');
+  assert(projectState.localProjectImages === projectState.cards && projectState.externalProjectImages === 0 && projectState.arcadeProjectCard, `project cards should use local asset banners and include the arcade suite: ${JSON.stringify(projectState)}`);
   assert(projectState.disabledLiveButtons >= 1 && projectState.modalLiveDisabled, 'projects without demos should render disabled live actions');
   assert(projectState.modalOpen && projectState.modalAriaHidden === 'false' && projectState.modalRole === 'dialog' && projectState.modalFocusInside, `project details modal should open with focus inside: ${JSON.stringify(projectState)}`);
+  assert(projectState.modalImageLocal, `project modal should use a local asset banner: ${JSON.stringify(projectState)}`);
   assert(!projectModalClosedState.open && projectModalClosedState.ariaHidden === 'true' && projectModalClosedState.display === 'none', `project details modal should close on Escape: ${JSON.stringify(projectModalClosedState)}`);
   assert(projectState.fakeHashLinks === 0, 'project cards should not convert placeholder live links into fake hash URLs');
   assert(
@@ -2084,7 +2106,8 @@ async function run() {
   assert(tacticsForecastAfterAction.dangerCount > 0 && tacticsForecastAfterAction.coverHud && tacticsForecastAfterAction.momentumHud !== undefined && tacticsForecastAfterAction.routeHud && tacticsJammedIntent, `tactics mode should expose post-action JAM, cover, momentum, and route forecast: ${JSON.stringify(tacticsForecastAfterAction)}`);
   assert(tacticsState.nonBlank && Number(tacticsState.ap) >= 0 && tacticsState.action && tacticsState.cover && tacticsState.momentum !== undefined && tacticsState.route && tacticsState.debug?.route?.length > 0, `tactics mode should render and accept enhanced actions: ${JSON.stringify(tacticsState)}`);
   assert(Number(tacticsState.danger) > 0 && tacticsState.intel && tacticsState.debug?.hud?.route === tacticsState.route && tacticsState.debug?.hud?.cover === tacticsState.cover && tacticsState.debug?.hud?.momentum === tacticsState.momentum, `tactics HUD should stay in sync with enhanced debug state: ${JSON.stringify(tacticsState)}`);
-  assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /arcade-feedback/.test(key)), `service worker should register and cache the app shell: ${JSON.stringify(pwaState)}`);
+  assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /local-assets/.test(key)), `service worker should register and cache the app shell: ${JSON.stringify(pwaState)}`);
+  assert(pwaState.swHasLocalProjectAssets, `service worker should precache local portfolio assets: ${JSON.stringify(pwaState)}`);
   assert(pwaState.swHasNavigationPreload && pwaState.swHasOfflineShellHeader && pwaState.swHasFallbackUrl, `service worker should include robust offline navigation fallback: ${JSON.stringify(pwaState)}`);
   const diagnosticText = JSON.stringify(diagnostics);
   assert(!/willReadFrequently|Multiple readback operations/i.test(diagnosticText), `canvas diagnostics should stay quiet after smoke readback hardening: ${diagnosticText}`);

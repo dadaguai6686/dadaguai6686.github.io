@@ -104,7 +104,7 @@ function init() {
       desc: '基于微光玻璃态风格设计的个人主页看板，包含系统指标可视化、白噪音播放器等丰富微交互。',
       tag: 'UI/UX设计',
       tags: ['Vanilla JS', 'Bento Grid', 'CSS variables', 'SVG Graph'],
-      img: 'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=500',
+      img: '/assets/project-bento-dashboard.webp',
       pain: '传统个人主页流于形式，缺乏直观、高颜值的即时交互以及实用的极客感监视工具。',
       solution: '设计以 Bento Grid（便当盒栅格）为核心架构，利用 CSS 毛玻璃结合后台波形图生成器，打造出富有生命感的极客式数字仪表盘。',
       github: 'https://github.com',
@@ -116,13 +116,38 @@ function init() {
       desc: '纯客户端实现的图片压缩和 WebP 格式转换工具，具有实时预览和压缩比例比对功能。',
       tag: '前端开发',
       tags: ['HTML5 Canvas', 'WebP encoder', 'Drag & Drop API'],
-      img: 'https://images.unsplash.com/photo-1542744094-3a31f103e35f?w=500',
+      img: '/assets/project-webp-converter.webp',
       pain: '常用图片压缩网站要么限制上传大小，要么需要将敏感图片上传到第三方服务器，存在泄露隐私隐患。',
       solution: '在浏览器中使用 Canvas API 完成无损/有损缩放，并以 image/webp 进行二次编码，全程在用户本地沙箱环境内运行，隐私安全率 100%。',
       github: 'https://github.com',
       live: '#'
+    },
+    {
+      id: 'proj-3',
+      title: 'Interactive Focus Noise Synthesizer',
+      desc: '番茄工作钟与 Web Audio 合成器组合，实时生成雨声、Lofi 与深空氛围，不依赖大型音频文件。',
+      tag: '黑客技术',
+      tags: ['Web Audio API', 'Focus Timer', 'Synth UI'],
+      img: '/assets/project-focus-synth.webp',
+      pain: '普通专注工具只有单调倒计时，外链音频又容易加载失败、循环突兀，还会拖慢首屏体验。',
+      solution: '使用浏览器原生音频节点合成连续氛围声，并把计时、状态和本地偏好保存整合到同一套轻量交互里。',
+      github: 'https://github.com',
+      live: '#'
+    },
+    {
+      id: 'proj-4',
+      title: 'Atherix Premium Arcade Suite',
+      desc: '六款精品浏览器小游戏，带生涯成长、每日挑战、奖牌路线、触控/键盘/手柄输入和沉浸反馈系统。',
+      tag: '前端开发',
+      tags: ['Canvas Games', 'Gamepad Input', 'PWA Ready', 'Arcade UX'],
+      img: '/assets/project-arcade-suite.webp',
+      pain: '多数个人站小游戏只是玩具原型，缺少长期目标、移动端控制、反馈手感与可复查的稳定性保障。',
+      solution: '把跑酷、幸存者、Boss Rush、漂移、潜入、连锁和战术玩法统一到街机生涯系统里，并用 smoke 测试覆盖核心玩法路径。',
+      github: 'https://github.com',
+      live: 'https://dadaguai6686.github.io/#game'
     }
   ];
+  const seededProjectDefaultsById = new Map(defaultMockProjects.map(project => [project.id, project]));
 
   const ambientTracks = [
     { title: 'Forest Rain', artist: 'Ambient Synth', src: 'rain_synth' },
@@ -181,12 +206,17 @@ function init() {
   }
 
   const safeUploadUrlPattern = /^\/uploads\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.(?:jpe?g|png|gif|webp)$/i;
+  const safeAssetUrlPattern = /^\/assets\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.(?:jpe?g|png|gif|webp|svg)$/i;
+  const defaultProjectImage = '/assets/project-bento-dashboard.webp';
 
-  function normalizeUrl(value, { allowRelativeUpload = false } = {}) {
+  function normalizeUrl(value, { allowRelativeUpload = false, allowRelativeAsset = false } = {}) {
     const raw = String(value || '').trim();
     if (!raw || raw === '#') return '';
     if (allowRelativeUpload && raw.startsWith('/uploads/')) {
       return safeUploadUrlPattern.test(raw) ? raw : '';
+    }
+    if (allowRelativeAsset && raw.startsWith('/assets/')) {
+      return safeAssetUrlPattern.test(raw) ? raw : '';
     }
     if (raw.startsWith('/') || raw.startsWith('#')) return '';
     try {
@@ -384,6 +414,34 @@ function init() {
       localStorage.removeItem(key);
       return fallback;
     }
+  }
+
+  function normalizeProjectCatalog(projects) {
+    const source = Array.isArray(projects) ? projects.filter(Boolean) : [];
+    const normalized = source.map(project => {
+      if (!project || typeof project !== 'object') return project;
+      const seed = seededProjectDefaultsById.get(project.id);
+      if (!seed) return project;
+
+      const image = String(project.img || '');
+      const usesLegacyExternalBanner = /images\.unsplash/i.test(image);
+      if (project.id === 'proj-1' || project.id === 'proj-2') {
+        return usesLegacyExternalBanner ? { ...project, img: seed.img } : project;
+      }
+
+      if (project.id === 'proj-3') {
+        const isLegacyFocusProject = project.title === 'Interactive Pomodoro & Noise Synthesizer' || usesLegacyExternalBanner;
+        return isLegacyFocusProject ? { ...project, ...seed } : project;
+      }
+
+      return project;
+    });
+
+    if (!normalized.some(project => project?.id === 'proj-4')) {
+      normalized.push(seededProjectDefaultsById.get('proj-4'));
+    }
+
+    return normalized;
   }
 
   // ==========================================
@@ -2270,9 +2328,9 @@ function init() {
   async function loadProjects() {
     try {
       const data = await fetchAPI('/api/projects');
-      projectsData = data;
+      projectsData = normalizeProjectCatalog(data);
     } catch (e) {
-      projectsData = getLocalArray('fallback_projects', defaultMockProjects);
+      projectsData = normalizeProjectCatalog(getLocalArray('fallback_projects', defaultMockProjects));
     }
     
     localStorage.setItem('fallback_projects', JSON.stringify(projectsData));
@@ -2298,7 +2356,7 @@ function init() {
       const title = escapeHTML(proj.title || '未命名项目');
       const tag = escapeHTML(proj.tag || '未分类');
       const desc = escapeHTML(proj.desc || '暂无项目简介。');
-      const imgUrl = escapeHTML(normalizeUrl(proj.img, { allowRelativeUpload: true }) || 'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=500');
+      const imgUrl = escapeHTML(normalizeUrl(proj.img, { allowRelativeUpload: true, allowRelativeAsset: true }) || defaultProjectImage);
       const liveUrl = normalizeUrl(proj.live);
       const liveAction = liveUrl
         ? `<a href="${escapeHTML(liveUrl)}" class="project-btn project-btn-primary" target="_blank" rel="noopener noreferrer"><i data-lucide="external-link"></i> Live Demo</a>`
@@ -2365,7 +2423,7 @@ function init() {
 
     document.getElementById('modal-project-tag').textContent = proj.tag || '未分类';
     document.getElementById('modal-project-title').textContent = proj.title || '未命名项目';
-    document.getElementById('modal-project-img').src = normalizeUrl(proj.img, { allowRelativeUpload: true }) || 'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=500';
+    document.getElementById('modal-project-img').src = normalizeUrl(proj.img, { allowRelativeUpload: true, allowRelativeAsset: true }) || defaultProjectImage;
     document.getElementById('modal-project-desc').textContent = proj.desc || '暂无项目简介。';
     document.getElementById('modal-project-pain').textContent = proj.pain || '暂无详细描述。';
     document.getElementById('modal-project-solution').textContent = proj.solution || '暂无详细描述。';

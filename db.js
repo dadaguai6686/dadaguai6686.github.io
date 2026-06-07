@@ -144,7 +144,7 @@ db.serialize(() => {
           desc: '基于微光玻璃态风格设计的个人主页看板，包含系统指标可视化、白噪音播放器等丰富微交互。',
           tag: 'UI/UX设计',
           tags: JSON.stringify(['Vanilla JS', 'Bento Grid', 'CSS variables', 'SVG Graph']),
-          img: 'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=500',
+          img: '/assets/project-bento-dashboard.webp',
           pain: '传统个人主页流于形式，缺乏直观、高颜值的即时交互以及实用的极客感监视工具。',
           solution: '设计以 Bento Grid（便当盒栅格）为核心架构，利用 CSS 毛玻璃结合后台波形图生成器，打造出富有生命感的极客式数字仪表盘。',
           github: 'https://github.com',
@@ -156,7 +156,7 @@ db.serialize(() => {
           desc: '纯客户端实现的图片压缩和 WebP 格式转换工具，具有实时预览和压缩比例比对功能。',
           tag: '前端开发',
           tags: JSON.stringify(['HTML5 Canvas', 'WebP encoder', 'Drag & Drop API']),
-          img: 'https://images.unsplash.com/photo-1542744094-3a31f103e35f?w=500',
+          img: '/assets/project-webp-converter.webp',
           pain: '常用图片压缩网站要么限制上传大小，要么需要将敏感图片上传到第三方服务器，存在泄露隐私隐患。',
           solution: '在浏览器中使用 Canvas API 完成无损/有损缩放，并以 image/webp 进行二次编码，全程在用户本地沙箱环境内运行，隐私安全率 100%。',
           github: 'https://github.com',
@@ -164,15 +164,27 @@ db.serialize(() => {
         },
         {
           id: 'proj-3',
-          title: 'Interactive Pomodoro & Noise Synthesizer',
-          desc: '番茄工作钟，融合基于 Web Audio API 动态合成的自然界白噪音（雨声、森林）。',
+          title: 'Interactive Focus Noise Synthesizer',
+          desc: '番茄工作钟与 Web Audio 合成器组合，实时生成雨声、Lofi 与深空氛围，不依赖大型音频文件。',
           tag: '黑客技术',
-          tags: JSON.stringify(['Web Audio API', 'Canvas animation', 'LocalStorage state']),
-          img: 'https://images.unsplash.com/photo-1506784983877-45594efa4cbe?w=500',
-          pain: '普通的番茄钟只有单调的倒计时，播放音频不仅消耗流量，而且音效存在明显的循环停顿感。',
-          solution: '利用浏览器原生的音频合成器实时计算出无缝连绵的粉色噪音模拟窗外雨声，并结合 SVG 环形进度条显示当前专注百分比。',
+          tags: JSON.stringify(['Web Audio API', 'Focus Timer', 'Synth UI']),
+          img: '/assets/project-focus-synth.webp',
+          pain: '普通专注工具只有单调倒计时，外链音频又容易加载失败、循环突兀，还会拖慢首屏体验。',
+          solution: '使用浏览器原生音频节点合成连续氛围声，并把计时、状态和本地偏好保存整合到同一套轻量交互里。',
           github: 'https://github.com',
           live: '#'
+        },
+        {
+          id: 'proj-4',
+          title: 'Atherix Premium Arcade Suite',
+          desc: '六款精品浏览器小游戏，带生涯成长、每日挑战、奖牌路线、触控/键盘/手柄输入和沉浸反馈系统。',
+          tag: '前端开发',
+          tags: JSON.stringify(['Canvas Games', 'Gamepad Input', 'PWA Ready', 'Arcade UX']),
+          img: '/assets/project-arcade-suite.webp',
+          pain: '多数个人站小游戏只是玩具原型，缺少长期目标、移动端控制、反馈手感与可复查的稳定性保障。',
+          solution: '把跑酷、幸存者、Boss Rush、漂移、潜入、连锁和战术玩法统一到街机生涯系统里，并用 smoke 测试覆盖核心玩法路径。',
+          github: 'https://github.com',
+          live: 'https://dadaguai6686.github.io/#game'
         }
       ];
 
@@ -182,6 +194,48 @@ db.serialize(() => {
       });
       stmt.finalize();
       console.log('Successfully seeded initial projects.');
+    } else {
+      db.run(
+        "UPDATE projects SET img = ? WHERE id = 'proj-1' AND img LIKE 'https://images.unsplash.com/%'",
+        ['/assets/project-bento-dashboard.webp']
+      );
+      db.run(
+        "UPDATE projects SET img = ? WHERE id = 'proj-2' AND img LIKE 'https://images.unsplash.com/%'",
+        ['/assets/project-webp-converter.webp']
+      );
+      db.run(
+        `UPDATE projects
+         SET title = ?, desc = ?, tag = ?, tags = ?, img = ?, pain = ?, solution = ?, github = ?, live = ?
+         WHERE id = 'proj-3'
+           AND (title = 'Interactive Pomodoro & Noise Synthesizer' OR img LIKE 'https://images.unsplash.com/%')`,
+        [
+          'Interactive Focus Noise Synthesizer',
+          '番茄工作钟与 Web Audio 合成器组合，实时生成雨声、Lofi 与深空氛围，不依赖大型音频文件。',
+          '黑客技术',
+          JSON.stringify(['Web Audio API', 'Focus Timer', 'Synth UI']),
+          '/assets/project-focus-synth.webp',
+          '普通专注工具只有单调倒计时，外链音频又容易加载失败、循环突兀，还会拖慢首屏体验。',
+          '使用浏览器原生音频节点合成连续氛围声，并把计时、状态和本地偏好保存整合到同一套轻量交互里。',
+          'https://github.com',
+          '#'
+        ]
+      );
+      db.run(
+        `INSERT OR IGNORE INTO projects (id, title, desc, tag, tags, img, pain, solution, github, live)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          'proj-4',
+          'Atherix Premium Arcade Suite',
+          '六款精品浏览器小游戏，带生涯成长、每日挑战、奖牌路线、触控/键盘/手柄输入和沉浸反馈系统。',
+          '前端开发',
+          JSON.stringify(['Canvas Games', 'Gamepad Input', 'PWA Ready', 'Arcade UX']),
+          '/assets/project-arcade-suite.webp',
+          '多数个人站小游戏只是玩具原型，缺少长期目标、移动端控制、反馈手感与可复查的稳定性保障。',
+          '把跑酷、幸存者、Boss Rush、漂移、潜入、连锁和战术玩法统一到街机生涯系统里，并用 smoke 测试覆盖核心玩法路径。',
+          'https://github.com',
+          'https://dadaguai6686.github.io/#game'
+        ]
+      );
     }
   });
 

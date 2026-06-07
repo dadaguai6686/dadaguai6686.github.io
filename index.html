@@ -32,12 +32,11 @@
   <link rel="alternate" type="application/rss+xml" title="Atherix Digital Space Feed" href="https://dadaguai6686.github.io/feed.xml">
   <link rel="icon" href="/assets/atherix-icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/assets/atherix-icon-192.png">
-  <link rel="preconnect" href="https://images.unsplash.com">
-  <link rel="preload" href="/style.css?v=20260608-mobile-controls-v7-arcade-feedback" as="style">
+  <link rel="preload" href="/style.css?v=20260608-local-assets-v1" as="style">
   <link rel="preload" href="/lucide.min.js" as="script">
-  <link rel="preload" href="/app.js?v=20260608-mobile-controls-v7-arcade-feedback" as="script">
+  <link rel="preload" href="/app.js?v=20260608-local-assets-v1" as="script">
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="/style.css?v=20260608-mobile-controls-v7-arcade-feedback">
+  <link rel="stylesheet" href="/style.css?v=20260608-local-assets-v1">
   <link rel="manifest" href="/manifest.webmanifest">
   <!-- Lucide Icons Local -->
   <script src="/lucide.min.js"></script>
@@ -116,7 +115,7 @@
         <div class="glass-card col-span-2 row-span-2 profile-card">
           <div class="profile-header">
             <div class="avatar-wrapper">
-              <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150" alt="Avatar" class="avatar-img" id="profile-avatar" loading="eager" decoding="async" fetchpriority="high">
+              <img src="/assets/atherix-profile-avatar.png" alt="Avatar" class="avatar-img" id="profile-avatar" loading="eager" decoding="async" fetchpriority="high">
               <div class="status-dot"></div>
             </div>
             <div class="profile-info">
@@ -1347,7 +1346,7 @@
           </div>
           <div class="form-group">
             <label for="proj-img-input">封面图网址 (选填)</label>
-            <input type="text" id="proj-img-input" class="form-input" placeholder="可以使用 https://images.unsplash.com/... 或本地路径">
+            <input type="text" id="proj-img-input" class="form-input" placeholder="可使用 /assets/...、/uploads/... 或 https://...">
           </div>
         </div>
         <div class="form-group">
@@ -1401,6 +1400,6 @@
   <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <!-- Main JavaScript File -->
-  <script src="/app.js?v=20260608-mobile-controls-v7-arcade-feedback"></script>
+  <script src="/app.js?v=20260608-local-assets-v1"></script>
 </body>
 </html>

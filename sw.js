@@ -1,10 +1,10 @@
-const CACHE_VERSION = 'atherix-static-v28-arcade-feedback';
+const CACHE_VERSION = 'atherix-static-v29-local-assets';
 const NAVIGATION_FALLBACK_URL = '/index.html';
 const STATIC_ASSETS = [
   '/',
   NAVIGATION_FALLBACK_URL,
-  '/style.css?v=20260608-mobile-controls-v7-arcade-feedback',
-  '/app.js?v=20260608-mobile-controls-v7-arcade-feedback',
+  '/style.css?v=20260608-local-assets-v1',
+  '/app.js?v=20260608-local-assets-v1',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',
@@ -12,7 +12,12 @@ const STATIC_ASSETS = [
   '/assets/atherix-icon.svg',
   '/assets/atherix-icon-192.png',
   '/assets/atherix-icon-512.png',
-  '/assets/atherix-og-card.png'
+  '/assets/atherix-og-card.png',
+  '/assets/atherix-profile-avatar.png',
+  '/assets/project-bento-dashboard.webp',
+  '/assets/project-webp-converter.webp',
+  '/assets/project-focus-synth.webp',
+  '/assets/project-arcade-suite.webp'
 ];
 
 self.addEventListener('install', (event) => {
