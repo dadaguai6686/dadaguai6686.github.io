@@ -4722,6 +4722,7 @@ function init() {
               <span>招式 <strong id="premium-boss-pattern">扫描中</strong></span>
               <span>弱点 <strong id="premium-boss-weak">LOCKED</strong></span>
               <span>破招 <strong id="premium-boss-break">0</strong></span>
+              <span>反击 <strong id="premium-boss-counter">0x</strong></span>
               <span>专注 <strong id="premium-boss-focus">0%</strong></span>
               <span>闪避 <strong id="premium-boss-dash">READY</strong></span>
             </div>
@@ -4917,6 +4918,7 @@ function init() {
       { id: 'boss_phase_2', label: '棱镜破相', desc: 'Boss 进入第二阶段' },
       { id: 'boss_clear', label: '碎光终结', desc: '击破棱镜核心' },
       { id: 'boss_focus_surge', label: '擦弹专注', desc: 'Boss 战触发专注爆发' },
+      { id: 'boss_counter_chain', label: '连锁破招', desc: 'Boss 战连续破招达到 x2' },
       { id: 'drift_clear', label: '霓虹完赛', desc: 'Neon Drift 穿越全部检查点' },
       { id: 'drift_clean', label: '零损漂移', desc: '高护盾完成 Neon Drift' },
       { id: 'drift_combo', label: '量子倍率', desc: 'Neon Drift 倍率达到 x3.0' },
@@ -7595,6 +7597,8 @@ function init() {
       patternFlash: 0,
       weakpoint: { active: false, hits: 0, required: 3, x: 280, y: 92, r: 20, pattern: '', timer: 0 },
       breakCount: 0,
+      breakChain: 0,
+      counterWindow: 0,
       breakFlash: 0,
       focusFlash: 0,
       focusSurges: 0,
@@ -7633,6 +7637,11 @@ function init() {
         breakEl.textContent = bossMode.breakCount;
         breakEl.style.color = bossMode.breakCount > 0 ? '#A7F3D0' : '#fff';
       }
+      const counterEl = document.getElementById('premium-boss-counter');
+      if (counterEl) {
+        counterEl.textContent = bossMode.counterWindow > 0 ? `${bossMode.breakChain}x` : '0x';
+        counterEl.style.color = bossMode.counterWindow > 0 ? '#FDE68A' : '#fff';
+      }
       const focusEl = document.getElementById('premium-boss-focus');
       if (focusEl) {
         const surge = Number(bossMode.player.focusSurge || 0);
@@ -7666,6 +7675,8 @@ function init() {
       bossMode.patternFlash = 0;
       bossMode.weakpoint = { active: false, hits: 0, required: 3, x: 280, y: 92, r: 20, pattern: '', timer: 0 };
       bossMode.breakCount = 0;
+      bossMode.breakChain = 0;
+      bossMode.counterWindow = 0;
       bossMode.breakFlash = 0;
       bossMode.focusFlash = 0;
       bossMode.focusSurges = 0;
@@ -7684,7 +7695,7 @@ function init() {
       cancelAnimationFrame(bossMode.raf);
       localStorage.setItem(bossMode.bestKey, String(Math.max(Number(localStorage.getItem(bossMode.bestKey) || 0), Math.floor(bossMode.score))));
       if (text === 'PRISM BROKEN') unlockAchievement('boss_clear');
-      recordPremiumResult('boss', bossMode.score, { phase: bossMode.boss.phase, graze: bossMode.player.graze, bestGrazeStreak: bossMode.player.bestGrazeStreak, focusSurges: bossMode.focusSurges });
+      recordPremiumResult('boss', bossMode.score, { phase: bossMode.boss.phase, graze: bossMode.player.graze, bestGrazeStreak: bossMode.player.bestGrazeStreak, focusSurges: bossMode.focusSurges, breakChain: bossMode.breakChain });
       setBossUi();
       updateBossPauseButton();
       drawBoss();
@@ -7797,6 +7808,8 @@ function init() {
         y: Math.round(Number(weak.y || 0)),
         timer: Math.ceil(Number(weak.timer || 0)),
         breakCount: bossMode.breakCount,
+        breakChain: bossMode.breakChain,
+        counterWindow: Math.ceil(bossMode.counterWindow),
         lastBreak: bossMode.lastBreak,
         breakFlash: Math.ceil(bossMode.breakFlash),
         focus: Math.round(Number(bossMode.player.focus || 0)),
@@ -7810,6 +7823,7 @@ function init() {
         score: Math.floor(bossMode.score),
         hudWeak: document.getElementById('premium-boss-weak')?.textContent || '',
         hudBreak: document.getElementById('premium-boss-break')?.textContent || '',
+        hudCounter: document.getElementById('premium-boss-counter')?.textContent || '',
         hudFocus: document.getElementById('premium-boss-focus')?.textContent || ''
       };
     }
@@ -7819,13 +7833,17 @@ function init() {
       const pattern = bossMode.weakpoint.pattern || bossMode.queuedPattern || bossMode.currentPattern || '';
       const phase = bossPhaseFromHp();
       const clearedBullets = bossMode.bullets.length;
+      const chain = bossMode.counterWindow > 0 ? Math.min(9, Number(bossMode.breakChain || 0) + 1) : 1;
+      const chainBonus = (chain - 1) * 140;
       bossMode.breakCount++;
-      bossMode.lastBreak = bossPatternDefs[pattern]?.label || pattern || '破招';
+      bossMode.breakChain = chain;
+      bossMode.counterWindow = 5200;
+      bossMode.lastBreak = `${bossPatternDefs[pattern]?.label || pattern || '破招'} x${chain}`;
       bossMode.breakFlash = 920;
-      bossMode.score += 420 + phase * 120 + clearedBullets * 8;
-      bossMode.boss.hp = Math.max(1, bossMode.boss.hp - (42 + phase * 12));
+      bossMode.score += 420 + phase * 120 + clearedBullets * 8 + chainBonus;
+      bossMode.boss.hp = Math.max(1, bossMode.boss.hp - (42 + phase * 12 + chain * 10));
       bossMode.player.invuln = Math.max(bossMode.player.invuln, 520);
-      bossMode.player.focus = Math.min(100, Number(bossMode.player.focus || 0) + 24 + phase * 4);
+      bossMode.player.focus = Math.min(100, Number(bossMode.player.focus || 0) + 24 + phase * 4 + chain * 3);
       bossMode.bullets = [];
       bossMode.queuedPattern = '';
       bossMode.currentPattern = '';
@@ -7834,6 +7852,7 @@ function init() {
       bossMode.patternTimer = -420;
       bossSpark(bossMode.boss.x, bossMode.boss.y, '#34D399', 34);
       closeBossWeakpoint();
+      if (bossMode.breakChain >= 2) unlockAchievement('boss_counter_chain');
       if (bossMode.player.focus >= 100) activateBossFocusSurge();
       setBossUi();
       return true;
@@ -7920,6 +7939,8 @@ function init() {
       bossMode.patternTimer += dt;
       bossMode.patternFlash = Math.max(0, bossMode.patternFlash - dt);
       bossMode.breakFlash = Math.max(0, bossMode.breakFlash - dt);
+      bossMode.counterWindow = Math.max(0, bossMode.counterWindow - dt);
+      if (bossMode.counterWindow <= 0) bossMode.breakChain = 0;
       bossMode.focusFlash = Math.max(0, bossMode.focusFlash - dt);
       p.invuln = Math.max(0, p.invuln - dt);
       p.dash = Math.max(0, p.dash - dt);
@@ -7969,9 +7990,10 @@ function init() {
           return false;
         }
         if (Math.hypot(s.x - b.x, s.y - b.y) < s.r + b.r) {
-          b.hp -= s.damage;
-          bossMode.score += 6;
-          bossSpark(s.x, s.y, '#BAE6FD', 2);
+          const counterMult = bossMode.counterWindow > 0 ? 1 + Math.min(0.75, Number(bossMode.breakChain || 0) * 0.12) : 1;
+          b.hp -= s.damage * counterMult;
+          bossMode.score += 6 + (bossMode.counterWindow > 0 ? Number(bossMode.breakChain || 0) * 2 : 0);
+          bossSpark(s.x, s.y, bossMode.counterWindow > 0 ? '#FDE68A' : '#BAE6FD', bossMode.counterWindow > 0 ? 4 : 2);
           return false;
         }
         return true;
@@ -8138,6 +8160,24 @@ function init() {
       ctx.closePath();
       ctx.stroke();
       ctx.restore();
+      if (bossMode.counterWindow > 0) {
+        ctx.save();
+        const alpha = clamp(bossMode.counterWindow / 5200, 0, 1);
+        ctx.globalAlpha = 0.18 + alpha * 0.24;
+        ctx.strokeStyle = '#FDE68A';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([8, 6]);
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r + 18 + Math.sin(bossMode.t / 90) * 4, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#FDE68A';
+        ctx.font = '900 11px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(`COUNTER x${bossMode.breakChain}`, b.x, b.y + b.r + 30);
+        ctx.restore();
+      }
       drawBossTelegraph(ctx, c);
       drawBossWeakpoint(ctx);
       bossMode.shots.forEach(s => {
@@ -8189,7 +8229,7 @@ function init() {
       ctx.fillRect(18, 16, (c.width - 36) * Math.max(0, b.hp / b.maxHp), 8);
       ctx.fillStyle = '#fff';
       ctx.font = '700 12px JetBrains Mono, monospace';
-      ctx.fillText(`PHASE ${b.phase}  GRAZE ${p.graze}  FOCUS ${p.focusSurge > 0 ? 'SURGE' : Math.round(Number(p.focus || 0)) + '%'}  BREAK ${bossMode.breakCount}`, 18, 42);
+      ctx.fillText(`PHASE ${b.phase}  GRAZE ${p.graze}  FOCUS ${p.focusSurge > 0 ? 'SURGE' : Math.round(Number(p.focus || 0)) + '%'}  BREAK ${bossMode.breakCount}  COUNTER ${bossMode.counterWindow > 0 ? `${bossMode.breakChain}x` : '0x'}`, 18, 42);
     }
 
     document.getElementById('premium-boss-start').addEventListener('click', startBoss);

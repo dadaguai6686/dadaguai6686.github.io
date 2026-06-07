@@ -1,9 +1,9 @@
-const CACHE_VERSION = 'atherix-static-v18-arcade-rival';
+const CACHE_VERSION = 'atherix-static-v19-boss-counter-chain';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/style.css?v=20260607-arcade-rival-v1',
-  '/app.js?v=20260607-arcade-rival-v1',
+  '/style.css?v=20260607-boss-counter-chain-v1',
+  '/app.js?v=20260607-boss-counter-chain-v1',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',

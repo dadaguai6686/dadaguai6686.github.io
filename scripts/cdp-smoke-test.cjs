@@ -1101,6 +1101,7 @@ async function run() {
       weak: document.querySelector('#premium-boss-weak')?.textContent,
       focus: document.querySelector('#premium-boss-focus')?.textContent,
       breaks: Number(document.querySelector('#premium-boss-break')?.textContent || 0),
+      counter: document.querySelector('#premium-boss-counter')?.textContent || '',
       lives: Number(document.querySelector('#premium-boss-lives')?.textContent || 0)
     };
   })()`);
@@ -1120,12 +1121,16 @@ async function run() {
   }))()`);
   const bossCounterState = await evaluate(`(() => {
     const result = window.__atherixDebug?.premium?.forceBossCounter?.('snipe') || {};
+    const chainResult = window.__atherixDebug?.premium?.forceBossCounter?.('ring') || {};
     return {
       ...result,
+      chain: chainResult,
       patternText: document.querySelector('#premium-boss-pattern')?.textContent || '',
       weakText: document.querySelector('#premium-boss-weak')?.textContent || '',
       breakText: document.querySelector('#premium-boss-break')?.textContent || '',
-      scoreText: document.querySelector('#premium-boss-score')?.textContent || ''
+      counterText: document.querySelector('#premium-boss-counter')?.textContent || '',
+      scoreText: document.querySelector('#premium-boss-score')?.textContent || '',
+      achievedCounterChain: (window.__atherixDebug?.premium?.achievements?.() || []).some(item => item.id === 'boss_counter_chain' && item.unlocked)
     };
   })()`);
   const bossFocusSurgeState = await evaluate(`(() => {
@@ -1545,7 +1550,7 @@ async function run() {
   assert(survivorOverdriveState.before?.overdrive >= 100 && survivorOverdriveState.before?.hud?.overdrive === 'READY' && survivorOverdriveState.after?.overdrive === 0 && survivorOverdriveState.after?.overdriveFlash > 0 && survivorOverdriveState.after?.score > survivorOverdriveState.before?.score && survivorOverdriveState.after?.slowed >= 1 && survivorOverdriveState.after?.enemies < survivorOverdriveState.before?.enemies && survivorOverdriveState.after?.chain >= survivorOverdriveState.before?.chain, `survivor overdrive should consume a full meter, slow enemies, kill targets, and score: ${JSON.stringify(survivorOverdriveState)}`);
   assert(survivorAnomalyState.started && survivorAnomalyState.nonBlank && survivorAnomalyState.state?.anomaly?.type === 'meteor' && survivorAnomalyState.state?.hazards?.length >= 3 && survivorAnomalyState.state?.hud?.event === 'METEOR' && survivorAnomalyState.eventText === 'METEOR' && survivorAnomalyState.achieved, `survivor anomaly events should create a readable deep-space crisis with hazards and achievement credit: ${JSON.stringify(survivorAnomalyState)}`);
   assert(survivorBountyState.nonBlank && survivorBountyState.after?.bounty?.completed > survivorBountyState.before?.bounty?.completed && survivorBountyState.after?.score > survivorBountyState.before?.score && survivorBountyState.after?.bounty?.last === 'ELITE CLEAR' && survivorBountyState.after?.bounty?.flash > 0 && survivorBountyState.after?.hud?.bounty === survivorBountyState.bountyText && survivorBountyState.achieved, `survivor elite bounty should complete deterministically, reward score, sync HUD, and unlock achievement: ${JSON.stringify(survivorBountyState)}`);
-  assert(bossState.nonBlank && bossState.dash && bossState.weak && bossState.breaks === 0 && bossState.lives >= 4, `boss canvas should render active state and apply equipped loadout: ${JSON.stringify(bossState)}`);
+  assert(bossState.nonBlank && bossState.dash && bossState.weak && bossState.breaks === 0 && bossState.counter === '0x' && bossState.lives >= 4, `boss canvas should render active state and apply equipped loadout: ${JSON.stringify(bossState)}`);
   assert(bossTelegraphState.running && !bossTelegraphState.paused && bossTelegraphState.queued === 'snipe' && bossTelegraphState.current === 'snipe' && bossTelegraphState.bullets === 0 && bossTelegraphState.weak?.active && bossTelegraphState.weak.remaining >= 1 && /^\d+\/\d+$/.test(bossTelegraphState.weakHud) && /预警/.test(bossTelegraphState.patternText) && /锁定狙击/.test(bossTelegraphState.patternText), `boss mode should surface a readable weakpoint telegraph before spawning bullets: ${JSON.stringify(bossTelegraphState)}`);
   assert(bossTelegraphHoldState.queued === 'snipe' && bossTelegraphHoldState.bullets === 0 && bossTelegraphHoldState.telegraphMs > 0 && bossTelegraphHoldState.weak?.active && bossTelegraphHoldState.weak.timer > 0 && /预警/.test(bossTelegraphHoldState.patternText), `boss telegraph should hold a reaction window before release: ${JSON.stringify(bossTelegraphHoldState)}`);
   assert(
@@ -1554,10 +1559,20 @@ async function run() {
     bossCounterState.after?.breakCount >= bossCounterState.before?.breakCount + 1 &&
     bossCounterState.after?.bullets === 0 &&
     !bossCounterState.after?.queued &&
+    bossCounterState.after?.weak?.breakChain >= 1 &&
+    bossCounterState.after?.weak?.counterWindow > 0 &&
+    /^\d+x$/.test(bossCounterState.counterText) &&
+    bossCounterState.after?.weak?.hudCounter === '1x' &&
+    bossCounterState.chain?.after?.weak?.breakChain >= 2 &&
+    bossCounterState.chain?.after?.weak?.counterWindow > 0 &&
+    bossCounterState.chain?.after?.weak?.hudCounter === '2x' &&
+    bossCounterState.counterText === '2x' &&
+    bossCounterState.achievedCounterChain &&
     Number(bossCounterState.after?.weak?.score || 0) > Number(bossCounterState.before?.weak?.score || 0) &&
+    Number(bossCounterState.chain?.after?.weak?.score || 0) > Number(bossCounterState.after?.weak?.score || 0) &&
     (/BROKEN|LOCKED/.test(bossCounterState.weakText)) &&
-    Number(bossCounterState.breakText || 0) >= 1,
-    `boss weakpoint counter should break the queued attack, clear bullets, score, and update HUD: ${JSON.stringify(bossCounterState)}`
+    Number(bossCounterState.breakText || 0) >= 2,
+    `boss weakpoint counter should break queued attacks, chain counters, score, and update HUD: ${JSON.stringify(bossCounterState)}`
   );
   assert(
     bossFocusSurgeState.after?.focusSurge > 0 &&
