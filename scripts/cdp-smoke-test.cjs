@@ -783,6 +783,11 @@ async function run() {
     directorMedals: document.querySelector('#premium-director-medals')?.textContent || '',
     directorAchievements: document.querySelector('#premium-director-achievements')?.textContent || '',
     directorCompletion: document.querySelector('#premium-director-completion')?.textContent || '',
+    masteryPanel: !!document.querySelector('#premium-mastery-panel'),
+    masteryCards: document.querySelectorAll('.arcade-mastery-card').length,
+    debugMastery: window.__atherixDebug?.premium?.mastery?.().length || 0,
+    masteryTitle: document.querySelector('#premium-mastery-title')?.textContent || '',
+    masterySummary: document.querySelector('#premium-mastery-summary')?.textContent || '',
     contractBoard: !!document.querySelector('#premium-contract-board'),
     contractCards: document.querySelectorAll('.arcade-contract-card').length,
     debugContracts: window.__atherixDebug?.premium?.contracts?.().length || 0,
@@ -826,6 +831,8 @@ async function run() {
       runLastScore: document.querySelector('#premium-run-last-score')?.textContent || '',
       runAverage: document.querySelector('#premium-run-average')?.textContent || '',
       runBestMode: document.querySelector('#premium-run-best-mode')?.textContent || '',
+      masteryAfter: window.__atherixDebug?.premium?.mastery?.().find(item => item.game === 'survivor') || {},
+      masteryCardText: document.querySelector('[data-mastery-game="survivor"]')?.textContent || '',
       toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || '',
       total: document.querySelector('#premium-career-total')?.textContent || ''
     };
@@ -1392,11 +1399,18 @@ async function run() {
   assert(arcadeInitial.premiumTabs >= 6 && arcadeInitial.driftPanel && arcadeInitial.tacticsPanel, 'premium arcade should include drift and tactics modes');
   assert(arcadeInitial.runLogPanel && arcadeInitial.runLogEmpty === 'true' && arcadeInitial.runLogCards === 0 && arcadeInitial.debugRuns === 0, `premium arcade run telemetry should start empty: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.directorPanel && arcadeInitial.directorTarget && arcadeInitial.directorTitle.length > 5 && arcadeInitial.directorReason.length > 10 && /^\d+%$/.test(arcadeInitial.directorCompletion) && arcadeInitial.tabBadges >= 6, `premium arcade director should render actionable progression guidance: ${JSON.stringify(arcadeInitial)}`);
+  assert(arcadeInitial.masteryPanel && arcadeInitial.masteryCards === 7 && arcadeInitial.debugMastery === 7 && /奖牌路线/.test(arcadeInitial.masteryTitle) && arcadeInitial.masterySummary.length > 10, `premium arcade mastery map should render all mode goals: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.contractBoard && arcadeInitial.contractCards === 3 && arcadeInitial.debugContracts === 3 && arcadeInitial.firstContractProgress === 0, `premium arcade contracts should render as daily progression goals: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.difficultyPanel && arcadeInitial.difficultyCards === 4 && arcadeInitial.activeDifficulty === 'standard', `premium arcade difficulty matrix should render with standard default: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.loadoutPanel && arcadeInitial.loadoutCards === 4 && arcadeInitial.activeLoadout === 'pulse' && arcadeInitial.loadoutUnlocked >= 1, `premium arcade loadout chips should render with a default build: ${JSON.stringify(arcadeInitial)}`);
   assert(contractProgressState.afterContracts === 3 && contractProgressState.cards === 3 && contractProgressState.afterFirst > contractProgressState.beforeFirst && /总声望/.test(contractProgressState.total), `premium arcade contracts should advance after a scored run: ${JSON.stringify(contractProgressState)}`);
   assert(contractProgressState.runCards >= 1 && contractProgressState.debugRuns === 1 && contractProgressState.latestRunGame === 'survivor' && contractProgressState.latestRunScore >= 900 && contractProgressState.latestRunDifficulty === 'standard', `premium arcade should record a replayable run log after scoring: ${JSON.stringify(contractProgressState)}`);
+  assert(
+    contractProgressState.masteryAfter.score >= 900 &&
+    contractProgressState.masteryAfter.progress > 0 &&
+    contractProgressState.masteryCardText.includes(String(contractProgressState.latestRunScore)),
+    `premium arcade mastery map should update after scored runs: ${JSON.stringify(contractProgressState)}`
+  );
   assert(/幸存者/.test(contractProgressState.runTitle) && /\d+/.test(contractProgressState.runLastScore) && /\d+/.test(contractProgressState.runAverage) && contractProgressState.runBestMode, `premium arcade run telemetry should render last score, average, and best mode: ${JSON.stringify(contractProgressState)}`);
   assert(loadoutProgressState.active === 'aegis' && loadoutProgressState.equippedCards === 1 && loadoutProgressState.unlocked.includes('aegis') && /棱镜护盾/.test(loadoutProgressState.activeLabel), `premium arcade loadouts should unlock and equip after career progress: ${JSON.stringify(loadoutProgressState)}`);
   assert(difficultyProgressState.active === 'elite' && difficultyProgressState.selectedCards === 1 && /精英/.test(difficultyProgressState.activeLabel) && difficultyProgressState.pressure > 1 && difficultyProgressState.scoreBoost > 0.15, `premium arcade difficulty should switch to elite with visible pressure and score boost: ${JSON.stringify(difficultyProgressState)}`);

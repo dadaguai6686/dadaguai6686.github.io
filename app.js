@@ -4491,6 +4491,14 @@ function init() {
           <span>进入推荐挑战</span>
         </button>
       </div>
+      <div class="arcade-mastery-panel" id="premium-mastery-panel" aria-label="街机大师地图">
+        <div class="arcade-mastery-heading">
+          <span><i data-lucide="radar"></i> MASTERY MAP</span>
+          <strong id="premium-mastery-title">大师地图初始化中...</strong>
+          <small id="premium-mastery-summary">跟踪每个模式的最佳分、奖牌、下一突破目标和进度。</small>
+        </div>
+        <div class="arcade-mastery-grid" id="premium-mastery-grid"></div>
+      </div>
       <div class="arcade-contract-board" id="premium-contract-board" aria-label="街机契约任务">
         <div class="arcade-contract-heading">
           <span><i data-lucide="clipboard-check"></i> CREW CONTRACTS</span>
@@ -4722,6 +4730,7 @@ function init() {
       runner: '主线远征 Cyber Astro-Runner'
     };
     const premiumTabLabels = {
+      runner: '主线远征',
       survivor: '星核幸存者',
       boss: '棱镜 Boss',
       drift: '霓虹漂移',
@@ -5069,6 +5078,82 @@ function init() {
         const score = Number(career.best?.[game] || 0);
         return medalClass(career.medals?.[game] || medalFor(game, score)) !== 'none';
       }).length;
+    }
+
+    function masteryStatusForGame(game) {
+      const score = Number(career.best?.[game] || 0);
+      const medal = medalClass(career.medals?.[game] || medalFor(game, score));
+      const rules = [...(medalRules[game] || [])].sort((a, b) => a.threshold - b.threshold);
+      const next = nextMedalTarget(game, score);
+      const gold = rules.find(rule => rule.name === 'gold') || rules[rules.length - 1] || { name: 'gold', threshold: 1 };
+      const target = next || gold;
+      const progress = next ? Math.min(100, Math.round(score / Math.max(1, target.threshold) * 100)) : 100;
+      const delta = next ? Math.max(0, target.threshold - score) : 0;
+      return {
+        game,
+        label: premiumTabLabels[game] || titles[game] || game,
+        score,
+        medal,
+        targetName: target.name,
+        targetLabel: next ? `${medalLabels[target.name] || target.name}牌 ${target.threshold}` : '金牌完成',
+        delta,
+        progress
+      };
+    }
+
+    function masteryFocusTarget() {
+      return careerGameOrder
+        .map(masteryStatusForGame)
+        .filter(item => item.delta > 0)
+        .sort((a, b) => a.delta - b.delta || b.score - a.score)[0] || null;
+    }
+
+    function launchMasteryTarget(game) {
+      if (!game) return;
+      if (game === 'runner') {
+        document.querySelector('.arcade-cabinet-bezel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        showToast('已定位到主线远征，冲刺下一枚奖牌', 'info');
+        return;
+      }
+      switchPremiumGame(game);
+      stage?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      showToast(`已切换到大师地图目标：${titles[game] || game}`, 'success');
+    }
+
+    function renderArcadeMasteryMap() {
+      const panel = document.getElementById('premium-mastery-panel');
+      const titleEl = document.getElementById('premium-mastery-title');
+      const summaryEl = document.getElementById('premium-mastery-summary');
+      const grid = document.getElementById('premium-mastery-grid');
+      if (!panel || !grid) return;
+      const statuses = careerGameOrder.map(masteryStatusForGame);
+      const goldCount = statuses.filter(item => item.medal === 'gold').length;
+      const medalCount = statuses.filter(item => item.medal !== 'none').length;
+      const focus = masteryFocusTarget();
+      panel.dataset.complete = focus ? 'false' : 'true';
+      if (titleEl) titleEl.textContent = `奖牌路线 ${medalCount}/${careerGameOrder.length} · 金牌 ${goldCount}/${careerGameOrder.length}`;
+      if (summaryEl) {
+        summaryEl.textContent = focus
+          ? `下一突破：${focus.label} 距离 ${focus.targetLabel} 还差 ${focus.delta} 分。`
+          : '所有模式已完成金牌目标，接下来就是刷新个人极限。';
+      }
+      grid.innerHTML = statuses.map(item => `
+        <button type="button" class="arcade-mastery-card" data-mastery-game="${escapeHTML(item.game)}" data-medal="${escapeHTML(item.medal)}">
+          <div class="arcade-mastery-top">
+            <span>${escapeHTML(item.label)}</span>
+            <b>${escapeHTML(medalLabels[item.medal] || medalLabels.none)}</b>
+          </div>
+          <strong>${escapeHTML(String(item.score))}</strong>
+          <small>${escapeHTML(item.targetLabel)}${item.delta ? ` · 差 ${escapeHTML(String(item.delta))}` : ''}</small>
+          <div class="arcade-mastery-progress" aria-label="${escapeHTML(item.label)} ${item.progress}%">
+            <i style="width: ${item.progress}%"></i>
+          </div>
+          <em>${item.delta ? '锁定突破' : '金牌完成'}</em>
+        </button>
+      `).join('');
+      grid.querySelectorAll('[data-mastery-game]').forEach(btn => {
+        btn.addEventListener('click', () => launchMasteryTarget(btn.dataset.masteryGame));
+      });
     }
 
     function formatRunTime(iso) {
@@ -5478,6 +5563,7 @@ function init() {
       renderAchievementFeed();
       renderArcadeRunLog();
       renderArcadeDirector();
+      renderArcadeMasteryMap();
       renderArcadeContracts();
       renderArcadeDifficulty();
       renderArcadeLoadouts();
@@ -5548,6 +5634,7 @@ function init() {
         tuning: difficultyTuning()
       }),
       setDifficulty: setArcadeDifficulty,
+      mastery: () => careerGameOrder.map(masteryStatusForGame),
       runs: () => (Array.isArray(career.runs) ? career.runs : []).map(run => ({ ...run })),
       contracts: () => getDailyContracts().map(contract => ({
         id: contract.id,
@@ -10768,7 +10855,8 @@ function init() {
           contracts: () => window.atherixArcadeCareer?.contracts?.() || [],
           runs: () => window.atherixArcadeCareer?.runs?.() || [],
           loadout: () => window.atherixArcadeCareer?.loadout?.() || {},
-          difficulty: () => window.atherixArcadeCareer?.difficulty?.() || {}
+          difficulty: () => window.atherixArcadeCareer?.difficulty?.() || {},
+          mastery: () => window.atherixArcadeCareer?.mastery?.() || []
         }
       };
     }

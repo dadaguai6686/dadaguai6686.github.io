@@ -4499,6 +4499,174 @@ body.command-open {
   height: 15px;
 }
 
+.arcade-mastery-panel {
+  margin-bottom: 1rem;
+  padding: 0.85rem;
+  border: 1px solid rgba(52, 211, 153, 0.22);
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(52, 211, 153, 0.1), rgba(34, 211, 238, 0.07)),
+    rgba(3, 7, 18, 0.5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.arcade-mastery-panel[data-complete="true"] {
+  border-color: rgba(251, 191, 36, 0.3);
+  background:
+    linear-gradient(135deg, rgba(251, 191, 36, 0.12), rgba(52, 211, 153, 0.08)),
+    rgba(3, 7, 18, 0.5);
+}
+
+.arcade-mastery-heading {
+  display: grid;
+  grid-template-columns: minmax(145px, auto) minmax(180px, 0.75fr) minmax(240px, 1.4fr);
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.75rem;
+}
+
+.arcade-mastery-heading span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #a7f3d0;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.arcade-mastery-heading svg {
+  width: 14px;
+  height: 14px;
+}
+
+.arcade-mastery-heading strong {
+  color: #fff;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.arcade-mastery-heading small {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.arcade-mastery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));
+  gap: 0.55rem;
+}
+
+.arcade-mastery-card {
+  min-height: 136px;
+  padding: 0.62rem;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.5);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.42rem;
+  text-align: left;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.arcade-mastery-card:hover,
+.arcade-mastery-card:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(52, 211, 153, 0.52);
+  box-shadow: 0 12px 26px rgba(16, 185, 129, 0.14);
+}
+
+.arcade-mastery-card[data-medal="bronze"] {
+  border-color: rgba(251, 146, 60, 0.26);
+}
+
+.arcade-mastery-card[data-medal="silver"] {
+  border-color: rgba(226, 232, 240, 0.28);
+}
+
+.arcade-mastery-card[data-medal="gold"] {
+  border-color: rgba(251, 191, 36, 0.38);
+  background:
+    linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(15, 23, 42, 0.54)),
+    rgba(15, 23, 42, 0.5);
+}
+
+.arcade-mastery-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.arcade-mastery-top span {
+  color: #fff;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 850;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.arcade-mastery-top b {
+  min-width: 24px;
+  border-radius: 999px;
+  padding: 0.12rem 0.34rem;
+  color: #e0f2fe;
+  background: rgba(34, 211, 238, 0.12);
+  font-size: 0.65rem;
+  text-align: center;
+}
+
+.arcade-mastery-card[data-medal="gold"] .arcade-mastery-top b {
+  color: #fef3c7;
+  background: rgba(251, 191, 36, 0.16);
+}
+
+.arcade-mastery-card strong {
+  color: #dffaff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1rem;
+  line-height: 1.1;
+}
+
+.arcade-mastery-card small {
+  color: var(--text-secondary);
+  font-size: 0.66rem;
+  line-height: 1.35;
+  flex: 1;
+}
+
+.arcade-mastery-progress {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+}
+
+.arcade-mastery-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22d3ee, #34d399);
+  box-shadow: 0 0 12px rgba(52, 211, 153, 0.28);
+}
+
+.arcade-mastery-card[data-medal="gold"] .arcade-mastery-progress i {
+  background: linear-gradient(90deg, #f59e0b, #fef08a);
+}
+
+.arcade-mastery-card em {
+  color: #a7f3d0;
+  font-style: normal;
+  font-size: 0.66rem;
+  font-weight: 900;
+}
+
 .arcade-contract-board {
   margin-bottom: 1rem;
   padding: 0.85rem;
@@ -5697,6 +5865,7 @@ body.command-open {
 
 @media (max-width: 1100px) {
   .arcade-run-log-list,
+  .arcade-mastery-grid,
   .arcade-difficulty-grid,
   .arcade-loadout-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5727,6 +5896,13 @@ body.command-open {
   }
   .arcade-run-log-stats {
     grid-template-columns: 1fr;
+  }
+  .arcade-mastery-heading,
+  .arcade-mastery-grid {
+    grid-template-columns: 1fr;
+  }
+  .arcade-mastery-card {
+    min-height: auto;
   }
   .arcade-contract-heading {
     align-items: flex-start;
