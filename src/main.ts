@@ -871,7 +871,14 @@ function hideCombatLog(immediate = false): void {
 
 function feedbackToneFor(kind: SoundKind): CombatLogTone {
   if (kind === "hit" || kind === "loss") return "danger";
-  if (kind === "contract" || kind === "pickup" || kind === "repair" || kind === "score" || kind === "win") {
+  if (
+    kind === "closeCall" ||
+    kind === "contract" ||
+    kind === "pickup" ||
+    kind === "repair" ||
+    kind === "score" ||
+    kind === "win"
+  ) {
     return "success";
   }
   return "primary";
@@ -1762,6 +1769,7 @@ function renderRunRecap(detail: RunEndDetail, newlyUnlocked: AchievementId[]): v
     ["事件", detail.waveModifier.name],
     ["流明", String(detail.stats.lumenCollected)],
     ["信标", String(detail.stats.relaysRepaired)],
+    ["擦险", String(detail.stats.closeCalls)],
     ["受击", String(detail.stats.hitsTaken)],
     ["风暴", formatSeconds(detail.stats.stormSeconds)]
   ];
@@ -2415,6 +2423,7 @@ function normalizeHistoryRouteSeed(seed: unknown, routeName: unknown): number {
 type SoundKind =
   | "boost"
   | "button"
+  | "closeCall"
   | "contract"
   | "hit"
   | "loss"
@@ -2443,6 +2452,7 @@ class AudioBus {
     const sounds: Record<SoundKind, Array<[number, number, number]>> = {
       boost: [[160, 0.07, 0.035], [260, 0.06, 0.026]],
       button: [[520, 0.04, 0.02]],
+      closeCall: [[820, 0.035, 0.026], [1180, 0.055, 0.022]],
       contract: [[620, 0.06, 0.032], [920, 0.08, 0.028], [1240, 0.1, 0.024]],
       hit: [[130, 0.11, 0.05], [82, 0.13, 0.035]],
       loss: [[180, 0.12, 0.04], [120, 0.18, 0.035]],

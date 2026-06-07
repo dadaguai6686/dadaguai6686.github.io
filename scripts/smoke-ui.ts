@@ -116,6 +116,8 @@ assert.ok(gameScene.includes("syncNavigatorLabel"), "Phaser scene should label t
 assert.ok(gameScene.includes("导航："), "in-world navigator label should be localized");
 assert.ok(gameScene.includes("syncRepairPromptLabel"), "Phaser scene should show an in-world repair control prompt");
 assert.ok(gameScene.includes('"score"'), "Phaser scene should emit score change feedback cues");
+assert.ok(gameScene.includes('"closeCall"'), "Phaser scene should emit close-call feedback cues");
+assert.ok(gameScene.includes("擦险脱离"), "close-call feedback should be localized in Chinese");
 assert.ok(gameScene.includes("toLocaleString()}分"), "score feedback should show localized point deltas");
 assert.ok(gameScene.includes("受击：连锁中断"), "hit feedback should explain chain loss in Chinese");
 assert.ok(gameScene.includes("机体 -"), "hit feedback should show concrete damage in Chinese");
@@ -126,12 +128,15 @@ assert.ok(gameScene.includes("HIT_RECOVERY_SECONDS"), "recovery window visuals s
 assert.ok(gameScene.includes("renderHazardTrajectories"), "Phaser scene should telegraph moving hazard paths");
 assert.ok(gameScene.includes("projectHazardPosition"), "hazard telegraphs should project future shard positions");
 assert.ok(simulation.includes("按住 E / 修复键"), "runtime objective copy should support keyboard and touch repair controls");
+assert.ok(simulation.includes("擦险脱离"), "simulation should reward skillful close-call escapes with Chinese feedback");
 assert.ok(simulation.includes("合约完成：继续修信标"), "coach should clearly guide after completed contracts");
 assert.ok(simulation.includes("合约失败，清主目标"), "objective copy should clearly guide after failed contracts");
 assert.ok(main.includes('"data-kind": "relay"'), "radar nodes should expose stable data-kind markers");
 assert.ok(main.includes('"data-kind": "player"'), "radar nodes should expose player marker for QA");
 assert.ok(main.includes('"data-kind": "guide"'), "radar nodes should expose guide markers for QA");
 assert.ok(main.includes("score:"), "audio bus should include a score feedback sound");
+assert.ok(main.includes("closeCall:"), "audio bus should include a close-call feedback sound");
+assert.ok(main.includes('["擦险"'), "run recap should surface close-call counts");
 assert.ok(styles.includes("#radar-panel"), "desktop radar should have CSS");
 assert.ok(styles.includes("#tactical-scan"), "pause tactical scan should have CSS");
 assert.ok(styles.includes("#mission-toast"), "mission transition toast should have CSS");

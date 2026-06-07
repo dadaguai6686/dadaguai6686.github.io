@@ -3,6 +3,9 @@ import {
   ACHIEVEMENTS,
   CAMPAIGN_WAVES,
   COMBO_WINDOW_SECONDS,
+  HAZARD_CLOSE_CALL_BUFFER,
+  HAZARD_CLOSE_CALL_ESCAPE_BUFFER,
+  HAZARD_PLAYER_RADIUS,
   MAX_UPGRADE_LEVEL,
   SECTOR_LAYOUTS,
   WAVE_MODIFIERS,
@@ -251,6 +254,25 @@ assert.ok(getRunPerformance(hitState).points < getRunPerformance(restartRun(crea
 const recoveryProtected = updateSimulation(hitState, idle, 0.016);
 assert.equal(recoveryProtected.stats.hitsTaken, 1, "recovery window should prevent immediate repeated hazard hits");
 assert.ok(recoveryProtected.player.invulnerable < HIT_RECOVERY_SECONDS, "recovery window should tick down after impact");
+let closeCallState = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
+closeCallState.briefingActive = false;
+closeCallState.hazards[0].velocity = { x: 0, y: 0 };
+const closeCallCollisionRadius = closeCallState.hazards[0].radius + HAZARD_PLAYER_RADIUS;
+closeCallState.hazards[0].position = {
+  x: closeCallState.player.position.x + closeCallCollisionRadius + HAZARD_CLOSE_CALL_BUFFER - 8,
+  y: closeCallState.player.position.y
+};
+closeCallState = updateSimulation(closeCallState, idle, 0.016);
+assert.equal(closeCallState.stats.closeCalls, 0, "entering a close-call band should arm without awarding immediately");
+const closeCallScore = closeCallState.score;
+closeCallState.hazards[0].position = {
+  x: closeCallState.player.position.x + closeCallCollisionRadius + HAZARD_CLOSE_CALL_ESCAPE_BUFFER + 6,
+  y: closeCallState.player.position.y
+};
+closeCallState = updateSimulation(closeCallState, idle, 0.016);
+assert.equal(closeCallState.stats.closeCalls, 1, "escaping a close shard line should count as a close call");
+assert.ok(closeCallState.score > closeCallScore, "close calls should award score");
+assert.ok(closeCallState.combo > 1, "close calls should extend the combo loop");
 const hazardThreatState = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
 hazardThreatState.briefingActive = false;
 hazardThreatState.contract = createContractState("pulseDiscipline", hazardThreatState.elapsed, hazardThreatState.stats);

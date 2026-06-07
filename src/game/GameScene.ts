@@ -96,7 +96,17 @@ type RadarGuide = {
   urgent: boolean;
 };
 
-type FeedbackKind = "boost" | "contract" | "hit" | "loss" | "pickup" | "pulse" | "repair" | "score" | "win";
+type FeedbackKind =
+  | "boost"
+  | "closeCall"
+  | "contract"
+  | "hit"
+  | "loss"
+  | "pickup"
+  | "pulse"
+  | "repair"
+  | "score"
+  | "win";
 
 type FeedbackTone = "danger" | "primary" | "success" | "warning";
 
@@ -200,6 +210,7 @@ export class GameScene extends Phaser.Scene {
     const previousRepairedIds = new Set(this.state.relays.filter((relay) => relay.repaired).map((relay) => relay.id));
     const previousHull = this.state.player.hull;
     const previousBoostCooldown = this.state.player.boostCooldown;
+    const previousCloseCalls = this.state.stats.closeCalls;
     const previousContractStatus = this.state.contract.status;
     const previousPulseCooldown = this.state.player.pulseCooldown;
     const input = this.inputMapper.read();
@@ -209,6 +220,7 @@ export class GameScene extends Phaser.Scene {
     this.emitHud();
     this.emitFeedback({
       previousBoostCooldown,
+      previousCloseCalls,
       previousCollectedIds,
       previousContractStatus,
       previousHull,
@@ -746,6 +758,7 @@ export class GameScene extends Phaser.Scene {
 
   private emitFeedback(previous: {
     previousBoostCooldown: number;
+    previousCloseCalls: number;
     previousCollectedIds: Set<number>;
     previousContractStatus: GameState["contract"]["status"];
     previousHull: number;
@@ -819,8 +832,9 @@ export class GameScene extends Phaser.Scene {
         tone: "success"
       });
     }
+    const closeCallDelta = this.state.stats.closeCalls - previous.previousCloseCalls;
     const scoreDelta = this.state.score - previous.previousScore;
-    if (scoreDelta !== 0) {
+    if (scoreDelta !== 0 && closeCallDelta <= 0) {
       this.dispatchFeedback({
         detail:
           scoreDelta > 0
@@ -833,6 +847,18 @@ export class GameScene extends Phaser.Scene {
         color: scoreDelta > 0 ? 0xffd76e : 0xff5f9b,
         scale: scoreDelta > 0 ? 1.08 : 1,
         tone: scoreDelta > 0 ? "success" : "warning"
+      });
+    }
+    if (closeCallDelta > 0) {
+      this.dispatchFeedback({
+        detail: `擦过碎片边缘但没有撞上，奖励连锁和分数。当前连锁 ${this.state.combo.toFixed(1)}x，继续绕线别贪修。`,
+        kind: "closeCall",
+        text: scoreDelta > 0 ? `擦险 +${scoreDelta.toLocaleString()}分` : "擦险",
+        title: "擦险脱离",
+        position: this.state.player.position,
+        color: 0x86ffbd,
+        scale: 1.08,
+        tone: "success"
       });
     }
     if (previous.previousHull - this.state.player.hull >= 5) {

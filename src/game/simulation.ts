@@ -21,6 +21,9 @@ export type Hazard = {
   position: Vec2;
   velocity: Vec2;
   radius: number;
+  closeCallArmed?: boolean;
+  closeCallCooldown?: number;
+  closeCallClosest?: number;
 };
 
 export type Storm = {
@@ -125,6 +128,7 @@ export type RunStats = {
   lumenCollected: number;
   relaysRepaired: number;
   hitsTaken: number;
+  closeCalls: number;
   stormSeconds: number;
   repairSeconds: number;
   distanceTraveled: number;
@@ -270,6 +274,8 @@ export const REPAIR_RADIUS = 76;
 export const LUMEN_PICKUP_RADIUS = 34;
 export const HAZARD_PLAYER_RADIUS = 28;
 export const HAZARD_NEAR_BUFFER = 112;
+export const HAZARD_CLOSE_CALL_BUFFER = 58;
+export const HAZARD_CLOSE_CALL_ESCAPE_BUFFER = 94;
 export const HIT_RECOVERY_SECONDS = 0.85;
 
 export const CONTRACTS: Record<ContractId, TacticalContract> = {
@@ -924,6 +930,7 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
 
   next.hazards.forEach((hazard) => {
     const hazardSpeed = 1 + modifier.hazardSpeedBonus;
+    hazard.closeCallCooldown = Math.max(0, (hazard.closeCallCooldown ?? 0) - dt);
     hazard.position.x += hazard.velocity.x * dt * hazardSpeed;
     hazard.position.y += hazard.velocity.y * dt * hazardSpeed;
     if (hazard.position.x < 70 || hazard.position.x > next.arena.width - 70) {
@@ -932,7 +939,9 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
     if (hazard.position.y < 84 || hazard.position.y > next.arena.height - 70) {
       hazard.velocity.y *= -1;
     }
-    if (distance(hazard.position, player.position) < hazard.radius + HAZARD_PLAYER_RADIUS && player.invulnerable <= 0) {
+    const hazardDistance = distance(hazard.position, player.position);
+    const collisionRadius = hazard.radius + HAZARD_PLAYER_RADIUS;
+    if (hazardDistance < collisionRadius && player.invulnerable <= 0) {
       const damageScale = 1 - next.upgrades.shield * 0.12;
       player.hull = Math.max(0, player.hull - 16 * damageScale * difficulty.damageScale);
       player.charge = Math.max(0, player.charge - 7);
@@ -946,7 +955,12 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
       const len = Math.hypot(away.x, away.y) || 1;
       player.velocity.x += (away.x / len) * 250;
       player.velocity.y += (away.y / len) * 250;
+      hazard.closeCallArmed = false;
+      hazard.closeCallCooldown = 1.2;
+      hazard.closeCallClosest = undefined;
       next.message = "被虚空碎片击中，机体完整度下降。";
+    } else {
+      updateCloseCall(next, hazard, hazardDistance, collisionRadius);
     }
   });
 
@@ -1065,6 +1079,7 @@ export function getRunRating(state: GameState): RunRating {
   points += state.stats.stormSeconds <= 1 ? 10 : state.stats.stormSeconds <= 4 ? 5 : 0;
   points += state.elapsed <= state.wave * 42 ? 8 : state.elapsed <= state.wave * 58 ? 4 : 0;
   points += state.stats.lumenCollected >= Math.max(3, state.wave * 2) ? 6 : 0;
+  points += Math.min(6, state.stats.closeCalls * 2);
   points += state.player.charge > state.player.maxCharge * 0.45 ? 5 : 0;
 
   const cappedPoints = clampInt(points, 0, 100);
@@ -1111,6 +1126,7 @@ export function getRunPerformance(state: GameState): RunPerformance {
   points += state.stats.stormSeconds <= 1 ? 8 : state.stats.stormSeconds <= 4 ? 4 : 0;
   points += state.elapsed <= state.wave * 48 ? 6 : state.elapsed <= state.wave * 66 ? 3 : 0;
   points += state.stats.lumenCollected >= Math.max(3, state.wave * 2) ? 5 : 0;
+  points += Math.min(5, state.stats.closeCalls * 2);
   points += state.player.charge > state.player.maxCharge * 0.45 ? 5 : 0;
   points += state.gate.open ? 12 : 0;
 
@@ -1183,6 +1199,9 @@ function getPerformanceDetail(state: GameState): string {
   }
   if (state.bestCombo < 3 && state.lumen.some((drop) => !drop.collected)) {
     return "连锁还有空间：顺路回收流明冲 A/S。";
+  }
+  if (state.stats.closeCalls >= 2 && state.stats.hitsTaken === 0) {
+    return "擦险表现很好：继续贴边绕线，但别贪到撞碎片。";
   }
   if (state.gate.open) {
     return "光门已开：带着高电量撤离可保评级。";
@@ -1768,6 +1787,7 @@ function createRunStats(): RunStats {
     lumenCollected: 0,
     relaysRepaired: 0,
     hitsTaken: 0,
+    closeCalls: 0,
     stormSeconds: 0,
     repairSeconds: 0,
     distanceTraveled: 0,
@@ -1873,6 +1893,38 @@ function awardScore(state: GameState, base: number, comboGain: number): void {
       DIFFICULTY_SETTINGS[state.difficulty].scoreScale *
       (1 + WAVE_MODIFIERS[state.waveModifier].scoreBonus)
   );
+}
+
+function updateCloseCall(state: GameState, hazard: Hazard, hazardDistance: number, collisionRadius: number): void {
+  const closeCallRadius = collisionRadius + HAZARD_CLOSE_CALL_BUFFER;
+  const escapeRadius = collisionRadius + HAZARD_CLOSE_CALL_ESCAPE_BUFFER;
+
+  if (state.player.invulnerable > 0) {
+    hazard.closeCallArmed = false;
+    return;
+  }
+
+  if (hazard.closeCallArmed) {
+    hazard.closeCallClosest = Math.min(hazard.closeCallClosest ?? hazardDistance, hazardDistance);
+    if (hazardDistance >= escapeRadius) {
+      const closest = hazard.closeCallClosest ?? closeCallRadius;
+      const tightness = Math.max(0, closeCallRadius - closest);
+      const score = 90 + Math.round(tightness * 0.9);
+      hazard.closeCallArmed = false;
+      hazard.closeCallCooldown = 1.45;
+      hazard.closeCallClosest = undefined;
+      state.stats.closeCalls += 1;
+      awardScore(state, score, 0.22);
+      state.shake = Math.max(state.shake, 0.08);
+      state.message = `擦险脱离，贴着碎片线安全穿出，${formatCombo(state.combo)} 连锁。`;
+    }
+    return;
+  }
+
+  if ((hazard.closeCallCooldown ?? 0) <= 0 && hazardDistance <= closeCallRadius) {
+    hazard.closeCallArmed = true;
+    hazard.closeCallClosest = hazardDistance;
+  }
 }
 
 function formatCombo(combo: number): string {
@@ -1997,6 +2049,7 @@ function getContractDeltas(state: GameState): RunStats {
     lumenCollected: state.stats.lumenCollected - state.contract.startStats.lumenCollected,
     relaysRepaired: state.stats.relaysRepaired - state.contract.startStats.relaysRepaired,
     hitsTaken: state.stats.hitsTaken - state.contract.startStats.hitsTaken,
+    closeCalls: state.stats.closeCalls - state.contract.startStats.closeCalls,
     stormSeconds: state.stats.stormSeconds - state.contract.startStats.stormSeconds,
     repairSeconds: state.stats.repairSeconds - state.contract.startStats.repairSeconds,
     distanceTraveled: state.stats.distanceTraveled - state.contract.startStats.distanceTraveled,
