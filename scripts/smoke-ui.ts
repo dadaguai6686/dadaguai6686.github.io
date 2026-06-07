@@ -82,10 +82,16 @@ assert.ok(main.includes('window.addEventListener("blur", pauseForInterruption)')
 assert.ok(main.includes('window.addEventListener("pagehide", pauseForInterruption)'), "pagehide should trigger auto-pause");
 assert.ok(main.includes('document.addEventListener("visibilitychange"'), "page visibility changes should be handled");
 assert.ok(main.includes("resetVirtualInput"), "touch input should reset when pausing or losing focus");
+assert.ok(main.includes("tap: { boost: 0, repair: 0, pulse: 0 }"), "touch input should expose a short tap buffer");
+assert.ok(main.includes('button.addEventListener("click"'), "touch action buttons should accept click fallback events");
 assert.ok(main.includes("lostpointercapture"), "touch controls should recover when pointer capture is lost");
 assert.ok(main.includes("setPointerCapture"), "touch controls should capture active pointers");
 assert.ok(input.includes("resetKeys()"), "keyboard input should expose a full Phaser key reset");
+assert.ok(input.includes("TAP_BUFFER_FRAMES"), "keyboard input should buffer very short taps");
+assert.ok(input.includes('window.addEventListener("keydown"'), "keyboard input should latch keydown events between Phaser reads");
+assert.ok(input.includes('window.removeEventListener("keydown"'), "keyboard input should release keydown latches when rebuilt");
 assert.ok(gameScene.includes("this.resetInput();"), "scene should reset keyboard state at run and pause boundaries");
+assert.ok(gameScene.includes("this.inputMapper?.destroy();"), "scene should not stack duplicate input listeners when rebuilding worlds");
 assert.ok(!main.includes("<small>Lv "), "upgrade cards should use localized level labels");
 assert.ok(main.includes("buildUpgradeRecommendation"), "upgrade choices should explain a recommendation based on the last wave");
 assert.ok(main.includes("升级建议：优先"), "upgrade choices should show a localized recommendation header");

@@ -314,7 +314,8 @@ window.__lumenVirtualInput = {
   move: { x: 0, y: 0 },
   boost: false,
   repair: false,
-  pulse: false
+  pulse: false,
+  tap: { boost: 0, repair: 0, pulse: 0 }
 };
 window.__lumenSettings = {
   largeLabels: saveData.largeLabels,
@@ -1374,7 +1375,12 @@ touchButtons.forEach((button) => {
     event.preventDefault();
     button.setPointerCapture(event.pointerId);
     window.__lumenVirtualInput![action] = true;
+    bufferTouchTap(action);
     button.dataset.active = "true";
+  });
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    bufferTouchTap(action);
   });
   const releaseAction = (event: PointerEvent) => {
     event.preventDefault();
@@ -1431,11 +1437,17 @@ function resetStick(): void {
   window.__lumenVirtualInput!.move = { x: 0, y: 0 };
 }
 
+function bufferTouchTap(action: "boost" | "repair" | "pulse"): void {
+  window.__lumenVirtualInput!.tap ??= { boost: 0, repair: 0, pulse: 0 };
+  window.__lumenVirtualInput!.tap[action] = 4;
+}
+
 function resetVirtualInput(): void {
   resetStick();
   window.__lumenVirtualInput!.boost = false;
   window.__lumenVirtualInput!.repair = false;
   window.__lumenVirtualInput!.pulse = false;
+  window.__lumenVirtualInput!.tap = { boost: 0, repair: 0, pulse: 0 };
   touchButtons.forEach((button) => {
     delete button.dataset.active;
   });

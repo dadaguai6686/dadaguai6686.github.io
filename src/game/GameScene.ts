@@ -362,6 +362,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.worldLayer.add(this.trail);
 
+    this.inputMapper?.destroy();
     this.inputMapper = new InputMapper(this.input.keyboard!);
     this.onResize();
   }
