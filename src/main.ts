@@ -727,6 +727,7 @@ function renderCoachDirective(directive: CoachDirective, status: GameStatus): vo
   coachPanel.hidden = status !== "playing";
   if (coachPanel.hidden) return;
   coachPanel.dataset.urgent = String(directive.urgent);
+  coachPanel.setAttribute("aria-label", `路线教练：${directive.title}`);
   coachTitle.textContent = directive.title;
   coachStep.textContent = `${directive.step}/${directive.totalSteps}`;
   coachDetail.textContent = directive.detail;

@@ -763,9 +763,33 @@ button {
 
 .coach-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
+}
+
+.coach-title-stack {
+  min-width: 0;
+}
+
+#coach-panel .coach-title-stack .coach-kicker,
+#coach-panel .coach-title-stack #coach-title {
+  display: block;
+  margin: 0;
+  line-height: 1.18;
+}
+
+#coach-panel .coach-title-stack .coach-kicker {
+  color: #86ffbd;
+  font-size: 9px;
+  font-weight: 1000;
+}
+
+#coach-panel .coach-title-stack #coach-title {
+  overflow: hidden;
+  color: #fff3ad;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .coach-head b {
@@ -3130,6 +3154,14 @@ h1 {
   #shell[data-status="playing"] #contract-panel strong,
   #shell[data-status="playing"] #coach-panel strong,
   #shell[data-status="playing"] #pilot-tip strong {
+    font-size: 10px;
+  }
+
+  #shell[data-status="playing"] #coach-panel .coach-title-stack .coach-kicker {
+    font-size: 8px;
+  }
+
+  #shell[data-status="playing"] #coach-panel .coach-title-stack #coach-title {
     font-size: 10px;
   }
 

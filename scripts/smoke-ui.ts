@@ -31,6 +31,7 @@ assert.ok(html.includes('id="recap-action-plan"'), "run recap should include a s
 assert.ok(html.includes("下一局作战计划"), "run recap action plan should be labeled in Chinese");
 assert.ok(html.includes('id="coach-rail"'), "route coach should expose a visible four-step progress rail");
 assert.ok(html.includes('role="list"'), "route coach progress rail should expose list semantics");
+assert.ok(html.includes('class="coach-kicker">路线教练'), "route coach should keep a persistent visible coach label");
 assert.ok(html.includes("首局作战令"), "launch briefing should provide first-run orders in Chinese");
 assert.ok(html.includes("安全读图"), "launch briefing should explain the safe opening read phase");
 assert.ok(html.includes("北侧撤离"), "launch briefing should explain the evacuation target");
@@ -79,6 +80,7 @@ assert.ok(main.includes("合约失败，主目标仍可完成"), "mission toast 
 assert.ok(main.includes("buildObjectiveStripTitle"), "HUD objective strip should use contextual mission copy");
 assert.ok(main.includes("renderCoachRail"), "route coach should render the current four-step progress state");
 assert.ok(main.includes("COACH_STEP_LABELS"), "route coach should use localized step labels");
+assert.ok(main.includes('coachPanel.setAttribute("aria-label"'), "route coach should keep its role label when the current directive title changes");
 assert.ok(main.includes('role", "listitem"'), "route coach progress steps should expose list item semantics");
 assert.ok(main.includes('aria-current", "step"'), "route coach should mark the current step accessibly");
 assert.ok(main.includes("buildMissionStatusText"), "HUD mission text should prefer current objective state over stale event copy");
@@ -178,6 +180,7 @@ assert.ok(styles.includes(".launch-route-line"), "launch route map should render
 assert.ok(styles.includes(".radar-guide"), "radar guide should have CSS");
 assert.ok(styles.includes(".tactical-scan-legend"), "pause tactical scan should have a legend style");
 assert.ok(styles.includes("#coach-rail"), "route coach progress rail should have CSS");
+assert.ok(styles.includes(".coach-title-stack"), "route coach should style a persistent label plus current directive title");
 assert.ok(styles.includes('span[data-state="active"]'), "route coach should visually mark the active step");
 assert.ok(styles.includes("#game-dossier"), "mission dossier should have CSS");
 assert.ok(styles.includes("#first-minute-route"), "first-minute route should have CSS");
