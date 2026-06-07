@@ -17,6 +17,8 @@ assert.ok(html.includes('id="game-dossier"'), "menu should explain the game fant
 assert.ok(html.includes('id="launch-brief"'), "menu should include an illustrated launch briefing");
 assert.ok(html.includes('id="launch-map"'), "launch briefing should include a route map");
 assert.ok(html.includes('id="first-minute-route"'), "menu should give players an actionable first-minute route");
+assert.ok(html.includes('id="recap-action-plan"'), "run recap should include a structured next-run action plan");
+assert.ok(html.includes("下一局作战计划"), "run recap action plan should be labeled in Chinese");
 assert.ok(html.includes('id="coach-rail"'), "route coach should expose a visible four-step progress rail");
 assert.ok(html.includes('role="list"'), "route coach progress rail should expose list semantics");
 assert.ok(html.includes("首局作战令"), "launch briefing should provide first-run orders in Chinese");
@@ -85,6 +87,12 @@ assert.ok(main.includes("区域"), "upgrade forecast should name the next sector
 assert.ok(main.includes("事件"), "upgrade forecast should name the next wave event");
 assert.ok(main.includes("合约"), "upgrade forecast should name the next tactical contract");
 assert.ok(main.includes("buildForecastUpgradeRecommendation"), "upgrade recommendations should account for next-wave pressure");
+assert.ok(main.includes("buildRecapActionPlan"), "run recap should build a structured post-run action plan");
+assert.ok(main.includes("buildChargeLossRecapPlan"), "charge loss recap should teach the next-run supply route");
+assert.ok(main.includes("buildHullLossRecapPlan"), "hull loss recap should teach pulse and hazard routing");
+assert.ok(main.includes("下一波作战计划"), "wave-clear recap should point toward the next wave in Chinese");
+assert.ok(main.includes("先吃 2-3 个流明"), "charge-loss plan should give a concrete opening correction");
+assert.ok(main.includes("碎片贴脸就按脉冲"), "hull-loss plan should give a concrete survival correction");
 assert.ok(main.includes("createRadarNodes"), "radar and scan should share SVG node construction");
 assert.ok(main.includes("radar-guide"), "radar and scan should draw the current navigation guide");
 assert.ok(main.includes("导航 "), "radar summary should name the current guide target");
@@ -124,6 +132,9 @@ assert.ok(styles.includes(".upgrade-forecast"), "next-wave upgrade forecast shou
 assert.ok(styles.includes(".upgrade-forecast-chips"), "next-wave forecast should style compact sector/event/contract tags");
 assert.ok(styles.includes('[data-recommended="true"]'), "recommended upgrade cards should have a highlighted style");
 assert.ok(styles.includes(".upgrade-tag"), "upgrade cards should have a visible role or recommendation tag");
+assert.ok(styles.includes("#recap-action-plan"), "structured recap action plan should have CSS");
+assert.ok(styles.includes(".recap-plan-header"), "recap action plan should have a visible header");
+assert.ok(styles.includes('#recap-action-plan article[data-tone="warning"]'), "recap action plan should highlight warning steps");
 assert.ok(styles.includes("touch-action: none"), "mobile controls should disable browser touch gestures");
 assert.ok(styles.includes('[data-active="true"]'), "touch buttons should expose an active pressed state");
 assert.ok(styles.includes("@media (pointer: coarse), (hover: none)"), "touch devices wider than phones should still get controls");

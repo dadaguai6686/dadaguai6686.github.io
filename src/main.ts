@@ -159,6 +159,7 @@ const contractRecap = document.querySelector<HTMLDivElement>("#contract-recap")!
 const contractRecapTitle = document.querySelector<HTMLElement>("#contract-recap-title")!;
 const contractRecapDetail = document.querySelector<HTMLElement>("#contract-recap-detail")!;
 const recapMetrics = document.querySelector<HTMLDivElement>("#recap-metrics")!;
+const recapActionPlan = document.querySelector<HTMLDivElement>("#recap-action-plan")!;
 const achievementUnlocks = document.querySelector<HTMLDivElement>("#achievement-unlocks")!;
 const recapAdvice = document.querySelector<HTMLElement>("#recap-advice")!;
 const touchStick = document.querySelector<HTMLDivElement>("#touch-stick")!;
@@ -217,6 +218,13 @@ type RunHistoryEntry = {
 type NextRunGoal = {
   label: string;
   text: string;
+  tone: "primary" | "steady" | "warning" | "complete";
+};
+
+type RecapPlanStep = {
+  detail: string;
+  label: string;
+  title: string;
   tone: "primary" | "steady" | "warning" | "complete";
 };
 
@@ -1702,9 +1710,211 @@ function renderRunRecap(detail: RunEndDetail, newlyUnlocked: AchievementId[]): v
       return item;
     })
   );
+  renderRecapActionPlan(detail);
   renderAchievementUnlocks(newlyUnlocked);
   recapAdvice.textContent = buildRunAdvice(detail);
   runRecap.hidden = false;
+}
+
+function renderRecapActionPlan(detail: RunEndDetail): void {
+  const plan = buildRecapActionPlan(detail);
+  const header = document.createElement("div");
+  header.className = "recap-plan-header";
+
+  const title = document.createElement("strong");
+  title.textContent = detail.status === "won" ? "下一波作战计划" : "下一局作战计划";
+
+  const summary = document.createElement("span");
+  summary.textContent = buildRecapPlanSummary(detail);
+
+  header.append(title, summary);
+  recapActionPlan.replaceChildren(
+    header,
+    ...plan.map((step, index) => {
+      const item = document.createElement("article");
+      item.dataset.tone = step.tone;
+
+      const badge = document.createElement("b");
+      badge.textContent = String(index + 1);
+
+      const label = document.createElement("em");
+      label.textContent = step.label;
+
+      const stepTitle = document.createElement("strong");
+      stepTitle.textContent = step.title;
+
+      const detailText = document.createElement("span");
+      detailText.textContent = step.detail;
+
+      item.append(badge, label, stepTitle, detailText);
+      return item;
+    })
+  );
+}
+
+function buildRecapPlanSummary(detail: RunEndDetail): string {
+  if (detail.status === "won") {
+    return `第 ${detail.wave}/5 波完成，先看下一波预报，再按短板选升级。`;
+  }
+  if (detail.status === "completed") {
+    return "五波救援完成，下一局可以把目标切到硬核、今日挑战或 S 级路线。";
+  }
+  if (detail.endReason === "chargeDepleted") {
+    return "这局主要断在电量节奏，下一局先把补给路线跑顺。";
+  }
+  if (detail.endReason === "hullDestroyed") {
+    return "这局主要断在危险处理，下一局先保脉冲和撤离路线。";
+  }
+  return "这局信号中断，下一局先完成主目标，再追副目标和连锁。";
+}
+
+function buildRecapActionPlan(detail: RunEndDetail): RecapPlanStep[] {
+  if (detail.status === "won") {
+    return buildWonRecapPlan(detail);
+  }
+  if (detail.status === "completed") {
+    return buildCompletedRecapPlan(detail);
+  }
+  if (detail.endReason === "chargeDepleted") {
+    return buildChargeLossRecapPlan(detail);
+  }
+  if (detail.endReason === "hullDestroyed") {
+    return buildHullLossRecapPlan(detail);
+  }
+  return [
+    {
+      label: "开局",
+      title: "先补给再维修",
+      detail: "开局读图缓冲里先找最近 2 个金色流明，再靠近蓝色信标按住修复。",
+      tone: "primary"
+    },
+    {
+      label: "中段",
+      title: "主目标优先",
+      detail: "合约完成或失败后都回到修信标；不要为了副目标把电量和机体打空。",
+      tone: "steady"
+    },
+    {
+      label: "收尾",
+      title: "修完立刻撤离",
+      detail: "4 座信标亮起后，导航会指向北侧光门，进门后才能升级和推进下一波。",
+      tone: "complete"
+    }
+  ];
+}
+
+function buildChargeLossRecapPlan(detail: RunEndDetail): RecapPlanStep[] {
+  const lowSupply = detail.stats.lumenCollected < Math.max(3, detail.wave * 3);
+  const stormHeavy = detail.stats.stormSeconds > 2.5;
+  return [
+    {
+      label: "开局",
+      title: lowSupply ? "先吃 2-3 个流明" : "把补给点当作路线节点",
+      detail: lowSupply
+        ? "不要一开局直冲信标。先沿导航吃金色流明，把电量抬起来再开始维修。"
+        : "每次维修前先确认附近金色流明位置，电量低于三分之一就先撤出来补给。",
+      tone: "warning"
+    },
+    {
+      label: "维修",
+      title: "半修也可以撤",
+      detail: `本局维修了 ${formatSeconds(detail.stats.repairSeconds)}。信标进度会保留一段时间，电量低时先离开补流明再回来。`,
+      tone: "primary"
+    },
+    {
+      label: "危险",
+      title: stormHeavy ? "别在风暴里硬修" : "推进留给脱险",
+      detail: stormHeavy
+        ? `本局风暴停留 ${formatSeconds(detail.stats.stormSeconds)}。进紫色风暴后立刻 Space / 推进键穿出，再回头找信标。`
+        : "推进不是只用来赶路；低电量时优先用它脱离风暴和碎片线。",
+      tone: stormHeavy ? "warning" : "steady"
+    }
+  ];
+}
+
+function buildHullLossRecapPlan(detail: RunEndDetail): RecapPlanStep[] {
+  const noPulse = detail.stats.pulseUses === 0;
+  const manyHits = detail.stats.hitsTaken >= 3;
+  return [
+    {
+      label: "保命",
+      title: noPulse ? "碎片贴脸就按脉冲" : "脉冲后立刻拉开",
+      detail: noPulse
+        ? "本局没有使用 Q / 脉冲键。粉色碎片贴近时先推开，再决定是否继续修复。"
+        : `本局用了 ${detail.stats.pulseUses} 次脉冲。脉冲后不要原地硬修，先移动到碎片线外侧。`,
+      tone: "warning"
+    },
+    {
+      label: "路线",
+      title: manyHits ? "绕开碎片密集线" : "从外圈切入信标",
+      detail: manyHits
+        ? `本局受击 ${detail.stats.hitsTaken} 次。下一局优先绕外圈，等碎片轨迹错开后再推进切入。`
+        : "从信标外侧切入，看到粉色轨迹线穿过维修圈时先等半秒，不要贴着碎片修。",
+      tone: manyHits ? "warning" : "steady"
+    },
+    {
+      label: "升级",
+      title: "优先曜盾或棱镜脉冲",
+      detail: "如果下一波仍常被撞，胜利后优先选曜盾机体；如果是贴脸来不及躲，选棱镜脉冲。",
+      tone: "primary"
+    }
+  ];
+}
+
+function buildWonRecapPlan(detail: RunEndDetail): RecapPlanStep[] {
+  const nextWave = Math.min(detail.wave + 1, 5);
+  return [
+    {
+      label: "升级",
+      title: "先补短板再冲分",
+      detail: buildUpgradeAdvice(detail),
+      tone: "primary"
+    },
+    {
+      label: "预报",
+      title: `读第 ${nextWave}/5 波区域和合约`,
+      detail: "升级卡上会显示下一波区域、事件和合约；先按合约规划路线，再决定是否冒险抢连锁。",
+      tone: "steady"
+    },
+    {
+      label: "目标",
+      title: detail.contract.status === "completed" ? "延续合约节奏" : "先稳主目标",
+      detail:
+        detail.contract.status === "completed"
+          ? `本波合约“${detail.contract.name}”已完成。下一波继续先读合约，再修信标撤离。`
+          : `本波合约“${detail.contract.name}”未完成。下一波先保证 4 座信标和撤离，再追副目标。`,
+      tone: detail.contract.status === "completed" ? "complete" : "warning"
+    }
+  ];
+}
+
+function buildCompletedRecapPlan(detail: RunEndDetail): RecapPlanStep[] {
+  return [
+    {
+      label: "复盘",
+      title: detail.stats.hitsTaken <= 2 ? "路线已经稳定" : "先减少碰撞",
+      detail:
+        detail.stats.hitsTaken <= 2
+          ? "五波已经跑通，下一局可以把目标切到更高难度、今日挑战或 S 级时间。"
+          : `通关但受击 ${detail.stats.hitsTaken} 次。下一局先保脉冲、绕碎片，再追连锁。`,
+      tone: detail.stats.hitsTaken <= 2 ? "complete" : "warning"
+    },
+    {
+      label: "冲分",
+      title: "把合约当路线骨架",
+      detail: `本局完成 ${detail.stats.contractsCompleted}/5 个合约。想冲 A/S，开波先读合约，再安排补给和维修顺序。`,
+      tone: "primary"
+    },
+    {
+      label: "挑战",
+      title: detail.difficulty === "hardcore" ? "冲今日最佳" : "切硬核或今日挑战",
+      detail:
+        detail.difficulty === "hardcore"
+          ? "硬核已通关，接下来用固定每日路线压时间、保无损、冲 S 级。"
+          : "标准通关后可以尝试硬核，或用今日挑战固定代号反复优化路线。",
+      tone: "steady"
+    }
+  ];
 }
 
 function renderContractRecap(contract: ContractSnapshot): void {
