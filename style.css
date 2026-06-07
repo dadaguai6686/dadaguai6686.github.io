@@ -2123,6 +2123,189 @@ main {
   color: var(--accent);
 }
 
+.reader-next-panel {
+  display: none;
+  max-width: 72ch;
+  margin: clamp(2rem, 5vw, 3.5rem) auto 0;
+  padding-top: 1.4rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.reader-next-panel.active {
+  display: block;
+}
+
+.reader-next-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.reader-next-kicker {
+  display: inline-flex;
+  margin-bottom: 0.35rem;
+  color: #22d3ee;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.reader-next-heading h2 {
+  font-family: 'Outfit', sans-serif;
+  font-size: clamp(1.25rem, 3vw, 1.75rem);
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+
+.reader-next-heading p {
+  max-width: 18rem;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  text-align: right;
+}
+
+.reader-next-list {
+  display: grid;
+  gap: 0.78rem;
+}
+
+.reader-next-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.95rem;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, 0.08), transparent 34%),
+    linear-gradient(315deg, rgba(245, 158, 11, 0.07), transparent 38%),
+    rgba(255, 255, 255, 0.035);
+  transition: border-color 0.2s ease, transform 0.2s ease, background 0.2s ease;
+}
+
+.reader-next-item:hover {
+  border-color: rgba(34, 211, 238, 0.34);
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, 0.12), transparent 34%),
+    linear-gradient(315deg, rgba(245, 158, 11, 0.1), transparent 38%),
+    rgba(255, 255, 255, 0.055);
+  transform: translateY(-1px);
+}
+
+.reader-next-copy {
+  min-width: 0;
+}
+
+.reader-next-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.reader-next-meta span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.reader-next-meta span:not(:last-child)::after {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  margin-left: 0.4rem;
+  vertical-align: middle;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.65);
+}
+
+.reader-next-reason {
+  color: #fbbf24;
+}
+
+.reader-next-title {
+  margin: 0.35rem 0 0.25rem;
+  color: var(--text-primary);
+  font-size: 1rem;
+  line-height: 1.28;
+  letter-spacing: 0;
+}
+
+.reader-next-copy p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.reader-next-progress-row {
+  display: grid;
+  grid-template-columns: auto minmax(80px, 1fr);
+  align-items: center;
+  gap: 0.55rem;
+  max-width: 18rem;
+  margin-top: 0.65rem;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.reader-next-progress {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+}
+
+.reader-next-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22d3ee, #fbbf24);
+}
+
+.reader-next-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-width: 92px;
+  min-height: 40px;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid rgba(34, 211, 238, 0.28);
+  border-radius: 999px;
+  background: rgba(34, 211, 238, 0.09);
+  color: #e0f2fe;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.reader-next-open:hover {
+  background: rgba(34, 211, 238, 0.18);
+  color: #fff;
+  transform: translateX(2px);
+}
+
+.reader-next-open:focus-visible {
+  outline: 2px solid rgba(251, 191, 36, 0.72);
+  outline-offset: 3px;
+}
+
+.reader-next-open svg {
+  width: 15px;
+  height: 15px;
+}
+
 /* ========================================= */
 /* PROJECTS SECTION STYLE (Task 5)            */
 /* ========================================= */
@@ -2896,6 +3079,21 @@ body.command-open {
   .blog-reader-view.reader-focus-mode .reader-content {
     font-size: 1rem;
     line-height: 1.78;
+  }
+  .reader-next-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .reader-next-heading p {
+    max-width: none;
+    text-align: left;
+  }
+  .reader-next-item {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+  .reader-next-open {
+    width: 100%;
   }
   .json-io-container {
     grid-template-columns: 1fr;

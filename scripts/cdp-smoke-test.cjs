@@ -266,6 +266,22 @@ async function run() {
     return false;
   }
 
+  async function waitForCondition(expression, timeout = 8000) {
+    const deadline = Date.now() + timeout;
+    let lastError = null;
+    while (Date.now() < deadline) {
+      try {
+        const found = await evaluate(`Boolean(${expression})`);
+        if (found) return true;
+      } catch (error) {
+        lastError = error;
+      }
+      await wait(200);
+    }
+    if (lastError) console.warn(`[smoke:games] Condition wait ended after error: ${lastError.message}`);
+    return false;
+  }
+
   async function key(type, key, code) {
     await send('Input.dispatchKeyEvent', {
       type,
@@ -503,6 +519,7 @@ async function run() {
   await wait(150);
   await evaluate(`window.scrollTo(0, document.body.scrollHeight)`);
   await wait(250);
+  await waitFor('#reader-next-panel.active [data-reader-next-open]', 5000);
   const blogState = await evaluate(`(() => ({
     hash: location.hash,
     visibleArticle: document.querySelector('#blog-reader')?.classList.contains('active') && !!document.querySelector('#reader-post-content')?.innerText.trim(),
@@ -518,10 +535,32 @@ async function run() {
     progress: document.querySelector('#reader-progress-percent')?.textContent || '',
     tocActive: document.querySelector('#reader-toc')?.classList.contains('active') || false,
     tocLinks: document.querySelectorAll('#reader-toc a').length,
+    nextPanel: document.querySelector('#reader-next-panel')?.classList.contains('active') || false,
+    nextCards: document.querySelectorAll('#reader-next-panel .reader-next-item').length,
+    nextReasons: [...document.querySelectorAll('#reader-next-panel .reader-next-reason')].map(el => el.textContent.trim()),
+    nextProgress: document.querySelector('#reader-next-panel .reader-next-progress-fill')?.style.width || '',
+    nextFirstTitle: document.querySelector('#reader-next-panel .reader-next-title')?.textContent.trim() || '',
+    nextFirstPostId: document.querySelector('#reader-next-panel .reader-next-item')?.dataset.readerNextId || '',
     codeBlocks: document.querySelectorAll('#reader-post-content pre code').length,
     inlineCode: document.querySelectorAll('#reader-post-content p code, #reader-post-content li code').length,
     orderedItems: document.querySelectorAll('#reader-post-content ol li').length,
     unorderedItems: document.querySelectorAll('#reader-post-content ul li').length
+  }))()`);
+  const readerNextClicked = await click('#reader-next-panel [data-reader-next-open]');
+  if (blogState.nextFirstTitle) {
+    await waitForCondition(`document.querySelector('#reader-post-title')?.textContent.trim() === ${JSON.stringify(blogState.nextFirstTitle)}`, 5000);
+  }
+  await wait(180);
+  const readerNextOpenState = await evaluate(`(() => ({
+    clicked: ${JSON.stringify(readerNextClicked)},
+    hash: location.hash,
+    title: document.querySelector('#reader-post-title')?.textContent.trim() || '',
+    expectedTitle: ${JSON.stringify(blogState.nextFirstTitle)},
+    expectedPostId: ${JSON.stringify(blogState.nextFirstPostId)},
+    visibleArticle: document.querySelector('#blog-reader')?.classList.contains('active') && !!document.querySelector('#reader-post-content')?.innerText.trim(),
+    nextPanel: document.querySelector('#reader-next-panel')?.classList.contains('active') || false,
+    nextCards: document.querySelectorAll('#reader-next-panel .reader-next-item').length,
+    horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
   }))()`);
   await click('#reader-mode-btn');
   await wait(150);
@@ -1222,6 +1261,9 @@ async function run() {
   assert(blogHubBefore.panel && blogHubBefore.total >= 1 && blogHubBefore.filters >= 3 && blogHubBefore.cards >= 1, `blog reading hub should render stats and filters: ${JSON.stringify(blogHubBefore)}`);
   assert(blogHubBefore.progressCards >= 1 && /42/.test(blogHubBefore.progressText) && !blogHubBefore.horizontalOverflow, `blog reading hub should show resumable progress without overflow: ${JSON.stringify(blogHubBefore)}`);
   assert(blogState.toolbar && blogState.bookmarkPressed, 'blog reader toolbar should render and toggle bookmark state');
+  assert(blogState.nextPanel && blogState.nextCards >= 1 && blogState.nextFirstTitle && blogState.nextFirstPostId, `blog reader should recommend a next article: ${JSON.stringify(blogState)}`);
+  assert(blogState.nextReasons.some(reason => /同主题延伸|拓展视角|未开始|读到|稍后读|精选|适合复盘/.test(reason)) && /^\d+%$/.test(blogState.nextProgress), `blog reader recommendations should explain ranking and progress: ${JSON.stringify(blogState)}`);
+  assert(readerNextOpenState.clicked && readerNextOpenState.visibleArticle && readerNextOpenState.title === readerNextOpenState.expectedTitle && readerNextOpenState.hash.includes(readerNextOpenState.expectedPostId) && readerNextOpenState.nextPanel && readerNextOpenState.nextCards >= 1 && !readerNextOpenState.horizontalOverflow, `blog reader recommendation should open another article cleanly: ${JSON.stringify(readerNextOpenState)}`);
   assert(readerToolState.shareButton && readerToolState.exportButton && readerToolState.modePressed && readerToolState.focusClass && readerToolState.storedMode === 'enabled' && !readerToolState.horizontalOverflow, `blog reader tools should support focus mode without overflow: ${JSON.stringify(readerToolState)}`);
   assert(readerExportState.clicks.length === 1 && /\.md$/i.test(readerExportState.clicks[0].download) && readerExportState.blobInfo?.size > 100 && /markdown/i.test(readerExportState.blobInfo.type), `blog reader should export the current article as markdown: ${JSON.stringify(readerExportState)}`);
   assert(blogState.tocActive && blogState.tocLinks >= 2, 'blog reader should build a table of contents from article headings');
@@ -1369,6 +1411,7 @@ async function run() {
     vaultImportState,
     blogHubBefore,
     blogState,
+    readerNextOpenState,
     readerToolState,
     readerExportState,
     blogHubAfterBookmark,

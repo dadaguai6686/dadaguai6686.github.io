@@ -33,6 +33,7 @@ function init() {
   if ('serviceWorker' in navigator && window.isSecureContext) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/sw.js')
+        .then(registration => registration.update?.().catch(err => console.warn('Service worker update check failed:', err.message)))
         .catch(err => console.warn('Service worker registration failed:', err.message));
     });
   }
@@ -1313,6 +1314,7 @@ function init() {
   const readerBackBtn = document.getElementById('reader-back-btn');
   const readerContentEl = document.getElementById('reader-post-content');
   const readerToc = document.getElementById('reader-toc');
+  const readerNextPanel = document.getElementById('reader-next-panel');
   const readerProgressPercent = document.getElementById('reader-progress-percent');
   const readerCopyLinkBtn = document.getElementById('reader-copy-link-btn');
   const readerShareBtn = document.getElementById('reader-share-btn');
@@ -1586,6 +1588,136 @@ function init() {
     return true;
   }
 
+  function plainTextFromMarkdown(value) {
+    return String(value ?? '')
+      .replace(/```[\s\S]*?```/g, ' ')
+      .replace(/!\[[^\]]*]\([^)]*\)/g, ' ')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/^#{1,6}\s+/gm, '')
+      .replace(/^>\s?/gm, '')
+      .replace(/^\s*(?:[-*]|\d+\.)\s+/gm, '')
+      .replace(/[*_`~]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function getReaderProgressLabel(progress) {
+    if (progress >= 100) return '已读完';
+    if (progress > 0) return `已读 ${progress}%`;
+    return '未开始';
+  }
+
+  function getReaderRecommendationReason(post, currentPost, progress, bookmarks) {
+    const reasons = [];
+    const tag = post?.tag || '未分类';
+    const currentTag = currentPost?.tag || '未分类';
+    if (tag === currentTag) reasons.push('同主题延伸');
+    else reasons.push('拓展视角');
+    if (progress > 0 && progress < 100) reasons.push(`读到 ${progress}%`);
+    else if (progress >= 100) reasons.push('适合复盘');
+    else reasons.push('未开始');
+    if (bookmarks.has(post.id)) reasons.push('稍后读');
+    if (post.pinned) reasons.push('精选');
+    return reasons.slice(0, 4).join(' · ');
+  }
+
+  function getReadingRecommendations(currentPost, limit = 3) {
+    if (!currentPost || !Array.isArray(blogPosts) || blogPosts.length < 2) return [];
+    const bookmarks = new Set(getReaderBookmarks());
+    const currentTag = currentPost.tag || '未分类';
+
+    return blogPosts
+      .filter(post => post?.id && post.id !== currentPost.id)
+      .map((post, index) => {
+        const progress = getReaderProgressValue(post.id);
+        const sameTag = (post.tag || '未分类') === currentTag;
+        const inProgress = progress > 0 && progress < 100;
+        const unread = progress === 0;
+        const completed = progress >= 100;
+        const postDate = Date.parse(post.date || '') || 0;
+        let score = 0;
+        if (sameTag) score += 80;
+        if (inProgress) score += 45;
+        else if (unread) score += 34;
+        else if (completed) score += 6;
+        if (bookmarks.has(post.id)) score += 22;
+        if (post.pinned) score += 10;
+        score += Math.max(0, 14 - index);
+
+        return {
+          post,
+          progress,
+          score,
+          postDate,
+          reason: getReaderRecommendationReason(post, currentPost, progress, bookmarks)
+        };
+      })
+      .sort((a, b) => b.score - a.score || b.postDate - a.postDate || String(a.post.title || '').localeCompare(String(b.post.title || '')))
+      .slice(0, limit);
+  }
+
+  function renderReaderNextPanel(currentPost) {
+    if (!readerNextPanel) return;
+    const recommendations = getReadingRecommendations(currentPost);
+    readerNextPanel.innerHTML = '';
+    readerNextPanel.hidden = recommendations.length === 0;
+    readerNextPanel.classList.toggle('active', recommendations.length > 0);
+    if (!recommendations.length) return;
+
+    const heading = document.createElement('div');
+    heading.className = 'reader-next-heading';
+    heading.innerHTML = `
+      <div>
+        <span class="reader-next-kicker">阅读路径</span>
+        <h2>继续读点更顺手的</h2>
+      </div>
+      <p>下一站已经排好</p>
+    `;
+
+    const list = document.createElement('div');
+    list.className = 'reader-next-list';
+
+    recommendations.forEach(({ post, progress, reason }) => {
+      const item = document.createElement('article');
+      item.className = 'reader-next-item';
+      item.dataset.readerNextId = post.id;
+      const title = post.title || '未命名文章';
+      const snippet = plainTextFromMarkdown(post.excerpt || post.content || '').slice(0, 96);
+      const progressLabel = getReaderProgressLabel(progress);
+      const actionLabel = progress > 0 && progress < 100 ? '继续读' : '阅读';
+
+      item.innerHTML = `
+        <div class="reader-next-copy">
+          <div class="reader-next-meta">
+            <span>${escapeHTML(post.tag || '未分类')}</span>
+            <span>${escapeHTML(post.readTime || '阅读')}</span>
+            <span class="reader-next-reason">${escapeHTML(reason)}</span>
+          </div>
+          <h3 class="reader-next-title">${escapeHTML(title)}</h3>
+          <p>${escapeHTML(snippet || '这篇文章可以作为下一站，继续补齐你的阅读路径。')}</p>
+          <div class="reader-next-progress-row">
+            <span>${escapeHTML(progressLabel)}</span>
+            <div class="reader-next-progress" aria-label="阅读进度 ${progress}%">
+              <span class="reader-next-progress-fill" style="width: ${progress}%"></span>
+            </div>
+          </div>
+        </div>
+        <button class="reader-next-open" data-reader-next-open type="button" aria-label="打开 ${escapeHTML(title)}">
+          <span>${actionLabel}</span>
+          <i data-lucide="arrow-right"></i>
+        </button>
+      `;
+
+      item.querySelector('[data-reader-next-open]')?.addEventListener('click', () => {
+        readArticle(post.id);
+      });
+      list.appendChild(item);
+    });
+
+    readerNextPanel.append(heading, list);
+    safeCreateIcons(readerNextPanel);
+  }
+
   function buildReaderToc(postId) {
     if (!readerToc || !readerContentEl) return;
     readerToc.innerHTML = '';
@@ -1656,6 +1788,7 @@ function init() {
     currentPostId = post.id;
     buildReaderToc(post.id);
     updateReaderBookmarkState();
+    renderReaderNextPanel(post);
     setReaderFocusMode(getReaderFocusMode(), { persist: false });
     navigateTo('blog-reader', { postId: post.id });
 
@@ -1723,6 +1856,7 @@ function init() {
   if (readerBackBtn) {
     readerBackBtn.addEventListener('click', () => {
       if (blogReaderCard) blogReaderCard.classList.remove('active');
+      if (readerNextPanel) readerNextPanel.hidden = true;
       document.title = 'Atherix - 个人博客与数字空间';
       navigateTo('blog');
       renderBlogList();

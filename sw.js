@@ -1,9 +1,9 @@
-const CACHE_VERSION = 'atherix-static-v13-brand-preview';
+const CACHE_VERSION = 'atherix-static-v14-reader-path';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/style.css?v=20260606-arcade-director-v1',
-  '/app.js?v=20260606-arcade-director-v1',
+  '/style.css?v=20260607-reader-path-v1',
+  '/app.js?v=20260607-reader-path-v1',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',
@@ -51,6 +51,21 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
+
+  if (['script', 'style'].includes(request.destination) || ['/app.js', '/style.css', '/sw.js'].includes(url.pathname)) {
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_VERSION).then(cache => cache.put(request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request))
     );
     return;
   }
