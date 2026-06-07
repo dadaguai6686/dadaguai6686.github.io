@@ -952,7 +952,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private renderHazardReadability(graphics: Phaser.GameObjects.Graphics, player: { x: number; y: number }, pulse: number): void {
-    getHazardThreats(this.state)
+    const threats = getHazardThreats(this.state);
+    this.renderHazardTrajectories(graphics, threats, pulse);
+    threats
       .filter((threat) => threat.level !== "safe")
       .forEach((threat) => {
         const danger = threat.level === "danger";
@@ -966,6 +968,44 @@ export class GameScene extends Phaser.Scene {
           graphics.lineBetween(player.x, player.y, threat.position.x, threat.position.y);
         }
       });
+  }
+
+  private renderHazardTrajectories(graphics: Phaser.GameObjects.Graphics, threats: ReturnType<typeof getHazardThreats>, pulse: number): void {
+    const modifier = WAVE_MODIFIERS[this.state.waveModifier];
+    const threatById = new Map(threats.map((threat) => [threat.id, threat]));
+
+    this.state.hazards.forEach((hazard) => {
+      const threat = threatById.get(hazard.id);
+      const projected = projectHazardPosition(hazard, 0.9, this.state.arena, 1 + modifier.hazardSpeedBonus);
+      const dx = projected.x - hazard.position.x;
+      const dy = projected.y - hazard.position.y;
+      const length = Math.hypot(dx, dy);
+      if (length < 8) return;
+
+      const danger = threat?.level === "danger";
+      const near = threat?.level === "near";
+      const color = danger ? 0xff5f9b : near ? 0xff8fba : 0xb388ff;
+      const alpha = danger ? 0.42 + pulse * 0.22 : near ? 0.24 + pulse * 0.15 : 0.1 + pulse * 0.04;
+      const arrowX = dx / length;
+      const arrowY = dy / length;
+      const perpX = -arrowY;
+      const perpY = arrowX;
+      const head = danger ? 14 : near ? 11 : 8;
+
+      graphics.lineStyle(danger ? 4 : near ? 3 : 2, color, alpha);
+      graphics.lineBetween(hazard.position.x, hazard.position.y, projected.x, projected.y);
+      graphics.fillStyle(color, Math.min(0.36, alpha + 0.08));
+      graphics.fillTriangle(
+        projected.x + arrowX * head,
+        projected.y + arrowY * head,
+        projected.x - arrowX * head * 0.75 + perpX * head * 0.62,
+        projected.y - arrowY * head * 0.75 + perpY * head * 0.62,
+        projected.x - arrowX * head * 0.75 - perpX * head * 0.62,
+        projected.y - arrowY * head * 0.75 - perpY * head * 0.62
+      );
+      graphics.lineStyle(danger ? 3 : 2, color, alpha * 0.72);
+      graphics.strokeCircle(projected.x, projected.y, Math.max(16, hazard.radius * 0.72));
+    });
   }
 
   private renderResourceReadability(graphics: Phaser.GameObjects.Graphics, player: { x: number; y: number }, pulse: number): void {
@@ -1025,4 +1065,29 @@ function getContractFocusRadius(kind: ContractFocus["kind"]): number {
   if (kind === "relay") return 72;
   if (kind === "avoidStorm") return 96;
   return 56;
+}
+
+function projectHazardPosition(
+  hazard: Hazard,
+  seconds: number,
+  arena: { width: number; height: number },
+  speedScale: number
+): { x: number; y: number } {
+  return {
+    x: reflectWithin(hazard.position.x + hazard.velocity.x * seconds * speedScale, 70, arena.width - 70),
+    y: reflectWithin(hazard.position.y + hazard.velocity.y * seconds * speedScale, 84, arena.height - 70)
+  };
+}
+
+function reflectWithin(value: number, min: number, max: number): number {
+  if (max <= min) return min;
+  let next = value;
+  for (let guard = 0; guard < 4 && (next < min || next > max); guard += 1) {
+    if (next < min) {
+      next = min + (min - next);
+    } else if (next > max) {
+      next = max - (next - max);
+    }
+  }
+  return Math.max(min, Math.min(max, next));
 }
