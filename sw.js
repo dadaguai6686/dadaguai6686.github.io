@@ -1,9 +1,9 @@
-const CACHE_VERSION = 'atherix-static-v19-boss-counter-chain';
+const CACHE_VERSION = 'atherix-static-v20-gamepad-bridge';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/style.css?v=20260607-boss-counter-chain-v1',
-  '/app.js?v=20260607-boss-counter-chain-v1',
+  '/style.css?v=20260607-gamepad-bridge-v1',
+  '/app.js?v=20260607-gamepad-bridge-v1',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',

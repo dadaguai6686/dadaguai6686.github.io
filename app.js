@@ -4832,6 +4832,7 @@ function init() {
           <canvas class="mini-canvas mini-canvas-wide" id="premium-tactics-canvas" width="560" height="360" aria-label="裂隙战术棋盘"></canvas>
         </div>
         <div class="premium-touch-controls" aria-label="触控街机控制器">
+          <span class="premium-gamepad-status" id="premium-gamepad-status" data-tone="idle">PAD 待机</span>
           <div class="premium-dpad">
             <button type="button" data-premium-control="up" aria-label="上">▲</button>
             <button type="button" data-premium-control="left" aria-label="左">◀</button>
@@ -4850,6 +4851,19 @@ function init() {
     const stage = document.getElementById('premium-game-stage');
     const title = document.getElementById('premium-active-title');
     const premiumKeys = { up: false, down: false, left: false, right: false, action: false, tool: false };
+    const premiumControlNames = Object.keys(premiumKeys);
+    const premiumInputSources = {
+      keyboard: {},
+      touch: {},
+      gamepad: {}
+    };
+    const premiumGamepadState = {
+      connected: false,
+      active: false,
+      name: '',
+      previous: { up: false, down: false, left: false, right: false, action: false, tool: false, start: false, pause: false },
+      lastSeen: 0
+    };
     let premiumActive = 'survivor';
     const titles = {
       survivor: '星核幸存者 Starcore Survivor',
@@ -6283,10 +6297,58 @@ function init() {
       if (stage) stage.focus({ preventScroll: true });
     }
 
-    function clearPremiumKeys() {
-      Object.keys(premiumKeys).forEach(key => {
-        premiumKeys[key] = false;
+    function syncPremiumKeys() {
+      premiumControlNames.forEach(control => {
+        premiumKeys[control] = Object.values(premiumInputSources).some(source => !!source[control]);
       });
+    }
+
+    function setPremiumSourceControl(sourceName, control, pressed) {
+      const source = premiumInputSources[sourceName];
+      if (!source || !premiumControlNames.includes(control)) return false;
+      const value = !!pressed;
+      const changed = !!source[control] !== value;
+      source[control] = value;
+      syncPremiumKeys();
+      return changed;
+    }
+
+    function clearPremiumKeys() {
+      Object.values(premiumInputSources).forEach(source => {
+        premiumControlNames.forEach(control => {
+          source[control] = false;
+        });
+      });
+      syncPremiumKeys();
+    }
+
+    function clearPremiumGamepadKeys() {
+      premiumControlNames.forEach(control => {
+        premiumInputSources.gamepad[control] = false;
+      });
+      syncPremiumKeys();
+    }
+
+    function setPremiumGamepadStatus(text, tone = 'idle') {
+      const el = document.getElementById('premium-gamepad-status');
+      if (!el) return;
+      el.textContent = text;
+      el.dataset.tone = tone;
+    }
+
+    function startPremiumActiveGame() {
+      if (premiumActive === 'survivor') startSurvivor();
+      if (premiumActive === 'boss') startBoss();
+      if (premiumActive === 'drift') startDrift();
+      if (premiumActive === 'heist') newHeist();
+      if (premiumActive === 'chain') newChain();
+      if (premiumActive === 'tactics') newTactics({ shouldFocus: true });
+    }
+
+    function togglePremiumActivePause() {
+      if (premiumActive === 'survivor' && survivor.running) toggleSurvivorPause();
+      if (premiumActive === 'boss' && bossMode.running) toggleBossPause();
+      if (premiumActive === 'drift' && drift.running) toggleDriftPause();
     }
 
     function pauseRealtimePremiumGamesExcept(name) {
@@ -6367,17 +6429,13 @@ function init() {
       btn.addEventListener('click', () => switchPremiumGame(btn.dataset.premiumGame));
     });
 
-    function applyPremiumControl(control, pressed) {
+    function applyPremiumControl(control, pressed, source = 'touch', options = {}) {
       if (pressed && premiumActive === 'survivor' && survivor.draftOpen && control === 'action') {
         selectSurvivorUpgrade(survivor.draftChoices[0]?.id);
         return;
       }
-      if (control === 'up') premiumKeys.up = pressed;
-      if (control === 'down') premiumKeys.down = pressed;
-      if (control === 'left') premiumKeys.left = pressed;
-      if (control === 'right') premiumKeys.right = pressed;
-      if (control === 'action') premiumKeys.action = pressed;
-      if (control === 'tool') premiumKeys.tool = pressed;
+      const changed = setPremiumSourceControl(source, control, pressed);
+      if (options.edgeOnly && !changed) return;
       if (pressed && premiumActive === 'heist') {
         if (control === 'up') moveHeist(0, -1);
         if (control === 'down') moveHeist(0, 1);
@@ -6396,6 +6454,9 @@ function init() {
       if (pressed && premiumActive === 'drift' && control === 'tool') {
         triggerDriftPhaseBrake();
       }
+      if (pressed && premiumActive === 'chain' && control === 'tool') {
+        triggerChainCatalyst();
+      }
     }
 
     library.querySelectorAll('[data-premium-control]').forEach(btn => {
@@ -6403,17 +6464,115 @@ function init() {
       const press = (event) => {
         event.preventDefault();
         focusStage();
-        applyPremiumControl(control, true);
+        applyPremiumControl(control, true, 'touch');
       };
       const release = (event) => {
         event.preventDefault();
-        applyPremiumControl(control, false);
+        applyPremiumControl(control, false, 'touch');
       };
       btn.addEventListener('pointerdown', press);
       btn.addEventListener('pointerup', release);
       btn.addEventListener('pointerleave', release);
       btn.addEventListener('pointercancel', release);
     });
+
+    function firstConnectedGamepad() {
+      if (typeof navigator === 'undefined' || typeof navigator.getGamepads !== 'function') return null;
+      return Array.from(navigator.getGamepads() || []).find(pad => pad && pad.connected !== false) || null;
+    }
+
+    function premiumSnapshotFromGamepad(pad) {
+      if (!pad) return { connected: false };
+      const buttons = pad.buttons || [];
+      const axes = pad.axes || [];
+      const pressed = index => !!buttons[index]?.pressed || Number(buttons[index]?.value || 0) > 0.55;
+      const axisX = Number(axes[0] || 0);
+      const axisY = Number(axes[1] || 0);
+      return {
+        connected: true,
+        name: pad.id || 'Gamepad',
+        left: axisX < -0.35 || pressed(14),
+        right: axisX > 0.35 || pressed(15),
+        up: axisY < -0.35 || pressed(12),
+        down: axisY > 0.35 || pressed(13),
+        action: pressed(0) || pressed(1),
+        tool: pressed(2) || pressed(3),
+        pause: pressed(8),
+        start: pressed(9)
+      };
+    }
+
+    function releasePremiumGamepadSnapshot(snapshot) {
+      clearPremiumGamepadKeys();
+      premiumGamepadState.active = false;
+      premiumGamepadState.connected = !!snapshot?.connected;
+      premiumGamepadState.name = snapshot?.name || premiumGamepadState.name || '';
+      premiumGamepadState.previous = { up: false, down: false, left: false, right: false, action: false, tool: false, start: false, pause: false };
+      if (premiumGamepadState.connected && isGameSectionActive()) {
+        setPremiumGamepadStatus('PAD 聚焦街机', 'focus');
+      } else {
+        setPremiumGamepadStatus('PAD 待机', 'idle');
+      }
+    }
+
+    function applyPremiumGamepadSnapshot(snapshot = {}, options = {}) {
+      const connected = snapshot && snapshot.connected !== false;
+      const focused = !!document.activeElement?.closest?.('#premium-game-stage');
+      const canControl = !!options.force || (connected && isGameSectionActive() && focused);
+      if (!connected || !canControl) {
+        releasePremiumGamepadSnapshot(snapshot);
+        return {
+          connected,
+          active: false,
+          focused,
+          status: document.getElementById('premium-gamepad-status')?.textContent || ''
+        };
+      }
+
+      premiumGamepadState.connected = true;
+      premiumGamepadState.active = true;
+      premiumGamepadState.name = snapshot.name || 'Gamepad';
+      premiumGamepadState.lastSeen = Date.now();
+
+      premiumControlNames.forEach(control => {
+        applyPremiumControl(control, !!snapshot[control], 'gamepad', { edgeOnly: true });
+      });
+
+      if (snapshot.start && !premiumGamepadState.previous.start) {
+        startPremiumActiveGame();
+      }
+      if (snapshot.pause && !premiumGamepadState.previous.pause) {
+        togglePremiumActivePause();
+      }
+
+      const held = premiumControlNames.filter(control => !!snapshot[control]);
+      premiumGamepadState.previous = {
+        up: !!snapshot.up,
+        down: !!snapshot.down,
+        left: !!snapshot.left,
+        right: !!snapshot.right,
+        action: !!snapshot.action,
+        tool: !!snapshot.tool,
+        start: !!snapshot.start,
+        pause: !!snapshot.pause
+      };
+      setPremiumGamepadStatus(held.length ? `PAD ${held.join('+').toUpperCase()}` : 'PAD 就绪', held.length ? 'active' : 'ready');
+      return {
+        connected: true,
+        active: true,
+        focused,
+        name: premiumGamepadState.name,
+        held,
+        status: document.getElementById('premium-gamepad-status')?.textContent || ''
+      };
+    }
+
+    function pollPremiumGamepad() {
+      applyPremiumGamepadSnapshot(premiumSnapshotFromGamepad(firstConnectedGamepad()));
+      requestAnimationFrame(pollPremiumGamepad);
+    }
+
+    requestAnimationFrame(pollPremiumGamepad);
 
     function drawGrid(ctx, w, h, color, gap = 28) {
       ctx.save();
@@ -11519,6 +11678,14 @@ function init() {
               after: tacticsDebugState()
             };
           },
+          gamepadState: () => ({
+            connected: premiumGamepadState.connected,
+            active: premiumGamepadState.active,
+            name: premiumGamepadState.name,
+            keys: { ...premiumKeys },
+            status: document.getElementById('premium-gamepad-status')?.textContent || ''
+          }),
+          simulateGamepad: (snapshot = {}) => applyPremiumGamepadSnapshot({ connected: true, name: 'Smoke Pad', ...snapshot }, { force: true }),
           achievements: () => achievementDefs.map(def => ({
             ...def,
             unlocked: career.achievements.includes(def.id)
@@ -11553,38 +11720,21 @@ function init() {
         if (premiumActive === 'drift') toggleDriftPause();
         return;
       }
-      if (e.code === 'ArrowUp' || e.code === 'KeyW') premiumKeys.up = true;
-      if (e.code === 'ArrowDown' || e.code === 'KeyS') premiumKeys.down = true;
-      if (e.code === 'ArrowLeft' || e.code === 'KeyA') premiumKeys.left = true;
-      if (e.code === 'ArrowRight' || e.code === 'KeyD') premiumKeys.right = true;
-      if (e.code === 'Space') premiumKeys.action = true;
-      if (e.code === 'KeyQ') premiumKeys.tool = true;
-      if (premiumActive === 'heist') {
-        if (e.code === 'ArrowUp' || e.code === 'KeyW') moveHeist(0, -1);
-        if (e.code === 'ArrowDown' || e.code === 'KeyS') moveHeist(0, 1);
-        if (e.code === 'ArrowLeft' || e.code === 'KeyA') moveHeist(-1, 0);
-        if (e.code === 'ArrowRight' || e.code === 'KeyD') moveHeist(1, 0);
-        if (e.code === 'Space') triggerHeistCloak();
-        if (e.code === 'KeyQ') triggerHeistDecoy();
-      }
-      if (premiumActive === 'tactics') {
-        if (e.code === 'ArrowUp' || e.code === 'KeyW') moveTactics(0, -1);
-        if (e.code === 'ArrowDown' || e.code === 'KeyS') moveTactics(0, 1);
-        if (e.code === 'ArrowLeft' || e.code === 'KeyA') moveTactics(-1, 0);
-        if (e.code === 'ArrowRight' || e.code === 'KeyD') moveTactics(1, 0);
-        if (e.code === 'Space') triggerTacticsAction();
-      }
-      if (premiumActive === 'drift' && e.code === 'KeyQ') triggerDriftPhaseBrake();
-      if (premiumActive === 'chain' && e.code === 'KeyQ') triggerChainCatalyst();
+      if (e.code === 'ArrowUp' || e.code === 'KeyW') applyPremiumControl('up', true, 'keyboard');
+      if (e.code === 'ArrowDown' || e.code === 'KeyS') applyPremiumControl('down', true, 'keyboard');
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') applyPremiumControl('left', true, 'keyboard');
+      if (e.code === 'ArrowRight' || e.code === 'KeyD') applyPremiumControl('right', true, 'keyboard');
+      if (e.code === 'Space') applyPremiumControl('action', true, 'keyboard');
+      if (e.code === 'KeyQ') applyPremiumControl('tool', true, 'keyboard');
     });
 
     window.addEventListener('keyup', (e) => {
-      if (e.code === 'ArrowUp' || e.code === 'KeyW') premiumKeys.up = false;
-      if (e.code === 'ArrowDown' || e.code === 'KeyS') premiumKeys.down = false;
-      if (e.code === 'ArrowLeft' || e.code === 'KeyA') premiumKeys.left = false;
-      if (e.code === 'ArrowRight' || e.code === 'KeyD') premiumKeys.right = false;
-      if (e.code === 'Space') premiumKeys.action = false;
-      if (e.code === 'KeyQ') premiumKeys.tool = false;
+      if (e.code === 'ArrowUp' || e.code === 'KeyW') applyPremiumControl('up', false, 'keyboard');
+      if (e.code === 'ArrowDown' || e.code === 'KeyS') applyPremiumControl('down', false, 'keyboard');
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') applyPremiumControl('left', false, 'keyboard');
+      if (e.code === 'ArrowRight' || e.code === 'KeyD') applyPremiumControl('right', false, 'keyboard');
+      if (e.code === 'Space') applyPremiumControl('action', false, 'keyboard');
+      if (e.code === 'KeyQ') applyPremiumControl('tool', false, 'keyboard');
     });
 
     window.addEventListener('blur', clearPremiumKeys);
@@ -11624,6 +11774,7 @@ function init() {
   const btnStartLed = document.getElementById('btn-start-led');
   const btnPauseLed = document.getElementById('btn-pause-led');
   const btnBgmLed = document.getElementById('btn-bgm-led');
+  const runnerGamepadStatus = document.getElementById('runner-gamepad-status');
   const joystickShaft = document.getElementById('joystick-shaft');
 
   const gameCtx = arcadeCanvas ? arcadeCanvas.getContext('2d') : null;
@@ -12881,6 +13032,17 @@ function init() {
       gamePaused: () => gamePaused,
       runnerElapsedMs: () => getRunnerElapsedMs(),
       runnerState: () => runnerDebugState(),
+      runnerGamepad: () => ({
+        connected: runnerGamepadState.connected,
+        active: runnerGamepadState.active,
+        name: runnerGamepadState.name,
+        keys: {
+          left: !!gameKeys.GamepadLeft,
+          right: !!gameKeys.GamepadRight
+        },
+        status: runnerGamepadStatus?.textContent || ''
+      }),
+      simulateRunnerGamepad: (snapshot = {}, holdMs = 650) => applyRunnerGamepadSnapshot({ connected: true, name: 'Smoke Pad', ...snapshot }, { force: true, holdMs }),
       forceRunnerContract: () => forceRunnerContract()
     };
   }
@@ -12947,6 +13109,15 @@ function init() {
 
   const gameKeys = {};
   const overlayActionCodes = ['Enter'];
+  const runnerGamepadState = {
+    connected: false,
+    active: false,
+    name: '',
+    previous: { left: false, right: false, jump: false, dash: false, start: false, pause: false, bgm: false },
+    lastSeen: 0,
+    debugSnapshot: null,
+    debugUntil: 0
+  };
   const runnerTouchMap = {
     left: 'ArrowLeft',
     right: 'ArrowRight'
@@ -12985,6 +13156,132 @@ function init() {
     }
     return true;
   }
+
+  function setRunnerGamepadStatus(text, tone = 'idle') {
+    if (!runnerGamepadStatus) return;
+    runnerGamepadStatus.textContent = text;
+    runnerGamepadStatus.dataset.tone = tone;
+  }
+
+  function firstRunnerGamepad() {
+    if (typeof navigator === 'undefined' || typeof navigator.getGamepads !== 'function') return null;
+    return Array.from(navigator.getGamepads() || []).find(pad => pad && pad.connected !== false) || null;
+  }
+
+  function runnerSnapshotFromGamepad(pad) {
+    if (!pad) return { connected: false };
+    const buttons = pad.buttons || [];
+    const axes = pad.axes || [];
+    const pressed = index => !!buttons[index]?.pressed || Number(buttons[index]?.value || 0) > 0.55;
+    const axisX = Number(axes[0] || 0);
+    return {
+      connected: true,
+      name: pad.id || 'Gamepad',
+      left: axisX < -0.35 || pressed(14),
+      right: axisX > 0.35 || pressed(15),
+      jump: pressed(0) || pressed(1),
+      dash: pressed(2) || pressed(3),
+      pause: pressed(8),
+      start: pressed(9),
+      bgm: pressed(6) && pressed(7)
+    };
+  }
+
+  function releaseRunnerGamepadSnapshot(snapshot = {}) {
+    gameKeys.GamepadLeft = false;
+    gameKeys.GamepadRight = false;
+    if (snapshot.connected === false) {
+      runnerGamepadState.debugSnapshot = null;
+      runnerGamepadState.debugUntil = 0;
+    }
+    runnerGamepadState.active = false;
+    runnerGamepadState.connected = !!snapshot.connected;
+    runnerGamepadState.name = snapshot.name || runnerGamepadState.name || '';
+    runnerGamepadState.previous = { left: false, right: false, jump: false, dash: false, start: false, pause: false, bgm: false };
+    if (runnerGamepadState.connected && isGameSectionActive() && isMiniGameFocus()) {
+      setRunnerGamepadStatus('PAD 街机占用', 'focus');
+    } else if (runnerGamepadState.connected && isGameSectionActive()) {
+      setRunnerGamepadStatus('PAD 就绪', 'ready');
+    } else {
+      setRunnerGamepadStatus('PAD 待机', 'idle');
+    }
+  }
+
+  function applyRunnerGamepadSnapshot(snapshot = {}, options = {}) {
+    const connected = snapshot && snapshot.connected !== false;
+    if (options.force && options.holdMs !== 0) {
+      runnerGamepadState.debugSnapshot = { ...snapshot };
+      runnerGamepadState.debugUntil = Date.now() + Math.max(80, Number(options.holdMs || 650));
+    }
+    const canControl = !!options.force || (connected && isGameSectionActive() && !isMiniGameFocus());
+    if (!connected || !canControl) {
+      releaseRunnerGamepadSnapshot(snapshot);
+      return {
+        connected,
+        active: false,
+        status: runnerGamepadStatus?.textContent || ''
+      };
+    }
+
+    runnerGamepadState.connected = true;
+    runnerGamepadState.active = true;
+    runnerGamepadState.name = snapshot.name || 'Gamepad';
+    runnerGamepadState.lastSeen = Date.now();
+    gameKeys.GamepadLeft = !!snapshot.left;
+    gameKeys.GamepadRight = !!snapshot.right;
+
+    if (snapshot.start && !runnerGamepadState.previous.start) {
+      if (gamePaused) {
+        resumeRunnerGame();
+      } else {
+        runOverlayAction();
+      }
+    }
+    if (snapshot.pause && !runnerGamepadState.previous.pause) {
+      toggleRunnerPause();
+    }
+    if (gameRunning && !gamePaused && snapshot.jump && !runnerGamepadState.previous.jump) {
+      triggerPlayerJump();
+    }
+    if (gameRunning && !gamePaused && snapshot.dash && !runnerGamepadState.previous.dash) {
+      triggerPlayerDash();
+    }
+    if (snapshot.bgm && !runnerGamepadState.previous.bgm) {
+      toggleRunnerMusic();
+    }
+
+    const held = ['left', 'right', 'jump', 'dash'].filter(control => !!snapshot[control]);
+    runnerGamepadState.previous = {
+      left: !!snapshot.left,
+      right: !!snapshot.right,
+      jump: !!snapshot.jump,
+      dash: !!snapshot.dash,
+      start: !!snapshot.start,
+      pause: !!snapshot.pause,
+      bgm: !!snapshot.bgm
+    };
+    setRunnerGamepadStatus(held.length ? `PAD ${held.join('+').toUpperCase()}` : 'PAD 就绪', held.length ? 'active' : 'ready');
+    return {
+      connected: true,
+      active: true,
+      name: runnerGamepadState.name,
+      held,
+      status: runnerGamepadStatus?.textContent || ''
+    };
+  }
+
+  function pollRunnerGamepad() {
+    const liveSnapshot = runnerSnapshotFromGamepad(firstRunnerGamepad());
+    if (!liveSnapshot.connected && runnerGamepadState.debugSnapshot && Date.now() < runnerGamepadState.debugUntil) {
+      applyRunnerGamepadSnapshot(runnerGamepadState.debugSnapshot, { force: true, holdMs: 0 });
+    } else {
+      if (Date.now() >= runnerGamepadState.debugUntil) runnerGamepadState.debugSnapshot = null;
+      applyRunnerGamepadSnapshot(liveSnapshot);
+    }
+    requestAnimationFrame(pollRunnerGamepad);
+  }
+
+  requestAnimationFrame(pollRunnerGamepad);
 
   window.addEventListener('keydown', (e) => {
     const gameControlCodes = ['Space', 'Enter', 'Escape', 'KeyP', 'KeyW', 'KeyA', 'KeyD', 'KeyK', 'ShiftLeft', 'ShiftRight', 'ArrowUp', 'ArrowLeft', 'ArrowRight'];
@@ -13242,7 +13539,7 @@ function init() {
     if (player.vy > 10) player.vy = 10;
 
     if (now > player.dashBurstUntil) {
-      if (gameKeys['KeyD'] || gameKeys['ArrowRight']) {
+      if (gameKeys['KeyD'] || gameKeys['ArrowRight'] || gameKeys.GamepadRight) {
         player.vx = 4;
         if (player.isGrounded && Math.random() < 0.15) {
           particles.push({
@@ -13256,7 +13553,7 @@ function init() {
             color: 'rgba(255, 255, 255, 0.3)'
           });
         }
-      } else if (gameKeys['KeyA'] || gameKeys['ArrowLeft']) {
+      } else if (gameKeys['KeyA'] || gameKeys['ArrowLeft'] || gameKeys.GamepadLeft) {
         player.vx = -4;
         if (player.isGrounded && Math.random() < 0.15) {
           particles.push({

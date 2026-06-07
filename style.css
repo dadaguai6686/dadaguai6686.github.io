@@ -3891,6 +3891,47 @@ body.command-open {
   order: -1;
 }
 
+.runner-gamepad-status,
+.premium-gamepad-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0.22rem 0.62rem;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.64);
+  color: rgba(226, 232, 240, 0.82);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.runner-gamepad-status[data-tone="ready"],
+.premium-gamepad-status[data-tone="ready"] {
+  border-color: rgba(34, 197, 94, 0.42);
+  background: rgba(21, 128, 61, 0.18);
+  color: #bbf7d0;
+  box-shadow: 0 0 18px rgba(34, 197, 94, 0.14);
+}
+
+.runner-gamepad-status[data-tone="active"],
+.premium-gamepad-status[data-tone="active"] {
+  border-color: rgba(34, 211, 238, 0.46);
+  background: rgba(14, 116, 144, 0.18);
+  color: #a5f3fc;
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.16);
+}
+
+.runner-gamepad-status[data-tone="focus"],
+.premium-gamepad-status[data-tone="focus"] {
+  border-color: rgba(251, 191, 36, 0.4);
+  background: rgba(180, 83, 9, 0.18);
+  color: #fde68a;
+}
+
 .runner-dpad,
 .runner-action-cluster {
   display: flex;

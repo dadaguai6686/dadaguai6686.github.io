@@ -798,6 +798,29 @@ async function run() {
       runningAfterResume
     };
   })()`, 7000);
+  const runnerGamepadState = await evaluate(`(async () => {
+    const api = window.__atherixDebug;
+    const before = api?.player || {};
+    const beforePad = api?.runnerGamepad?.() || {};
+    api?.simulateRunnerGamepad?.({ right: true }, 520);
+    await new Promise(resolve => setTimeout(resolve, 320));
+    const afterMove = api?.player || {};
+    const movingPad = api?.runnerGamepad?.() || {};
+    api?.simulateRunnerGamepad?.({ right: false }, 120);
+    await new Promise(resolve => setTimeout(resolve, 80));
+    const releasedPad = api?.runnerGamepad?.() || {};
+    return {
+      beforeX: before.x || 0,
+      afterX: afterMove.x || 0,
+      running: !!api?.gameRunning?.(),
+      beforePad,
+      movingPad,
+      releasedPad,
+      statusText: document.querySelector('#runner-gamepad-status')?.textContent || '',
+      statusTone: document.querySelector('#runner-gamepad-status')?.dataset.tone || '',
+      debug: api?.runnerState?.() || {}
+    };
+  })()`, 3000);
   const arcadeInitial = await evaluate(`(() => ({
     premium: !!document.querySelector('#premium-game-stage'),
     careerPanel: !!document.querySelector('#premium-career-rating'),
@@ -858,9 +881,29 @@ async function run() {
     tacticsPanel: !!document.querySelector('#premium-tactics-canvas'),
     oldPrototypeCount: document.querySelectorAll('#snake-canvas,#breakout-canvas,#tile-board,#memory-board').length,
     touchControls: document.querySelectorAll('[data-premium-control]').length,
+    gamepadStatus: document.querySelector('#premium-gamepad-status')?.textContent || '',
     chainCells: document.querySelectorAll('#premium-chain-board .chain-cell').length,
     chainTarget: document.querySelector('#premium-chain-target')?.textContent
   }))()`);
+  const premiumGamepadState = await evaluate(`(() => {
+    const api = window.__atherixDebug?.premium;
+    document.querySelector('[data-premium-game="tactics"]')?.click();
+    document.querySelector('#premium-tactics-start')?.click();
+    const before = api?.tacticsState?.() || {};
+    const applied = api?.simulateGamepad?.({ left: true }) || {};
+    const after = api?.tacticsState?.() || {};
+    const held = api?.gamepadState?.() || {};
+    const released = api?.simulateGamepad?.({ left: false }) || {};
+    return {
+      before,
+      after,
+      applied,
+      held,
+      released,
+      statusText: document.querySelector('#premium-gamepad-status')?.textContent || '',
+      statusTone: document.querySelector('#premium-gamepad-status')?.dataset.tone || ''
+    };
+  })()`);
   const contractProgressState = await evaluate(`(() => {
     const before = window.__atherixDebug?.premium?.contracts?.() || [];
     window.atherixArcadeCareer?.recordResult?.('survivor', 900, { smoke: true });
@@ -1508,6 +1551,7 @@ async function run() {
   assert(runnerTouchState.contractAfterDash && runnerTouchState.debugAfterDash?.contractHud === runnerTouchState.contractAfterDash, `runner contract HUD should sync with debug state: ${JSON.stringify(runnerTouchState)}`);
   assert(runnerTouchState.forceContract?.after?.contract?.completed > runnerTouchState.forceContract?.before?.contract?.completed && runnerTouchState.forceContract?.after?.score > runnerTouchState.forceContract?.before?.score && runnerTouchState.forceContract?.achieved, `runner route contract should complete, score, and unlock achievement: ${JSON.stringify(runnerTouchState)}`);
   assert(Number(runnerTouchState.scoreHud) === runnerTouchState.debug?.score && runnerTouchState.comboHud === runnerTouchState.debug?.comboHud && runnerTouchState.contractHud === runnerTouchState.debug?.contractHud && runnerTouchState.statusHud === runnerTouchState.debug?.statusHud, `runner HUD should remain synchronized after forced contract: ${JSON.stringify(runnerTouchState)}`);
+  assert(runnerGamepadState.running && runnerGamepadState.afterX > runnerGamepadState.beforeX && runnerGamepadState.movingPad?.keys?.right && /PAD/.test(runnerGamepadState.statusText), `runner gamepad bridge should move the player and update PAD status: ${JSON.stringify(runnerGamepadState)}`);
   assert(runnerMobileState.controls >= 7 && runnerMobileState.visibleInFirstViewport && !runnerMobileState.horizontalOverflow, `runner touch controls should be reachable on mobile: ${JSON.stringify(runnerMobileState)}`);
   assert(arcadeInitial.premium && arcadeInitial.careerPanel, 'premium arcade career panel should render');
   assert(arcadeInitial.oldPrototypeCount === 0, 'old prototype mini-games should be replaced');
@@ -1543,6 +1587,7 @@ async function run() {
   assert(rivalLaunchState.target === 'boss' && rivalLaunchState.active === 'boss' && /Boss/.test(rivalLaunchState.activeTitle) && /宿敌挑战/.test(rivalLaunchState.toast) && !rivalLaunchState.horizontalOverflow, `premium arcade rival action should launch the current rival mode: ${JSON.stringify(rivalLaunchState)}`);
   assert(['runner', 'survivor', 'boss', 'drift', 'heist', 'chain', 'tactics'].includes(directorLaunchState.target) && (directorLaunchState.target === 'runner' || directorLaunchState.active === directorLaunchState.target) && !directorLaunchState.horizontalOverflow, `premium arcade director should launch the recommended target: ${JSON.stringify(directorLaunchState)}`);
   assert(arcadeInitial.touchControls >= 5, 'premium touch controls should be available');
+  assert(/PAD/.test(arcadeInitial.gamepadStatus) && premiumGamepadState.after?.player?.x < premiumGamepadState.before?.player?.x && premiumGamepadState.held?.keys?.left && /PAD/.test(premiumGamepadState.statusText), `premium arcade gamepad bridge should drive tactics movement and status: ${JSON.stringify(premiumGamepadState)}`);
   assert(survivorState.nonBlank && survivorState.threat && /\dx$/.test(survivorState.chain) && survivorState.overdrive && survivorState.bounty && survivorState.debug?.hud?.chain === survivorState.chain && survivorState.debug?.hud?.bounty === survivorState.bounty, `survivor canvas should render active state with chain, overdrive, and bounty HUD: ${JSON.stringify(survivorState)}`);
   assert(survivorDraftOpenState.open && survivorDraftOpenState.ariaHidden === 'false' && survivorDraftOpenState.optionCards === 3 && survivorDraftOpenState.choices.length === 3 && survivorDraftOpenState.running && !survivorDraftOpenState.paused, `survivor roguelite draft should open three upgrade choices without using pause state: ${JSON.stringify(survivorDraftOpenState)}`);
   assert(survivorDraftFreezeState.open && Math.abs(survivorDraftFreezeState.elapsedAfter - survivorDraftOpenState.beforeElapsed) < 1 && Math.abs(survivorDraftFreezeState.scoreAfter - survivorDraftOpenState.beforeScore) < 1, `survivor roguelite draft should freeze the run clock and score until a choice is made: ${JSON.stringify({ survivorDraftOpenState, survivorDraftFreezeState })}`);
@@ -1681,8 +1726,10 @@ async function run() {
     gameViewportState,
     mainSpaceState,
     runnerTouchState,
+    runnerGamepadState,
     runnerMobileState,
     arcadeInitial,
+    premiumGamepadState,
     contractProgressState,
     leagueProgressState,
     loadoutProgressState,
