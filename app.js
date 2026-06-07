@@ -4546,6 +4546,23 @@ function init() {
         </div>
         <div class="arcade-leaderboard-list" id="premium-leaderboard-list"></div>
       </div>
+      <div class="arcade-rival-panel" id="premium-rival-panel" data-tone="combat" data-complete="false" aria-label="街机宿敌挑战">
+        <div class="arcade-rival-heading">
+          <span><i data-lucide="swords"></i> RIVAL INTEL</span>
+          <strong id="premium-rival-title">宿敌扫描中...</strong>
+          <small id="premium-rival-summary">系统会根据最近战报、联赛路线和奖牌进度生成下一位可追逐宿敌。</small>
+        </div>
+        <div class="arcade-rival-stats">
+          <span>目标 <strong id="premium-rival-target">--</strong></span>
+          <span>差距 <strong id="premium-rival-gap">--</strong></span>
+          <span>压强 <strong id="premium-rival-pressure">--</strong></span>
+        </div>
+        <div class="arcade-rival-brief" id="premium-rival-brief">完成一局后，这里会给出宿敌打法提示。</div>
+        <button type="button" class="arcade-rival-action" id="premium-rival-start" data-rival-target-game="survivor">
+          <i data-lucide="crosshair"></i>
+          <span>锁定宿敌</span>
+        </button>
+      </div>
       <div class="arcade-coach-panel" id="premium-run-coach-panel" data-empty="true" aria-label="街机赛后教练">
         <div class="arcade-coach-heading">
           <span><i data-lucide="sparkles"></i> POST-RUN COACH</span>
@@ -5059,6 +5076,15 @@ function init() {
         tuning: { hp: -14, shield: -16, enemyHp: 1.28, bossHp: 1.26, guardCone: 1, chainTarget: 1.28, chainMoves: -2, tacticsHp: -12 }
       }
     ];
+    const rivalProfiles = {
+      runner: { name: 'ORION-7', title: '航线幽灵', tone: 'speed', tactic: '保持连段窗口，冲刺只留给水晶、信标与航线合约。' },
+      survivor: { name: 'NOVA-9', title: '星核猎手', tone: 'combat', tactic: '先控精英潮，Space 超载留给异常事件和赏金目标。' },
+      boss: { name: 'PRISM-0', title: '棱镜决斗者', tone: 'duel', tactic: '擦弹攒专注，等弱点预警结束前贴近反击。' },
+      drift: { name: 'KAIRO', title: '霓虹劲敌', tone: 'speed', tactic: '连续 PERFECT 门能压制劲敌，Q 相位刹车只救高热路段。' },
+      heist: { name: 'ECHO-V', title: '幽影渗透者', tone: 'shadow', tactic: '先拿缓存再撤离，诱饵优先拆守卫与摄像头交叉视野。' },
+      chain: { name: 'SAGE-X', title: '炼金解算器', tone: 'mind', tactic: '优先配方颜色和 9 连，催化剂等超载团再出手。' },
+      tactics: { name: 'RIFT-MK', title: '裂隙指挥官', tone: 'strategy', tactic: '沿推荐路线拿掩体动量，爆破锁定单位后再推进核心。' }
+    };
 
     function todayKey() {
       const d = new Date();
@@ -5459,6 +5485,76 @@ function init() {
       list.querySelectorAll('[data-leaderboard-game]').forEach(btn => {
         btn.addEventListener('click', () => launchMasteryTarget(btn.dataset.leaderboardGame));
       });
+    }
+
+    function rivalProfileForGame(game) {
+      return rivalProfiles[game] || rivalProfiles.survivor;
+    }
+
+    function arcadeRivalIntel() {
+      const runs = Array.isArray(career.runs) ? career.runs : [];
+      const latest = runs[0] || null;
+      const league = leagueSnapshot();
+      const focus = masteryFocusTarget();
+      const game = latest?.game || league.activeStage?.game || focus?.game || 'survivor';
+      const source = latest?.game ? '赛后复仇' : league.activeStage ? '联赛宿敌' : '奖牌猎手';
+      const best = Number(career.best?.[game] || 0);
+      const next = nextMedalTarget(game, best);
+      let target = 0;
+      if (latest?.game) {
+        target = next?.threshold || Math.max(best + 150, Math.ceil(best * 1.08));
+      } else if (league.activeStage?.game === game) {
+        target = Number(league.activeStage.target || 0);
+      } else {
+        target = next?.threshold || Math.max(best + 150, Math.ceil(best * 1.08));
+      }
+      if (!target) {
+        target = (medalRules[game] || []).find(rule => rule.name === 'bronze')?.threshold || 800;
+      }
+      const profile = rivalProfileForGame(game);
+      const gap = Math.max(0, target - best);
+      const pressure = best > 0 ? Math.max(100, Math.round(target / Math.max(1, best) * 100)) : 100;
+      return {
+        game,
+        label: premiumTabLabels[game] || titles[game] || game,
+        profile: profile.name,
+        title: profile.title,
+        tone: profile.tone,
+        source,
+        best,
+        target,
+        gap,
+        pressure,
+        complete: gap <= 0,
+        tactic: profile.tactic,
+        progress: target > 0 ? Math.min(100, Math.round(best / target * 100)) : 0
+      };
+    }
+
+    function renderArcadeRival() {
+      const panel = document.getElementById('premium-rival-panel');
+      if (!panel) return;
+      const intel = arcadeRivalIntel();
+      const titleEl = document.getElementById('premium-rival-title');
+      const summaryEl = document.getElementById('premium-rival-summary');
+      const targetEl = document.getElementById('premium-rival-target');
+      const gapEl = document.getElementById('premium-rival-gap');
+      const pressureEl = document.getElementById('premium-rival-pressure');
+      const briefEl = document.getElementById('premium-rival-brief');
+      const actionBtn = document.getElementById('premium-rival-start');
+      panel.dataset.tone = intel.tone;
+      panel.dataset.complete = intel.complete ? 'true' : 'false';
+      panel.style.setProperty('--rival-progress', `${intel.progress}%`);
+      if (titleEl) titleEl.textContent = `${intel.profile} · ${intel.label}`;
+      if (summaryEl) summaryEl.textContent = `${intel.title} 正在 ${intel.source} 中压线，目标 ${intel.target}+。`;
+      if (targetEl) targetEl.textContent = String(intel.target);
+      if (gapEl) gapEl.textContent = intel.gap ? String(intel.gap) : '已压制';
+      if (pressureEl) pressureEl.textContent = intel.complete ? 'OVR' : `${intel.pressure}%`;
+      if (briefEl) briefEl.textContent = `${intel.tactic} 当前最佳 ${intel.best}，完成后会刷新宿敌目标。`;
+      if (actionBtn) {
+        actionBtn.dataset.rivalTargetGame = intel.game;
+        actionBtn.querySelector('span').textContent = intel.complete ? '刷新宿敌' : `挑战 ${intel.label}`;
+      }
     }
 
     function renderArcadeRunLog() {
@@ -6045,6 +6141,7 @@ function init() {
       renderAchievementFeed();
       renderArcadeRunLog();
       renderArcadeLeaderboard();
+      renderArcadeRival();
       renderArcadeCoach();
       renderArcadeDirector();
       renderArcadeMasteryMap();
@@ -6126,6 +6223,7 @@ function init() {
       setDifficulty: setArcadeDifficulty,
       mastery: () => careerGameOrder.map(masteryStatusForGame),
       leaderboard: () => careerLeaderboard(),
+      rival: () => arcadeRivalIntel(),
       runs: () => (Array.isArray(career.runs) ? career.runs : []).map(run => ({ ...run })),
       coach: () => latestRunCoach(),
       league: () => leagueSnapshot(),
@@ -6236,8 +6334,15 @@ function init() {
       showToast(`已进入联赛阶段：${titles[target] || target}`, 'success');
     }
 
+    function launchRivalChallenge() {
+      const intel = arcadeRivalIntel();
+      launchMasteryTarget(intel.game);
+      showToast(`宿敌挑战：${intel.profile} · ${intel.label} ${intel.target}+`, 'info');
+    }
+
     document.getElementById('premium-director-start')?.addEventListener('click', launchDirectorChallenge);
     document.getElementById('premium-league-start')?.addEventListener('click', launchLeagueStage);
+    document.getElementById('premium-rival-start')?.addEventListener('click', launchRivalChallenge);
     document.getElementById('premium-coach-launch')?.addEventListener('click', () => {
       const target = document.getElementById('premium-coach-launch')?.dataset.coachTargetGame || latestRunCoach()?.game;
       if (!target) return;
@@ -11383,6 +11488,7 @@ function init() {
           coach: () => window.atherixArcadeCareer?.coach?.() || null,
           league: () => window.atherixArcadeCareer?.league?.() || {},
           leaderboard: () => window.atherixArcadeCareer?.leaderboard?.() || {},
+          rival: () => window.atherixArcadeCareer?.rival?.() || {},
           loadout: () => window.atherixArcadeCareer?.loadout?.() || {},
           difficulty: () => window.atherixArcadeCareer?.difficulty?.() || {},
           mastery: () => window.atherixArcadeCareer?.mastery?.() || []

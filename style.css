@@ -4576,6 +4576,163 @@ body.command-open {
   background: rgba(15, 23, 42, 0.34);
 }
 
+.arcade-rival-panel {
+  --rival-progress: 0%;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(230px, 1fr) minmax(250px, 0.9fr) minmax(230px, 1fr) auto;
+  gap: 0.7rem;
+  align-items: stretch;
+  margin-bottom: 1rem;
+  padding: 0.85rem;
+  overflow: hidden;
+  border: 1px solid rgba(244, 114, 182, 0.24);
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(244, 114, 182, 0.11), rgba(34, 211, 238, 0.07)),
+    rgba(3, 7, 18, 0.5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.arcade-rival-panel::after {
+  content: "";
+  position: absolute;
+  left: 0.85rem;
+  right: 0.85rem;
+  bottom: 0.46rem;
+  height: 3px;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, #f472b6, #22d3ee) 0 / var(--rival-progress) 100% no-repeat,
+    rgba(148, 163, 184, 0.16);
+}
+
+.arcade-rival-panel[data-tone="speed"] {
+  border-color: rgba(34, 211, 238, 0.28);
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, 0.12), rgba(251, 191, 36, 0.07)),
+    rgba(3, 7, 18, 0.5);
+}
+
+.arcade-rival-panel[data-tone="strategy"],
+.arcade-rival-panel[data-tone="mind"] {
+  border-color: rgba(167, 139, 250, 0.28);
+  background:
+    linear-gradient(135deg, rgba(167, 139, 250, 0.12), rgba(52, 211, 153, 0.07)),
+    rgba(3, 7, 18, 0.5);
+}
+
+.arcade-rival-panel[data-complete="true"] {
+  border-color: rgba(52, 211, 153, 0.34);
+}
+
+.arcade-rival-heading {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.arcade-rival-heading span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #fbcfe8;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.arcade-rival-heading svg,
+.arcade-rival-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+.arcade-rival-heading strong {
+  color: #fff;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.02rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.arcade-rival-heading small {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.38;
+}
+
+.arcade-rival-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.48rem;
+}
+
+.arcade-rival-stats span {
+  min-height: 64px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.16rem;
+  padding: 0.52rem 0.58rem;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.48);
+  color: var(--text-muted);
+  font-size: 0.66rem;
+  font-weight: 900;
+}
+
+.arcade-rival-stats strong {
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82rem;
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+}
+
+.arcade-rival-brief {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  padding: 0.58rem 0.65rem;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.44);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.42;
+  overflow-wrap: anywhere;
+}
+
+.arcade-rival-action {
+  min-width: 132px;
+  min-height: 42px;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.38rem;
+  padding: 0.52rem 0.72rem;
+  border: 1px solid rgba(244, 114, 182, 0.36);
+  border-radius: 8px;
+  background: rgba(244, 114, 182, 0.13);
+  color: #fdf2f8;
+  font-size: 0.72rem;
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.arcade-rival-action:hover,
+.arcade-rival-action:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(34, 211, 238, 0.42);
+  background: rgba(34, 211, 238, 0.14);
+}
+
 .arcade-coach-panel {
   display: grid;
   grid-template-columns: minmax(240px, 1.2fr) minmax(260px, 1fr) minmax(220px, 0.9fr);
@@ -6414,6 +6571,12 @@ body.command-open {
   .arcade-loadout-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .arcade-rival-panel {
+    grid-template-columns: minmax(220px, 1fr) minmax(250px, 1fr);
+  }
+  .arcade-rival-action {
+    width: 100%;
+  }
 }
 
 @media (max-width: 760px) {
@@ -6446,6 +6609,13 @@ body.command-open {
   }
   .arcade-leaderboard-card {
     min-height: auto;
+  }
+  .arcade-rival-panel,
+  .arcade-rival-stats {
+    grid-template-columns: 1fr;
+  }
+  .arcade-rival-action {
+    min-width: 0;
   }
   .arcade-coach-panel,
   .arcade-coach-grid {
