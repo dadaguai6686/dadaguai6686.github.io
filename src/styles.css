@@ -3076,6 +3076,10 @@ h1 {
     padding: 5px 6px;
   }
 
+  #shell[data-status="playing"][data-briefing="true"] #signal-panel {
+    display: none;
+  }
+
   #shell[data-status="playing"] .signal-head strong,
   #shell[data-status="playing"] .signal-head span {
     font-size: 10px;

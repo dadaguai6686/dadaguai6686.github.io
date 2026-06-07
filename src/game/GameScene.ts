@@ -74,6 +74,7 @@ type HudSnapshot = {
   sector: SectorLayout;
   contract: ContractSnapshot;
   performance: RunPerformance;
+  briefingActive: boolean;
   radar: RadarSnapshot;
   upgradeSummaries: UpgradeSummary[];
   upgradeChoices: Upgrade[];
@@ -732,6 +733,7 @@ export class GameScene extends Phaser.Scene {
       sector: SECTOR_LAYOUTS[this.state.sector],
       contract: getContractSnapshot(this.state),
       performance: getRunPerformance(this.state),
+      briefingActive: this.state.briefingActive,
       radar: this.createRadarSnapshot(),
       upgradeSummaries: getUpgradeSummaries(this.state.upgrades),
       upgradeChoices: this.state.status === "won" ? getUpgradeChoices(this.state) : []

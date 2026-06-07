@@ -520,6 +520,7 @@ window.addEventListener("game:hud", (event) => {
     message: string;
     contract: ContractSnapshot;
     performance: RunPerformance;
+    briefingActive: boolean;
     coachDirective: CoachDirective;
     objectiveHint: ObjectiveHint;
     resourceAlerts: ResourceAlerts;
@@ -536,6 +537,7 @@ window.addEventListener("game:hud", (event) => {
 
   latestStatus = detail.status;
   setShellStatus(detail.status);
+  setShellBriefingActive(detail.status === "playing" && detail.briefingActive);
   latestScore = detail.score;
   latestWave = detail.wave;
   latestBestCombo = detail.bestCombo;
@@ -594,6 +596,7 @@ window.addEventListener("game:ended", (event) => {
   const detail = (event as CustomEvent).detail as RunEndDetail;
   latestStatus = detail.status;
   setShellStatus(detail.status);
+  setShellBriefingActive(false);
   latestScore = detail.score;
   latestWave = detail.wave;
   latestBestCombo = detail.bestCombo;
@@ -1342,6 +1345,7 @@ function showHelpOverlay(reason: "manual" | "interruption" = "manual"): void {
     window.dispatchEvent(new CustomEvent("game:pause"));
     latestStatus = "paused";
     setShellStatus(latestStatus);
+    setShellBriefingActive(false);
   }
   overlay.classList.add("show");
   const paused = latestStatus === "paused";
@@ -1716,6 +1720,10 @@ function updateRecordUi(): void {
 
 function setShellStatus(status: GameStatus): void {
   shell.dataset.status = status;
+}
+
+function setShellBriefingActive(active: boolean): void {
+  shell.dataset.briefing = String(active);
 }
 
 function setDifficultyPickerVisible(visible: boolean): void {
@@ -2559,6 +2567,7 @@ class AudioBus {
 
 audioBus = new AudioBus(() => saveData.audioEnabled);
 setShellStatus(latestStatus);
+setShellBriefingActive(false);
 updateDifficultyUi();
 updateAudioUi();
 updateSettingsUi();

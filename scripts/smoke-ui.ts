@@ -68,6 +68,8 @@ assert.ok(main.includes("completeBootStatus"), "runtime should hide the boot loa
 assert.ok(main.includes('document.body.dataset.gameReady = "true"'), "runtime should mark the page as game-ready");
 assert.ok(main.includes("renderTacticalScan()"), "pause overlay should render the tactical scan");
 assert.ok(main.includes("updateWaveIntro(detail)"), "HUD updates should render wave intro briefing");
+assert.ok(gameScene.includes("briefingActive: this.state.briefingActive"), "HUD bridge should expose opening briefing state to the DOM");
+assert.ok(main.includes("setShellBriefingActive"), "DOM shell should track whether the opening briefing is active");
 assert.ok(main.includes("renderMissionToast(detail)"), "HUD updates should render in-run mission transition toasts");
 assert.ok(main.includes("showCombatLog"), "HUD should show localized in-run combat feedback details");
 assert.ok(main.includes("hideCombatLog"), "HUD should hide combat feedback when leaving play");
@@ -176,6 +178,7 @@ assert.ok(styles.includes("#combat-log-history li:nth-child(n + 2)"), "mobile co
 assert.ok(styles.includes('#shell[data-status="playing"] #combat-log'), "mobile play should position combat feedback away from touch controls");
 assert.ok(styles.includes("#objective-strip span") && styles.includes("-webkit-line-clamp: 2"), "mobile objective strip should clamp long route details");
 assert.ok(styles.includes('#shell[data-status="playing"] #combo-timer[data-state="idle"]'), "mobile play should collapse the idle combo timer until a chain starts");
+assert.ok(styles.includes('[data-briefing="true"] #signal-panel'), "mobile play should hide the score rating panel during the opening read phase");
 assert.ok(styles.includes("#quick-brief"), "compact first-screen objective brief should have CSS");
 assert.ok(styles.includes("#launch-brief"), "launch briefing should have CSS");
 assert.ok(styles.includes(".launch-route-line"), "launch route map should render an obvious route line");
