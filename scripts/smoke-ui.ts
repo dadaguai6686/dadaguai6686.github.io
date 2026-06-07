@@ -79,6 +79,12 @@ assert.ok(main.includes("升级建议：优先"), "upgrade choices should show a
 assert.ok(main.includes("短板原因"), "upgrade choices should explain why an upgrade is recommended");
 assert.ok(main.includes("系统推荐"), "recommended upgrade cards should be visibly labeled in Chinese");
 assert.ok(main.includes("选择理由"), "each upgrade card should explain when to choose it");
+assert.ok(main.includes("buildUpgradeForecast"), "upgrade choices should preview the next wave before the player chooses");
+assert.ok(main.includes("下一波预报"), "upgrade choices should label the next-wave forecast in Chinese");
+assert.ok(main.includes("区域"), "upgrade forecast should name the next sector");
+assert.ok(main.includes("事件"), "upgrade forecast should name the next wave event");
+assert.ok(main.includes("合约"), "upgrade forecast should name the next tactical contract");
+assert.ok(main.includes("buildForecastUpgradeRecommendation"), "upgrade recommendations should account for next-wave pressure");
 assert.ok(main.includes("createRadarNodes"), "radar and scan should share SVG node construction");
 assert.ok(main.includes("radar-guide"), "radar and scan should draw the current navigation guide");
 assert.ok(main.includes("导航 "), "radar summary should name the current guide target");
@@ -114,6 +120,8 @@ assert.ok(styles.includes('span[data-state="active"]'), "route coach should visu
 assert.ok(styles.includes("#game-dossier"), "mission dossier should have CSS");
 assert.ok(styles.includes("#first-minute-route"), "first-minute route should have CSS");
 assert.ok(styles.includes(".upgrade-brief"), "upgrade recommendation header should have CSS");
+assert.ok(styles.includes(".upgrade-forecast"), "next-wave upgrade forecast should have CSS");
+assert.ok(styles.includes(".upgrade-forecast-chips"), "next-wave forecast should style compact sector/event/contract tags");
 assert.ok(styles.includes('[data-recommended="true"]'), "recommended upgrade cards should have a highlighted style");
 assert.ok(styles.includes(".upgrade-tag"), "upgrade cards should have a visible role or recommendation tag");
 assert.ok(styles.includes("touch-action: none"), "mobile controls should disable browser touch gestures");

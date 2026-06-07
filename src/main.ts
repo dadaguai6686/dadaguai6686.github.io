@@ -2,11 +2,18 @@ import Phaser from "phaser";
 import { GameScene } from "./game/GameScene";
 import {
   ACHIEVEMENTS,
+  CAMPAIGN_WAVES,
+  CONTRACTS,
   DIFFICULTY_SETTINGS,
+  SECTOR_LAYOUTS,
   UPGRADE_CATALOG,
+  WAVE_MODIFIERS,
   getAchievementSummaries,
+  getContractFor,
   getRoutePlan,
+  getSectorFor,
   getUnlockedAchievementsForRun,
+  getWaveModifierFor,
   parseRouteSeed,
   type AchievementId,
   type CoachDirective,
@@ -217,6 +224,17 @@ type UpgradeRecommendation = {
   id: UpgradeId;
   label: string;
   reason: string;
+};
+
+type UpgradeForecast = {
+  contractName: string;
+  contractRequirement: string;
+  eventBriefing: string;
+  eventName: string;
+  sectorBriefing: string;
+  sectorName: string;
+  wave: number;
+  totalWaves: number;
 };
 
 type RadarSnapshot = {
@@ -576,6 +594,7 @@ function renderUpgradeChoices(detail = latestEndDetail): void {
   const choices = latestUpgradeChoices.length > 0 ? latestUpgradeChoices : Object.values(UPGRADE_CATALOG).slice(0, 3);
   const summaries = new Map(latestUpgradeSummaries.map((summary) => [summary.id, summary]));
   const recommendation = detail ? buildUpgradeRecommendation(detail, choices) : undefined;
+  const forecast = detail ? buildUpgradeForecast(detail) : undefined;
   const header = document.createElement("div");
   header.className = "upgrade-brief";
   const headerTitle = document.createElement("strong");
@@ -587,6 +606,9 @@ function renderUpgradeChoices(detail = latestEndDetail): void {
     ? `短板原因：${recommendation.reason}`
     : "根据下一波风险选择改装；每项都会显示升级前和升级后收益。";
   header.append(headerTitle, headerDetail);
+  if (forecast) {
+    header.append(createUpgradeForecastNode(forecast));
+  }
   upgradeChoices.replaceChildren(
     header,
     ...choices.map((choice) => {
@@ -1036,6 +1058,7 @@ function buildUpgradeRecommendation(detail: RunEndDetail, choices: Upgrade[]): U
   const pick = (id: UpgradeId, label: string, reason: string): UpgradeRecommendation | undefined =>
     available.has(id) ? { id, label, reason } : undefined;
   const contractPick = buildContractUpgradeRecommendation(detail, pick);
+  const forecastPick = buildForecastUpgradeRecommendation(detail, pick);
   const candidates: Array<UpgradeRecommendation | undefined> = [
     contractPick,
     detail.charge < 34 || detail.stats.lumenCollected < Math.max(3, detail.wave * 2)
@@ -1053,6 +1076,7 @@ function buildUpgradeRecommendation(detail: RunEndDetail, choices: Upgrade[]): U
     detail.elapsed > detail.wave * 58
       ? pick("repair", "提速清波", "清波时间偏长，信标织机能缩短维修窗口并提高信标收益。")
       : undefined,
+    forecastPick,
     detail.rating.points < 62
       ? pick("repair", "评级提分", "当前评级还有提升空间，更快修复能减少耗电并稳定过波节奏。")
       : undefined,
@@ -1062,6 +1086,79 @@ function buildUpgradeRecommendation(detail: RunEndDetail, choices: Upgrade[]): U
     pick(choices[0]?.id ?? "engine", "均衡强化", "继续强化当前可选改装，为下一波更高密度路线保留余量。")
   ];
   return candidates.find(Boolean);
+}
+
+function buildUpgradeForecast(detail: RunEndDetail): UpgradeForecast | undefined {
+  if (detail.status !== "won" || detail.wave >= CAMPAIGN_WAVES) {
+    return undefined;
+  }
+  const nextWave = Math.min(detail.wave + 1, CAMPAIGN_WAVES);
+  const sector = SECTOR_LAYOUTS[getSectorFor(nextWave, detail.difficulty)];
+  const event = WAVE_MODIFIERS[getWaveModifierFor(nextWave, detail.difficulty)];
+  const contract = CONTRACTS[getContractFor(nextWave, detail.difficulty)];
+  return {
+    contractName: contract.name,
+    contractRequirement: contract.requirement,
+    eventBriefing: event.briefing,
+    eventName: event.name,
+    sectorBriefing: sector.briefing,
+    sectorName: sector.name,
+    wave: nextWave,
+    totalWaves: CAMPAIGN_WAVES
+  };
+}
+
+function createUpgradeForecastNode(forecast: UpgradeForecast): HTMLElement {
+  const forecastNode = document.createElement("div");
+  forecastNode.className = "upgrade-forecast";
+
+  const title = document.createElement("b");
+  title.textContent = `下一波预报：第 ${forecast.wave}/${forecast.totalWaves} 波`;
+
+  const chips = document.createElement("div");
+  chips.className = "upgrade-forecast-chips";
+  chips.append(
+    createForecastChip("区域", forecast.sectorName),
+    createForecastChip("事件", forecast.eventName),
+    createForecastChip("合约", forecast.contractName)
+  );
+
+  const detail = document.createElement("span");
+  detail.textContent = `${forecast.sectorBriefing} ${forecast.eventBriefing} 合约目标：${forecast.contractRequirement}`;
+
+  forecastNode.append(title, chips, detail);
+  return forecastNode;
+}
+
+function createForecastChip(label: string, value: string): HTMLElement {
+  const chip = document.createElement("em");
+  chip.textContent = `${label}：${value}`;
+  return chip;
+}
+
+function buildForecastUpgradeRecommendation(
+  detail: RunEndDetail,
+  pick: (id: UpgradeId, label: string, reason: string) => UpgradeRecommendation | undefined
+): UpgradeRecommendation | undefined {
+  if (detail.status !== "won" || detail.wave >= CAMPAIGN_WAVES) return undefined;
+  const nextWave = detail.wave + 1;
+  const nextContract = getContractFor(nextWave, detail.difficulty);
+  const nextModifier = getWaveModifierFor(nextWave, detail.difficulty);
+  if (nextContract === "relayRush" || nextModifier === "overclockedGrid") {
+    return pick("repair", "下一波速修", "下一波维修窗口更关键，信标织机能缩短站桩时间。");
+  }
+  if (nextContract === "stormSkipper" || nextModifier === "stormFront") {
+    return pick("engine", "下一波绕风暴", "下一波风暴压力更高，引擎能更快脱离紫色区域。");
+  }
+  if (nextContract === "cleanWave" || nextModifier === "shardCurrent") {
+    return detail.stats.pulseUses === 0
+      ? pick("pulse", "下一波控碎片", "下一波碎片切线更危险，脉冲能保护维修窗口。")
+      : pick("shield", "下一波防碰撞", "下一波更考验无损路线，曜盾能提高容错。");
+  }
+  if (nextContract === "lumenRoute" || nextModifier === "lumenSurge") {
+    return pick("capacitor", "下一波补给", "下一波适合围绕流明路线冲分，电容能放大补给价值。");
+  }
+  return undefined;
 }
 
 function buildContractUpgradeRecommendation(

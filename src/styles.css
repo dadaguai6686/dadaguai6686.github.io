@@ -2346,6 +2346,54 @@ h1 {
   line-height: 1.4;
 }
 
+.upgrade-forecast {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 9px 10px;
+  border: 1px solid rgba(103, 244, 255, 0.18);
+  border-radius: 7px;
+  background: linear-gradient(120deg, rgba(103, 244, 255, 0.1), rgba(255, 255, 255, 0.035));
+}
+
+.upgrade-forecast b,
+.upgrade-forecast span {
+  display: block;
+}
+
+.upgrade-forecast b {
+  color: #7eefff;
+  font-size: 12px;
+  font-weight: 1000;
+}
+
+.upgrade-forecast span {
+  margin-top: 0;
+  color: #cfe3f2;
+  font-size: 11px;
+  line-height: 1.38;
+}
+
+.upgrade-forecast-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.upgrade-forecast em {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  padding: 3px 7px;
+  border: 1px solid rgba(255, 226, 122, 0.16);
+  border-radius: 999px;
+  color: #fff3ad;
+  background: rgba(255, 226, 122, 0.07);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 1000;
+}
+
 .upgrade-option {
   width: 100%;
   padding: 11px 13px;
@@ -3123,6 +3171,17 @@ h1 {
 
   .upgrade-brief strong {
     font-size: 12px;
+  }
+
+  .upgrade-forecast {
+    gap: 6px;
+    padding: 8px 9px;
+  }
+
+  .upgrade-forecast b,
+  .upgrade-forecast span,
+  .upgrade-forecast em {
+    font-size: 10px;
   }
 
   .upgrade-brief span,
