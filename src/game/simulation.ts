@@ -792,8 +792,12 @@ export function restartRun(state: GameState, upgradeId?: UpgradeId, options: Res
   }
   next.player.maxHull = 100 + next.upgrades.shield * 14;
   next.player.maxCharge = 100 + next.upgrades.capacitor * 16;
-  next.player.hull = Math.min(next.player.maxHull, 84 + state.player.lumen * 2 + next.upgrades.shield * 10);
-  next.player.charge = Math.min(next.player.maxCharge, 84 + state.player.lumen * 3 + next.upgrades.capacitor * 12);
+  next.player.hull = wonPreviousWave
+    ? Math.min(next.player.maxHull, 84 + state.player.lumen * 2 + next.upgrades.shield * 10)
+    : next.player.maxHull;
+  next.player.charge = wonPreviousWave
+    ? Math.min(next.player.maxCharge, 84 + state.player.lumen * 3 + next.upgrades.capacitor * 12)
+    : next.player.maxCharge;
   next.player.lumen = wonPreviousWave ? Math.floor(state.player.lumen * 0.35) : 0;
   next.score = wonPreviousWave ? state.score + state.wave * 500 : 0;
   next.bestCombo = wonPreviousWave ? state.bestCombo : 1;
@@ -905,12 +909,20 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
       next.message = `信标修复完成，${formatCombo(next.combo)} 连锁保持中。`;
     }
   } else {
+    let decayedRelay: Relay | undefined;
     next.relays.forEach((relay) => {
       if (!relay.repaired && relay.progress > 0) {
         const checkpointFloor = relay.checkpoint / RELAY_CHECKPOINT_COUNT;
+        const previousProgress = relay.progress;
         relay.progress = Math.max(checkpointFloor, relay.progress - dt * 0.022);
+        if (!decayedRelay && relay.progress < previousProgress) {
+          decayedRelay = relay;
+        }
       }
     });
+    if (decayedRelay) {
+      next.message = `维修中断：${decayedRelay.checkpoint}/${RELAY_CHECKPOINT_COUNT} 节点已保留，未锁定的进度正在缓慢回落。`;
+    }
   }
 
   if (input.pulse && player.pulseCooldown <= 0) {
@@ -1005,7 +1017,10 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
   next.gate.open = next.relays.every((relay) => relay.repaired);
 
   if (next.gate.open) {
-    next.message = "光门已开启，飞向北侧出口。";
+    const hazardDanger = getHazardThreats(next).some((threat) => threat.level === "danger");
+    if (!insideStorm && !hazardDanger) {
+      next.message = "光门已开启，飞向北侧出口。";
+    }
     if (distance(next.gate.position, player.position) < 58) {
       awardScore(next, 900 + player.lumen * 45 + Math.ceil(player.charge) * 8, 0.35);
       next.status = next.wave >= next.campaignWaves ? "completed" : "won";
@@ -1052,12 +1067,75 @@ export function resumeRun(state: GameState): GameState {
 export function getUpgradeChoices(state: GameState): Upgrade[] {
   const ids = Object.keys(UPGRADE_CATALOG) as UpgradeId[];
   const offset = (state.wave + state.score + state.player.lumen) % ids.length;
-  return ids
-    .slice(offset)
-    .concat(ids.slice(0, offset))
+  const rotated = ids.slice(offset).concat(ids.slice(0, offset));
+  return uniqueUpgradeIds([...getUpgradePriorityIds(state), ...rotated])
     .filter((id) => state.upgrades[id] < MAX_UPGRADE_LEVEL)
     .slice(0, 3)
     .map((id) => UPGRADE_CATALOG[id]);
+}
+
+function getUpgradePriorityIds(state: GameState): UpgradeId[] {
+  const priority: UpgradeId[] = [];
+  const waveStats = getCurrentWaveStats(state);
+  const add = (id: UpgradeId): void => {
+    if (!priority.includes(id)) priority.push(id);
+  };
+
+  if (state.contract.status === "failed") {
+    if (state.contract.id === "lumenRoute") add("capacitor");
+    if (state.contract.id === "relayRush") add("repair");
+    if (state.contract.id === "cleanWave") add(waveStats.pulseUses === 0 ? "pulse" : "shield");
+    if (state.contract.id === "stormSkipper") add("engine");
+    if (state.contract.id === "pulseDiscipline") add("engine");
+  }
+
+  if (state.player.charge < state.player.maxCharge * 0.36 || waveStats.lumenCollected < Math.max(3, state.wave * 2)) {
+    add("capacitor");
+  }
+  if (waveStats.stormSeconds > 2.2) {
+    add("engine");
+  }
+  if (waveStats.hitsTaken > 0 && waveStats.pulseUses === 0) {
+    add("pulse");
+  }
+  if (waveStats.hitsTaken >= 2 || state.player.hull < state.player.maxHull * 0.55) {
+    add("shield");
+  }
+  if (state.elapsed > state.wave * 58 || waveStats.repairSeconds > state.wave * 13) {
+    add("repair");
+  }
+
+  if (state.status === "won" && state.wave < CAMPAIGN_WAVES) {
+    addNextWaveUpgradePriority(state, waveStats, add);
+  }
+
+  if (state.contract.status === "completed" && waveStats.hitsTaken === 0) {
+    add("repair");
+  }
+
+  return priority;
+}
+
+function addNextWaveUpgradePriority(state: GameState, waveStats: RunStats, add: (id: UpgradeId) => void): void {
+  const nextWave = state.wave + 1;
+  const nextContract = getContractFor(nextWave, state.difficulty);
+  const nextModifier = getWaveModifierFor(nextWave, state.difficulty);
+  if (nextContract === "relayRush" || nextModifier === "overclockedGrid") {
+    add("repair");
+  }
+  if (nextContract === "stormSkipper" || nextModifier === "stormFront") {
+    add("engine");
+  }
+  if (nextContract === "cleanWave" || nextModifier === "shardCurrent") {
+    add(waveStats.pulseUses === 0 ? "pulse" : "shield");
+  }
+  if (nextContract === "lumenRoute" || nextModifier === "lumenSurge") {
+    add("capacitor");
+  }
+}
+
+function uniqueUpgradeIds(ids: UpgradeId[]): UpgradeId[] {
+  return ids.filter((id, index) => ids.indexOf(id) === index);
 }
 
 export function getUpgradeSummary(upgrades: UpgradeState, id: UpgradeId): UpgradeSummary {
@@ -1466,8 +1544,13 @@ export function parseRouteSeed(value: string | null | undefined): number | undef
   return Number.isFinite(parsed) ? normalizeRouteSeed(parsed) : undefined;
 }
 
+function getCurrentWaveRepairedRelays(state: GameState): number {
+  return state.relays.filter((relay) => relay.repaired).length;
+}
+
 export function getCoachDirective(state: GameState): CoachDirective {
   const totalSteps = 4;
+  const repairedRelays = getCurrentWaveRepairedRelays(state);
   if (state.status !== "playing") {
     return {
       id: "readContract",
@@ -1498,7 +1581,7 @@ export function getCoachDirective(state: GameState): CoachDirective {
   if (activeStorm) {
     return {
       id: "escapeStorm",
-      step: Math.max(1, Math.min(totalSteps, state.stats.relaysRepaired + 1)),
+      step: Math.max(1, Math.min(totalSteps, repairedRelays + 1)),
       totalSteps,
       title: "紧急：脱离风暴",
       detail: "紫色区域会快速吸走电量。先用推进离开范围，再回头继续修复。",
@@ -1512,7 +1595,7 @@ export function getCoachDirective(state: GameState): CoachDirective {
     const ready = player.pulseCooldown <= 0;
     return {
       id: "pulseDanger",
-      step: Math.max(1, Math.min(totalSteps, state.stats.relaysRepaired + 1)),
+      step: Math.max(1, Math.min(totalSteps, repairedRelays + 1)),
       totalSteps,
       title: ready ? "紧急：Q / 脉冲键" : "紧急：推进拉开距离",
       detail: ready ? "粉色碎片已经贴近，立刻释放脉冲把它推开。" : "脉冲还在冷却，先横向推进，别原地硬修。",
@@ -1585,7 +1668,7 @@ export function getCoachDirective(state: GameState): CoachDirective {
       totalSteps,
       title: "合约完成：继续修信标",
       detail: "副目标奖励已经结算。现在回到主路线，靠近剩余蓝色信标并按住 E / 修复键。",
-      progress: `已修复 ${state.stats.relaysRepaired}/${state.relays.length}`,
+      progress: `已修复 ${repairedRelays}/${state.relays.length}`,
       target: nearestRelay.item.position,
       urgent: false
     };
@@ -1598,20 +1681,36 @@ export function getCoachDirective(state: GameState): CoachDirective {
       totalSteps,
       title: "主目标优先：继续修信标",
       detail: "本波合约已经失败，但主目标仍可完成。先清剩余信标，再从北侧光门撤离。",
-      progress: `已修复 ${state.stats.relaysRepaired}/${state.relays.length}`,
+      progress: `已修复 ${repairedRelays}/${state.relays.length}`,
       target: nearestRelay.item.position,
       urgent: false
     };
   }
 
-  if (state.wave === 1 && state.stats.lumenCollected < 2 && nearestLumen) {
+  if (state.wave === 1 && state.contract.id === "lumenRoute" && state.contract.status === "active") {
+    const lumenDelta = getCurrentWaveStats(state).lumenCollected;
+    if (lumenDelta < 4 && nearestLumen) {
+      return {
+        id: "collectLumen",
+        step: 1,
+        totalSteps,
+        title: "第 1 步：先完成流明航线",
+        detail: "首波合约就是补给教学：先收 4 个金色流明，电量和连锁稳了再去修信标。",
+        progress: `${Math.min(lumenDelta, 4)}/4 流明`,
+        target: nearestLumen.item.position,
+        urgent: false
+      };
+    }
+  }
+
+  if (state.wave === 1 && state.stats.lumenCollected < 4 && nearestLumen) {
     return {
       id: "collectLumen",
       step: 1,
       totalSteps,
-      title: "第 1 步：先捡 2 个流明",
-      detail: "金色流明会补电，也会建立连锁倍率。新手先补给，再去修信标。",
-      progress: `${Math.min(state.stats.lumenCollected, 2)}/2 流明`,
+      title: "第 1 步：先补足流明",
+      detail: "金色流明会补电，也会建立连锁倍率。首波先补给，再去修信标。",
+      progress: `${Math.min(state.stats.lumenCollected, 4)}/4 流明`,
       target: nearestLumen.item.position,
       urgent: false
     };
@@ -1624,7 +1723,7 @@ export function getCoachDirective(state: GameState): CoachDirective {
       totalSteps,
       title: "第 2 步：靠近蓝色信标",
       detail: "贴近信标后按住 E / 修复键，边看危险圈边修，不要站在碎片路径上。",
-      progress: `已修复 ${state.stats.relaysRepaired}/${state.relays.length}`,
+      progress: `已修复 ${repairedRelays}/${state.relays.length}`,
       target: nearestRelay.item.position,
       urgent: false
     };
@@ -1689,6 +1788,19 @@ export function getObjectiveHint(state: GameState): ObjectiveHint {
     };
   }
 
+  const dangerThreat = getHazardThreats(state).find((threat) => threat.level === "danger");
+  if (dangerThreat) {
+    const ready = player.pulseCooldown <= 0;
+    return {
+      kind: "danger",
+      title: ready ? "碎片贴脸，先放脉冲" : "碎片贴脸，先拉开",
+      detail: ready
+        ? "粉色碎片已经进入危险圈，先按 Q / 脉冲键推开，再继续维修或撤离。"
+        : `粉色碎片已经贴近，脉冲还要 ${Math.ceil(player.pulseCooldown)} 秒；先横向推进离开碎片线。`,
+      urgent: true
+    };
+  }
+
   if (state.gate.open) {
     return {
       kind: "gate",
@@ -1740,10 +1852,22 @@ export function getObjectiveHint(state: GameState): ObjectiveHint {
       urgent: false
     };
   }
-  if (state.wave === 1 && state.stats.lumenCollected < 2 && nearestLumen) {
+  if (state.wave === 1 && state.contract.id === "lumenRoute" && state.contract.status === "active") {
+    const lumenDelta = getCurrentWaveStats(state).lumenCollected;
+    if (lumenDelta < 4 && nearestLumen) {
+      return {
+        kind: "lumen",
+        title: "先完成流明航线",
+        detail: `首波合约需要 4 个流明，已回收 ${Math.min(lumenDelta, 4)}/4；最近流明距离 ${formatDistance(nearestLumen.distance)}。`,
+        target: nearestLumen.item.position,
+        urgent: false
+      };
+    }
+  }
+  if (state.wave === 1 && state.stats.lumenCollected < 4 && nearestLumen) {
     return {
       kind: "lumen",
-      title: "先捡 2 个流明",
+      title: "先补足流明",
       detail: `金色流明会补电并建立连锁，最近流明距离 ${formatDistance(nearestLumen.distance)}。`,
       target: nearestLumen.item.position,
       urgent: false
@@ -1806,6 +1930,26 @@ function createRunStats(): RunStats {
     distanceTraveled: 0,
     wavesCleared: 0
   };
+}
+
+export function getCurrentWaveStats(state: GameState): RunStats {
+  return {
+    boostUses: state.stats.boostUses - state.contract.startStats.boostUses,
+    contractsCompleted: state.stats.contractsCompleted - state.contract.startStats.contractsCompleted,
+    pulseUses: state.stats.pulseUses - state.contract.startStats.pulseUses,
+    lumenCollected: state.stats.lumenCollected - state.contract.startStats.lumenCollected,
+    relaysRepaired: state.stats.relaysRepaired - state.contract.startStats.relaysRepaired,
+    hitsTaken: state.stats.hitsTaken - state.contract.startStats.hitsTaken,
+    closeCalls: state.stats.closeCalls - state.contract.startStats.closeCalls,
+    stormSeconds: state.stats.stormSeconds - state.contract.startStats.stormSeconds,
+    repairSeconds: state.stats.repairSeconds - state.contract.startStats.repairSeconds,
+    distanceTraveled: state.stats.distanceTraveled - state.contract.startStats.distanceTraveled,
+    wavesCleared: state.stats.wavesCleared - state.contract.startStats.wavesCleared
+  };
+}
+
+export function withRunStats(state: GameState, stats: RunStats): GameState {
+  return { ...state, stats };
 }
 
 function createRelays(sector: SectorId, routeSeed: number, wave: number): Relay[] {
@@ -2056,19 +2200,7 @@ function getContractProgressText(state: GameState): string {
 }
 
 function getContractDeltas(state: GameState): RunStats {
-  return {
-    boostUses: state.stats.boostUses - state.contract.startStats.boostUses,
-    contractsCompleted: state.stats.contractsCompleted - state.contract.startStats.contractsCompleted,
-    pulseUses: state.stats.pulseUses - state.contract.startStats.pulseUses,
-    lumenCollected: state.stats.lumenCollected - state.contract.startStats.lumenCollected,
-    relaysRepaired: state.stats.relaysRepaired - state.contract.startStats.relaysRepaired,
-    hitsTaken: state.stats.hitsTaken - state.contract.startStats.hitsTaken,
-    closeCalls: state.stats.closeCalls - state.contract.startStats.closeCalls,
-    stormSeconds: state.stats.stormSeconds - state.contract.startStats.stormSeconds,
-    repairSeconds: state.stats.repairSeconds - state.contract.startStats.repairSeconds,
-    distanceTraveled: state.stats.distanceTraveled - state.contract.startStats.distanceTraveled,
-    wavesCleared: state.stats.wavesCleared - state.contract.startStats.wavesCleared
-  };
+  return getCurrentWaveStats(state);
 }
 
 function getResourceAlertLevel(

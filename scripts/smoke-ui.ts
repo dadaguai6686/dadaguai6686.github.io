@@ -23,6 +23,8 @@ assert.ok(html.includes('id="combat-log"'), "in-run combat feedback log should e
 assert.ok(html.includes('id="combat-log-history"'), "combat feedback log should keep a short recent event history");
 assert.ok(html.includes("战斗记录"), "combat feedback log should be labeled in Chinese");
 assert.ok(html.includes('id="quick-brief"'), "menu should expose a compact first-screen objective brief");
+assert.ok(html.includes('id="control-primer"'), "menu should expose first-viewport movement and action controls");
+assert.ok(html.includes('id="loop-primer"'), "menu should expose a compact reason to keep playing");
 assert.ok(html.includes('id="game-dossier"'), "menu should explain the game fantasy and win/loss loop");
 assert.ok(html.includes('id="launch-brief"'), "menu should include an illustrated launch briefing");
 assert.ok(html.includes('id="launch-map"'), "launch briefing should include a route map");
@@ -35,13 +37,21 @@ assert.ok(html.includes('class="coach-kicker">路线教练'), "route coach shoul
 assert.ok(html.includes("首局作战令"), "launch briefing should provide first-run orders in Chinese");
 assert.ok(html.includes("安全读图"), "launch briefing should explain the safe opening read phase");
 assert.ok(html.includes("北侧撤离"), "launch briefing should explain the evacuation target");
-assert.ok(html.includes("先补给"), "quick brief should explain the opening supply verb");
+assert.ok(html.includes("先移动补给"), "quick brief should explain movement before the opening supply verb");
+assert.ok(html.includes("方向键 / 字母键 / 左摇杆"), "first-viewport controls should explain movement on keyboard and touch");
+assert.ok(html.includes("过波选升级"), "first-viewport motivation should mention upgrades");
+assert.ok(html.includes("今日挑战与路线复盘"), "first-viewport motivation should mention route replay");
 assert.ok(html.includes("再维修"), "quick brief should explain the repair verb before long docs");
 assert.ok(html.includes("撤离升级"), "quick brief should explain the wave clear and upgrade verb");
 assert.ok(html.includes("读图补电"), "first-minute route should explain the opening supply step in Chinese");
+assert.ok(html.includes("先完成 4 个金色流明合约"), "first-run briefing should align with the four-lumen opening contract");
 assert.ok(html.includes("E / 修复键"), "visible control copy should support keyboard and touch repair controls");
 assert.ok(html.includes("Space / 推进键"), "visible control copy should support keyboard and touch boost controls");
 assert.ok(html.includes("Q / 脉冲键"), "visible control copy should support keyboard and touch pulse controls");
+assert.ok(html.includes("viewport-fit=cover"), "mobile viewport should opt into safe-area handling");
+assert.ok(!html.includes("Phaser 场景"), "boot copy should not expose engine internals");
+assert.ok(!html.includes("中文 HUD"), "boot copy should describe the interface in player-facing Chinese");
+assert.ok(!html.includes("中文 2D"), "visible genre copy should prefer Chinese wording over 2D shorthand");
 assert.ok(!html.includes("Roguelite"), "visible genre copy should be localized to Chinese");
 assert.ok(
   html.indexOf('id="start-button"') < html.indexOf('id="mission-brief"'),
@@ -67,6 +77,9 @@ assert.ok(main.includes("renderRadar(detail.radar"), "HUD updates should render 
 assert.ok(main.includes("completeBootStatus"), "runtime should hide the boot loading status after initialization");
 assert.ok(main.includes('document.body.dataset.gameReady = "true"'), "runtime should mark the page as game-ready");
 assert.ok(main.includes("renderTacticalScan()"), "pause overlay should render the tactical scan");
+assert.ok(main.includes("syncOverlayState"), "overlay should hide background HUD semantically");
+assert.ok(main.includes("aria-hidden"), "overlay background should be hidden from accessibility surfaces");
+assert.ok(main.includes("inert"), "overlay background should not remain focusable behind menus");
 assert.ok(main.includes("updateWaveIntro(detail)"), "HUD updates should render wave intro briefing");
 assert.ok(gameScene.includes("briefingActive: this.state.briefingActive"), "HUD bridge should expose opening briefing state to the DOM");
 assert.ok(main.includes("setShellBriefingActive"), "DOM shell should track whether the opening briefing is active");
@@ -97,6 +110,7 @@ assert.ok(main.includes("focusGameSurface"), "runtime should restore keyboard fo
 assert.ok(main.includes("gameWrap.focus"), "game surface focus should target the canvas wrapper");
 assert.ok(main.includes("window.setTimeout(focus, 80)"), "game surface focus should retry after browser click focus settles");
 assert.ok(main.includes("tap: { boost: 0, repair: 0, pulse: 0 }"), "touch input should expose a short tap buffer");
+assert.ok(!input.includes("virtualTap.repair > 0"), "touch repair should require holding the repair button rather than tap buffering");
 assert.ok(main.includes('button.addEventListener("click"'), "touch action buttons should accept click fallback events");
 assert.ok(main.includes("lostpointercapture"), "touch controls should recover when pointer capture is lost");
 assert.ok(main.includes("setPointerCapture"), "touch controls should capture active pointers");
@@ -108,10 +122,17 @@ assert.ok(gameScene.includes("this.resetInput();"), "scene should reset keyboard
 assert.ok(gameScene.includes("this.inputMapper?.destroy();"), "scene should not stack duplicate input listeners when rebuilding worlds");
 assert.ok(!main.includes("<small>Lv "), "upgrade cards should use localized level labels");
 assert.ok(main.includes("buildUpgradeRecommendation"), "upgrade choices should explain a recommendation based on the last wave");
+assert.ok(simulation.includes("getUpgradePriorityIds"), "upgrade choices should bias toward the last-wave shortfall before filling random options");
+assert.ok(gameScene.includes("campaignStats") && gameScene.includes("getCurrentWaveStats"), "wave-end details should separate campaign stats from current-wave recap stats");
+assert.ok(main.includes("detail.campaignStats.contractsCompleted"), "save and history should preserve campaign contract progress");
+assert.ok(main.includes("本波合约"), "recap metrics should label current-wave contract counts clearly");
 assert.ok(main.includes("升级建议：优先"), "upgrade choices should show a localized recommendation header");
 assert.ok(main.includes("短板原因"), "upgrade choices should explain why an upgrade is recommended");
 assert.ok(main.includes("系统推荐"), "recommended upgrade cards should be visibly labeled in Chinese");
 assert.ok(main.includes("选择理由"), "each upgrade card should explain when to choose it");
+assert.ok(main.includes("upgrade-skip"), "wave-clear skip should be a secondary action inside the upgrade list");
+assert.ok(main.includes('startButton.hidden = detail.status === "won"'), "wave-clear overlay should not make skip-upgrade the primary CTA");
+assert.ok(main.includes('latestStatus === "won"') && main.includes("过波后先处理升级选择"), "help hotkey should not replace the wave-clear upgrade loop");
 assert.ok(main.includes("buildUpgradeForecast"), "upgrade choices should preview the next wave before the player chooses");
 assert.ok(main.includes("下一波预报"), "upgrade choices should label the next-wave forecast in Chinese");
 assert.ok(main.includes("区域"), "upgrade forecast should name the next sector");
@@ -119,6 +140,8 @@ assert.ok(main.includes("事件"), "upgrade forecast should name the next wave e
 assert.ok(main.includes("合约"), "upgrade forecast should name the next tactical contract");
 assert.ok(main.includes("buildForecastUpgradeRecommendation"), "upgrade recommendations should account for next-wave pressure");
 assert.ok(main.includes("buildRecapActionPlan"), "run recap should build a structured post-run action plan");
+assert.ok(main.includes("buildRunEndCopy"), "loss overlays should summarize the concrete failure cause");
+assert.ok(main.includes("失误根因"), "loss recap should label the root cause in Chinese");
 assert.ok(main.includes("buildChargeLossRecapPlan"), "charge loss recap should teach the next-run supply route");
 assert.ok(main.includes("buildHullLossRecapPlan"), "hull loss recap should teach pulse and hazard routing");
 assert.ok(main.includes("下一波作战计划"), "wave-clear recap should point toward the next wave in Chinese");
@@ -132,12 +155,16 @@ assert.ok(gameScene.includes("drawSectorField"), "Phaser scene should render sec
 assert.ok(gameScene.includes("renderContractFocus"), "Phaser scene should render contract focus markers");
 assert.ok(gameScene.includes("renderOpeningRoutePreview"), "Phaser scene should draw the opening route preview");
 assert.ok(gameScene.includes("buildOpeningRoutePreview"), "opening route preview should derive route targets from game state");
+assert.ok(gameScene.includes("getOpeningLumenWaypointCount"), "opening route preview should align lumen waypoints with the active contract");
+assert.ok(gameScene.includes('state.contract.id === "relayRush"'), "opening route preview should prioritize relay rush contracts");
 assert.ok(gameScene.includes("syncNavigatorLabel"), "Phaser scene should label the current navigation target in-world");
 assert.ok(gameScene.includes("导航："), "in-world navigator label should be localized");
 assert.ok(gameScene.includes("syncRepairPromptLabel"), "Phaser scene should show an in-world repair control prompt");
 assert.ok(gameScene.includes("RELAY_CHECKPOINT_COUNT"), "Phaser scene should render relay repair checkpoint state");
 assert.ok(gameScene.includes("relay.checkpoint >= checkpoint"), "relay progress rings should mark reached repair checkpoints");
 assert.ok(gameScene.includes("维修节点锁定"), "relay checkpoint feedback should be localized in Chinese");
+assert.ok(gameScene.includes("维修回落"), "repair decay should have localized in-world feedback");
+assert.ok(simulation.includes("未锁定的进度正在缓慢回落"), "simulation should explain repair decay when players leave a relay early");
 assert.ok(
   closeCallFeedbackIndex >= 0 && checkpointFeedbackIndex > closeCallFeedbackIndex,
   "repair checkpoint feedback should be dispatched after close-call feedback so the checkpoint milestone remains visible"
@@ -180,6 +207,9 @@ assert.ok(styles.includes("#objective-strip span") && styles.includes("-webkit-l
 assert.ok(styles.includes('#shell[data-status="playing"] #combo-timer[data-state="idle"]'), "mobile play should collapse the idle combo timer until a chain starts");
 assert.ok(styles.includes('[data-briefing="true"] #signal-panel'), "mobile play should hide the score rating panel during the opening read phase");
 assert.ok(styles.includes("#quick-brief"), "compact first-screen objective brief should have CSS");
+assert.ok(styles.includes("#control-primer"), "first-viewport control primer should have CSS");
+assert.ok(styles.includes("#loop-primer"), "first-viewport progression primer should have CSS");
+assert.ok(styles.includes('[data-overlay="true"] #hud'), "overlay should visually suppress background HUD");
 assert.ok(styles.includes("#launch-brief"), "launch briefing should have CSS");
 assert.ok(styles.includes(".launch-route-line"), "launch route map should render an obvious route line");
 assert.ok(styles.includes(".radar-guide"), "radar guide should have CSS");
@@ -200,6 +230,11 @@ assert.ok(styles.includes('#recap-action-plan article[data-tone="warning"]'), "r
 assert.ok(styles.includes("touch-action: none"), "mobile controls should disable browser touch gestures");
 assert.ok(styles.includes('[data-active="true"]'), "touch buttons should expose an active pressed state");
 assert.ok(styles.includes("@media (pointer: coarse), (hover: none)"), "touch devices wider than phones should still get controls");
+assert.ok(styles.includes("(pointer: coarse) and (orientation: landscape)"), "coarse pointer landscape devices should get a dedicated compact HUD");
+assert.ok(styles.includes(".upgrade-skip"), "skip upgrade should be styled as a secondary action");
+assert.ok(styles.includes("env(safe-area-inset-right) + 128px"), "coarse landscape objective should leave room for right touch actions");
+assert.ok(main.includes("isCompactPlayViewport"), "compact play viewports should prevent notification stack overlap at runtime");
+assert.ok(styles.includes('#shell[data-status="playing"] #wave-intro.show') && styles.includes("max-height: 68px"), "low-height landscape wave intro should stay compact and off the playfield center");
 assert.ok(
   styles.includes('#shell[data-status="playing"] #touch-controls'),
   "touch controls should be enabled by game status for touch devices"

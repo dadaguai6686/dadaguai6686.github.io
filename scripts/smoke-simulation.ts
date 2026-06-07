@@ -18,6 +18,7 @@ import {
   getContractFor,
   getContractFocus,
   getContractSnapshot,
+  getCurrentWaveStats,
   getHazardThreats,
   HIT_RECOVERY_SECONDS,
   getObjectiveHint,
@@ -53,6 +54,8 @@ assert.equal(state.status, "playing");
 assert.equal(state.briefingActive, true, "new waves should begin in a safe briefing state");
 assert.equal(state.difficulty, "standard");
 assert.equal(state.campaignWaves, CAMPAIGN_WAVES);
+assert.equal(state.player.charge, state.player.maxCharge, "fresh runs should start with full visible charge");
+assert.equal(state.player.hull, state.player.maxHull, "fresh runs should start with full visible hull");
 assert.equal(state.relays.length, 4);
 assert.equal(state.gate.open, false);
 assert.equal(state.waveModifier, "steadySignal");
@@ -94,7 +97,23 @@ assert.equal(state.briefingActive, false, "the first movement should end the ope
 assert.ok(state.elapsed > 0, "the run timer should start after player input");
 assert.ok(state.message.includes("正式开始"), "the first input should replace the briefing copy");
 assert.equal(getObjectiveHint(state).kind, "lumen", "first-run objective strip should match the lumen tutorial");
-assert.equal(getObjectiveHint(state).title, "先捡 2 个流明", "first-run objective strip should not send players to relays too early");
+assert.equal(getObjectiveHint(state).title, "先完成流明航线", "first-run objective strip should align with the first lumen contract");
+
+let twoLumenTutorial = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
+twoLumenTutorial.briefingActive = false;
+twoLumenTutorial.stats.lumenCollected = 2;
+twoLumenTutorial.lumen[0].collected = true;
+twoLumenTutorial.lumen[1].collected = true;
+assert.equal(
+  getCoachDirective(twoLumenTutorial).title,
+  "第 1 步：先完成流明航线",
+  "first-wave coaching should continue the four-lumen contract after the opening two pickups"
+);
+assert.equal(
+  getObjectiveHint(twoLumenTutorial).title,
+  "先完成流明航线",
+  "first-wave objective should not pivot to relays before the lumen contract is complete"
+);
 
 const seededA = restartRun(createInitialState(), undefined, { routeSeed: 4660 });
 const seededB = restartRun(createInitialState(), undefined, { routeSeed: 4660 });
@@ -256,6 +275,10 @@ assert.ok(
   checkpointState.relays[0].progress >= checkpointFloor,
   "relay progress should not decay below the latest locked checkpoint"
 );
+assert.ok(
+  checkpointState.message.includes("维修中断"),
+  "leaving a partially repaired relay should explain that only unlocked progress decays"
+);
 for (let i = 0; i < 260; i += 1) {
   repairState = updateSimulation(repairState, { ...idle, repair: true }, 0.016);
 }
@@ -276,6 +299,17 @@ assert.ok(stormed.player.charge < stormCharge, "standing in a storm should sipho
 assert.ok(stormed.stats.stormSeconds >= 0.5, "storm exposure should be counted once per tick");
 assert.equal(getObjectiveHint(stormed).kind, "danger", "storm exposure should become the urgent hint");
 assert.equal(getCoachDirective(stormed).id, "escapeStorm", "storm exposure should override normal coaching");
+const openGateStorm = structuredClone(stormState);
+openGateStorm.relays.forEach((relay) => {
+  relay.repaired = true;
+  relay.progress = 1;
+});
+const openGateStormed = updateSimulation(openGateStorm, idle, 0.016);
+assert.equal(openGateStormed.gate.open, true, "prepared storm state should still open the gate");
+assert.ok(
+  openGateStormed.message.includes("风暴"),
+  "open gate copy should not overwrite urgent storm guidance while the player is in danger"
+);
 
 let hitState = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
 hitState.briefingActive = false;
@@ -314,6 +348,7 @@ hazardThreatState.hazards[0].position = { x: hazardThreatState.player.position.x
 assert.equal(getContractFocus(hazardThreatState).kind, "conservePulse", "pulse discipline should focus controlled hazard handling");
 assert.equal(getHazardThreats(hazardThreatState)[0].level, "danger", "close hazards should be flagged for danger rendering");
 assert.equal(getCoachDirective(hazardThreatState).id, "pulseDanger", "dangerous hazards should override normal coaching");
+assert.equal(getObjectiveHint(hazardThreatState).kind, "danger", "objective strip should also prioritize dangerous close hazards");
 hazardThreatState.hazards[0].position = { x: hazardThreatState.player.position.x + 118, y: hazardThreatState.player.position.y };
 assert.equal(getHazardThreats(hazardThreatState)[0].level, "near", "near hazards should be flagged before collision");
 
@@ -357,6 +392,17 @@ assert.equal(state.status, "won", "entering the open gate should win the wave");
 assert.equal(state.endReason, "waveCleared", "winning a non-final wave should record the end reason");
 assert.equal(state.stats.wavesCleared, 1, "cleared waves should be counted");
 assert.ok(getUpgradeChoices(state).length > 0, "winning should offer upgrade choices");
+assert.ok(
+  getUpgradeChoices(state).some((choice) => choice.id === "repair" || choice.id === "capacitor"),
+  "post-wave upgrade choices should include next-wave pressure or shortfall fixes"
+);
+const pollutedWin = structuredClone(state);
+pollutedWin.stats.hitsTaken = 3;
+pollutedWin.stats.stormSeconds = 5;
+const cleanNextWave = restartRun(pollutedWin, "engine");
+assert.equal(cleanNextWave.stats.hitsTaken, 3, "campaign stats should still carry across waves");
+assert.equal(getCurrentWaveStats(cleanNextWave).hitsTaken, 0, "current-wave stats should reset after advancing");
+assert.equal(getCurrentWaveStats(cleanNextWave).stormSeconds, 0, "current-wave storm exposure should reset after advancing");
 const waveAchievements = achievementIdsFor(state);
 assert.ok(waveAchievements.includes("firstRepair"), "repairing a relay should unlock the first repair achievement");
 assert.ok(waveAchievements.includes("cleanWave"), "clean wave clears should unlock the no-hit achievement");
@@ -375,6 +421,13 @@ assert.notDeepEqual(
 assert.equal(upgraded.upgrades.engine, 1, "chosen upgrade should be installed");
 assert.equal(getUpgradeSummary(upgraded.upgrades, "engine").level, 1, "installed upgrades should update summaries");
 assert.equal(upgraded.stats.wavesCleared, 1, "campaign stats should carry into the next wave");
+const secondWaveRouteCoach = structuredClone(upgraded);
+secondWaveRouteCoach.briefingActive = false;
+secondWaveRouteCoach.elapsed = secondWaveRouteCoach.contract.startElapsed + 8;
+assert.ok(
+  getCoachDirective(secondWaveRouteCoach).progress.includes("0/4"),
+  "route coach progress should count current-wave relays, not cumulative campaign repairs"
+);
 
 const trainingStart = restartRun(createInitialState(), undefined, { difficulty: "training", routeSeed: TEST_ROUTE_SEED });
 const hardcoreStart = restartRun(createInitialState(), undefined, { difficulty: "hardcore", routeSeed: TEST_ROUTE_SEED });

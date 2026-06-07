@@ -58,6 +58,7 @@ const shell = document.querySelector<HTMLDivElement>("#shell")!;
 const bootStatus = document.querySelector<HTMLDivElement>("#boot-status");
 const overlay = document.querySelector<HTMLDivElement>("#overlay")!;
 const overlayPanel = overlay.querySelector<HTMLDivElement>(".panel")!;
+const hud = document.querySelector<HTMLElement>("#hud")!;
 const objectiveTitle = document.querySelector<HTMLElement>("#objective-title")!;
 const objectiveDetail = document.querySelector<HTMLElement>("#objective-detail")!;
 const waveIntro = document.querySelector<HTMLDivElement>("#wave-intro")!;
@@ -143,9 +144,12 @@ const overlayEyebrow = overlay.querySelector<HTMLElement>(".eyebrow")!;
 const overlayTitle = overlay.querySelector<HTMLElement>("h1")!;
 const overlayCopy = overlay.querySelector<HTMLElement>("p")!;
 const quickBrief = document.querySelector<HTMLDivElement>("#quick-brief")!;
+const controlPrimer = document.querySelector<HTMLDivElement>("#control-primer")!;
+const loopPrimer = document.querySelector<HTMLDivElement>("#loop-primer")!;
 const gameDossier = document.querySelector<HTMLDivElement>("#game-dossier")!;
 const launchBrief = document.querySelector<HTMLDivElement>("#launch-brief")!;
 const firstMinuteRoute = document.querySelector<HTMLDivElement>("#first-minute-route")!;
+const launchCommit = document.querySelector<HTMLDivElement>("#launch-commit")!;
 const missionBrief = document.querySelector<HTMLDivElement>("#mission-brief")!;
 const fieldGuide = document.querySelector<HTMLDivElement>("#field-guide")!;
 const tacticalScan = document.querySelector<HTMLDivElement>("#tactical-scan")!;
@@ -279,6 +283,7 @@ let coachRailItems: HTMLSpanElement[] = [];
 
 type RunEndDetail = {
   bestCombo: number;
+  campaignStats: RunStats;
   charge: number;
   contract: ContractSnapshot;
   difficulty: DifficultyId;
@@ -619,11 +624,14 @@ window.addEventListener("game:ended", (event) => {
     detail.status === "completed" ? "全域稳定" : detail.status === "won" ? "救援成功" : "救援失败";
   overlayTitle.textContent =
     detail.status === "completed" ? "五波完成" : detail.status === "won" ? "光网稳定" : "信号中断";
-  overlayCopy.textContent = detail.message;
+  overlayCopy.textContent = buildRunEndCopy(detail);
   quickBrief.hidden = true;
+  controlPrimer.hidden = true;
+  loopPrimer.hidden = true;
   gameDossier.hidden = true;
   launchBrief.hidden = true;
   firstMinuteRoute.hidden = true;
+  launchCommit.hidden = true;
   missionBrief.hidden = true;
   fieldGuide.hidden = true;
   renderRunRecap(detail, newlyUnlocked);
@@ -631,6 +639,7 @@ window.addEventListener("game:ended", (event) => {
   updateSessionTools();
   startButton.textContent =
     detail.status === "completed" ? "再次救援" : detail.status === "won" ? "不升级，进入下一波" : "重新救援";
+  startButton.hidden = detail.status === "won";
   upgradeChoices.hidden = detail.status !== "won";
   if (detail.status === "won") {
     renderUpgradeChoices(detail);
@@ -669,9 +678,7 @@ function renderUpgradeChoices(detail = latestEndDetail): void {
   if (forecast) {
     header.append(createUpgradeForecastNode(forecast));
   }
-  upgradeChoices.replaceChildren(
-    header,
-    ...choices.map((choice) => {
+  const optionNodes = choices.map((choice) => {
       const summary = summaries.get(choice.id);
       const recommended = recommendation?.id === choice.id;
       const button = document.createElement("button");
@@ -688,8 +695,13 @@ function renderUpgradeChoices(detail = latestEndDetail): void {
       `;
       button.addEventListener("click", () => launchRun(choice.id));
       return button;
-    })
-  );
+    });
+  const skipButton = document.createElement("button");
+  skipButton.type = "button";
+  skipButton.className = "upgrade-skip";
+  skipButton.textContent = "暂不升级，直接进入下一波";
+  skipButton.addEventListener("click", () => launchRun());
+  upgradeChoices.replaceChildren(header, ...optionNodes, skipButton);
 }
 
 function renderLoadout(summaries: UpgradeSummary[], status: GameStatus): void {
@@ -848,6 +860,9 @@ function buildMissionToast(detail: {
 }
 
 function showMissionToast(title: string, detail: string, tone: MissionToastTone): void {
+  if (isCompactPlayViewport()) {
+    hideCombatLog(true);
+  }
   window.clearTimeout(missionToastTimer);
   missionToast.dataset.tone = tone;
   missionToastTitle.textContent = title;
@@ -876,6 +891,9 @@ function hideMissionToast(immediate = false): void {
 
 function showCombatLog(title: string, detail: string, tone: CombatLogTone): void {
   if (latestStatus !== "playing") return;
+  if (isCompactPlayViewport()) {
+    hideMissionToast(true);
+  }
   window.clearTimeout(combatLogTimer);
   combatLogEntries = [{ detail, title, tone }, ...combatLogEntries].slice(0, COMBAT_LOG_HISTORY_LIMIT);
   combatLog.dataset.tone = tone;
@@ -932,6 +950,10 @@ function clearCombatLogHistory(): void {
   combatLogHistory.replaceChildren();
 }
 
+function isCompactPlayViewport(): boolean {
+  return window.matchMedia("(max-width: 700px), (max-height: 480px) and (orientation: landscape), (pointer: coarse)").matches;
+}
+
 function feedbackToneFor(kind: SoundKind): CombatLogTone {
   if (kind === "hit" || kind === "loss") return "danger";
   if (
@@ -955,6 +977,7 @@ function buildObjectiveStripTitle(hint: ObjectiveHint): string {
 }
 
 function buildObjectiveStripDetail(detail: {
+  briefingActive: boolean;
   campaignWaves: number;
   contract: ContractSnapshot;
   difficulty: DifficultyId;
@@ -969,7 +992,14 @@ function buildObjectiveStripDetail(detail: {
     detail.contract.status === "active"
       ? `${detail.contract.name}：${detail.contract.progress}`
       : `${detail.contract.name}：${getContractStatusLabel(detail.contract.status)}`;
-  return `${detail.objectiveHint.detail} · 第 ${detail.wave}/${detail.campaignWaves} 波 · 信标 ${detail.relays} · ${DIFFICULTY_SETTINGS[detail.difficulty].name} / ${detail.routePlan.name} / ${detail.sector.name} / 合约 ${contractStatus}`;
+  const waveContext = `第 ${detail.wave}/${detail.campaignWaves} 波 · 信标 ${detail.relays}`;
+  if (detail.briefingActive) {
+    return `${detail.objectiveHint.detail} · ${waveContext} · 合约 ${contractStatus}`;
+  }
+  if (detail.objectiveHint.urgent) {
+    return `${detail.objectiveHint.detail} · ${waveContext}`;
+  }
+  return `${detail.objectiveHint.detail} · ${waveContext} · 合约 ${contractStatus}`;
 }
 
 function buildMissionStatusText(message: string, hint: ObjectiveHint): string {
@@ -1340,6 +1370,10 @@ function getUpgradeChoiceReason(id: UpgradeId): string {
 }
 
 function showHelpOverlay(reason: "manual" | "interruption" = "manual"): void {
+  if (latestStatus === "won") {
+    setSessionFeedback("先选择一项升级；也可以使用升级列表末尾的次要按钮跳过。");
+    return;
+  }
   resetVirtualInput();
   if (latestStatus === "playing") {
     window.dispatchEvent(new CustomEvent("game:pause"));
@@ -1362,9 +1396,12 @@ function showHelpOverlay(reason: "manual" | "interruption" = "manual"): void {
     : "目标不是乱飞，而是在电量压力下规划路线：先补流明，再修信标，最后从北侧光门撤离。";
   runRecap.hidden = true;
   quickBrief.hidden = paused;
+  controlPrimer.hidden = paused;
+  loopPrimer.hidden = paused;
   gameDossier.hidden = false;
   launchBrief.hidden = false;
   firstMinuteRoute.hidden = false;
+  launchCommit.hidden = paused;
   missionBrief.hidden = false;
   fieldGuide.hidden = false;
   renderTacticalScan();
@@ -1393,6 +1430,10 @@ function resetOverlayPanelScroll(): void {
 
 window.addEventListener("keydown", (event) => {
   if (event.key.toLowerCase() === "h") {
+    if (latestStatus === "won") {
+      setSessionFeedback("过波后先处理升级选择，避免丢失下一波改装。");
+      return;
+    }
     showHelpOverlay();
   }
   if (event.key === "Escape" && latestStatus === "paused") {
@@ -1439,12 +1480,16 @@ touchButtons.forEach((button) => {
     event.preventDefault();
     button.setPointerCapture(event.pointerId);
     window.__lumenVirtualInput![action] = true;
-    bufferTouchTap(action);
+    if (action !== "repair") {
+      bufferTouchTap(action);
+    }
     button.dataset.active = "true";
   });
   button.addEventListener("click", (event) => {
     event.preventDefault();
-    bufferTouchTap(action);
+    if (action !== "repair") {
+      bufferTouchTap(action);
+    }
   });
   const releaseAction = (event: PointerEvent) => {
     event.preventDefault();
@@ -1658,7 +1703,7 @@ function buildNextRunSummary(detail?: RunEndDetail): { title: string; focus: str
 function buildNextRunFocus(detail: RunEndDetail | undefined, dailyBest: DailyBestEntry | undefined): string {
   if (!detail) {
     if (!saveData.achievements.includes("firstRepair")) {
-      return "首次目标：先捡 2 个金色流明，再修复第一座蓝色信标。";
+      return "首次目标：先完成 4 个流明合约，再修复第一座蓝色信标。";
     }
     if (saveData.bestWave < 2) {
       return "下一局先稳定第一波：补流明、修 4 座信标、从北侧光门撤离。";
@@ -1724,6 +1769,16 @@ function setShellStatus(status: GameStatus): void {
 
 function setShellBriefingActive(active: boolean): void {
   shell.dataset.briefing = String(active);
+}
+
+function syncOverlayState(): void {
+  const active = overlay.classList.contains("show");
+  shell.dataset.overlay = String(active);
+  [gameWrap, objectiveTitle.parentElement, radarPanel, hud, waveIntro, missionToast, combatLog].forEach((element) => {
+    if (!element) return;
+    element.setAttribute("aria-hidden", String(active));
+    (element as HTMLElement & { inert?: boolean }).inert = active;
+  });
 }
 
 function setDifficultyPickerVisible(visible: boolean): void {
@@ -1810,7 +1865,7 @@ function persistRunResult(detail: RunEndDetail): AchievementId[] {
   saveData.bestScore = Math.max(saveData.bestScore, detail.score);
   saveData.bestWave = Math.max(saveData.bestWave, detail.wave);
   saveData.bestCombo = Math.max(saveData.bestCombo, detail.bestCombo);
-  saveData.bestContracts = Math.max(saveData.bestContracts, detail.stats.contractsCompleted);
+  saveData.bestContracts = Math.max(saveData.bestContracts, detail.campaignStats.contractsCompleted);
   if (detail.contract.status === "completed") {
     saveData.totalContracts += 1;
   }
@@ -1843,7 +1898,10 @@ function renderRunRecap(detail: RunEndDetail, newlyUnlocked: AchievementId[]): v
     ["波次", `${detail.wave}/5`],
     ["用时", formatDuration(detail.elapsed)],
     ["最佳连锁", `${detail.bestCombo.toFixed(1)}x`],
-    ["合约", `${detail.stats.contractsCompleted}/5`],
+    [
+      detail.status === "completed" ? "合约" : "本波合约",
+      detail.status === "completed" ? `${detail.stats.contractsCompleted}/5` : `${detail.stats.contractsCompleted}/1`
+    ],
     ["代号", detail.routePlan.name],
     ["区域", detail.sector.name],
     ["事件", detail.waveModifier.name],
@@ -1913,12 +1971,47 @@ function buildRecapPlanSummary(detail: RunEndDetail): string {
     return "五波救援完成，下一局可以把目标切到硬核、今日挑战或 S 级路线。";
   }
   if (detail.endReason === "chargeDepleted") {
-    return "这局主要断在电量节奏，下一局先把补给路线跑顺。";
+    return `失误根因：${buildLossRootCause(detail)}。下一局先把补给路线跑顺。`;
   }
   if (detail.endReason === "hullDestroyed") {
-    return "这局主要断在危险处理，下一局先保脉冲和撤离路线。";
+    return `失误根因：${buildLossRootCause(detail)}。下一局先保脉冲和撤离路线。`;
   }
-  return "这局信号中断，下一局先完成主目标，再追副目标和连锁。";
+  return `失误根因：${buildLossRootCause(detail)}。下一局先完成主目标，再追副目标和连锁。`;
+}
+
+function buildRunEndCopy(detail: RunEndDetail): string {
+  if (detail.status === "won" || detail.status === "completed") {
+    return detail.message;
+  }
+  return `${detail.message} 失误根因：${buildLossRootCause(detail)}。${buildLossNextAction(detail)}`;
+}
+
+function buildLossRootCause(detail: RunEndDetail): string {
+  if (detail.endReason === "chargeDepleted") {
+    if (detail.stats.stormSeconds > 2.5) return "在紫色风暴里停留太久，电量被持续吸走";
+    if (detail.stats.lumenCollected < Math.max(3, detail.wave * 2)) return "补给路线不足，开局和维修间隔没有吃够流明";
+    if (detail.stats.repairSeconds > detail.wave * 12) return "低电量时硬修信标，没有利用节点锁定后撤补给";
+    return "电量规划不足，推进、维修和绕路消耗叠在一起";
+  }
+  if (detail.endReason === "hullDestroyed") {
+    if (detail.stats.pulseUses === 0) return "粉色碎片贴脸时没有使用 Q / 脉冲键清场";
+    if (detail.stats.hitsTaken >= 3) return "连续穿过碎片密集线，受击后没有等恢复窗口";
+    return "维修时站位过贪，碎片轨迹切进维修圈后没有先撤";
+  }
+  if (detail.contract.status === "failed") {
+    return `战术合约“${detail.contract.name}”打乱了主路线`;
+  }
+  return "主目标节奏中断，补给、维修和撤离顺序没有稳定下来";
+}
+
+function buildLossNextAction(detail: RunEndDetail): string {
+  if (detail.endReason === "chargeDepleted") {
+    return "下一局先沿虚线补流明，修到节点后低电就撤出来补给。";
+  }
+  if (detail.endReason === "hullDestroyed") {
+    return "下一局把脉冲留给贴脸碎片，受击后先横向拉开再回去维修。";
+  }
+  return "下一局先完成 4 座信标和北侧撤离，再追合约和连锁。";
 }
 
 function buildRecapActionPlan(detail: RunEndDetail): RecapPlanStep[] {
@@ -1938,7 +2031,7 @@ function buildRecapActionPlan(detail: RunEndDetail): RecapPlanStep[] {
     {
       label: "开局",
       title: "先补给再维修",
-      detail: "开局读图缓冲里先找最近 2 个金色流明，再靠近蓝色信标按住修复。",
+      detail: "开局读图缓冲里先沿虚线补流明，再靠近蓝色信标按住修复。",
       tone: "primary"
     },
     {
@@ -2454,7 +2547,7 @@ function createRunHistoryEntry(detail: RunEndDetail): RunHistoryEntry {
     id: `${Date.now()}-${detail.routePlan.code}-${detail.wave}`,
     bestCombo: detail.bestCombo,
     contractStatus: detail.contract.status,
-    contractsCompleted: detail.stats.contractsCompleted,
+    contractsCompleted: detail.campaignStats.contractsCompleted,
     difficulty: detail.difficulty,
     elapsed: detail.elapsed,
     ratingId: detail.rating.id,
@@ -2576,4 +2669,6 @@ updateRecordUi();
 updateAchievementUi();
 updateRunHistoryUi();
 updateSessionTools();
+new MutationObserver(syncOverlayState).observe(overlay, { attributeFilter: ["class"], attributes: true });
+syncOverlayState();
 completeBootStatus();

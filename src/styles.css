@@ -1255,6 +1255,14 @@ button {
   font-size: 11px;
 }
 
+#shell[data-status="playing"][data-briefing="true"] #ability-bar,
+#shell[data-status="playing"][data-briefing="true"] #combo-timer[data-state="idle"],
+#shell[data-status="playing"][data-briefing="true"] #signal-panel,
+#shell[data-status="playing"][data-briefing="true"] #loadout-strip,
+#shell[data-status="playing"][data-briefing="true"] #wave-event {
+  display: none;
+}
+
 #overlay {
   position: absolute;
   inset: 0;
@@ -1273,14 +1281,28 @@ button {
   display: flex;
 }
 
+#overlay.show ~ #mobile-pause-button {
+  display: none;
+}
+
+#shell[data-overlay="true"] #hud,
+#shell[data-overlay="true"] #objective-strip,
+#shell[data-overlay="true"] #radar-panel,
+#shell[data-overlay="true"] #wave-intro,
+#shell[data-overlay="true"] #mission-toast,
+#shell[data-overlay="true"] #combat-log {
+  opacity: 0;
+  pointer-events: none;
+}
+
 #overlay.show ~ #touch-controls {
   display: none;
 }
 
 #mobile-pause-button {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: max(8px, calc(env(safe-area-inset-top) + 8px));
+  right: max(8px, calc(env(safe-area-inset-right) + 8px));
   z-index: 7;
   display: none;
   min-width: 54px;
@@ -1300,10 +1322,6 @@ button {
 #mobile-pause-button:focus-visible {
   outline: none;
   border-color: rgba(255, 255, 255, 0.65);
-}
-
-#overlay.show ~ #mobile-pause-button {
-  display: none;
 }
 
 .panel {
@@ -1882,6 +1900,86 @@ h1 {
   color: #b7d7e6;
   font-size: 12px;
   line-height: 1.4;
+}
+
+#control-primer,
+#loop-primer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 7px;
+  max-width: 640px;
+  margin: 0 auto 10px;
+}
+
+#control-primer[hidden],
+#loop-primer[hidden] {
+  display: none;
+}
+
+#control-primer span,
+#loop-primer span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 5px 8px;
+  border: 1px solid rgba(126, 239, 255, 0.16);
+  border-radius: 999px;
+  color: #d8eaf7;
+  background: rgba(255, 255, 255, 0.045);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+#control-primer b {
+  margin-right: 5px;
+  color: #fff3ad;
+  font-weight: 1000;
+}
+
+#loop-primer {
+  margin-bottom: 12px;
+}
+
+#loop-primer span {
+  border-color: rgba(255, 226, 122, 0.17);
+  color: #fff3ad;
+  background: rgba(255, 226, 122, 0.07);
+}
+
+#launch-commit {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  max-width: 560px;
+  margin: 0 auto 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 226, 122, 0.22);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(255, 226, 122, 0.13), rgba(103, 244, 255, 0.07)),
+    rgba(255, 255, 255, 0.035);
+  text-align: left;
+}
+
+#launch-commit strong,
+#launch-commit span {
+  display: block;
+}
+
+#launch-commit strong {
+  color: #fff3ad;
+  font-size: 12px;
+  font-weight: 1000;
+  white-space: nowrap;
+}
+
+#launch-commit span {
+  color: #d9eef9;
+  font-size: 12px;
+  line-height: 1.38;
 }
 
 #next-run-panel {
@@ -2479,6 +2577,16 @@ h1 {
   display: none;
 }
 
+#start-button,
+#resume-button {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  box-shadow:
+    0 -10px 22px rgba(5, 10, 18, 0.28),
+    0 10px 32px rgba(103, 244, 255, 0.25);
+}
+
 #start-button:active {
   transform: translateY(1px);
 }
@@ -2710,6 +2818,26 @@ h1 {
   background: linear-gradient(90deg, rgba(103, 244, 255, 0.2), rgba(255, 226, 122, 0.14));
 }
 
+.upgrade-skip {
+  justify-self: center;
+  min-height: 34px;
+  padding: 8px 12px;
+  border: 1px solid rgba(126, 239, 255, 0.18);
+  border-radius: 6px;
+  color: #cfe6f4;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.upgrade-skip:hover,
+.upgrade-skip:focus-visible {
+  outline: none;
+  border-color: rgba(255, 226, 122, 0.48);
+  color: #fff3ad;
+}
+
 #touch-controls {
   position: absolute;
   inset: auto 0 18px 0;
@@ -2795,6 +2923,215 @@ h1 {
 
   #shell[data-status="playing"] #radar-panel {
     display: none;
+  }
+
+  #shell[data-status="playing"] #mission-toast {
+    right: max(12px, env(safe-area-inset-right));
+    bottom: calc(150px + env(safe-area-inset-bottom));
+  }
+
+  #shell[data-status="playing"] #combat-log {
+    left: max(12px, env(safe-area-inset-left));
+    bottom: calc(150px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-height: 480px) and (orientation: landscape), (pointer: coarse) and (orientation: landscape) {
+  #shell[data-status="playing"] #hud {
+    top: max(8px, env(safe-area-inset-top));
+    left: max(8px, env(safe-area-inset-left));
+    width: min(430px, calc(100vw - 188px));
+    max-height: calc(100vh - 18px - env(safe-area-inset-top));
+    overflow: hidden;
+    padding: 7px 9px;
+  }
+
+  #shell[data-status="playing"] .brand,
+  #shell[data-status="playing"] #wave-event,
+  #shell[data-status="playing"] #loadout-strip,
+  #shell[data-status="playing"] #help-button,
+  #shell[data-status="playing"] #signal-panel em,
+  #shell[data-status="playing"] #contract-requirement,
+  #shell[data-status="playing"] #coach-detail,
+  #shell[data-status="playing"] #pilot-tip-detail {
+    display: none;
+  }
+
+  #shell[data-status="playing"] .meter-row {
+    grid-template-columns: 34px 1fr 30px;
+    gap: 5px;
+    margin-top: 4px;
+    font-size: 10px;
+  }
+
+  #shell[data-status="playing"] .meter {
+    height: 7px;
+  }
+
+  #shell[data-status="playing"] .stats {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 4px;
+    margin-top: 6px;
+  }
+
+  #shell[data-status="playing"] .stats div {
+    min-height: 30px;
+    padding: 3px 2px;
+  }
+
+  #shell[data-status="playing"] .stats dt {
+    font-size: 9px;
+  }
+
+  #shell[data-status="playing"] .stats dd {
+    margin-top: 1px;
+    font-size: 10px;
+  }
+
+  #shell[data-status="playing"] #ability-bar,
+  #shell[data-status="playing"] #combo-timer,
+  #shell[data-status="playing"] #signal-panel,
+  #shell[data-status="playing"] #contract-panel,
+  #shell[data-status="playing"] #coach-panel,
+  #shell[data-status="playing"] #pilot-tip {
+    margin-top: 5px;
+    padding: 5px 6px;
+  }
+
+  #shell[data-status="playing"] #combo-timer[data-state="idle"],
+  #shell[data-status="playing"][data-briefing="true"] #contract-panel {
+    display: none;
+  }
+
+  #shell[data-status="playing"] #coach-rail {
+    gap: 3px;
+    margin-top: 4px;
+  }
+
+  #shell[data-status="playing"] #coach-rail span {
+    min-height: 15px;
+    padding: 2px 1px;
+    font-size: 8px;
+  }
+
+  #shell[data-status="playing"] #objective-strip {
+    top: auto;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: auto;
+    width: min(430px, calc(100vw - 210px));
+    min-width: 0;
+    padding: 8px 10px;
+    transform: none;
+  }
+
+  #shell[data-status="playing"] #objective-strip strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #shell[data-status="playing"] #objective-strip span {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  #shell[data-status="playing"] #wave-intro {
+    top: max(8px, env(safe-area-inset-top));
+    right: max(12px, env(safe-area-inset-right));
+    bottom: auto;
+    left: auto;
+    width: min(374px, calc(100vw - 470px));
+    min-width: 252px;
+    max-height: 68px;
+    overflow: hidden;
+    padding: 7px 9px;
+    transform: translateY(-6px);
+  }
+
+  #shell[data-status="playing"] #wave-intro.show {
+    transform: none;
+  }
+
+  #shell[data-status="playing"] #wave-intro strong {
+    overflow: hidden;
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #shell[data-status="playing"] #wave-intro span {
+    display: none;
+  }
+
+  #shell[data-status="playing"] #wave-intro em {
+    display: block;
+    overflow: hidden;
+    margin-top: 3px;
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #shell[data-status="playing"] #mission-toast,
+  #shell[data-status="playing"] #combat-log {
+    right: max(12px, env(safe-area-inset-right));
+    bottom: calc(92px + env(safe-area-inset-bottom));
+    left: auto;
+    width: min(420px, calc(100vw - 210px));
+    padding: 8px 10px;
+  }
+
+  #shell[data-status="playing"] #combat-log {
+    max-height: 70px;
+    overflow: hidden;
+  }
+
+  #shell[data-status="playing"] #combat-log-history {
+    display: none;
+  }
+
+  #touch-stick {
+    width: 92px;
+    height: 92px;
+  }
+
+  #touch-stick span {
+    width: 34px;
+    height: 34px;
+    margin: 29px;
+  }
+
+  .touch-actions {
+    grid-template-columns: repeat(2, 54px);
+    gap: 8px;
+  }
+
+  .touch-actions button {
+    min-height: 44px;
+    font-size: 10px;
+  }
+
+  .touch-actions button[data-touch-action="repair"] {
+    min-height: 96px;
+  }
+}
+
+@media (pointer: coarse) and (orientation: landscape) {
+  #shell[data-status="playing"] #objective-strip {
+    right: max(132px, calc(env(safe-area-inset-right) + 128px));
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: max(116px, calc(env(safe-area-inset-left) + 108px));
+    width: auto;
+  }
+
+  #shell[data-status="playing"] #mission-toast,
+  #shell[data-status="playing"] #combat-log {
+    right: max(132px, calc(env(safe-area-inset-right) + 128px));
+    left: max(116px, calc(env(safe-area-inset-left) + 108px));
+    width: auto;
   }
 }
 
@@ -2933,6 +3270,16 @@ h1 {
     margin-bottom: 10px;
   }
 
+  #launch-commit {
+    margin-bottom: 10px;
+    padding: 8px 10px;
+  }
+
+  #launch-commit strong,
+  #launch-commit span {
+    font-size: 11px;
+  }
+
   #next-run-panel {
     margin-bottom: 12px;
   }
@@ -2944,6 +3291,100 @@ h1 {
   #next-run-goals article {
     min-height: 62px;
     padding: 8px;
+  }
+}
+
+@media (max-height: 480px) and (orientation: landscape) {
+  #overlay {
+    padding: 10px;
+  }
+
+  .panel {
+    max-height: calc(100dvh - 20px);
+    padding: 10px 14px 12px;
+  }
+
+  .eyebrow {
+    font-size: 10px;
+  }
+
+  h1 {
+    margin: 4px 0 6px;
+    font-size: 34px;
+    line-height: 0.96;
+  }
+
+  .panel p {
+    max-width: 600px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  #quick-brief,
+  #launch-commit,
+  #daily-detail,
+  #next-run-panel,
+  #achievement-strip,
+  #run-history,
+  #how-to-play {
+    display: none;
+  }
+
+  #control-primer,
+  #loop-primer {
+    gap: 5px;
+    margin-bottom: 6px;
+  }
+
+  #control-primer span,
+  #loop-primer span {
+    min-height: 24px;
+    padding: 4px 7px;
+    font-size: 10px;
+  }
+
+  #menu-options {
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  #difficulty-picker button,
+  #audio-toggle,
+  #daily-route-button {
+    min-height: 28px;
+    font-size: 10px;
+  }
+
+  #difficulty-detail {
+    margin-bottom: 6px;
+    font-size: 11px;
+  }
+
+  #start-button,
+  #resume-button {
+    min-height: 34px;
+    padding: 8px 14px;
+    font-size: 12px;
+  }
+
+  #tactical-scan {
+    margin-bottom: 6px;
+    padding: 7px 8px;
+  }
+
+  #tactical-scan-map {
+    max-height: 118px;
+  }
+
+  .tactical-scan-head {
+    margin-bottom: 5px;
+  }
+
+  .tactical-scan-head strong,
+  .tactical-scan-head span,
+  .tactical-scan-legend span {
+    font-size: 9px;
   }
 }
 
@@ -3254,8 +3695,8 @@ h1 {
   }
 
   #shell[data-status="playing"] #touch-controls {
-    inset: auto 0 12px 0;
-    padding: 0 12px;
+    inset: auto max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    padding: 0;
   }
 
   #shell[data-status="playing"] #mobile-pause-button {
@@ -3428,6 +3869,18 @@ h1 {
 
   #daily-detail {
     margin-bottom: 10px;
+    font-size: 11px;
+  }
+
+  #launch-commit {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    margin-bottom: 10px;
+    padding: 9px 10px;
+  }
+
+  #launch-commit strong,
+  #launch-commit span {
     font-size: 11px;
   }
 

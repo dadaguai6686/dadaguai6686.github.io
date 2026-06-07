@@ -78,7 +78,7 @@ export class InputMapper {
     const input = {
       move: { x, y },
       boost: this.keys.boost.isDown || virtualInput.boost || this.boostFrames > 0 || virtualTap.boost > 0,
-      repair: this.keys.repair.isDown || virtualInput.repair || this.repairFrames > 0 || virtualTap.repair > 0,
+      repair: this.keys.repair.isDown || virtualInput.repair || this.repairFrames > 0,
       pulse: this.keys.pulse.isDown || virtualInput.pulse || this.pulseFrames > 0 || virtualTap.pulse > 0
     };
     this.consumeBufferedInput(virtualInput);

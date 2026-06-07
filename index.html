@@ -2,7 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>流明漂航</title>
     <link
       rel="icon"
@@ -107,7 +107,7 @@
     <div id="boot-status" role="status" aria-live="polite">
       <div class="boot-card">
         <strong id="boot-status-title">正在加载流明漂航</strong>
-        <span id="boot-status-detail">正在启动 Phaser 场景、中文 HUD 和本地存档。</span>
+        <span id="boot-status-detail">正在启动游戏场景、中文界面和本地存档。</span>
         <i aria-hidden="true"></i>
       </div>
     </div>
@@ -231,7 +231,7 @@
       </div>
       <div id="overlay" class="show">
         <div class="panel" tabindex="-1">
-          <span class="eyebrow">中文 2D 太空救援轻度肉鸽</span>
+          <span class="eyebrow">中文二维太空救援轻度肉鸽</span>
           <h1>流明漂航</h1>
           <p>
             你是一台维修无人机。城市光网正在坍缩：修复蓝色信标、收集金色流明、
@@ -239,8 +239,8 @@
           </p>
           <div id="quick-brief" aria-label="首屏快速目标">
             <article data-kind="lumen">
-              <b>先补给</b>
-              <span>吃金色流明</span>
+              <b>先移动补给</b>
+              <span>方向键/摇杆吃流明</span>
             </article>
             <article data-kind="relay">
               <b>再维修</b>
@@ -281,6 +281,20 @@
           </div>
           <p id="difficulty-detail">标准模式：推荐第一次游玩，完整体验风险、连锁和升级。</p>
           <p id="daily-detail">今日挑战会使用当天固定救援代号。</p>
+          <div id="control-primer" aria-label="首屏操作条">
+            <span><b>移动</b>方向键 / 字母键 / 左摇杆</span>
+            <span><b>修复</b>按住 E / 修复键</span>
+            <span><b>脱险</b>空格推进 / Q 脉冲</span>
+          </div>
+          <div id="loop-primer" aria-label="继续游玩目标">
+            <span>五波救援</span>
+            <span>过波选升级</span>
+            <span>今日挑战与路线复盘</span>
+          </div>
+          <div id="launch-commit" aria-label="出发任务板">
+            <strong>出发后第一步</strong>
+            <span>安全读图缓冲中，先沿虚线完成 4 个金色流明合约，再按导航靠近蓝色信标维修。</span>
+          </div>
           <button id="start-button" type="button">开始标准救援</button>
           <button id="resume-button" type="button" hidden>继续游戏</button>
           <div id="game-dossier" aria-label="任务档案">
@@ -328,7 +342,7 @@
               <strong>首局作战令</strong>
               <ol>
                 <li><b>安全读图</b><span>开局不耗电，先看路线和合约。</span></li>
-                <li><b>补给起手</b><span>先吃 2 个金色流明，再进维修圈。</span></li>
+                <li><b>补给起手</b><span>先完成 4 个金色流明合约，再进维修圈。</span></li>
                 <li><b>按住维修</b><span>蓝色信标旁按住 E / 修复键。</span></li>
                 <li><b>北侧撤离</b><span>4 座信标亮起后冲进光门选升级。</span></li>
               </ol>
@@ -338,7 +352,7 @@
             <article>
               <b>1</b>
               <strong>读图补电</strong>
-              <span>开局安全缓冲中，先找最近 2 个金色流明。</span>
+              <span>开局安全缓冲中，先沿虚线回收 4 个金色流明。</span>
             </article>
             <article>
               <b>2</b>
@@ -418,7 +432,7 @@
           <div id="how-to-play">
             <article>
               <strong>第一步：补流明</strong>
-              <span>开局先捡 2 个金色流明，补电并建立连锁。</span>
+              <span>首波先回收 4 个金色流明，补电并完成合约。</span>
             </article>
             <article>
               <strong>第二步：修信标</strong>

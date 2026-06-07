@@ -7,6 +7,7 @@ import {
   getCoachDirective,
   getContractFocus,
   getContractSnapshot,
+  getCurrentWaveStats,
   getHazardThreats,
   HIT_RECOVERY_SECONDS,
   getObjectiveHint,
@@ -24,6 +25,7 @@ import {
   SECTOR_LAYOUTS,
   updateSimulation,
   WAVE_MODIFIERS,
+  withRunStats,
   type CoachDirective,
   type ContractFocus,
   type ContractSnapshot,
@@ -193,6 +195,7 @@ export class GameScene extends Phaser.Scene {
   private routePreviewLabels: Phaser.GameObjects.Text[] = [];
   private starLayer?: Phaser.GameObjects.Graphics;
   private trail?: Phaser.GameObjects.Particles.ParticleEmitter;
+  private lastRepairDecayFeedbackAt = 0;
   private largeLabels = false;
   private reducedMotion = false;
 
@@ -211,6 +214,7 @@ export class GameScene extends Phaser.Scene {
     const previousCollectedIds = new Set(this.state.lumen.filter((drop) => drop.collected).map((drop) => drop.id));
     const previousRepairedIds = new Set(this.state.relays.filter((relay) => relay.repaired).map((relay) => relay.id));
     const previousRelayCheckpoints = new Map(this.state.relays.map((relay) => [relay.id, relay.checkpoint]));
+    const previousRelayProgress = new Map(this.state.relays.map((relay) => [relay.id, relay.progress]));
     const previousHull = this.state.player.hull;
     const previousBoostCooldown = this.state.player.boostCooldown;
     const previousCloseCalls = this.state.stats.closeCalls;
@@ -229,15 +233,19 @@ export class GameScene extends Phaser.Scene {
       previousHull,
       previousPulseCooldown,
       previousRelayCheckpoints,
+      previousRelayProgress,
       previousRepairedIds,
       previousScore,
       previousStatus
     });
     if (previousStatus === "playing" && this.state.status !== "playing") {
+      const waveStats = this.state.status === "completed" ? this.state.stats : getCurrentWaveStats(this.state);
+      const ratingState = withRunStats(this.state, waveStats);
       window.dispatchEvent(
         new CustomEvent("game:ended", {
           detail: {
             bestCombo: this.state.bestCombo,
+            campaignStats: this.state.stats as RunStats,
             charge: this.state.player.charge,
             contract: getContractSnapshot(this.state),
             difficulty: this.state.difficulty,
@@ -245,11 +253,11 @@ export class GameScene extends Phaser.Scene {
             endReason: this.state.endReason as RunEndReason,
             hull: this.state.player.hull,
             message: this.state.message,
-            rating: getRunRating(this.state) as RunRating,
+            rating: getRunRating(ratingState) as RunRating,
             routePlan: getRoutePlan(this.state.routeSeed) as RoutePlan,
             score: this.state.score,
             sector: SECTOR_LAYOUTS[this.state.sector] as SectorLayout,
-            stats: this.state.stats as RunStats,
+            stats: waveStats as RunStats,
             status: this.state.status,
             wave: this.state.wave,
             waveModifier: WAVE_MODIFIERS[this.state.waveModifier] as WaveModifier
@@ -780,6 +788,7 @@ export class GameScene extends Phaser.Scene {
     previousHull: number;
     previousPulseCooldown: number;
     previousRelayCheckpoints: Map<number, number>;
+    previousRelayProgress: Map<number, number>;
     previousRepairedIds: Set<number>;
     previousScore: number;
     previousStatus: GameState["status"];
@@ -794,6 +803,11 @@ export class GameScene extends Phaser.Scene {
     const newlyCheckpointed = this.state.relays.filter(
       (relay) => !relay.repaired && relay.checkpoint > (previous.previousRelayCheckpoints.get(relay.id) ?? 0)
     );
+    const decayingRelay = this.state.relays.find((relay) => {
+      const previousProgress = previous.previousRelayProgress.get(relay.id) ?? relay.progress;
+      const checkpointFloor = relay.checkpoint / RELAY_CHECKPOINT_COUNT;
+      return !relay.repaired && previousProgress > relay.progress && previousProgress > checkpointFloor;
+    });
     if (previous.previousBoostCooldown <= 0 && this.state.player.boostCooldown > 0) {
       this.dispatchFeedback({
         detail: "短推进已启动。优先用它穿出风暴和碎片线，别只拿来赶路。",
@@ -893,6 +907,18 @@ export class GameScene extends Phaser.Scene {
         tone: "success"
       });
     });
+    if (decayingRelay && this.time.now - this.lastRepairDecayFeedbackAt > 2200) {
+      this.lastRepairDecayFeedbackAt = this.time.now;
+      this.dispatchFeedback({
+        detail: `离开维修圈后，未锁定的维修进度会慢慢回落；节点 ${decayingRelay.checkpoint}/${RELAY_CHECKPOINT_COUNT} 已保留，可以补流明后回来继续。`,
+        kind: "repair",
+        text: "维修回落",
+        title: "维修中断",
+        position: decayingRelay.position,
+        color: 0xffd76e,
+        tone: "warning"
+      });
+    }
     if (previous.previousHull - this.state.player.hull >= 5) {
       const damage = Math.ceil(previous.previousHull - this.state.player.hull);
       this.dispatchFeedback({
@@ -1419,10 +1445,22 @@ function buildOpeningRoutePreview(state: GameState): RoutePreviewWaypoint[] {
 
   const route: RoutePreviewWaypoint[] = [];
   let cursor = state.player.position;
+  if (state.contract.id === "relayRush") {
+    const rushRelay = selectNearestWaypoints(
+      state.relays.filter((target) => !target.repaired).map((target) => target.position),
+      cursor,
+      1
+    )[0];
+    if (rushRelay) {
+      route.push({ color: 0x67f4ff, label: "速修信标", position: rushRelay });
+      cursor = rushRelay;
+    }
+  }
+
   const lumenTargets = selectNearestWaypoints(
     state.lumen.filter((drop) => !drop.collected).map((drop) => drop.position),
     cursor,
-    Math.max(1, Math.min(2, 2 - Math.min(state.stats.lumenCollected, 2)))
+    getOpeningLumenWaypointCount(state)
   );
 
   lumenTargets.forEach((position) => {
@@ -1430,13 +1468,15 @@ function buildOpeningRoutePreview(state: GameState): RoutePreviewWaypoint[] {
     cursor = position;
   });
 
-  const relay = selectNearestWaypoints(
-    state.relays.filter((target) => !target.repaired).map((target) => target.position),
-    cursor,
-    1
-  )[0];
-  if (relay) {
-    route.push({ color: 0x67f4ff, label: "修信标", position: relay });
+  if (state.contract.id !== "relayRush") {
+    const relay = selectNearestWaypoints(
+      state.relays.filter((target) => !target.repaired).map((target) => target.position),
+      cursor,
+      1
+    )[0];
+    if (relay) {
+      route.push({ color: 0x67f4ff, label: "修信标", position: relay });
+    }
   }
 
   if (state.gate.open) {
@@ -1444,6 +1484,15 @@ function buildOpeningRoutePreview(state: GameState): RoutePreviewWaypoint[] {
   }
 
   return route.slice(0, 4);
+}
+
+function getOpeningLumenWaypointCount(state: GameState): number {
+  if (state.contract.id === "relayRush") return 0;
+  if (state.wave === 1 && state.contract.id === "lumenRoute" && state.contract.status === "active") {
+    const collected = getCurrentWaveStats(state).lumenCollected;
+    return Math.max(1, Math.min(4, 4 - Math.min(collected, 4)));
+  }
+  return Math.max(1, Math.min(2, 2 - Math.min(state.stats.lumenCollected, 2)));
 }
 
 function selectNearestWaypoints(
