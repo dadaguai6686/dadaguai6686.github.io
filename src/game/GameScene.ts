@@ -867,18 +867,6 @@ export class GameScene extends Phaser.Scene {
         tone: scoreDelta > 0 ? "success" : "warning"
       });
     }
-    newlyCheckpointed.forEach((relay) => {
-      this.dispatchFeedback({
-        detail: `维修进度已锁定到 ${relay.checkpoint}/${RELAY_CHECKPOINT_COUNT}。危险靠近时可以先撤出，回头从节点继续修。`,
-        kind: "repair",
-        text: `节点 ${relay.checkpoint}/${RELAY_CHECKPOINT_COUNT}`,
-        title: "维修节点锁定",
-        position: relay.position,
-        color: 0x67f4ff,
-        scale: 1.06,
-        tone: "success"
-      });
-    });
     if (closeCallDelta > 0) {
       this.dispatchFeedback({
         detail: `擦过碎片边缘但没有撞上，奖励连锁和分数。当前连锁 ${this.state.combo.toFixed(1)}x，继续绕线别贪修。`,
@@ -891,6 +879,18 @@ export class GameScene extends Phaser.Scene {
         tone: "success"
       });
     }
+    newlyCheckpointed.forEach((relay) => {
+      this.dispatchFeedback({
+        detail: `维修进度已锁定到 ${relay.checkpoint}/${RELAY_CHECKPOINT_COUNT}。危险靠近时可以先撤出，回头从节点继续修。`,
+        kind: "repair",
+        text: `节点 ${relay.checkpoint}/${RELAY_CHECKPOINT_COUNT}`,
+        title: "维修节点锁定",
+        position: relay.position,
+        color: 0x67f4ff,
+        scale: 1.06,
+        tone: "success"
+      });
+    });
     if (previous.previousHull - this.state.player.hull >= 5) {
       const damage = Math.ceil(previous.previousHull - this.state.player.hull);
       this.dispatchFeedback({

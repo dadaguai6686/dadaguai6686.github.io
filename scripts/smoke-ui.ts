@@ -8,6 +8,8 @@ const main = readFileSync("src/main.ts", "utf8");
 const simulation = readFileSync("src/game/simulation.ts", "utf8");
 const styles = readFileSync("src/styles.css", "utf8");
 const viteConfig = readFileSync("vite.config.ts", "utf8");
+const closeCallFeedbackIndex = gameScene.indexOf("if (closeCallDelta > 0)");
+const checkpointFeedbackIndex = gameScene.indexOf("newlyCheckpointed.forEach");
 
 assert.ok(html.includes('id="boot-status"'), "HTML should include a boot loading status before the game bundle loads");
 assert.ok(html.includes("正在加载流明漂航"), "boot loading status should be localized in Chinese");
@@ -124,6 +126,10 @@ assert.ok(gameScene.includes("syncRepairPromptLabel"), "Phaser scene should show
 assert.ok(gameScene.includes("RELAY_CHECKPOINT_COUNT"), "Phaser scene should render relay repair checkpoint state");
 assert.ok(gameScene.includes("relay.checkpoint >= checkpoint"), "relay progress rings should mark reached repair checkpoints");
 assert.ok(gameScene.includes("维修节点锁定"), "relay checkpoint feedback should be localized in Chinese");
+assert.ok(
+  closeCallFeedbackIndex >= 0 && checkpointFeedbackIndex > closeCallFeedbackIndex,
+  "repair checkpoint feedback should be dispatched after close-call feedback so the checkpoint milestone remains visible"
+);
 assert.ok(gameScene.includes('"score"'), "Phaser scene should emit score change feedback cues");
 assert.ok(gameScene.includes('"closeCall"'), "Phaser scene should emit close-call feedback cues");
 assert.ok(gameScene.includes("擦险脱离"), "close-call feedback should be localized in Chinese");
