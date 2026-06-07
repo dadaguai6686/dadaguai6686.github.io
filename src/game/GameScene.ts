@@ -8,6 +8,7 @@ import {
   getContractFocus,
   getContractSnapshot,
   getHazardThreats,
+  HIT_RECOVERY_SECONDS,
   getObjectiveHint,
   getResourceAlerts,
   getRunPerformance,
@@ -176,6 +177,7 @@ export class GameScene extends Phaser.Scene {
   private navigatorLabel?: Phaser.GameObjects.Text;
   private readabilityView?: Phaser.GameObjects.Graphics;
   private repairPromptLabel?: Phaser.GameObjects.Text;
+  private recoveryLabel?: Phaser.GameObjects.Text;
   private routePreviewLabels: Phaser.GameObjects.Text[] = [];
   private starLayer?: Phaser.GameObjects.Graphics;
   private trail?: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -292,6 +294,7 @@ export class GameScene extends Phaser.Scene {
     this.stormViews.clear();
     this.navigatorLabel = undefined;
     this.repairPromptLabel = undefined;
+    this.recoveryLabel = undefined;
     this.routePreviewLabels = [];
 
     this.worldLayer = this.add.container(0, 0);
@@ -835,7 +838,7 @@ export class GameScene extends Phaser.Scene {
     if (previous.previousHull - this.state.player.hull >= 5) {
       const damage = Math.ceil(previous.previousHull - this.state.player.hull);
       this.dispatchFeedback({
-        detail: `机体 -${damage}，连锁已断。先离开碎片轨迹，必要时用 Q / 脉冲键清场。`,
+        detail: `机体 -${damage}，连锁已断。恢复环消失前拉开距离，必要时用 Q / 脉冲键清场。`,
         kind: "hit",
         text: "受击",
         title: "受击：连锁中断",
@@ -1030,11 +1033,12 @@ export class GameScene extends Phaser.Scene {
     const player = this.state.player.position;
     const pulse = Math.sin(this.time.now * 0.008) * 0.5 + 0.5;
 
-    this.renderOpeningRoutePreview(graphics, player, pulse);
-    this.renderRepairReadability(graphics, player, pulse);
-    this.renderContractFocus(graphics, pulse);
-    this.renderHazardReadability(graphics, player, pulse);
-    this.renderResourceReadability(graphics, player, pulse);
+      this.renderOpeningRoutePreview(graphics, player, pulse);
+      this.renderRepairReadability(graphics, player, pulse);
+      this.renderRecoveryReadability(graphics, player, pulse);
+      this.renderContractFocus(graphics, pulse);
+      this.renderHazardReadability(graphics, player, pulse);
+      this.renderResourceReadability(graphics, player, pulse);
   }
 
   private renderOpeningRoutePreview(graphics: Phaser.GameObjects.Graphics, player: { x: number; y: number }, pulse: number): void {
@@ -1167,6 +1171,51 @@ export class GameScene extends Phaser.Scene {
 
   private hideRepairPromptLabel(): void {
     this.repairPromptLabel?.setVisible(false);
+  }
+
+  private renderRecoveryReadability(graphics: Phaser.GameObjects.Graphics, player: { x: number; y: number }, pulse: number): void {
+    const remaining = this.state.player.invulnerable;
+    if (remaining <= 0) {
+      this.hideRecoveryLabel();
+      return;
+    }
+
+    const ratio = Math.max(0, Math.min(1, remaining / HIT_RECOVERY_SECONDS));
+    graphics.lineStyle(4, 0x67f4ff, 0.28 + pulse * 0.18);
+    graphics.strokeCircle(player.x, player.y, 62 + pulse * 8);
+    graphics.lineStyle(6, 0xffd76e, 0.56 + ratio * 0.22);
+    graphics.arc(player.x, player.y, 70, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ratio);
+    graphics.lineStyle(2, 0xffffff, 0.2 + pulse * 0.16);
+    graphics.strokeCircle(player.x, player.y, 78 + pulse * 10);
+    this.syncRecoveryLabel(player, remaining, pulse);
+  }
+
+  private syncRecoveryLabel(player: { x: number; y: number }, remaining: number, pulse: number): void {
+    if (!this.recoveryLabel) {
+      this.recoveryLabel = this.add.text(0, 0, "", {
+        align: "center",
+        backgroundColor: "rgba(5, 10, 18, 0.7)",
+        color: "#fff3ad",
+        fontFamily: "Inter, Segoe UI, sans-serif",
+        fontSize: this.largeLabels ? "15px" : "12px",
+        fontStyle: "900",
+        padding: { bottom: 4, left: 8, right: 8, top: 4 },
+        stroke: "#07111c",
+        strokeThickness: this.largeLabels ? 4 : 3
+      });
+      this.recoveryLabel.setOrigin(0.5);
+      this.worldLayer?.add(this.recoveryLabel);
+    }
+
+    this.recoveryLabel.setVisible(true);
+    this.recoveryLabel.setText(`恢复窗口 ${remaining.toFixed(1)}秒`);
+    this.recoveryLabel.setPosition(player.x, player.y - 82);
+    this.recoveryLabel.setAlpha(0.78 + pulse * 0.22);
+    this.recoveryLabel.setScale(this.largeLabels ? 1.06 : 1);
+  }
+
+  private hideRecoveryLabel(): void {
+    this.recoveryLabel?.setVisible(false);
   }
 
   private renderHazardReadability(graphics: Phaser.GameObjects.Graphics, player: { x: number; y: number }, pulse: number): void {

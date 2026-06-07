@@ -270,6 +270,7 @@ export const REPAIR_RADIUS = 76;
 export const LUMEN_PICKUP_RADIUS = 34;
 export const HAZARD_PLAYER_RADIUS = 28;
 export const HAZARD_NEAR_BUFFER = 112;
+export const HIT_RECOVERY_SECONDS = 0.85;
 
 export const CONTRACTS: Record<ContractId, TacticalContract> = {
   lumenRoute: {
@@ -935,7 +936,7 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
       const damageScale = 1 - next.upgrades.shield * 0.12;
       player.hull = Math.max(0, player.hull - 16 * damageScale * difficulty.damageScale);
       player.charge = Math.max(0, player.charge - 7);
-      player.invulnerable = 0.85;
+      player.invulnerable = HIT_RECOVERY_SECONDS;
       next.stats.hitsTaken += 1;
       next.combo = 1;
       next.comboTimer = 0;

@@ -114,6 +114,9 @@ assert.ok(gameScene.includes("toLocaleString()}分"), "score feedback should sho
 assert.ok(gameScene.includes("受击：连锁中断"), "hit feedback should explain chain loss in Chinese");
 assert.ok(gameScene.includes("机体 -"), "hit feedback should show concrete damage in Chinese");
 assert.ok(gameScene.includes("脉冲会推开附近碎片"), "pulse feedback should teach its tactical use");
+assert.ok(gameScene.includes("renderRecoveryReadability"), "Phaser scene should render the post-hit recovery window");
+assert.ok(gameScene.includes("恢复窗口"), "recovery window label should be localized in Chinese");
+assert.ok(gameScene.includes("HIT_RECOVERY_SECONDS"), "recovery window visuals should share the simulation timing constant");
 assert.ok(gameScene.includes("renderHazardTrajectories"), "Phaser scene should telegraph moving hazard paths");
 assert.ok(gameScene.includes("projectHazardPosition"), "hazard telegraphs should project future shard positions");
 assert.ok(simulation.includes("按住 E / 修复键"), "runtime objective copy should support keyboard and touch repair controls");

@@ -15,6 +15,7 @@ import {
   getContractFocus,
   getContractSnapshot,
   getHazardThreats,
+  HIT_RECOVERY_SECONDS,
   getObjectiveHint,
   getResourceAlerts,
   getRoutePlan,
@@ -244,8 +245,12 @@ hitState.briefingActive = false;
 hitState.hazards[0].position = { ...hitState.player.position };
 hitState = updateSimulation(hitState, idle, 0.016);
 assert.equal(hitState.stats.hitsTaken, 1, "hazard impacts should be counted");
+assert.equal(hitState.player.invulnerable, HIT_RECOVERY_SECONDS, "hazard impacts should open a recovery window");
 assert.equal(getResourceAlerts(hitState).hull, "stable", "one standard hit should not overstate hull danger");
 assert.ok(getRunPerformance(hitState).points < getRunPerformance(restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED })).points, "hits should lower live rating pressure");
+const recoveryProtected = updateSimulation(hitState, idle, 0.016);
+assert.equal(recoveryProtected.stats.hitsTaken, 1, "recovery window should prevent immediate repeated hazard hits");
+assert.ok(recoveryProtected.player.invulnerable < HIT_RECOVERY_SECONDS, "recovery window should tick down after impact");
 const hazardThreatState = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
 hazardThreatState.briefingActive = false;
 hazardThreatState.contract = createContractState("pulseDiscipline", hazardThreatState.elapsed, hazardThreatState.stats);
