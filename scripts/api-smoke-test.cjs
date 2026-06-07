@@ -144,6 +144,8 @@ async function run() {
     assert(serviceWorkerText.includes('atherix-static-v29-local-assets'), 'service worker should use the latest local-assets cache version');
     assert(serviceWorkerText.includes('NAVIGATION_FALLBACK_URL') && serviceWorkerText.includes('navigationPreload') && serviceWorkerText.includes('X-Atherix-Offline-Shell'), 'service worker should provide a navigation-preload offline app shell');
     assert(serviceWorkerText.includes('/style.css?v=20260608-local-assets-v1') && serviceWorkerText.includes('/app.js?v=20260608-local-assets-v1'), 'service worker should precache the latest versioned app assets');
+    assert(serviceWorkerText.includes('networkFirstCacheFallback') && serviceWorkerText.includes('staleWhileRevalidate') && serviceWorkerText.includes('offlineResponseFor') && serviceWorkerText.includes('cacheResponseQuietly'), 'service worker should use explicit offline-safe caching strategies');
+    assert(serviceWorkerText.includes('X-Atherix-Offline-Asset') && serviceWorkerText.includes('status: 204'), 'service worker should provide a quiet offline image placeholder');
 
     const indexHtml = await fetch(`${baseUrl}/`);
     const indexText = await indexHtml.text();

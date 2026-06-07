@@ -52,11 +52,60 @@ async function cacheResponse(cacheKey, response) {
   await cache.put(cacheKey, clone);
 }
 
+function cacheResponseQuietly(cacheKey, response) {
+  return cacheResponse(cacheKey, response).catch(() => undefined);
+}
+
+function offlineResponseFor(request) {
+  if (request.destination === 'image') {
+    return new Response(null, {
+      status: 204,
+      statusText: 'Offline Image Placeholder',
+      headers: { 'X-Atherix-Offline-Asset': 'image' }
+    });
+  }
+  return new Response('', {
+    status: 503,
+    statusText: 'Offline',
+    headers: { 'Cache-Control': 'no-store', 'X-Atherix-Offline-Asset': 'true' }
+  });
+}
+
+async function networkFirstCacheFallback(request) {
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      await cacheResponseQuietly(request, response);
+    }
+    return response;
+  } catch {
+    return await caches.match(request) || offlineResponseFor(request);
+  }
+}
+
+async function staleWhileRevalidate(request) {
+  const cached = await caches.match(request);
+  const refresh = fetch(request)
+    .then(response => {
+      if (response.ok) {
+        cacheResponseQuietly(request, response);
+      }
+      return response;
+    })
+    .catch(() => null);
+
+  if (cached) {
+    return cached;
+  }
+
+  return await refresh || offlineResponseFor(request);
+}
+
 async function navigationFallback(preloadResponse, request) {
   try {
     const preload = await preloadResponse;
     if (preload) {
-      cacheResponse(NAVIGATION_FALLBACK_URL, preload);
+      cacheResponseQuietly(NAVIGATION_FALLBACK_URL, preload);
       return preload;
     }
   } catch {
@@ -65,7 +114,7 @@ async function navigationFallback(preloadResponse, request) {
 
   try {
     const response = await fetch(request);
-    cacheResponse(NAVIGATION_FALLBACK_URL, response);
+    cacheResponseQuietly(NAVIGATION_FALLBACK_URL, response);
     return response;
   } catch {
     const cached = await caches.match(NAVIGATION_FALLBACK_URL) || await caches.match('/');
@@ -99,28 +148,9 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (['script', 'style'].includes(request.destination) || ['/app.js', '/style.css', '/sw.js'].includes(url.pathname)) {
-    event.respondWith(
-      fetch(request)
-        .then(response => {
-          if (response.ok) {
-            cacheResponse(request, response);
-          }
-          return response;
-        })
-        .catch(() => caches.match(request))
-    );
+    event.respondWith(networkFirstCacheFallback(request));
     return;
   }
 
-  event.respondWith(
-    caches.match(request).then(cached => {
-      const network = fetch(request).then(response => {
-        if (response.ok) {
-          cacheResponse(request, response);
-        }
-        return response;
-      });
-      return cached || network;
-    })
-  );
+  event.respondWith(staleWhileRevalidate(request));
 });
