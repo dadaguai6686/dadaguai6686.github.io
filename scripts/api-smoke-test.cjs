@@ -110,6 +110,10 @@ async function run() {
     assert(healthBody.ok === true, 'health body should report ok=true');
     assert(health.headers.get('x-content-type-options') === 'nosniff', 'nosniff header missing');
     assert(health.headers.get('x-frame-options') === 'SAMEORIGIN', 'x-frame-options header missing');
+    assert(health.headers.get('cross-origin-opener-policy') === 'same-origin', 'COOP header missing');
+    assert(health.headers.get('origin-agent-cluster') === '?1', 'origin isolation header missing');
+    assert(health.headers.get('x-dns-prefetch-control') === 'off', 'DNS prefetch control header missing');
+    assert(health.headers.get('x-permitted-cross-domain-policies') === 'none', 'cross-domain policy header missing');
     assert(health.headers.get('content-security-policy')?.includes("object-src 'none'"), 'CSP object-src guard missing');
     assert(health.headers.get('content-security-policy')?.includes('https://fonts.googleapis.com'), 'CSP should allow configured web font stylesheet');
     assert(health.headers.get('content-security-policy')?.includes('https://fonts.gstatic.com'), 'CSP should allow configured web font files');
