@@ -24,6 +24,9 @@ assert.ok(main.includes("renderTacticalScan()"), "pause overlay should render th
 assert.ok(main.includes("updateWaveIntro(detail)"), "HUD updates should render wave intro briefing");
 assert.ok(main.includes("buildObjectiveStripTitle"), "HUD objective strip should use contextual mission copy");
 assert.ok(main.includes("buildMissionStatusText"), "HUD mission text should prefer current objective state over stale event copy");
+assert.ok(main.includes("resetVirtualInput"), "touch input should reset when pausing or losing focus");
+assert.ok(main.includes("lostpointercapture"), "touch controls should recover when pointer capture is lost");
+assert.ok(main.includes("setPointerCapture"), "touch controls should capture active pointers");
 assert.ok(!main.includes("<small>Lv "), "upgrade cards should use localized level labels");
 assert.ok(main.includes("createRadarNodes"), "radar and scan should share SVG node construction");
 assert.ok(gameScene.includes("SECTOR_VISUALS"), "Phaser scene should define sector-specific visual styles");
@@ -35,5 +38,7 @@ assert.ok(styles.includes("#radar-panel"), "desktop radar should have CSS");
 assert.ok(styles.includes("#tactical-scan"), "pause tactical scan should have CSS");
 assert.ok(styles.includes(".tactical-scan-legend"), "pause tactical scan should have a legend style");
 assert.ok(styles.includes("#game-dossier"), "mission dossier should have CSS");
+assert.ok(styles.includes("touch-action: none"), "mobile controls should disable browser touch gestures");
+assert.ok(styles.includes('[data-active="true"]'), "touch buttons should expose an active pressed state");
 
 console.log("UI static smoke checks passed.");

@@ -276,11 +276,13 @@ resumeButton.addEventListener("click", () => {
 
 helpButton.addEventListener("click", () => {
   audioBus.play("button");
+  resetVirtualInput();
   showHelpOverlay();
 });
 
 mobilePauseButton.addEventListener("click", () => {
   audioBus.play("button");
+  resetVirtualInput();
   showHelpOverlay();
 });
 
@@ -876,33 +878,51 @@ function ratio(value: number, max: number): number {
 }
 
 touchStick.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
   touchStick.setPointerCapture(event.pointerId);
   updateStick(event);
 });
 
 touchStick.addEventListener("pointermove", (event) => {
   if (touchStick.hasPointerCapture(event.pointerId)) {
+    event.preventDefault();
     updateStick(event);
   }
 });
 
-touchStick.addEventListener("pointerup", resetStick);
-touchStick.addEventListener("pointercancel", resetStick);
+touchStick.addEventListener("pointerup", endStickInput);
+touchStick.addEventListener("pointercancel", endStickInput);
+touchStick.addEventListener("lostpointercapture", endStickInput);
+touchStick.addEventListener("contextmenu", (event) => event.preventDefault());
 
 touchButtons.forEach((button) => {
   const action = button.dataset.touchAction as "boost" | "repair" | "pulse";
-  button.addEventListener("pointerdown", () => {
+  button.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    button.setPointerCapture(event.pointerId);
     window.__lumenVirtualInput![action] = true;
+    button.dataset.active = "true";
   });
-  button.addEventListener("pointerup", () => {
+  const releaseAction = (event: PointerEvent) => {
+    event.preventDefault();
+    if (button.hasPointerCapture(event.pointerId)) {
+      button.releasePointerCapture(event.pointerId);
+    }
     window.__lumenVirtualInput![action] = false;
-  });
-  button.addEventListener("pointercancel", () => {
-    window.__lumenVirtualInput![action] = false;
-  });
-  button.addEventListener("pointerleave", () => {
-    window.__lumenVirtualInput![action] = false;
-  });
+    delete button.dataset.active;
+  };
+  button.addEventListener("pointerup", releaseAction);
+  button.addEventListener("pointercancel", releaseAction);
+  button.addEventListener("lostpointercapture", releaseAction);
+  button.addEventListener("contextmenu", (event) => event.preventDefault());
+});
+
+window.addEventListener("blur", resetVirtualInput);
+window.addEventListener("pagehide", resetVirtualInput);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    resetVirtualInput();
+  }
 });
 
 function updateStick(event: PointerEvent): void {
@@ -924,10 +944,28 @@ function updateStick(event: PointerEvent): void {
   };
 }
 
+function endStickInput(event: PointerEvent): void {
+  event.preventDefault();
+  if (touchStick.hasPointerCapture(event.pointerId)) {
+    touchStick.releasePointerCapture(event.pointerId);
+  }
+  resetStick();
+}
+
 function resetStick(): void {
   touchStickKnob.style.setProperty("--stick-x", "0px");
   touchStickKnob.style.setProperty("--stick-y", "0px");
   window.__lumenVirtualInput!.move = { x: 0, y: 0 };
+}
+
+function resetVirtualInput(): void {
+  resetStick();
+  window.__lumenVirtualInput!.boost = false;
+  window.__lumenVirtualInput!.repair = false;
+  window.__lumenVirtualInput!.pulse = false;
+  touchButtons.forEach((button) => {
+    delete button.dataset.active;
+  });
 }
 
 function updateDifficultyUi(): void {
