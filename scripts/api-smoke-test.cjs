@@ -287,6 +287,52 @@ async function run() {
     assert(deletedPost.status === 200, 'admin post deletion should succeed');
     assert(deletedPost.headers.get('ratelimit-limit') === '30', 'admin post deletion should be write rate-limited');
 
+    const projectHeaders = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${loginBody.token}`
+    };
+    const unsafeProjectPath = await fetch(`${baseUrl}/api/projects`, {
+      method: 'POST',
+      headers: projectHeaders,
+      body: JSON.stringify({
+        id: `smoke-unsafe-path-${Date.now()}`,
+        title: 'Unsafe Upload Path',
+        img: '/uploads/../assets/atherix-og-card.png'
+      })
+    });
+    assert(unsafeProjectPath.status === 400, 'project images should reject upload path traversal');
+
+    const unsafeProjectEncodedPath = await fetch(`${baseUrl}/api/projects`, {
+      method: 'POST',
+      headers: projectHeaders,
+      body: JSON.stringify({
+        id: `smoke-unsafe-encoded-${Date.now()}`,
+        title: 'Unsafe Encoded Upload Path',
+        img: '/uploads/%2e%2e/assets/atherix-og-card.png'
+      })
+    });
+    assert(unsafeProjectEncodedPath.status === 400, 'project images should reject encoded upload path traversal');
+
+    const smokeProjectId = `smoke-project-${Date.now()}`;
+    const createdProject = await fetch(`${baseUrl}/api/projects`, {
+      method: 'POST',
+      headers: projectHeaders,
+      body: JSON.stringify({
+        id: smokeProjectId,
+        title: 'Smoke Test Project',
+        desc: 'temporary project',
+        img: '/uploads/safe-image.png',
+        tags: ['测试', '安全']
+      })
+    });
+    assert(createdProject.status === 200, 'safe local upload project image should be accepted');
+
+    const deletedProject = await fetch(`${baseUrl}/api/projects/${encodeURIComponent(smokeProjectId)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${loginBody.token}` }
+    });
+    assert(deletedProject.status === 200, 'admin project deletion should succeed');
+
     const uploadDir = path.resolve(__dirname, '..', 'uploads');
     const beforeUploads = new Set(fs.readdirSync(uploadDir));
     const fakeImageForm = new FormData();
@@ -320,6 +366,9 @@ async function run() {
       spamTrapStatus: spamTrap.status,
       linkSpamStatus: linkSpam.status,
       adminWriteLimit: createdPost.headers.get('ratelimit-limit'),
+      unsafeUploadPathStatus: unsafeProjectPath.status,
+      unsafeEncodedUploadPathStatus: unsafeProjectEncodedPath.status,
+      safeUploadPathProjectStatus: createdProject.status,
       forgedUploadStatus: fakeImageUpload.status
     };
   } finally {

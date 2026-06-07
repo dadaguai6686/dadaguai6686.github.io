@@ -180,10 +180,14 @@ function init() {
       .replace(/'/g, '&#39;');
   }
 
+  const safeUploadUrlPattern = /^\/uploads\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.(?:jpe?g|png|gif|webp)$/i;
+
   function normalizeUrl(value, { allowRelativeUpload = false } = {}) {
     const raw = String(value || '').trim();
     if (!raw || raw === '#') return '';
-    if (allowRelativeUpload && raw.startsWith('/uploads/')) return raw;
+    if (allowRelativeUpload && raw.startsWith('/uploads/')) {
+      return safeUploadUrlPattern.test(raw) ? raw : '';
+    }
     if (raw.startsWith('/') || raw.startsWith('#')) return '';
     try {
       const url = new URL(raw, window.location.origin);

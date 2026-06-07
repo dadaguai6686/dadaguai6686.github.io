@@ -43,6 +43,7 @@ const allowedImageMimeTypes = new Map([
   ['image/gif', '.gif'],
   ['image/webp', '.webp']
 ]);
+const safeUploadUrlPattern = /^\/uploads\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.(?:jpe?g|png|gif|webp)$/i;
 const publicRootFiles = new Set([
   '/',
   '/index.html',
@@ -111,7 +112,11 @@ function readUrlField(res, label, value, { max = 2048, allowLocalUploads = false
   const raw = readTextField(res, label, value, { max });
   if (raw === undefined) return undefined;
   if (!raw) return '';
-  if (allowLocalUploads && raw.startsWith('/uploads/')) return raw;
+  if (allowLocalUploads && raw.startsWith('/uploads/')) {
+    if (safeUploadUrlPattern.test(raw)) return raw;
+    res.status(400).json({ error: `${label} must be a safe uploaded image URL.` });
+    return undefined;
+  }
   try {
     const parsed = new URL(raw);
     if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return parsed.href;
