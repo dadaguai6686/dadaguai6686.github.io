@@ -12,6 +12,8 @@ assert.ok(html.includes('id="radar-panel"'), "desktop radar panel should exist i
 assert.ok(html.includes('id="tactical-scan"'), "pause tactical scan should exist in HTML");
 assert.ok(html.includes('id="wave-intro"'), "wave intro briefing should exist in HTML");
 assert.ok(html.includes('id="mission-toast"'), "in-run mission transition toast should exist in HTML");
+assert.ok(html.includes('id="combat-log"'), "in-run combat feedback log should exist in HTML");
+assert.ok(html.includes("战斗记录"), "combat feedback log should be labeled in Chinese");
 assert.ok(html.includes('id="quick-brief"'), "menu should expose a compact first-screen objective brief");
 assert.ok(html.includes('id="game-dossier"'), "menu should explain the game fantasy and win/loss loop");
 assert.ok(html.includes('id="launch-brief"'), "menu should include an illustrated launch briefing");
@@ -56,6 +58,9 @@ assert.ok(main.includes("renderRadar(detail.radar"), "HUD updates should render 
 assert.ok(main.includes("renderTacticalScan()"), "pause overlay should render the tactical scan");
 assert.ok(main.includes("updateWaveIntro(detail)"), "HUD updates should render wave intro briefing");
 assert.ok(main.includes("renderMissionToast(detail)"), "HUD updates should render in-run mission transition toasts");
+assert.ok(main.includes("showCombatLog"), "HUD should show localized in-run combat feedback details");
+assert.ok(main.includes("hideCombatLog"), "HUD should hide combat feedback when leaving play");
+assert.ok(main.includes("feedbackToneFor"), "combat feedback should map event kinds to visual tones");
 assert.ok(main.includes("合约完成，切回主目标"), "mission toast should clearly transition completed contracts back to the main objective");
 assert.ok(main.includes("合约失败，主目标仍可完成"), "mission toast should keep failed contracts from feeling like run failure");
 assert.ok(main.includes("buildObjectiveStripTitle"), "HUD objective strip should use contextual mission copy");
@@ -106,6 +111,9 @@ assert.ok(gameScene.includes("导航："), "in-world navigator label should be l
 assert.ok(gameScene.includes("syncRepairPromptLabel"), "Phaser scene should show an in-world repair control prompt");
 assert.ok(gameScene.includes('"score"'), "Phaser scene should emit score change feedback cues");
 assert.ok(gameScene.includes("toLocaleString()}分"), "score feedback should show localized point deltas");
+assert.ok(gameScene.includes("受击：连锁中断"), "hit feedback should explain chain loss in Chinese");
+assert.ok(gameScene.includes("机体 -"), "hit feedback should show concrete damage in Chinese");
+assert.ok(gameScene.includes("脉冲会推开附近碎片"), "pulse feedback should teach its tactical use");
 assert.ok(gameScene.includes("renderHazardTrajectories"), "Phaser scene should telegraph moving hazard paths");
 assert.ok(gameScene.includes("projectHazardPosition"), "hazard telegraphs should project future shard positions");
 assert.ok(simulation.includes("按住 E / 修复键"), "runtime objective copy should support keyboard and touch repair controls");
@@ -118,6 +126,9 @@ assert.ok(main.includes("score:"), "audio bus should include a score feedback so
 assert.ok(styles.includes("#radar-panel"), "desktop radar should have CSS");
 assert.ok(styles.includes("#tactical-scan"), "pause tactical scan should have CSS");
 assert.ok(styles.includes("#mission-toast"), "mission transition toast should have CSS");
+assert.ok(styles.includes("#combat-log"), "combat feedback log should have CSS");
+assert.ok(styles.includes('#combat-log[data-tone="danger"]'), "combat feedback log should style danger events");
+assert.ok(styles.includes('#shell[data-status="playing"] #combat-log'), "mobile play should position combat feedback away from touch controls");
 assert.ok(styles.includes("#quick-brief"), "compact first-screen objective brief should have CSS");
 assert.ok(styles.includes("#launch-brief"), "launch briefing should have CSS");
 assert.ok(styles.includes(".launch-route-line"), "launch route map should render an obvious route line");

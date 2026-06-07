@@ -65,6 +65,9 @@ const waveIntroContract = document.querySelector<HTMLElement>("#wave-intro-contr
 const missionToast = document.querySelector<HTMLDivElement>("#mission-toast")!;
 const missionToastTitle = document.querySelector<HTMLElement>("#mission-toast-title")!;
 const missionToastDetail = document.querySelector<HTMLElement>("#mission-toast-detail")!;
+const combatLog = document.querySelector<HTMLDivElement>("#combat-log")!;
+const combatLogTitle = document.querySelector<HTMLElement>("#combat-log-title")!;
+const combatLogDetail = document.querySelector<HTMLElement>("#combat-log-detail")!;
 const startButton = document.querySelector<HTMLButtonElement>("#start-button")!;
 const sessionTools = document.querySelector<HTMLDivElement>("#session-tools")!;
 const copyRouteButton = document.querySelector<HTMLButtonElement>("#copy-route-button")!;
@@ -168,6 +171,7 @@ const touchButtons = document.querySelectorAll<HTMLButtonElement>("[data-touch-a
 const STORAGE_KEY = "lumen-drift-save-v1";
 
 type MissionToastTone = "danger" | "primary" | "success" | "warning";
+type CombatLogTone = MissionToastTone;
 
 type SaveData = {
   achievements: AchievementId[];
@@ -303,6 +307,7 @@ let waveIntroExpiresAt = 0;
 let waveIntroTimer: number | undefined;
 let latestMissionToastKey = "";
 let missionToastTimer: number | undefined;
+let combatLogTimer: number | undefined;
 
 window.__lumenVirtualInput = {
   move: { x: 0, y: 0 },
@@ -427,6 +432,7 @@ function launchRun(upgradeId?: UpgradeId): void {
   latestWaveIntroKey = "";
   latestMissionToastKey = "";
   hideMissionToast(true);
+  hideCombatLog(true);
   hideWaveIntro(true);
   disarmResetSave();
   runRecap.hidden = true;
@@ -451,6 +457,7 @@ function launchDailyChallenge(): void {
   latestWaveIntroKey = "";
   latestMissionToastKey = "";
   hideMissionToast(true);
+  hideCombatLog(true);
   hideWaveIntro(true);
   disarmResetSave();
   runRecap.hidden = true;
@@ -505,6 +512,9 @@ window.addEventListener("game:hud", (event) => {
   latestDifficulty = detail.difficulty;
   latestRoutePlan = detail.routePlan;
   latestRadarSnapshot = detail.radar;
+  if (detail.status !== "playing") {
+    hideCombatLog(true);
+  }
   chargeFill.style.width = `${ratio(detail.charge, detail.maxCharge)}%`;
   hullFill.style.width = `${ratio(detail.hull, detail.maxHull)}%`;
   chargeMeter.dataset.alert = detail.resourceAlerts.charge;
@@ -564,6 +574,7 @@ window.addEventListener("game:ended", (event) => {
   overlay.classList.add("show");
   hideTacticalScan();
   hideMissionToast(true);
+  hideCombatLog(true);
   hideWaveIntro(true);
   howToPlay.hidden = true;
   achievementStrip.hidden = true;
@@ -594,8 +605,16 @@ window.addEventListener("game:ended", (event) => {
 });
 
 window.addEventListener("game:feedback", (event) => {
-  const detail = (event as CustomEvent).detail as { kind: SoundKind };
+  const detail = (event as CustomEvent).detail as {
+    detail?: string;
+    kind: SoundKind;
+    title?: string;
+    tone?: CombatLogTone;
+  };
   audioBus.play(detail.kind);
+  if (detail.title && detail.detail) {
+    showCombatLog(detail.title, detail.detail, detail.tone ?? feedbackToneFor(detail.kind));
+  }
 });
 
 function renderUpgradeChoices(detail = latestEndDetail): void {
@@ -819,6 +838,42 @@ function hideMissionToast(immediate = false): void {
       missionToast.hidden = true;
     }
   }, 220);
+}
+
+function showCombatLog(title: string, detail: string, tone: CombatLogTone): void {
+  if (latestStatus !== "playing") return;
+  window.clearTimeout(combatLogTimer);
+  combatLog.dataset.tone = tone;
+  combatLogTitle.textContent = title;
+  combatLogDetail.textContent = detail;
+  combatLog.hidden = false;
+  window.requestAnimationFrame(() => {
+    combatLog.classList.add("show");
+  });
+  combatLogTimer = window.setTimeout(() => hideCombatLog(), tone === "danger" ? 3600 : 2800);
+}
+
+function hideCombatLog(immediate = false): void {
+  window.clearTimeout(combatLogTimer);
+  if (combatLog.hidden) return;
+  combatLog.classList.remove("show");
+  if (immediate) {
+    combatLog.hidden = true;
+    return;
+  }
+  combatLogTimer = window.setTimeout(() => {
+    if (!combatLog.classList.contains("show")) {
+      combatLog.hidden = true;
+    }
+  }, 200);
+}
+
+function feedbackToneFor(kind: SoundKind): CombatLogTone {
+  if (kind === "hit" || kind === "loss") return "danger";
+  if (kind === "contract" || kind === "pickup" || kind === "repair" || kind === "score" || kind === "win") {
+    return "success";
+  }
+  return "primary";
 }
 
 function buildObjectiveStripTitle(hint: ObjectiveHint): string {

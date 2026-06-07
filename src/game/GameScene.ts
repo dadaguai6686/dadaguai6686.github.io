@@ -97,12 +97,17 @@ type RadarGuide = {
 
 type FeedbackKind = "boost" | "contract" | "hit" | "loss" | "pickup" | "pulse" | "repair" | "score" | "win";
 
+type FeedbackTone = "danger" | "primary" | "success" | "warning";
+
 type FeedbackCue = {
+  detail: string;
   kind: FeedbackKind;
   text: string;
+  title: string;
   position: { x: number; y: number };
   color: number;
   scale?: number;
+  tone: FeedbackTone;
 };
 
 type SectorVisual = {
@@ -755,88 +760,131 @@ export class GameScene extends Phaser.Scene {
     );
     if (previous.previousBoostCooldown <= 0 && this.state.player.boostCooldown > 0) {
       this.dispatchFeedback({
+        detail: "短推进已启动。优先用它穿出风暴和碎片线，别只拿来赶路。",
         kind: "boost",
         text: "推进",
+        title: "推进启动",
         position: this.state.player.position,
-        color: 0x67f4ff
+        color: 0x67f4ff,
+        tone: "primary"
       });
     }
     if (previous.previousPulseCooldown <= 0 && this.state.player.pulseCooldown > 0) {
       this.dispatchFeedback({
+        detail: "脉冲会推开附近碎片；冷却期间先绕线移动，别原地硬修。",
         kind: "pulse",
         text: "脉冲",
+        title: "脉冲释放",
         position: this.state.player.position,
         color: 0xb388ff,
-        scale: 1.15
+        scale: 1.15,
+        tone: "primary"
       });
     }
     newlyCollected.forEach((drop) => {
       this.dispatchFeedback({
+        detail: "电量回升并延长连锁。下一步按导航靠近信标或继续补给。",
         kind: "pickup",
         text: "+流明",
+        title: "流明回收",
         position: drop.position,
-        color: 0xffd76e
+        color: 0xffd76e,
+        tone: "success"
       });
     });
     newlyRepaired.forEach((relay) => {
       this.dispatchFeedback({
+        detail: "主目标推进，连锁提高。电量偏低时先吃流明，再修下一座。",
         kind: "repair",
         text: "信标修复",
+        title: "信标修复",
         position: relay.position,
         color: 0xffffff,
-        scale: 1.1
+        scale: 1.1,
+        tone: "success"
       });
     });
     if (previous.previousContractStatus === "active" && this.state.contract.status === "completed") {
       this.dispatchFeedback({
+        detail: "副目标奖励已结算。现在回到主路线：修剩余信标，然后北侧撤离。",
         kind: "contract",
         text: "合约完成",
+        title: "战术合约完成",
         position: this.state.player.position,
         color: 0xffd76e,
-        scale: 1.16
+        scale: 1.16,
+        tone: "success"
       });
     }
     const scoreDelta = this.state.score - previous.previousScore;
     if (scoreDelta !== 0) {
       this.dispatchFeedback({
+        detail:
+          scoreDelta > 0
+            ? `本次获得 ${scoreDelta.toLocaleString()} 分，当前连锁 ${this.state.combo.toFixed(1)}x。`
+            : `本次扣除 ${Math.abs(scoreDelta).toLocaleString()} 分。受击会打断连锁，先拉开距离。`,
         kind: "score",
         text: `${scoreDelta > 0 ? "+" : "-"}${Math.abs(scoreDelta).toLocaleString()}分`,
+        title: scoreDelta > 0 ? "连锁得分" : "扣分警告",
         position: this.state.player.position,
         color: scoreDelta > 0 ? 0xffd76e : 0xff5f9b,
-        scale: scoreDelta > 0 ? 1.08 : 1
+        scale: scoreDelta > 0 ? 1.08 : 1,
+        tone: scoreDelta > 0 ? "success" : "warning"
       });
     }
     if (previous.previousHull - this.state.player.hull >= 5) {
+      const damage = Math.ceil(previous.previousHull - this.state.player.hull);
       this.dispatchFeedback({
+        detail: `机体 -${damage}，连锁已断。先离开碎片轨迹，必要时用 Q / 脉冲键清场。`,
         kind: "hit",
         text: "受击",
+        title: "受击：连锁中断",
         position: this.state.player.position,
         color: 0xff5f9b,
-        scale: 1.18
+        scale: 1.18,
+        tone: "danger"
       });
     }
     if (this.state.status === "won" || this.state.status === "completed") {
       this.dispatchFeedback({
+        detail:
+          this.state.status === "completed"
+            ? "五波救援完成。结算里会给出下一局冲分路线。"
+            : "本波主目标完成。进升级界面前先看下一波预报。",
         kind: "win",
         text: this.state.status === "completed" ? "全域稳定" : "撤离成功",
+        title: this.state.status === "completed" ? "全域稳定" : "撤离成功",
         position: this.state.gate.position,
         color: 0xffd76e,
-        scale: 1.22
+        scale: 1.22,
+        tone: "success"
       });
     }
     if (this.state.status === "lost") {
       this.dispatchFeedback({
+        detail: this.state.endReason === "chargeDepleted" ? "电量归零。下一局先补流明，再修信标。" : "机体损毁。下一局先保脉冲，绕开碎片密集线。",
         kind: "loss",
         text: "信号中断",
+        title: "信号中断",
         position: this.state.player.position,
         color: 0xff5f9b,
-        scale: 1.2
+        scale: 1.2,
+        tone: "danger"
       });
     }
   }
 
   private dispatchFeedback(cue: FeedbackCue): void {
-    window.dispatchEvent(new CustomEvent("game:feedback", { detail: { kind: cue.kind } }));
+    window.dispatchEvent(
+      new CustomEvent("game:feedback", {
+        detail: {
+          detail: cue.detail,
+          kind: cue.kind,
+          title: cue.title,
+          tone: cue.tone
+        }
+      })
+    );
     this.spawnFeedbackCue(cue);
   }
 
