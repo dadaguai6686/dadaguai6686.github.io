@@ -7,6 +7,7 @@ const input = readFileSync("src/game/input.ts", "utf8");
 const main = readFileSync("src/main.ts", "utf8");
 const simulation = readFileSync("src/game/simulation.ts", "utf8");
 const styles = readFileSync("src/styles.css", "utf8");
+const viteConfig = readFileSync("vite.config.ts", "utf8");
 
 assert.ok(html.includes('id="boot-status"'), "HTML should include a boot loading status before the game bundle loads");
 assert.ok(html.includes("正在加载流明漂航"), "boot loading status should be localized in Chinese");
@@ -165,5 +166,7 @@ assert.ok(
   styles.includes('#shell[data-status="playing"] #radar-panel'),
   "touch-device play should hide the desktop radar to avoid the pause button overlap"
 );
+assert.ok(viteConfig.includes("manualChunks"), "production build should split vendor chunks for release loading");
+assert.ok(viteConfig.includes('return "phaser"'), "Phaser should ship as a stable vendor chunk");
 
 console.log("UI static smoke checks passed.");

@@ -6,7 +6,12 @@ export default defineConfig({
       output: {
         assetFileNames: "assets/[name][extname]",
         chunkFileNames: "assets/[name].js",
-        entryFileNames: "assets/[name].js"
+        entryFileNames: "assets/[name].js",
+        manualChunks(id) {
+          if (id.includes("node_modules/phaser")) {
+            return "phaser";
+          }
+        }
       }
     }
   },
