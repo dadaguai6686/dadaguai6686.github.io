@@ -46,6 +46,10 @@ button {
   inset: 0;
 }
 
+#game-wrap:focus {
+  outline: none;
+}
+
 #game-wrap canvas {
   display: block;
   width: 100%;

@@ -14,6 +14,7 @@ const checkpointFeedbackIndex = gameScene.indexOf("newlyCheckpointed.forEach");
 assert.ok(html.includes('id="boot-status"'), "HTML should include a boot loading status before the game bundle loads");
 assert.ok(html.includes("正在加载流明漂航"), "boot loading status should be localized in Chinese");
 assert.ok(html.includes("markBootError"), "boot loader should show a localized error if module loading fails");
+assert.ok(html.includes('id="game-wrap" tabindex="-1"'), "game canvas surface should be programmatically focusable");
 assert.ok(html.includes('id="radar-panel"'), "desktop radar panel should exist in HTML");
 assert.ok(html.includes('id="tactical-scan"'), "pause tactical scan should exist in HTML");
 assert.ok(html.includes('id="wave-intro"'), "wave intro briefing should exist in HTML");
@@ -88,6 +89,9 @@ assert.ok(main.includes('window.addEventListener("blur", pauseForInterruption)')
 assert.ok(main.includes('window.addEventListener("pagehide", pauseForInterruption)'), "pagehide should trigger auto-pause");
 assert.ok(main.includes('document.addEventListener("visibilitychange"'), "page visibility changes should be handled");
 assert.ok(main.includes("resetVirtualInput"), "touch input should reset when pausing or losing focus");
+assert.ok(main.includes("focusGameSurface"), "runtime should restore keyboard focus to the game surface after menu actions");
+assert.ok(main.includes("gameWrap.focus"), "game surface focus should target the canvas wrapper");
+assert.ok(main.includes("window.setTimeout(focus, 80)"), "game surface focus should retry after browser click focus settles");
 assert.ok(main.includes("tap: { boost: 0, repair: 0, pulse: 0 }"), "touch input should expose a short tap buffer");
 assert.ok(main.includes('button.addEventListener("click"'), "touch action buttons should accept click fallback events");
 assert.ok(main.includes("lostpointercapture"), "touch controls should recover when pointer capture is lost");
@@ -164,6 +168,7 @@ assert.ok(styles.includes("#tactical-scan"), "pause tactical scan should have CS
 assert.ok(styles.includes("#mission-toast"), "mission transition toast should have CSS");
 assert.ok(styles.includes("#combat-log"), "combat feedback log should have CSS");
 assert.ok(styles.includes("#combat-log-history"), "combat feedback history should have CSS");
+assert.ok(styles.includes("#game-wrap:focus"), "game surface focus should avoid visible browser focus artifacts");
 assert.ok(styles.includes('#combat-log[data-tone="danger"]'), "combat feedback log should style danger events");
 assert.ok(styles.includes("#combat-log-history li:nth-child(n + 2)"), "mobile combat feedback should limit old event history height");
 assert.ok(styles.includes('#shell[data-status="playing"] #combat-log'), "mobile play should position combat feedback away from touch controls");

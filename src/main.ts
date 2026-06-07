@@ -53,6 +53,7 @@ const config: Phaser.Types.Core.GameConfig = {
 
 new Phaser.Game(config);
 
+const gameWrap = document.querySelector<HTMLElement>("#game-wrap")!;
 const shell = document.querySelector<HTMLDivElement>("#shell")!;
 const bootStatus = document.querySelector<HTMLDivElement>("#boot-status");
 const overlay = document.querySelector<HTMLDivElement>("#overlay")!;
@@ -341,6 +342,13 @@ resumeButton.addEventListener("click", () => {
   hideTacticalScan();
   disarmResetSave();
   window.dispatchEvent(new CustomEvent("game:resume"));
+  focusGameSurface();
+});
+
+gameWrap.addEventListener("pointerdown", () => {
+  if (latestStatus === "playing") {
+    focusGameSurface();
+  }
 });
 
 helpButton.addEventListener("click", () => {
@@ -453,6 +461,7 @@ function launchRun(upgradeId?: UpgradeId): void {
   const runDifficulty = latestStatus === "won" ? latestDifficulty : selectedDifficulty;
   const routeSeed = latestStatus === "won" ? undefined : getRequestedRouteSeed();
   window.dispatchEvent(new CustomEvent("game:start", { detail: { difficulty: runDifficulty, routeSeed, upgradeId } }));
+  focusGameSurface();
 }
 
 function launchDailyChallenge(): void {
@@ -480,6 +489,16 @@ function launchDailyChallenge(): void {
       detail: { difficulty: selectedDifficulty, routeSeed: daily.seed }
     })
   );
+  focusGameSurface();
+}
+
+function focusGameSurface(): void {
+  const focus = () => {
+    gameWrap.focus({ preventScroll: true });
+  };
+  focus();
+  window.requestAnimationFrame(focus);
+  window.setTimeout(focus, 80);
 }
 
 window.addEventListener("game:hud", (event) => {
@@ -1376,6 +1395,7 @@ window.addEventListener("keydown", (event) => {
     hideTacticalScan();
     disarmResetSave();
     window.dispatchEvent(new CustomEvent("game:resume"));
+    focusGameSurface();
   }
 });
 
