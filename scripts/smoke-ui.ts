@@ -51,6 +51,8 @@ assert.ok(gameScene.includes("drawSectorField"), "Phaser scene should render sec
 assert.ok(gameScene.includes("renderContractFocus"), "Phaser scene should render contract focus markers");
 assert.ok(gameScene.includes("renderOpeningRoutePreview"), "Phaser scene should draw the opening route preview");
 assert.ok(gameScene.includes("buildOpeningRoutePreview"), "opening route preview should derive route targets from game state");
+assert.ok(gameScene.includes("syncNavigatorLabel"), "Phaser scene should label the current navigation target in-world");
+assert.ok(gameScene.includes("导航："), "in-world navigator label should be localized");
 assert.ok(gameScene.includes("syncRepairPromptLabel"), "Phaser scene should show an in-world repair control prompt");
 assert.ok(gameScene.includes('"score"'), "Phaser scene should emit score change feedback cues");
 assert.ok(gameScene.includes("toLocaleString()}分"), "score feedback should show localized point deltas");

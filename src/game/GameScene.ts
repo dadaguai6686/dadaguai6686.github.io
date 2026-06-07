@@ -168,6 +168,7 @@ export class GameScene extends Phaser.Scene {
   private playerView?: Phaser.GameObjects.Container;
   private gateView?: Phaser.GameObjects.Container;
   private navigatorView?: Phaser.GameObjects.Graphics;
+  private navigatorLabel?: Phaser.GameObjects.Text;
   private readabilityView?: Phaser.GameObjects.Graphics;
   private repairPromptLabel?: Phaser.GameObjects.Text;
   private routePreviewLabels: Phaser.GameObjects.Text[] = [];
@@ -284,6 +285,7 @@ export class GameScene extends Phaser.Scene {
     this.lumenViews.clear();
     this.hazardViews.clear();
     this.stormViews.clear();
+    this.navigatorLabel = undefined;
     this.repairPromptLabel = undefined;
     this.routePreviewLabels = [];
 
@@ -892,7 +894,10 @@ export class GameScene extends Phaser.Scene {
     const coach = getCoachDirective(this.state);
     const hint = getObjectiveHint(this.state);
     const target = coach.target ?? hint.target;
-    if (this.state.status !== "playing" || !target) return;
+    if (this.state.status !== "playing" || !target) {
+      this.hideNavigatorLabel();
+      return;
+    }
 
     const urgent = coach.urgent || hint.urgent;
     const color = coach.target ? getCoachColor(coach.id) : getHintColor(hint.kind);
@@ -923,6 +928,45 @@ export class GameScene extends Phaser.Scene {
       arrowX + Math.cos(angle - 2.45) * 11,
       arrowY + Math.sin(angle - 2.45) * 11
     );
+    this.syncNavigatorLabel(getNavigatorLabel(coach, hint), target, markerRadius, color, urgent, pulse);
+  }
+
+  private syncNavigatorLabel(
+    text: string,
+    target: { x: number; y: number },
+    markerRadius: number,
+    color: number,
+    urgent: boolean,
+    pulse: number
+  ): void {
+    if (!this.navigatorLabel) {
+      this.navigatorLabel = this.add.text(0, 0, "", {
+        align: "center",
+        backgroundColor: "rgba(5, 10, 18, 0.68)",
+        color: "#f7fbff",
+        fontFamily: "Inter, Segoe UI, sans-serif",
+        fontSize: this.largeLabels ? "16px" : "12px",
+        fontStyle: "900",
+        padding: { bottom: 4, left: 8, right: 8, top: 4 },
+        stroke: "#07111c",
+        strokeThickness: this.largeLabels ? 4 : 3
+      });
+      this.navigatorLabel.setOrigin(0.5);
+      this.worldLayer?.add(this.navigatorLabel);
+    }
+
+    const x = Phaser.Math.Clamp(target.x, 92, this.state.arena.width - 92);
+    const y = Phaser.Math.Clamp(target.y - markerRadius - 26, 24, this.state.arena.height - 24);
+    this.navigatorLabel.setVisible(true);
+    this.navigatorLabel.setText(`导航：${text}`);
+    this.navigatorLabel.setPosition(x, y);
+    this.navigatorLabel.setAlpha(urgent ? 0.9 + pulse * 0.1 : 0.76 + pulse * 0.16);
+    this.navigatorLabel.setScale(this.largeLabels ? 1.04 : 1);
+    this.navigatorLabel.setColor(toCssColor(color));
+  }
+
+  private hideNavigatorLabel(): void {
+    this.navigatorLabel?.setVisible(false);
   }
 
   private renderReadability(): void {
@@ -1177,6 +1221,26 @@ function getCoachColor(id: CoachDirective["id"]): number {
   if (id === "collectLumen" || id === "recoverCharge" || id === "exitGate") return 0xffd76e;
   if (id === "repairRelay") return 0xffffff;
   return 0x67f4ff;
+}
+
+function getNavigatorLabel(coach: CoachDirective, hint: ObjectiveHint): string {
+  if (coach.target) {
+    if (coach.id === "collectLumen") return "流明";
+    if (coach.id === "recoverCharge") return "补电";
+    if (coach.id === "reachRelay") return "信标";
+    if (coach.id === "repairRelay") return "维修";
+    if (coach.id === "exitGate") return "光门";
+  }
+  if (hint.kind === "lumen") return "流明";
+  if (hint.kind === "relay") return "信标";
+  if (hint.kind === "repair") return "维修";
+  if (hint.kind === "gate") return "光门";
+  if (hint.kind === "danger") return "脱险";
+  return "目标";
+}
+
+function toCssColor(color: number): string {
+  return `#${color.toString(16).padStart(6, "0")}`;
 }
 
 function getContractFocusColor(kind: ContractFocus["kind"]): number {
