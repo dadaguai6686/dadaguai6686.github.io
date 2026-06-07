@@ -1323,10 +1323,12 @@ function init() {
   const readerCopyLinkBtn = document.getElementById('reader-copy-link-btn');
   const readerShareBtn = document.getElementById('reader-share-btn');
   const readerBookmarkBtn = document.getElementById('reader-bookmark-btn');
+  const readerMarkReadBtn = document.getElementById('reader-mark-read-btn');
   const readerModeBtn = document.getElementById('reader-mode-btn');
   const readerExportMdBtn = document.getElementById('reader-export-md-btn');
   const readerFocusModeKey = 'atherix_reader_focus_mode';
   let readerProgressFrame = 0;
+  let readerManualProgressLockUntil = 0;
 
   // Blog creation modals and controls
   const addPostBtn = document.getElementById('add-post-btn');
@@ -1426,9 +1428,40 @@ function init() {
     return `atherix_reader_progress_${postId}`;
   }
 
+  function normalizeReaderProgress(value) {
+    const numeric = Number(value);
+    return Math.max(0, Math.min(100, Number.isFinite(numeric) ? Math.round(numeric) : 0));
+  }
+
   function getReaderProgressValue(postId) {
-    const raw = Number(localStorage.getItem(readerProgressKey(postId)) || 0);
-    return Math.max(0, Math.min(100, Number.isFinite(raw) ? Math.round(raw) : 0));
+    return normalizeReaderProgress(localStorage.getItem(readerProgressKey(postId)) || 0);
+  }
+
+  function updateReaderMarkReadState(progress = currentPostId ? getReaderProgressValue(currentPostId) : 0) {
+    if (!readerMarkReadBtn) return;
+    const completed = progress >= 100;
+    readerMarkReadBtn.setAttribute('aria-pressed', completed ? 'true' : 'false');
+    readerMarkReadBtn.innerHTML = completed
+      ? '<i data-lucide="rotate-ccw"></i> 重新阅读'
+      : '<i data-lucide="check-circle-2"></i> 标记读完';
+    safeCreateIcons(readerMarkReadBtn);
+  }
+
+  function setReaderProgressValue(postId, value, { refreshInsights = true } = {}) {
+    const progress = normalizeReaderProgress(value);
+    if (postId) {
+      try {
+        localStorage.setItem(readerProgressKey(postId), String(progress));
+      } catch (err) {
+        console.warn('Could not save reader progress:', err.message);
+      }
+    }
+    if (!postId || postId === currentPostId) {
+      if (readerProgressPercent) readerProgressPercent.textContent = `${progress}%`;
+      updateReaderMarkReadState(progress);
+    }
+    if (refreshInsights) updateBlogInsightPanel();
+    return progress;
   }
 
   function readerAnchorPrefix(postId) {
@@ -1748,9 +1781,12 @@ function init() {
     const articleTop = window.scrollY + rect.top;
     const total = Math.max(1, readerContentEl.offsetHeight - window.innerHeight * 0.65);
     const scrolled = window.scrollY - articleTop + 120;
-    const percent = Math.max(0, Math.min(100, Math.round(scrolled / total * 100)));
-    readerProgressPercent.textContent = `${percent}%`;
-    if (currentPostId) localStorage.setItem(readerProgressKey(currentPostId), String(percent));
+    const calculatedPercent = normalizeReaderProgress(scrolled / total * 100);
+    const savedProgress = currentPostId ? getReaderProgressValue(currentPostId) : 0;
+    const percent = currentPostId && Date.now() < readerManualProgressLockUntil
+      ? savedProgress
+      : Math.max(savedProgress, calculatedPercent);
+    setReaderProgressValue(currentPostId, percent, { refreshInsights: false });
     updateBlogInsightPanel();
 
     if (!readerToc?.classList.contains('active')) return;
@@ -1792,6 +1828,7 @@ function init() {
     currentPostId = post.id;
     buildReaderToc(post.id);
     updateReaderBookmarkState();
+    updateReaderMarkReadState(getReaderProgressValue(post.id));
     renderReaderNextPanel(post);
     setReaderFocusMode(getReaderFocusMode(), { persist: false });
     navigateTo('blog-reader', { postId: post.id });
@@ -1841,6 +1878,27 @@ function init() {
       updateReaderBookmarkState();
       updateBlogInsightPanel();
       renderBlogList();
+    });
+  }
+
+  if (readerMarkReadBtn) {
+    readerMarkReadBtn.addEventListener('click', () => {
+      if (!currentPostId) return;
+      const currentProgress = getReaderProgressValue(currentPostId);
+      const isCompleted = currentProgress >= 100;
+      readerManualProgressLockUntil = Date.now() + 1400;
+
+      if (isCompleted) {
+        setReaderProgressValue(currentPostId, 0);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        showToast('已重置阅读进度', 'info');
+      } else {
+        setReaderProgressValue(currentPostId, 100);
+        showToast('已标记为读完', 'success');
+      }
+
+      renderBlogList();
+      renderReaderNextPanel(getCurrentReaderPost());
     });
   }
 

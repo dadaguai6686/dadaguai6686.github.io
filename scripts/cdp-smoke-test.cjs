@@ -517,6 +517,31 @@ async function run() {
   await waitFor('#reader-post-content h2');
   await click('#reader-bookmark-btn');
   await wait(150);
+  await click('#reader-mark-read-btn');
+  await wait(150);
+  const readerCompletionState = await evaluate(`(() => {
+    const postId = location.hash.replace(/^#post\\//, '');
+    return {
+      postId,
+      stored: localStorage.getItem(\`atherix_reader_progress_\${postId}\`) || '',
+      label: document.querySelector('#reader-mark-read-btn')?.textContent.trim() || '',
+      pressed: document.querySelector('#reader-mark-read-btn')?.getAttribute('aria-pressed') === 'true',
+      progress: document.querySelector('#reader-progress-percent')?.textContent || ''
+    };
+  })()`);
+  await click('#reader-mark-read-btn');
+  await wait(150);
+  const readerResetState = await evaluate(`(() => {
+    const postId = location.hash.replace(/^#post\\//, '');
+    return {
+      postId,
+      stored: localStorage.getItem(\`atherix_reader_progress_\${postId}\`) || '',
+      label: document.querySelector('#reader-mark-read-btn')?.textContent.trim() || '',
+      pressed: document.querySelector('#reader-mark-read-btn')?.getAttribute('aria-pressed') === 'true',
+      progress: document.querySelector('#reader-progress-percent')?.textContent || ''
+    };
+  })()`);
+  await wait(1550);
   await evaluate(`window.scrollTo(0, document.body.scrollHeight)`);
   await wait(250);
   await waitFor('#reader-next-panel.active [data-reader-next-open]', 5000);
@@ -528,6 +553,7 @@ async function run() {
       '#reader-copy-link-btn',
       '#reader-share-btn',
       '#reader-bookmark-btn',
+      '#reader-mark-read-btn',
       '#reader-mode-btn',
       '#reader-export-md-btn'
     ].every(selector => !!document.querySelector(selector)),
@@ -1351,6 +1377,8 @@ async function run() {
   assert(blogHubBefore.panel && blogHubBefore.total >= 1 && blogHubBefore.filters >= 3 && blogHubBefore.cards >= 1, `blog reading hub should render stats and filters: ${JSON.stringify(blogHubBefore)}`);
   assert(blogHubBefore.progressCards >= 1 && /42/.test(blogHubBefore.progressText) && !blogHubBefore.horizontalOverflow, `blog reading hub should show resumable progress without overflow: ${JSON.stringify(blogHubBefore)}`);
   assert(blogState.toolbar && blogState.bookmarkPressed, 'blog reader toolbar should render and toggle bookmark state');
+  assert(readerCompletionState.stored === '100' && readerCompletionState.pressed && /重新阅读/.test(readerCompletionState.label) && readerCompletionState.progress === '100%', `blog reader should support explicit completion: ${JSON.stringify(readerCompletionState)}`);
+  assert(readerResetState.stored === '0' && !readerResetState.pressed && /标记读完/.test(readerResetState.label) && readerResetState.progress === '0%', `blog reader should support reread reset: ${JSON.stringify(readerResetState)}`);
   assert(blogState.nextPanel && blogState.nextCards >= 1 && blogState.nextFirstTitle && blogState.nextFirstPostId, `blog reader should recommend a next article: ${JSON.stringify(blogState)}`);
   assert(blogState.nextReasons.some(reason => /同主题延伸|拓展视角|未开始|读到|稍后读|精选|适合复盘/.test(reason)) && /^\d+%$/.test(blogState.nextProgress), `blog reader recommendations should explain ranking and progress: ${JSON.stringify(blogState)}`);
   assert(readerNextOpenState.clicked && readerNextOpenState.visibleArticle && readerNextOpenState.title === readerNextOpenState.expectedTitle && readerNextOpenState.hash.includes(readerNextOpenState.expectedPostId) && readerNextOpenState.nextPanel && readerNextOpenState.nextCards >= 1 && !readerNextOpenState.horizontalOverflow, `blog reader recommendation should open another article cleanly: ${JSON.stringify(readerNextOpenState)}`);
@@ -1533,6 +1561,8 @@ async function run() {
     vaultImportState,
     blogHubBefore,
     blogState,
+    readerCompletionState,
+    readerResetState,
     readerNextOpenState,
     readerToolState,
     readerExportState,
