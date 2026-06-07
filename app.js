@@ -4483,7 +4483,7 @@ function init() {
         </div>
         <div class="arcade-director-meters" aria-label="街机完成度">
           <span>奖牌 <strong id="premium-director-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-director-achievements">0/16</strong></span>
+          <span>成就 <strong id="premium-director-achievements">0/19</strong></span>
           <span>完成度 <strong id="premium-director-completion">0%</strong></span>
         </div>
         <button type="button" class="arcade-director-action" id="premium-director-start" data-target-game="survivor">
@@ -4551,6 +4551,7 @@ function init() {
               <span>连段 <strong id="premium-survivor-chain">0x</strong></span>
               <span>超载 <strong id="premium-survivor-overdrive">0%</strong></span>
               <span>危机 <strong id="premium-survivor-threat">WAVE 1</strong></span>
+              <span>事件 <strong id="premium-survivor-event">稳定</strong></span>
             </div>
             <div class="mini-actions">
               <button type="button" class="action-btn action-btn-primary" id="premium-survivor-start">部署 / 重开</button>
@@ -4757,6 +4758,7 @@ function init() {
     const achievementDefs = [
       { id: 'survivor_level_4', label: '星核觉醒', desc: '星核幸存者达到 4 级' },
       { id: 'survivor_90', label: '深空存活', desc: '坚持完整 90 秒' },
+      { id: 'survivor_anomaly', label: '裂隙调度', desc: '星核幸存者触发深空异常事件' },
       { id: 'boss_phase_2', label: '棱镜破相', desc: 'Boss 进入第二阶段' },
       { id: 'boss_clear', label: '碎光终结', desc: '击破棱镜核心' },
       { id: 'boss_focus_surge', label: '擦弹专注', desc: 'Boss 战触发专注爆发' },
@@ -5727,9 +5729,19 @@ function init() {
       bullets: [],
       orbs: [],
       pickups: [],
+      hazards: [],
       particles: [],
       draftOpen: false,
-      draftChoices: []
+      draftChoices: [],
+      anomaly: null,
+      anomalyCooldown: 0,
+      anomalyCount: 0
+    };
+
+    const survivorAnomalyDefs = {
+      meteor: { label: '裂隙陨雨', short: 'METEOR', color: '#F97316', duration: 5600 },
+      cache: { label: '补给裂隙', short: 'CACHE', color: '#34D399', duration: 4200 },
+      nemesis: { label: '精英跃迁', short: 'NEMESIS', color: '#A78BFA', duration: 6200 }
     };
 
     const survivorUpgradeDefs = [
@@ -5872,6 +5884,12 @@ function init() {
         overdriveEl.style.color = survivor.overdrive >= 100 ? '#FDE68A' : survivor.overdrive >= 65 ? '#BAE6FD' : '#fff';
       }
       document.getElementById('premium-survivor-threat').textContent = `WAVE ${Math.max(1, Math.floor(survivor.elapsed / 18000) + 1)}`;
+      const eventEl = document.getElementById('premium-survivor-event');
+      if (eventEl) {
+        const eventDef = survivor.anomaly ? survivorAnomalyDefs[survivor.anomaly.type] : null;
+        eventEl.textContent = eventDef ? eventDef.short : '稳定';
+        eventEl.style.color = eventDef ? eventDef.color : '#fff';
+      }
     }
 
     function startSurvivor() {
@@ -5890,6 +5908,9 @@ function init() {
       survivor.overdrive = 0;
       survivor.overdriveFlash = 0;
       survivor.overdriveText = 'SYNC';
+      survivor.anomaly = null;
+      survivor.anomalyCooldown = 9200;
+      survivor.anomalyCount = 0;
       survivor.draftOpen = false;
       survivor.draftChoices = [];
       hideSurvivorDraft();
@@ -5921,6 +5942,7 @@ function init() {
       survivor.bullets = [];
       survivor.orbs = [];
       survivor.pickups = [];
+      survivor.hazards = [];
       survivor.particles = [];
       document.getElementById('premium-survivor-pause').textContent = '暂停';
       setSurvivorUi();
@@ -5987,10 +6009,174 @@ function init() {
       return bonus;
     }
 
+    function survivorRandomPoint(margin = 42) {
+      const c = survivor.canvas;
+      return {
+        x: margin + Math.random() * Math.max(1, c.width - margin * 2),
+        y: margin + Math.random() * Math.max(1, c.height - margin * 2)
+      };
+    }
+
+    function queueSurvivorMeteor(count = 1) {
+      for (let i = 0; i < count; i++) {
+        const point = survivorRandomPoint(48);
+        const wave = Math.max(1, Math.floor(survivor.elapsed / 18000) + 1);
+        survivor.hazards.push({
+          type: 'meteor',
+          x: point.x,
+          y: point.y,
+          r: 42 + Math.min(14, wave * 2),
+          timer: 920 + Math.random() * 260,
+          telegraph: 1180,
+          life: 420,
+          damage: 16,
+          enemyDamage: 112 + wave * 18,
+          exploded: false
+        });
+      }
+    }
+
+    function spawnSurvivorCachePickup() {
+      const point = survivorRandomPoint(56);
+      const pool = ['surge', 'haste', 'heal', 'bomb'];
+      const type = pool[(survivor.anomaly?.spawned || 0) % pool.length];
+      survivor.pickups.push({ x: point.x, y: point.y, r: 9, type });
+      survivor.orbs.push({ x: point.x + 16, y: point.y - 12, r: 7, value: 38 });
+      survivorBurst(point.x, point.y, '#34D399', 24);
+    }
+
+    function spawnSurvivorNemesis() {
+      const c = survivor.canvas;
+      const tuning = difficultyTuning();
+      const pressure = Number(activeDifficultyDef().pressure || 1);
+      const wave = Math.max(1, Math.floor(survivor.elapsed / 18000) + 1);
+      const fromLeft = Math.random() < 0.5;
+      survivor.enemies.push({
+        x: fromLeft ? -32 : c.width + 32,
+        y: 72 + Math.random() * (c.height - 144),
+        r: 24,
+        hp: (360 + wave * 96) * Number(tuning.enemyHp || 1),
+        maxHp: (360 + wave * 96) * Number(tuning.enemyHp || 1),
+        speed: (54 + wave * 4) * (0.92 + pressure * 0.08),
+        value: 220 + wave * 42,
+        color: '#FDE68A',
+        type: 'nemesis',
+        elite: true,
+        nemesis: true,
+        pulse: Math.random() * Math.PI * 2,
+        slow: 0
+      });
+    }
+
+    function startSurvivorAnomaly(forcedType = '') {
+      if (!survivor.running || survivor.draftOpen || survivor.anomaly) return false;
+      const cycle = ['meteor', 'cache', 'nemesis'];
+      const type = survivorAnomalyDefs[forcedType] ? forcedType : cycle[survivor.anomalyCount % cycle.length];
+      const def = survivorAnomalyDefs[type];
+      survivor.anomaly = {
+        type,
+        label: def.label,
+        color: def.color,
+        timer: def.duration,
+        duration: def.duration,
+        spawnTimer: 0,
+        spawned: 0
+      };
+      survivor.anomalyCount++;
+      survivor.anomalyCooldown = 15000;
+      unlockAchievement('survivor_anomaly');
+      addSurvivorOverdrive(10, def.short);
+      if (type === 'meteor') queueSurvivorMeteor(3);
+      if (type === 'cache') {
+        spawnSurvivorCachePickup();
+        survivor.anomaly.spawned++;
+      }
+      if (type === 'nemesis') spawnSurvivorNemesis();
+      survivorBurst(survivor.player.x, survivor.player.y, def.color, 34);
+      setSurvivorUi();
+      return true;
+    }
+
+    function resolveSurvivorMeteor(hazard) {
+      const p = survivor.player;
+      hazard.exploded = true;
+      hazard.life = 460;
+      survivorBurst(hazard.x, hazard.y, '#F97316', 46);
+      if (p && Math.hypot(p.x - hazard.x, p.y - hazard.y) < hazard.r + p.r) {
+        p.hp -= hazard.damage;
+        survivor.chain = 0;
+        survivor.chainTimer = 0;
+      }
+      survivor.enemies.forEach(enemy => {
+        if (Math.hypot(enemy.x - hazard.x, enemy.y - hazard.y) < hazard.r + enemy.r) {
+          enemy.hp -= hazard.enemyDamage;
+          enemy.slow = Math.max(enemy.slow || 0, 820);
+        }
+      });
+      survivor.enemies = survivor.enemies.filter(enemy => {
+        if (enemy.hp > 0) return true;
+        defeatSurvivorEnemy(enemy, 'anomaly');
+        return false;
+      });
+    }
+
+    function updateSurvivorAnomaly(dt) {
+      survivor.hazards.forEach(hazard => {
+        if (!hazard.exploded) {
+          hazard.timer -= dt;
+          if (hazard.timer <= 0) resolveSurvivorMeteor(hazard);
+        } else {
+          hazard.life -= dt;
+        }
+      });
+      survivor.hazards = survivor.hazards.filter(hazard => !hazard.exploded || hazard.life > 0);
+
+      if (!survivor.anomaly) {
+        survivor.anomalyCooldown = Math.max(0, survivor.anomalyCooldown - dt);
+        if (survivor.elapsed > 10500 && survivor.anomalyCooldown <= 0) startSurvivorAnomaly();
+        return;
+      }
+
+      const event = survivor.anomaly;
+      event.timer -= dt;
+      event.spawnTimer += dt;
+      if (event.type === 'meteor' && event.spawnTimer > 940) {
+        event.spawnTimer = 0;
+        queueSurvivorMeteor(survivor.elapsed > 52000 ? 2 : 1);
+      }
+      if (event.type === 'cache' && event.spawnTimer > 980 && event.spawned < 4) {
+        event.spawnTimer = 0;
+        spawnSurvivorCachePickup();
+        event.spawned++;
+      }
+      if (event.type === 'nemesis' && event.spawnTimer > 1700 && event.spawned < 2) {
+        event.spawnTimer = 0;
+        event.spawned++;
+        spawnSurvivorEnemy();
+        const latest = survivor.enemies[survivor.enemies.length - 1];
+        if (latest) {
+          latest.elite = true;
+          latest.hp *= 1.35;
+          latest.maxHp *= 1.35;
+          latest.value *= 2;
+        }
+      }
+      if (event.timer <= 0) {
+        survivor.anomaly = null;
+        survivor.anomalyCooldown = Math.max(9200, 14600 - survivor.anomalyCount * 650);
+      }
+    }
+
     function defeatSurvivorEnemy(enemy, reason = 'weapon') {
       const p = survivor.player;
       survivor.score += enemy.value;
       survivor.orbs.push({ x: enemy.x, y: enemy.y, r: enemy.elite ? 7 : 6, value: enemy.value });
+      if (enemy.nemesis) {
+        survivor.score += 360;
+        addSurvivorOverdrive(32, 'NEMESIS BREAK');
+        survivor.pickups.push({ x: enemy.x + 12, y: enemy.y - 10, r: 9, type: 'surge' });
+        survivor.pickups.push({ x: enemy.x - 14, y: enemy.y + 12, r: 8, type: 'heal' });
+      }
       if (enemy.elite) {
         addSurvivorOverdrive(18, 'ELITE BREAK');
         survivor.chainTimer = Math.max(survivor.chainTimer, 1800);
@@ -6152,10 +6338,10 @@ function init() {
       survivor.draftChoices = [];
       hideSurvivorDraft();
       cancelAnimationFrame(survivor.raf);
-      const finalScore = Math.floor(survivor.score + survivor.elapsed / 120 + survivor.bestChain * 42 + survivor.overdrive * 3);
+      const finalScore = Math.floor(survivor.score + survivor.elapsed / 120 + survivor.bestChain * 42 + survivor.overdrive * 3 + survivor.anomalyCount * 95);
       localStorage.setItem(survivor.bestKey, String(Math.max(Number(localStorage.getItem(survivor.bestKey) || 0), finalScore)));
       if (survivor.elapsed >= 90000) unlockAchievement('survivor_90');
-      recordPremiumResult('survivor', finalScore, { elapsed: survivor.elapsed, level: survivor.player?.level || 1, bestChain: survivor.bestChain, overdrive: Math.floor(survivor.overdrive) });
+      recordPremiumResult('survivor', finalScore, { elapsed: survivor.elapsed, level: survivor.player?.level || 1, bestChain: survivor.bestChain, overdrive: Math.floor(survivor.overdrive), anomalies: survivor.anomalyCount });
       setSurvivorUi();
       drawSurvivor();
       overlay(survivor.ctx, survivor.canvas.width, survivor.canvas.height, text, `Score ${finalScore} · 点击部署再来一局`);
@@ -6186,6 +6372,7 @@ function init() {
       survivor.chainTimer = Math.max(0, survivor.chainTimer - dt);
       if (survivor.chainTimer <= 0) survivor.chain = 0;
       survivor.overdriveFlash = Math.max(0, survivor.overdriveFlash - dt);
+      updateSurvivorAnomaly(dt);
       if (premiumKeys.action) triggerSurvivorNova();
       let mx = (premiumKeys.right ? 1 : 0) - (premiumKeys.left ? 1 : 0);
       let my = (premiumKeys.down ? 1 : 0) - (premiumKeys.up ? 1 : 0);
@@ -6285,6 +6472,26 @@ function init() {
       ctx.fillStyle = '#040711';
       ctx.fillRect(0, 0, c.width, c.height);
       drawGrid(ctx, c.width, c.height, 'rgba(6, 182, 212, 0.07)');
+      survivor.hazards.forEach(hazard => {
+        if (hazard.type !== 'meteor') return;
+        const telegraphProgress = hazard.exploded ? 1 : clamp(1 - hazard.timer / Math.max(1, hazard.telegraph), 0, 1);
+        ctx.save();
+        ctx.globalAlpha = hazard.exploded ? clamp(hazard.life / 460, 0, 1) : 0.28 + telegraphProgress * 0.38;
+        ctx.strokeStyle = hazard.exploded ? '#FDE68A' : '#F97316';
+        ctx.fillStyle = hazard.exploded ? 'rgba(249, 115, 22, 0.2)' : 'rgba(249, 115, 22, 0.08)';
+        ctx.lineWidth = hazard.exploded ? 5 : 2 + telegraphProgress * 3;
+        if (!hazard.exploded) ctx.setLineDash([6, 6]);
+        ctx.beginPath();
+        ctx.arc(hazard.x, hazard.y, hazard.r * (hazard.exploded ? 1.08 : 0.72 + telegraphProgress * 0.28), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#FDE68A';
+        ctx.font = '900 10px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(hazard.exploded ? 'IMPACT' : 'WARNING', hazard.x, hazard.y + 4);
+        ctx.restore();
+      });
       survivor.orbs.forEach(o => { ctx.fillStyle = '#FBBF24'; ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, Math.PI * 2); ctx.fill(); });
       survivor.pickups.forEach(item => {
         ctx.fillStyle = item.type === 'heal' ? '#34D399' : item.type === 'bomb' ? '#F97316' : item.type === 'surge' ? '#FDE68A' : '#BAE6FD';
@@ -6352,6 +6559,15 @@ function init() {
       ctx.fillText(`NOVA ${p.novaCooldown > 0 ? Math.ceil(p.novaCooldown / 1000) : 'READY'}`, 14, 40);
       ctx.fillStyle = survivor.overdrive >= 100 ? '#FDE68A' : '#BAE6FD';
       ctx.fillText(`CHAIN ${survivor.chain}x · OVR ${survivor.overdrive >= 100 ? 'READY' : Math.floor(survivor.overdrive) + '%'}`, 14, 58);
+      if (survivor.anomaly) {
+        const eventDef = survivorAnomalyDefs[survivor.anomaly.type];
+        const remaining = Math.max(0, Math.ceil(survivor.anomaly.timer / 1000));
+        ctx.fillStyle = eventDef?.color || '#FDE68A';
+        ctx.font = '900 12px JetBrains Mono, monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(`${eventDef?.short || 'EVENT'} ${remaining}s`, c.width - 14, 22);
+        ctx.textAlign = 'left';
+      }
     }
 
     function updateSurvivorPauseButton() {
@@ -6381,6 +6597,20 @@ function init() {
         bestChain: survivor.bestChain,
         overdrive: Math.floor(survivor.overdrive),
         overdriveFlash: Math.ceil(survivor.overdriveFlash),
+        anomaly: survivor.anomaly ? {
+          type: survivor.anomaly.type,
+          label: survivor.anomaly.label,
+          timer: Math.ceil(survivor.anomaly.timer),
+          spawned: survivor.anomaly.spawned
+        } : null,
+        anomalyCount: survivor.anomalyCount,
+        anomalyCooldown: Math.ceil(survivor.anomalyCooldown),
+        hazards: survivor.hazards.map(hazard => ({
+          type: hazard.type,
+          exploded: !!hazard.exploded,
+          timer: Math.ceil(hazard.timer || 0),
+          life: Math.ceil(hazard.life || 0)
+        })),
         build: survivorBuildSummary(),
         player: {
           hp: Math.ceil(p.hp || 0),
@@ -6397,8 +6627,28 @@ function init() {
           chain: document.getElementById('premium-survivor-chain')?.textContent || '',
           overdrive: document.getElementById('premium-survivor-overdrive')?.textContent || '',
           build: document.getElementById('premium-survivor-build')?.textContent || '',
-          threat: document.getElementById('premium-survivor-threat')?.textContent || ''
+          threat: document.getElementById('premium-survivor-threat')?.textContent || '',
+          event: document.getElementById('premium-survivor-event')?.textContent || ''
         }
+      };
+    }
+
+    function forceSurvivorAnomaly(type = 'meteor') {
+      switchPremiumGame('survivor');
+      if (!survivor.running) startSurvivor();
+      survivor.paused = false;
+      survivor.draftOpen = false;
+      hideSurvivorDraft();
+      survivor.anomaly = null;
+      survivor.hazards = [];
+      survivor.anomalyCooldown = 0;
+      const started = startSurvivorAnomaly(type);
+      setSurvivorUi();
+      drawSurvivor();
+      return {
+        started,
+        state: survivorDebugState(),
+        achieved: (career.achievements || []).includes('survivor_anomaly')
       };
     }
 
@@ -9331,6 +9581,7 @@ function init() {
           chooseSurvivorUpgrade: (id) => selectSurvivorUpgrade(id || survivor.draftChoices[0]?.id),
           survivorBuild: () => survivorBuildSummary(),
           survivorState: () => survivorDebugState(),
+          forceSurvivorAnomaly: (type = 'meteor') => forceSurvivorAnomaly(type),
           forceSurvivorOverdrive: () => forceSurvivorOverdrive(),
           bossRunning: () => bossMode.running,
           bossPaused: () => bossMode.paused,
