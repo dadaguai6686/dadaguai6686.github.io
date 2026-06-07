@@ -999,6 +999,9 @@ async function run() {
       mult: document.querySelector('#premium-drift-mult')?.textContent || '',
       line: document.querySelector('#premium-drift-line')?.textContent || '',
       combo: document.querySelector('#premium-drift-combo')?.textContent || '',
+      rival: document.querySelector('#premium-drift-rival')?.textContent || '',
+      overtake: document.querySelector('#premium-drift-overtake')?.textContent || '',
+      debug: window.__atherixDebug?.premium?.driftLineState?.() || {},
       activeTitle: document.querySelector('#premium-active-title')?.textContent || ''
     };
   })()`);
@@ -1010,6 +1013,8 @@ async function run() {
       after,
       line: document.querySelector('#premium-drift-line')?.textContent || '',
       combo: document.querySelector('#premium-drift-combo')?.textContent || '',
+      rival: document.querySelector('#premium-drift-rival')?.textContent || '',
+      overtake: document.querySelector('#premium-drift-overtake')?.textContent || '',
       gates: Number(document.querySelector('#premium-drift-gates')?.textContent || 0),
       score: Number(document.querySelector('#premium-drift-score')?.textContent || 0)
     };
@@ -1294,8 +1299,8 @@ async function run() {
     `boss mode should freeze while paused: ${JSON.stringify({ bossPauseState, bossPauseFreezeState })}`
   );
   assert(bossResumeState.running && !bossResumeState.paused && bossResumeState.pauseButton === '暂停', `boss mode should resume from keyboard pause: ${JSON.stringify(bossResumeState)}`);
-  assert(driftState.nonBlank && driftState.running && !driftState.paused && driftState.score > 0 && /Neon Drift/.test(driftState.activeTitle) && driftState.boost !== 'READY', `drift mode should render, move, score, and spend boost: ${JSON.stringify(driftState)}`);
-  assert(driftApexState.after.running && driftApexState.after.gates >= driftApexState.before.gates + 1 && driftApexState.after.label === 'PERFECT' && driftApexState.after.quality >= 86 && driftApexState.after.combo >= 1 && driftApexState.after.bestCombo >= driftApexState.after.combo && driftApexState.after.splits?.length >= 1 && driftApexState.after.lineBank > driftApexState.before.lineBank && /PERFECT/.test(driftApexState.line) && /\dx/.test(driftApexState.combo), `drift mode should grade clean apex gates with combo, split, and HUD feedback: ${JSON.stringify(driftApexState)}`);
+  assert(driftState.nonBlank && driftState.running && !driftState.paused && driftState.score > 0 && /Neon Drift/.test(driftState.activeTitle) && driftState.boost !== 'READY' && /G$/.test(driftState.rival) && driftState.overtake && driftState.debug?.rivalHud === driftState.rival, `drift mode should render, move, score, spend boost, and expose rival HUD: ${JSON.stringify(driftState)}`);
+  assert(driftApexState.after.running && driftApexState.after.gates >= driftApexState.before.gates + 1 && driftApexState.after.label === 'PERFECT' && driftApexState.after.quality >= 86 && driftApexState.after.combo >= 1 && driftApexState.after.bestCombo >= driftApexState.after.combo && driftApexState.after.splits?.length >= 1 && driftApexState.after.lineBank > driftApexState.before.lineBank && driftApexState.after.overtakes > driftApexState.before.overtakes && driftApexState.after.rival?.flash > 0 && /PERFECT/.test(driftApexState.line) && /\dx/.test(driftApexState.combo) && driftApexState.rival && driftApexState.overtake, `drift mode should grade clean apex gates with combo, split, rival overtake, and HUD feedback: ${JSON.stringify(driftApexState)}`);
   assert(driftPauseState.running && driftPauseState.paused && driftPauseState.pauseButton === '继续', `drift mode should enter pause with keyboard: ${JSON.stringify(driftPauseState)}`);
   assert(
     driftPauseFreezeState.paused &&

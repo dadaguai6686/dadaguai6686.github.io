@@ -4463,6 +4463,8 @@ function init() {
               <span>倍率 <strong id="premium-drift-mult">x1.0</strong></span>
               <span>线路 <strong id="premium-drift-line">READY</strong></span>
               <span>连击 <strong id="premium-drift-combo">0x</strong></span>
+              <span>劲敌 <strong id="premium-drift-rival">+0.0G</strong></span>
+              <span>超车 <strong id="premium-drift-overtake">0</strong></span>
               <span>加速 <strong id="premium-drift-boost">READY</strong></span>
             </div>
             <div class="mini-actions">
@@ -6714,7 +6716,11 @@ function init() {
       lineTone: 'ready',
       lineFlash: 0,
       lineBank: 0,
+      draft: 0,
+      draftBank: 0,
+      overtakes: 0,
       splits: [],
+      rival: { x: 132, y: 238, r: 13, segment: 0, progress: 0, speed: 0.000092, flash: 0, pressure: 0, gap: 0 },
       player: { x: 70, y: 276, vx: 0, vy: 0, angle: -0.62, r: 12, shield: 100, trail: [] },
       gates: [
         { x: 132, y: 238, r: 27 },
@@ -6753,6 +6759,17 @@ function init() {
         comboEl.textContent = `${drift.combo}x`;
         comboEl.style.color = drift.combo >= 4 ? '#FDE68A' : drift.combo >= 2 ? '#A7F3D0' : '#fff';
       }
+      const rivalEl = document.getElementById('premium-drift-rival');
+      if (rivalEl) {
+        const gap = Number(drift.rival?.gap || 0);
+        rivalEl.textContent = `${gap >= 0 ? '+' : ''}${gap.toFixed(1)}G`;
+        rivalEl.style.color = gap >= 0.35 ? '#A7F3D0' : gap >= -0.35 ? '#FDE68A' : '#FCA5A5';
+      }
+      const overtakeEl = document.getElementById('premium-drift-overtake');
+      if (overtakeEl) {
+        overtakeEl.textContent = drift.draft > 0.35 ? `DRAFT ${Math.round(drift.draft * 100)}` : String(drift.overtakes);
+        overtakeEl.style.color = drift.overtakes >= 3 ? '#FDE68A' : drift.draft > 0.35 ? '#BAE6FD' : '#fff';
+      }
     }
 
     function resetDriftState() {
@@ -6776,7 +6793,11 @@ function init() {
       drift.lineTone = 'ready';
       drift.lineFlash = 0;
       drift.lineBank = 0;
+      drift.draft = 0;
+      drift.draftBank = 0;
+      drift.overtakes = 0;
       drift.splits = [];
+      drift.rival = { x: 132, y: 238, r: 13, segment: 0, progress: 0, speed: 0.000092 * pressure, flash: 0, pressure: 0, gap: -0.2 };
       drift.player = { x: 70, y: 276, vx: 0, vy: 0, angle: -0.62, r: 12, shield: 100 + Number(bonuses.driftShield || 0) + Number(tuning.shield || 0), trail: [] };
       drift.drones = [
         { x: 278, y: 66, baseX: 278, baseY: 66, ampX: 110, ampY: 34, phase: 0, speed: 0.0016 * pressure, r: 13 },
@@ -6857,6 +6878,79 @@ function init() {
       return Math.atan2(next.y - gate.y, next.x - gate.x);
     }
 
+    function driftPlayerRouteProgress() {
+      if (drift.gateIndex >= drift.gates.length) return drift.gates.length;
+      const p = drift.player;
+      if (drift.gateIndex <= 0) {
+        const start = { x: 70, y: 276 };
+        const first = drift.gates[0];
+        const dx = first.x - start.x;
+        const dy = first.y - start.y;
+        const lenSq = Math.max(1, dx * dx + dy * dy);
+        return clamp(((p.x - start.x) * dx + (p.y - start.y) * dy) / lenSq, 0, 1) * 0.85;
+      }
+      const prev = drift.gates[drift.gateIndex - 1];
+      const next = drift.gates[drift.gateIndex];
+      if (!prev || !next) return drift.gateIndex;
+      const dx = next.x - prev.x;
+      const dy = next.y - prev.y;
+      const lenSq = Math.max(1, dx * dx + dy * dy);
+      const t = clamp(((p.x - prev.x) * dx + (p.y - prev.y) * dy) / lenSq, 0, 1);
+      return drift.gateIndex - 1 + t;
+    }
+
+    function driftRivalProgress() {
+      const rival = drift.rival;
+      if (!rival) return 0;
+      return rival.segment + rival.progress;
+    }
+
+    function updateDriftRival(dt) {
+      const rival = drift.rival;
+      if (!rival) return;
+      rival.flash = Math.max(0, rival.flash - dt);
+      rival.progress += dt * rival.speed * (1 + drift.gateIndex * 0.018);
+      while (rival.progress >= 1 && rival.segment < drift.gates.length - 2) {
+        rival.progress -= 1;
+        rival.segment++;
+      }
+      const from = drift.gates[rival.segment] || drift.gates[0];
+      const to = drift.gates[rival.segment + 1] || from;
+      rival.x = from.x + (to.x - from.x) * rival.progress;
+      rival.y = from.y + (to.y - from.y) * rival.progress;
+      rival.gap = driftPlayerRouteProgress() - driftRivalProgress();
+      rival.pressure = clamp(1 - Math.abs(rival.gap) / 1.35, 0, 1);
+
+      const dist = Math.hypot(rival.x - drift.player.x, rival.y - drift.player.y);
+      const draftWindow = rival.gap < 0.55 && rival.gap > -1.45;
+      drift.draft = draftWindow ? clamp(1 - dist / 96, 0, 1) : 0;
+      if (drift.draft > 0.08) {
+        drift.boost = Math.min(drift.maxBoost, drift.boost + dt * 0.032 * drift.draft);
+        drift.score += dt * 0.052 * drift.draft * drift.multiplier;
+        drift.draftBank += dt * 0.024 * drift.draft;
+      }
+      if (dist < drift.player.r + rival.r - 2 && drift.hitCooldown <= 0) {
+        damageDrift(9, rival.x, rival.y);
+        rival.flash = 760;
+      }
+    }
+
+    function awardDriftOvertake(grade, speed) {
+      const qualifies = grade.quality >= 86 || (grade.quality >= 70 && drift.draft >= 0.5);
+      if (!qualifies) return 0;
+      drift.overtakes++;
+      if (drift.rival) {
+        drift.rival.flash = 1040;
+        drift.rival.progress = Math.max(0, drift.rival.progress - 0.12);
+      }
+      const bonus = Math.floor((260 + grade.quality * 4 + speed * 0.35 + drift.combo * 44) * drift.multiplier);
+      drift.score += bonus;
+      drift.boost = Math.min(drift.maxBoost, drift.boost + 20 + drift.combo * 3);
+      drift.lineBank += 86 + drift.overtakes * 16;
+      driftSpark(drift.player.x, drift.player.y, '#FDE68A', 34);
+      return bonus;
+    }
+
     function driftToneColor(tone) {
       if (tone === 'perfect') return '#FDE68A';
       if (tone === 'apex') return '#34D399';
@@ -6894,11 +6988,13 @@ function init() {
       const splitScore = Math.floor((210 + speed * 0.72) * drift.multiplier * grade.bonus + drift.combo * 42);
       drift.lineBank += Math.max(0, grade.quality - 52) * 2 + drift.combo * 18;
       drift.score += splitScore;
+      const overtakeBonus = awardDriftOvertake(grade, speed);
       drift.splits.unshift({
         gate: drift.gateIndex + 1,
         label: grade.label,
         quality: grade.quality,
         score: splitScore,
+        overtakeBonus,
         combo: drift.combo,
         age: 1800
       });
@@ -6922,11 +7018,11 @@ function init() {
       cancelAnimationFrame(drift.raf);
       const complete = drift.gateIndex >= drift.gates.length;
       const timeBonus = complete ? Math.max(0, 76000 - drift.elapsed) / 42 : 0;
-      const finalScore = Math.floor(drift.score + drift.gateIndex * 120 + drift.player.shield * 7 + timeBonus + drift.bestCombo * 75 + drift.lineBank);
+      const finalScore = Math.floor(drift.score + drift.gateIndex * 120 + drift.player.shield * 7 + timeBonus + drift.bestCombo * 75 + drift.lineBank + drift.overtakes * 180 + drift.draftBank);
       localStorage.setItem(drift.bestKey, String(Math.max(Number(localStorage.getItem(drift.bestKey) || 0), finalScore)));
       if (complete) unlockAchievement('drift_clear');
       if (complete && drift.player.shield >= 75) unlockAchievement('drift_clean');
-      recordPremiumResult('drift', finalScore, { gates: drift.gateIndex, shield: drift.player.shield, elapsed: drift.elapsed, bestCombo: drift.bestCombo, line: drift.lineLabel });
+      recordPremiumResult('drift', finalScore, { gates: drift.gateIndex, shield: drift.player.shield, elapsed: drift.elapsed, bestCombo: drift.bestCombo, line: drift.lineLabel, overtakes: drift.overtakes, draft: Math.floor(drift.draftBank) });
       setDriftUi();
       updateDriftPauseButton();
       drawDrift();
@@ -6992,6 +7088,7 @@ function init() {
         drone.y = drone.baseY + Math.cos(drift.elapsed * drone.speed * 0.86 + drone.phase) * drone.ampY;
         if (Math.hypot(drone.x - p.x, drone.y - p.y) < drone.r + p.r) damageDrift(12, drone.x, drone.y);
       });
+      updateDriftRival(dt);
 
       const currentGate = drift.gates[drift.gateIndex];
       if (currentGate && Math.hypot(currentGate.x - p.x, currentGate.y - p.y) < currentGate.r + p.r) {
@@ -7109,6 +7206,52 @@ function init() {
         ctx.stroke();
       });
 
+      if (drift.rival) {
+        const rival = drift.rival;
+        const from = drift.gates[rival.segment] || drift.gates[0];
+        const to = drift.gates[rival.segment + 1] || from;
+        const rivalAngle = Math.atan2(to.y - from.y, to.x - from.x);
+        if (drift.draft > 0.08) {
+          ctx.save();
+          ctx.globalAlpha = 0.22 + drift.draft * 0.42;
+          ctx.strokeStyle = '#BAE6FD';
+          ctx.lineWidth = 8 + drift.draft * 8;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(rival.x, rival.y);
+          ctx.lineTo(p.x, p.y);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = '#BAE6FD';
+          ctx.font = '800 10px JetBrains Mono, monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText(`DRAFT ${Math.round(drift.draft * 100)}`, (rival.x + p.x) / 2, (rival.y + p.y) / 2 - 10);
+          ctx.restore();
+        }
+        ctx.save();
+        ctx.translate(rival.x, rival.y);
+        ctx.rotate(rivalAngle);
+        const flash = clamp(rival.flash / 1040, 0, 1);
+        ctx.shadowColor = flash > 0 ? '#FDE68A' : '#A78BFA';
+        ctx.shadowBlur = 12 + flash * 16;
+        ctx.fillStyle = flash > 0 ? '#FDE68A' : '#A78BFA';
+        ctx.beginPath();
+        ctx.moveTo(15, 0);
+        ctx.lineTo(-10, 10);
+        ctx.lineTo(-6, 0);
+        ctx.lineTo(-10, -10);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = flash > 0 ? 'rgba(253, 230, 138, 0.9)' : 'rgba(221, 214, 254, 0.72)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+        ctx.fillStyle = rival.gap <= -0.65 ? '#FCA5A5' : rival.gap >= 0.35 ? '#A7F3D0' : '#FDE68A';
+        ctx.font = '800 10px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('RIVAL', rival.x, rival.y - 20);
+      }
+
       p.trail.forEach(item => {
         ctx.globalAlpha = Math.max(0, item.life / 520) * 0.62;
         ctx.fillStyle = item.boost ? '#BAE6FD' : '#A78BFA';
@@ -7164,7 +7307,8 @@ function init() {
         ctx.fillStyle = driftToneColor(split.label === 'PERFECT' ? 'perfect' : split.label === 'APEX' ? 'apex' : split.label === 'CLEAN' ? 'clean' : 'danger');
         ctx.font = '800 10px JetBrains Mono, monospace';
         ctx.textAlign = 'right';
-        ctx.fillText(`#${split.gate} ${split.label} ${split.quality} +${split.score} ${split.combo}x`, c.width - 16, 24 + index * 15);
+        const overtakeText = split.overtakeBonus > 0 ? ` OVERTAKE +${split.overtakeBonus}` : '';
+        ctx.fillText(`#${split.gate} ${split.label} ${split.quality} +${split.score} ${split.combo}x${overtakeText}`, c.width - 16, 24 + index * 15);
         ctx.restore();
       });
     }
@@ -8874,12 +9018,23 @@ function init() {
             combo: drift.combo,
             bestCombo: drift.bestCombo,
             lineBank: Math.floor(drift.lineBank),
+            draft: Number(drift.draft.toFixed(2)),
+            draftBank: Math.floor(drift.draftBank),
+            overtakes: drift.overtakes,
+            rival: {
+              gap: Number((drift.rival?.gap || 0).toFixed(2)),
+              segment: drift.rival?.segment || 0,
+              progress: Number((drift.rival?.progress || 0).toFixed(2)),
+              flash: Math.ceil(drift.rival?.flash || 0)
+            },
             splits: drift.splits.map(split => ({ ...split })),
             score: Math.floor(drift.score),
             boost: Math.ceil(drift.boost),
             mult: Number(drift.multiplier.toFixed(2)),
             lineHud: document.getElementById('premium-drift-line')?.textContent || '',
-            comboHud: document.getElementById('premium-drift-combo')?.textContent || ''
+            comboHud: document.getElementById('premium-drift-combo')?.textContent || '',
+            rivalHud: document.getElementById('premium-drift-rival')?.textContent || '',
+            overtakeHud: document.getElementById('premium-drift-overtake')?.textContent || ''
           }),
           forceDriftApex: () => {
             if (!drift.running) startDrift();
