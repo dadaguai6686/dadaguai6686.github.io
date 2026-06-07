@@ -126,6 +126,7 @@ const overlayEyebrow = overlay.querySelector<HTMLElement>(".eyebrow")!;
 const overlayTitle = overlay.querySelector<HTMLElement>("h1")!;
 const overlayCopy = overlay.querySelector<HTMLElement>("p")!;
 const gameDossier = document.querySelector<HTMLDivElement>("#game-dossier")!;
+const firstMinuteRoute = document.querySelector<HTMLDivElement>("#first-minute-route")!;
 const missionBrief = document.querySelector<HTMLDivElement>("#mission-brief")!;
 const fieldGuide = document.querySelector<HTMLDivElement>("#field-guide")!;
 const tacticalScan = document.querySelector<HTMLDivElement>("#tactical-scan")!;
@@ -515,6 +516,7 @@ window.addEventListener("game:ended", (event) => {
     detail.status === "completed" ? "五波完成" : detail.status === "won" ? "光网稳定" : "信号中断";
   overlayCopy.textContent = detail.message;
   gameDossier.hidden = true;
+  firstMinuteRoute.hidden = true;
   missionBrief.hidden = true;
   fieldGuide.hidden = true;
   renderRunRecap(detail, newlyUnlocked);
@@ -825,16 +827,19 @@ function showHelpOverlay(): void {
     setShellStatus(latestStatus);
   }
   overlay.classList.add("show");
+  const paused = latestStatus === "paused";
   achievementStrip.hidden = false;
   runHistory.hidden = true;
   updateAchievementUi();
   setDifficultyPickerVisible(latestStatus === "menu" || latestStatus === "lost" || latestStatus === "completed");
-  overlayEyebrow.textContent = "玩法说明";
-  overlayTitle.textContent = "维修、连锁、撤离";
-  overlayCopy.textContent =
-    "目标不是乱飞，而是在电量压力下规划路线：先补流明，再修信标，最后从北侧光门撤离。";
+  overlayEyebrow.textContent = paused ? "暂停战术说明" : "玩法说明";
+  overlayTitle.textContent = paused ? "先看路线，再继续" : "维修、连锁、撤离";
+  overlayCopy.textContent = paused
+    ? "游戏已暂停，不会耗电或受击。先看战术扫描确认流明、信标、危险和光门，再继续执行当前目标。"
+    : "目标不是乱飞，而是在电量压力下规划路线：先补流明，再修信标，最后从北侧光门撤离。";
   runRecap.hidden = true;
   gameDossier.hidden = false;
+  firstMinuteRoute.hidden = false;
   missionBrief.hidden = false;
   fieldGuide.hidden = false;
   renderTacticalScan();

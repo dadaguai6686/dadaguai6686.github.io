@@ -1108,6 +1108,62 @@ h1 {
   line-height: 1.45;
 }
 
+#first-minute-route {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  max-width: 660px;
+  margin: 14px auto 10px;
+  text-align: left;
+}
+
+#first-minute-route[hidden] {
+  display: none;
+}
+
+#first-minute-route article {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 2px 8px;
+  min-height: 74px;
+  padding: 10px;
+  border: 1px solid rgba(103, 244, 255, 0.16);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(103, 244, 255, 0.1), rgba(255, 226, 122, 0.045)),
+    rgba(255, 255, 255, 0.035);
+}
+
+#first-minute-route b {
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: #061018;
+  background: linear-gradient(135deg, var(--ui-cyan), var(--ui-gold));
+  font-size: 12px;
+  font-weight: 1000;
+}
+
+#first-minute-route strong,
+#first-minute-route span {
+  display: block;
+}
+
+#first-minute-route strong {
+  color: #fff3ad;
+  font-size: 11px;
+  font-weight: 1000;
+}
+
+#first-minute-route span {
+  color: #c8d9e8;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
 #field-guide {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2004,6 +2060,22 @@ h1 {
   transform: translateY(1px) scale(0.97);
 }
 
+@media (pointer: coarse), (hover: none) {
+  #shell[data-status="playing"] #touch-controls {
+    inset: auto max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    display: flex;
+    padding: 0;
+  }
+
+  #shell[data-status="playing"] #mobile-pause-button {
+    display: block;
+  }
+
+  #shell[data-status="playing"] #radar-panel {
+    display: none;
+  }
+}
+
 @keyframes resource-alert-pulse {
   from {
     filter: brightness(1);
@@ -2095,6 +2167,16 @@ h1 {
   #mission-brief {
     margin-bottom: 10px;
     padding: 8px 10px;
+  }
+
+  #first-minute-route {
+    gap: 6px;
+    margin: 10px auto 8px;
+  }
+
+  #first-minute-route article {
+    min-height: 64px;
+    padding: 8px;
   }
 
   #field-guide {
@@ -2394,6 +2476,21 @@ h1 {
   #mission-brief {
     margin-bottom: 12px;
     padding: 9px 10px;
+  }
+
+  #first-minute-route {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    margin: 10px auto;
+  }
+
+  #first-minute-route article {
+    min-height: 62px;
+    padding: 8px;
+  }
+
+  #first-minute-route span {
+    font-size: 9px;
   }
 
   #field-guide {
