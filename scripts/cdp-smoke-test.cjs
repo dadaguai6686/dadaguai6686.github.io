@@ -1134,12 +1134,8 @@ async function run() {
   await click('#premium-tactics-start');
   await wait(200);
   const tacticsForecastStart = await evaluate(`(() => window.__atherixDebug?.premium?.tacticsForecast?.() || {})()`);
-  await key('keyDown', 'ArrowRight', 'ArrowRight');
-  await key('keyUp', 'ArrowRight', 'ArrowRight');
-  await wait(160);
-  await key('keyDown', ' ', 'Space');
-  await key('keyUp', ' ', 'Space');
-  await wait(240);
+  const tacticsRouteState = await evaluate(`(() => window.__atherixDebug?.premium?.forceTacticsRoute?.() || {})()`);
+  const tacticsBlastState = await evaluate(`(() => window.__atherixDebug?.premium?.forceTacticsBlast?.() || {})()`);
   const tacticsForecastAfterAction = await evaluate(`(() => window.__atherixDebug?.premium?.tacticsForecast?.() || {})()`);
   const tacticsState = await evaluate(`(() => {
     const c = document.querySelector('#premium-tactics-canvas');
@@ -1154,7 +1150,11 @@ async function run() {
       threat: document.querySelector('#premium-tactics-threat')?.textContent,
       intel: document.querySelector('#premium-tactics-intel')?.textContent,
       danger: document.querySelector('#premium-tactics-danger')?.textContent,
-      action: document.querySelector('#premium-tactics-action')?.textContent
+      cover: document.querySelector('#premium-tactics-cover')?.textContent,
+      momentum: document.querySelector('#premium-tactics-momentum')?.textContent,
+      route: document.querySelector('#premium-tactics-route')?.textContent,
+      action: document.querySelector('#premium-tactics-action')?.textContent,
+      debug: window.__atherixDebug?.premium?.tacticsState?.() || {}
     };
   })()`);
 
@@ -1321,10 +1321,19 @@ async function run() {
   assert(chainState.forced.before.bestMove?.cleared >= 12 && chainState.forced.after.combo >= 12 && chainState.forced.after.score > chainState.forced.before.score, `chain debug combo should clear a large deterministic cluster: ${JSON.stringify(chainState.forced)}`);
   assert(chainState.forced.after.phaseIndex >= 1 && chainState.forced.after.lastSpecial && chainState.forced.after.mult > 1, `chain combo should advance phase, create a core, and raise multiplier: ${JSON.stringify(chainState.forced.after)}`);
   assert(/^x\d+(\.\d)?$/.test(chainState.mult) && chainState.debugAfter.hud.mult === chainState.mult && chainState.debugAfter.hud.phase === chainState.phase && chainState.debugAfter.hud.hint === chainState.hint, `chain HUD should stay in sync with debug state: ${JSON.stringify(chainState)}`);
-  assert(tacticsForecastStart.dangerCount > 0 && tacticsForecastStart.intents?.length >= 4 && tacticsForecastStart.blastTargets?.length >= 1 && /目标/.test(tacticsForecastStart.action), `tactics mode should forecast enemy intent and available blast targets: ${JSON.stringify(tacticsForecastStart)}`);
-  assert(tacticsForecastAfterAction.incoming > 0 && tacticsForecastAfterAction.dangerCount > 0 && /火力锁定/.test(tacticsForecastAfterAction.intelHud) && /架盾/.test(tacticsForecastAfterAction.action), `tactics mode should update forecast after movement and action: ${JSON.stringify(tacticsForecastAfterAction)}`);
-  assert(tacticsState.nonBlank && Number(tacticsState.ap) < 3 && tacticsState.action, `tactics mode should render and accept actions: ${JSON.stringify(tacticsState)}`);
-  assert(Number(tacticsState.danger) > 0 && tacticsState.intel, `tactics HUD should expose forecast and danger counters: ${JSON.stringify(tacticsState)}`);
+  const tacticsRouteNext = tacticsRouteState.before?.route?.next;
+  const tacticsBlastBeforeTargets = tacticsBlastState.before?.forecast?.blastTargets || [];
+  const tacticsBlastAfterEnemies = tacticsBlastState.after?.enemies || [];
+  const tacticsJammedAfterBlast = tacticsBlastAfterEnemies.some(enemy => Number(enemy.disrupted || 0) > 0);
+  const tacticsKilledDuringBlast = Number(tacticsBlastState.after?.kills || 0) > Number(tacticsBlastState.before?.kills || 0)
+    || tacticsBlastAfterEnemies.length < (tacticsBlastState.before?.enemies || []).length;
+  const tacticsJammedIntent = (tacticsForecastAfterAction.intents || []).some(intent => intent.label === 'JAM' || intent.mode === 'disrupted');
+  assert(tacticsForecastStart.dangerCount > 0 && tacticsForecastStart.intents?.length >= 4 && tacticsForecastStart.blastTargets?.length >= 1 && /目标/.test(tacticsForecastStart.action) && tacticsForecastStart.route?.route?.length > 0 && tacticsForecastStart.routeHud === tacticsForecastStart.route?.label && tacticsForecastStart.coverHud && tacticsForecastStart.momentumHud !== undefined, `tactics mode should forecast enemy intent, blast windows, cover, momentum, and route intel: ${JSON.stringify(tacticsForecastStart)}`);
+  assert(tacticsRouteNext && tacticsRouteState.after?.player?.x === tacticsRouteNext.x && tacticsRouteState.after?.player?.y === tacticsRouteNext.y && Number(tacticsRouteState.after?.momentum || 0) > Number(tacticsRouteState.before?.momentum || 0) && tacticsRouteState.after?.route?.label && tacticsRouteState.after?.hud?.route === tacticsRouteState.after?.route?.label, `tactics route debug should move along the recommended path and reward momentum: ${JSON.stringify(tacticsRouteState)}`);
+  assert(tacticsBlastBeforeTargets.length >= 2 && Number(tacticsBlastState.after?.player?.ap || 0) >= Number(tacticsBlastState.before?.player?.ap || 0) && Number(tacticsBlastState.after?.momentum || 0) > Number(tacticsBlastState.before?.momentum || 0) && Number(tacticsBlastState.after?.combo || 0) >= 1 && tacticsJammedAfterBlast && tacticsKilledDuringBlast, `tactics phase blast should pierce targets, refund AP, build combo/momentum, kill, and jam survivors: ${JSON.stringify(tacticsBlastState)}`);
+  assert(tacticsForecastAfterAction.dangerCount > 0 && tacticsForecastAfterAction.coverHud && tacticsForecastAfterAction.momentumHud !== undefined && tacticsForecastAfterAction.routeHud && tacticsJammedIntent, `tactics mode should expose post-action JAM, cover, momentum, and route forecast: ${JSON.stringify(tacticsForecastAfterAction)}`);
+  assert(tacticsState.nonBlank && Number(tacticsState.ap) >= 0 && tacticsState.action && tacticsState.cover && tacticsState.momentum !== undefined && tacticsState.route && tacticsState.debug?.route?.length > 0, `tactics mode should render and accept enhanced actions: ${JSON.stringify(tacticsState)}`);
+  assert(Number(tacticsState.danger) > 0 && tacticsState.intel && tacticsState.debug?.hud?.route === tacticsState.route && tacticsState.debug?.hud?.cover === tacticsState.cover && tacticsState.debug?.hud?.momentum === tacticsState.momentum, `tactics HUD should stay in sync with enhanced debug state: ${JSON.stringify(tacticsState)}`);
   assert(pwaState.supported && pwaState.registered, 'service worker should register');
 
   await bestEffortSend('Page.close');
@@ -1386,6 +1395,8 @@ async function run() {
     careerDialogClosed,
     chainState,
     tacticsForecastStart,
+    tacticsRouteState,
+    tacticsBlastState,
     tacticsForecastAfterAction,
     tacticsState,
     pwaState
