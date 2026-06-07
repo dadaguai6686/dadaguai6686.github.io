@@ -224,6 +224,22 @@ repairState = movePlayerTo(repairState, repairState.relays[0].position.x, repair
 assert.equal(getObjectiveHint(repairState).kind, "repair", "standing near a relay should prompt repair");
 assert.equal(getCoachDirective(repairState).id, "repairRelay", "standing near a relay should explain the repair verb");
 assert.equal(getActiveRepairTarget(repairState)?.id, repairState.relays[0].id, "standing near a relay should expose a repair target for rendering");
+const lowChargeAtRelay = structuredClone(repairState);
+lowChargeAtRelay.player.charge = Math.floor(lowChargeAtRelay.player.maxCharge * 0.2);
+assert.equal(
+  getObjectiveHint(lowChargeAtRelay).kind,
+  "lumen",
+  "low charge at a relay should prioritize nearby lumen over repair"
+);
+assert.ok(
+  getObjectiveHint(lowChargeAtRelay).detail.includes("不要硬修"),
+  "low charge at a relay should warn players not to force a repair"
+);
+assert.equal(
+  getCoachDirective(lowChargeAtRelay).id,
+  "recoverCharge",
+  "low charge at a relay should keep coach and objective aligned"
+);
 let checkpointState = structuredClone(repairState);
 for (let i = 0; i < 74; i += 1) {
   checkpointState = updateSimulation(checkpointState, { ...idle, repair: true }, 0.016);

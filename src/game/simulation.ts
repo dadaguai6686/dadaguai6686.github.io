@@ -1699,6 +1699,17 @@ export function getObjectiveHint(state: GameState): ObjectiveHint {
     };
   }
 
+  const nearestLumen = nearest(state.lumen.filter((drop) => !drop.collected), player.position);
+  if (player.charge < player.maxCharge * 0.28 && nearestLumen) {
+    return {
+      kind: "lumen",
+      title: "先补充流明",
+      detail: `电量偏低，不要硬修信标；先吃最近流明，距离 ${formatDistance(nearestLumen.distance)}。`,
+      target: nearestLumen.item.position,
+      urgent: true
+    };
+  }
+
   const repairTarget = getActiveRepairTarget(state);
   if (repairTarget) {
     return {
@@ -1706,17 +1717,6 @@ export function getObjectiveHint(state: GameState): ObjectiveHint {
       title: "按住 E / 修复键",
       detail: `信标已接入，当前进度 ${Math.round(repairTarget.progress * 100)}%，节点 ${repairTarget.checkpoint}/${RELAY_CHECKPOINT_COUNT}。按住 E / 修复键；锁到节点后可先撤退补流明。`,
       target: repairTarget.position,
-      urgent: true
-    };
-  }
-
-  const nearestLumen = nearest(state.lumen.filter((drop) => !drop.collected), player.position);
-  if (player.charge < 38 && nearestLumen) {
-    return {
-      kind: "lumen",
-      title: "先补充流明",
-      detail: `电量偏低，最近流明距离 ${formatDistance(nearestLumen.distance)}。`,
-      target: nearestLumen.item.position,
       urgent: true
     };
   }
