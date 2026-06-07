@@ -11,6 +11,7 @@ import {
   HIT_RECOVERY_SECONDS,
   getObjectiveHint,
   getResourceAlerts,
+  RELAY_CHECKPOINT_COUNT,
   getRunPerformance,
   getRoutePlan,
   getRunRating,
@@ -208,6 +209,7 @@ export class GameScene extends Phaser.Scene {
     const previousStatus = this.state.status;
     const previousCollectedIds = new Set(this.state.lumen.filter((drop) => drop.collected).map((drop) => drop.id));
     const previousRepairedIds = new Set(this.state.relays.filter((relay) => relay.repaired).map((relay) => relay.id));
+    const previousRelayCheckpoints = new Map(this.state.relays.map((relay) => [relay.id, relay.checkpoint]));
     const previousHull = this.state.player.hull;
     const previousBoostCooldown = this.state.player.boostCooldown;
     const previousCloseCalls = this.state.stats.closeCalls;
@@ -225,6 +227,7 @@ export class GameScene extends Phaser.Scene {
       previousContractStatus,
       previousHull,
       previousPulseCooldown,
+      previousRelayCheckpoints,
       previousRepairedIds,
       previousScore,
       previousStatus
@@ -654,6 +657,16 @@ export class GameScene extends Phaser.Scene {
       progress?.clear();
       progress?.lineStyle(6, relay.repaired ? 0xffe27a : 0x67f4ff, 0.9);
       progress?.arc(0, 0, 42, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * relay.progress);
+      if (progress) {
+        for (let checkpoint = 1; checkpoint < RELAY_CHECKPOINT_COUNT; checkpoint += 1) {
+          const angle = -Math.PI / 2 + (Math.PI * 2 * checkpoint) / RELAY_CHECKPOINT_COUNT;
+          const reached = relay.repaired || relay.checkpoint >= checkpoint;
+          const inner = 34;
+          const outer = 50;
+          progress.lineStyle(reached ? 4 : 2, reached ? 0xffe27a : 0x9fefff, reached ? 0.92 : 0.34);
+          progress.lineBetween(Math.cos(angle) * inner, Math.sin(angle) * inner, Math.cos(angle) * outer, Math.sin(angle) * outer);
+        }
+      }
     });
 
     this.state.lumen.forEach((drop) => {
@@ -764,6 +777,7 @@ export class GameScene extends Phaser.Scene {
     previousContractStatus: GameState["contract"]["status"];
     previousHull: number;
     previousPulseCooldown: number;
+    previousRelayCheckpoints: Map<number, number>;
     previousRepairedIds: Set<number>;
     previousScore: number;
     previousStatus: GameState["status"];
@@ -774,6 +788,9 @@ export class GameScene extends Phaser.Scene {
     );
     const newlyRepaired = this.state.relays.filter(
       (relay) => relay.repaired && !previous.previousRepairedIds.has(relay.id)
+    );
+    const newlyCheckpointed = this.state.relays.filter(
+      (relay) => !relay.repaired && relay.checkpoint > (previous.previousRelayCheckpoints.get(relay.id) ?? 0)
     );
     if (previous.previousBoostCooldown <= 0 && this.state.player.boostCooldown > 0) {
       this.dispatchFeedback({
@@ -850,6 +867,18 @@ export class GameScene extends Phaser.Scene {
         tone: scoreDelta > 0 ? "success" : "warning"
       });
     }
+    newlyCheckpointed.forEach((relay) => {
+      this.dispatchFeedback({
+        detail: `维修进度已锁定到 ${relay.checkpoint}/${RELAY_CHECKPOINT_COUNT}。危险靠近时可以先撤出，回头从节点继续修。`,
+        kind: "repair",
+        text: `节点 ${relay.checkpoint}/${RELAY_CHECKPOINT_COUNT}`,
+        title: "维修节点锁定",
+        position: relay.position,
+        color: 0x67f4ff,
+        scale: 1.06,
+        tone: "success"
+      });
+    });
     if (closeCallDelta > 0) {
       this.dispatchFeedback({
         detail: `擦过碎片边缘但没有撞上，奖励连锁和分数。当前连锁 ${this.state.combo.toFixed(1)}x，继续绕线别贪修。`,
@@ -1190,7 +1219,9 @@ export class GameScene extends Phaser.Scene {
 
     const progress = Math.round(repairTarget.progress * 100);
     this.repairPromptLabel.setVisible(true);
-    this.repairPromptLabel.setText(progress > 0 ? `维修中 ${progress}%` : "按住 E / 修复键");
+    this.repairPromptLabel.setText(
+      progress > 0 ? `维修 ${progress}% · 节点 ${repairTarget.checkpoint}/${RELAY_CHECKPOINT_COUNT}` : "按住 E / 修复键"
+    );
     this.repairPromptLabel.setPosition(repairTarget.position.x, repairTarget.position.y - 72);
     this.repairPromptLabel.setAlpha(0.86 + pulse * 0.14);
     this.repairPromptLabel.setScale(this.largeLabels ? 1.06 : 1);

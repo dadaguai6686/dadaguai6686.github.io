@@ -7,6 +7,7 @@ export type Relay = {
   id: number;
   position: Vec2;
   progress: number;
+  checkpoint: number;
   repaired: boolean;
 };
 
@@ -270,6 +271,7 @@ export type HazardThreat = {
 export const CAMPAIGN_WAVES = 5;
 export const COMBO_WINDOW_SECONDS = 3.4;
 export const MAX_UPGRADE_LEVEL = 3;
+export const RELAY_CHECKPOINT_COUNT = 4;
 export const REPAIR_RADIUS = 76;
 export const LUMEN_PICKUP_RADIUS = 34;
 export const HAZARD_PLAYER_RADIUS = 28;
@@ -883,9 +885,19 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
     repairTarget.progress = Math.min(1, repairTarget.progress + dt * repairSpeed);
     player.charge = Math.max(0, player.charge - dt * 3.2);
     next.stats.repairSeconds += dt;
-    next.message = "保持在信标旁，维修光束正在充能。";
+    next.message = "保持在信标旁，维修光束正在充能；每 25% 锁一个节点。";
+    const nextCheckpoint = Math.min(
+      RELAY_CHECKPOINT_COUNT - 1,
+      Math.floor(repairTarget.progress * RELAY_CHECKPOINT_COUNT)
+    );
+    if (nextCheckpoint > repairTarget.checkpoint && repairTarget.progress < 1) {
+      repairTarget.checkpoint = nextCheckpoint;
+      awardScore(next, 55 + nextCheckpoint * 15, 0.16);
+      next.message = `信标维修节点 ${nextCheckpoint}/${RELAY_CHECKPOINT_COUNT} 已锁定，离开也不会掉回节点以下。`;
+    }
     if (repairTarget.progress >= 1) {
       repairTarget.repaired = true;
+      repairTarget.checkpoint = RELAY_CHECKPOINT_COUNT;
       player.lumen += 2;
       next.stats.relaysRepaired += 1;
       awardScore(next, 260 + next.upgrades.repair * 75, 0.48);
@@ -895,7 +907,8 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
   } else {
     next.relays.forEach((relay) => {
       if (!relay.repaired && relay.progress > 0) {
-        relay.progress = Math.max(0, relay.progress - dt * 0.022);
+        const checkpointFloor = relay.checkpoint / RELAY_CHECKPOINT_COUNT;
+        relay.progress = Math.max(checkpointFloor, relay.progress - dt * 0.022);
       }
     });
   }
@@ -1541,8 +1554,8 @@ export function getCoachDirective(state: GameState): CoachDirective {
       step: 3,
       totalSteps,
       title: "第 3 步：按住 E / 修复键",
-      detail: "留在蓝色信标旁保持维修光束；键盘按 E，触控按修复键，离开会慢慢掉进度。",
-      progress: `维修进度 ${Math.round(repairTarget.progress * 100)}%`,
+      detail: "留在蓝色信标旁保持维修光束；每 25% 锁一个节点，危险靠近时可以先撤退补流明。",
+      progress: `维修 ${Math.round(repairTarget.progress * 100)}% · 节点 ${repairTarget.checkpoint}/${RELAY_CHECKPOINT_COUNT}`,
       target: repairTarget.position,
       urgent: true
     };
@@ -1691,7 +1704,7 @@ export function getObjectiveHint(state: GameState): ObjectiveHint {
     return {
       kind: "repair",
       title: "按住 E / 修复键",
-      detail: `信标已锁定，当前进度 ${Math.round(repairTarget.progress * 100)}%。键盘按 E，触控按修复键，离开会慢慢掉进度。`,
+      detail: `信标已接入，当前进度 ${Math.round(repairTarget.progress * 100)}%，节点 ${repairTarget.checkpoint}/${RELAY_CHECKPOINT_COUNT}。按住 E / 修复键；锁到节点后可先撤退补流明。`,
       target: repairTarget.position,
       urgent: true
     };
@@ -1801,6 +1814,7 @@ function createRelays(sector: SectorId, routeSeed: number, wave: number): Relay[
     id,
     position: varyRoutePosition(position, routeSeed, wave, salt + id, 24),
     progress: 0,
+    checkpoint: 0,
     repaired: false
   }));
 }

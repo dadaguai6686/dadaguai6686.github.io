@@ -7,6 +7,7 @@ import {
   HAZARD_CLOSE_CALL_ESCAPE_BUFFER,
   HAZARD_PLAYER_RADIUS,
   MAX_UPGRADE_LEVEL,
+  RELAY_CHECKPOINT_COUNT,
   SECTOR_LAYOUTS,
   WAVE_MODIFIERS,
   createContractState,
@@ -223,10 +224,27 @@ repairState = movePlayerTo(repairState, repairState.relays[0].position.x, repair
 assert.equal(getObjectiveHint(repairState).kind, "repair", "standing near a relay should prompt repair");
 assert.equal(getCoachDirective(repairState).id, "repairRelay", "standing near a relay should explain the repair verb");
 assert.equal(getActiveRepairTarget(repairState)?.id, repairState.relays[0].id, "standing near a relay should expose a repair target for rendering");
+let checkpointState = structuredClone(repairState);
+for (let i = 0; i < 74; i += 1) {
+  checkpointState = updateSimulation(checkpointState, { ...idle, repair: true }, 0.016);
+}
+assert.equal(checkpointState.relays[0].checkpoint, 1, "partial relay repair should lock the first checkpoint");
+assert.ok(checkpointState.score > repairState.score, "relay checkpoints should award a small score bump");
+const checkpointFloor = checkpointState.relays[0].checkpoint / RELAY_CHECKPOINT_COUNT;
+checkpointState.hazards = [];
+checkpointState.storms = [];
+checkpointState.player.maxCharge = 200;
+checkpointState.player.charge = 200;
+checkpointState = updateSimulation(checkpointState, idle, 24);
+assert.ok(
+  checkpointState.relays[0].progress >= checkpointFloor,
+  "relay progress should not decay below the latest locked checkpoint"
+);
 for (let i = 0; i < 260; i += 1) {
   repairState = updateSimulation(repairState, { ...idle, repair: true }, 0.016);
 }
 assert.equal(repairState.relays[0].repaired, true, "repairing near a relay should complete it");
+assert.equal(repairState.relays[0].checkpoint, RELAY_CHECKPOINT_COUNT, "completed relays should lock all checkpoints");
 assert.equal(repairState.stats.relaysRepaired, 1, "completed relay repairs should be counted");
 assert.ok(repairState.stats.repairSeconds > 0, "time spent repairing should be counted");
 assert.ok(repairState.score > 0, "repairing a relay should award score");

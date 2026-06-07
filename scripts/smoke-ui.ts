@@ -121,6 +121,9 @@ assert.ok(gameScene.includes("buildOpeningRoutePreview"), "opening route preview
 assert.ok(gameScene.includes("syncNavigatorLabel"), "Phaser scene should label the current navigation target in-world");
 assert.ok(gameScene.includes("导航："), "in-world navigator label should be localized");
 assert.ok(gameScene.includes("syncRepairPromptLabel"), "Phaser scene should show an in-world repair control prompt");
+assert.ok(gameScene.includes("RELAY_CHECKPOINT_COUNT"), "Phaser scene should render relay repair checkpoint state");
+assert.ok(gameScene.includes("relay.checkpoint >= checkpoint"), "relay progress rings should mark reached repair checkpoints");
+assert.ok(gameScene.includes("维修节点锁定"), "relay checkpoint feedback should be localized in Chinese");
 assert.ok(gameScene.includes('"score"'), "Phaser scene should emit score change feedback cues");
 assert.ok(gameScene.includes('"closeCall"'), "Phaser scene should emit close-call feedback cues");
 assert.ok(gameScene.includes("擦险脱离"), "close-call feedback should be localized in Chinese");
@@ -134,9 +137,12 @@ assert.ok(gameScene.includes("HIT_RECOVERY_SECONDS"), "recovery window visuals s
 assert.ok(gameScene.includes("renderHazardTrajectories"), "Phaser scene should telegraph moving hazard paths");
 assert.ok(gameScene.includes("projectHazardPosition"), "hazard telegraphs should project future shard positions");
 assert.ok(simulation.includes("按住 E / 修复键"), "runtime objective copy should support keyboard and touch repair controls");
+assert.ok(simulation.includes("每 25% 锁一个节点"), "runtime repair copy should explain relay checkpoint locks");
+assert.ok(simulation.includes("RELAY_CHECKPOINT_COUNT"), "simulation should share a stable relay checkpoint count");
 assert.ok(simulation.includes("擦险脱离"), "simulation should reward skillful close-call escapes with Chinese feedback");
 assert.ok(simulation.includes("合约完成：继续修信标"), "coach should clearly guide after completed contracts");
 assert.ok(simulation.includes("合约失败，清主目标"), "objective copy should clearly guide after failed contracts");
+assert.ok(main.includes("锁节点后再撤"), "loss recap should teach retreating after locked repair checkpoints");
 assert.ok(main.includes('"data-kind": "relay"'), "radar nodes should expose stable data-kind markers");
 assert.ok(main.includes('"data-kind": "player"'), "radar nodes should expose player marker for QA");
 assert.ok(main.includes('"data-kind": "guide"'), "radar nodes should expose guide markers for QA");

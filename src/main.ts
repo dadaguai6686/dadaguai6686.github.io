@@ -1621,7 +1621,7 @@ function buildLossCorrection(detail: RunEndDetail): string {
   if (detail.endReason === "chargeDepleted") {
     return detail.stats.lumenCollected < 3
       ? "电量归零：开局先吃 2-3 个流明，别直接硬修信标。"
-      : "电量归零：修到一半可以先离开补流明，再回到信标继续。";
+      : "电量归零：修到节点后可以先离开补流明，再回到信标继续。";
   }
   if (detail.endReason === "hullDestroyed") {
     return detail.stats.pulseUses === 0
@@ -1902,8 +1902,8 @@ function buildChargeLossRecapPlan(detail: RunEndDetail): RecapPlanStep[] {
     },
     {
       label: "维修",
-      title: "半修也可以撤",
-      detail: `本局维修了 ${formatSeconds(detail.stats.repairSeconds)}。信标进度会保留一段时间，电量低时先离开补流明再回来。`,
+      title: "锁节点后再撤",
+      detail: `本局维修了 ${formatSeconds(detail.stats.repairSeconds)}。信标每 25% 锁一个节点，电量低时先撤出补流明，再回到节点继续修。`,
       tone: "primary"
     },
     {
