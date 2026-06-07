@@ -13,6 +13,8 @@ assert.ok(html.includes('id="tactical-scan"'), "pause tactical scan should exist
 assert.ok(html.includes('id="wave-intro"'), "wave intro briefing should exist in HTML");
 assert.ok(html.includes('id="game-dossier"'), "menu should explain the game fantasy and win/loss loop");
 assert.ok(html.includes('id="first-minute-route"'), "menu should give players an actionable first-minute route");
+assert.ok(html.includes('id="coach-rail"'), "route coach should expose a visible four-step progress rail");
+assert.ok(html.includes('role="list"'), "route coach progress rail should expose list semantics");
 assert.ok(html.includes("读图补电"), "first-minute route should explain the opening supply step in Chinese");
 assert.ok(html.includes("E / 修复键"), "visible control copy should support keyboard and touch repair controls");
 assert.ok(html.includes("Space / 推进键"), "visible control copy should support keyboard and touch boost controls");
@@ -30,6 +32,10 @@ assert.ok(main.includes("renderRadar(detail.radar"), "HUD updates should render 
 assert.ok(main.includes("renderTacticalScan()"), "pause overlay should render the tactical scan");
 assert.ok(main.includes("updateWaveIntro(detail)"), "HUD updates should render wave intro briefing");
 assert.ok(main.includes("buildObjectiveStripTitle"), "HUD objective strip should use contextual mission copy");
+assert.ok(main.includes("renderCoachRail"), "route coach should render the current four-step progress state");
+assert.ok(main.includes("COACH_STEP_LABELS"), "route coach should use localized step labels");
+assert.ok(main.includes('role", "listitem"'), "route coach progress steps should expose list item semantics");
+assert.ok(main.includes('aria-current", "step"'), "route coach should mark the current step accessibly");
 assert.ok(main.includes("buildMissionStatusText"), "HUD mission text should prefer current objective state over stale event copy");
 assert.ok(main.includes("暂停战术说明"), "pause overlay should explain that the scan is safe to read");
 assert.ok(main.includes("pauseForInterruption"), "runtime should pause when the page is interrupted");
@@ -67,6 +73,8 @@ assert.ok(styles.includes("#radar-panel"), "desktop radar should have CSS");
 assert.ok(styles.includes("#tactical-scan"), "pause tactical scan should have CSS");
 assert.ok(styles.includes(".radar-guide"), "radar guide should have CSS");
 assert.ok(styles.includes(".tactical-scan-legend"), "pause tactical scan should have a legend style");
+assert.ok(styles.includes("#coach-rail"), "route coach progress rail should have CSS");
+assert.ok(styles.includes('span[data-state="active"]'), "route coach should visually mark the active step");
 assert.ok(styles.includes("#game-dossier"), "mission dossier should have CSS");
 assert.ok(styles.includes("#first-minute-route"), "first-minute route should have CSS");
 assert.ok(styles.includes("touch-action: none"), "mobile controls should disable browser touch gestures");

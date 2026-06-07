@@ -101,6 +101,7 @@ const contractReward = document.querySelector<HTMLElement>("#contract-reward")!;
 const coachPanel = document.querySelector<HTMLDivElement>("#coach-panel")!;
 const coachTitle = document.querySelector<HTMLElement>("#coach-title")!;
 const coachStep = document.querySelector<HTMLElement>("#coach-step")!;
+const coachRail = document.querySelector<HTMLDivElement>("#coach-rail")!;
 const coachDetail = document.querySelector<HTMLElement>("#coach-detail")!;
 const coachProgress = document.querySelector<HTMLElement>("#coach-progress")!;
 const pilotTip = document.querySelector<HTMLDivElement>("#pilot-tip")!;
@@ -220,6 +221,9 @@ type RadarSnapshot = {
   relays: Array<{ id: number; position: { x: number; y: number }; progress: number; repaired: boolean }>;
   storms: Array<{ activeRadius: number; id: number; position: { x: number; y: number }; radius: number }>;
 };
+
+const COACH_STEP_LABELS = ["补流明", "找信标", "按住维修", "撤离"] as const;
+let coachRailItems: HTMLSpanElement[] = [];
 
 type RunEndDetail = {
   bestCombo: number;
@@ -604,6 +608,35 @@ function renderCoachDirective(directive: CoachDirective, status: GameStatus): vo
   coachStep.textContent = `${directive.step}/${directive.totalSteps}`;
   coachDetail.textContent = directive.detail;
   coachProgress.textContent = directive.progress;
+  renderCoachRail(directive);
+}
+
+function renderCoachRail(directive: CoachDirective): void {
+  const stepCount = Math.max(1, directive.totalSteps);
+  if (coachRailItems.length !== stepCount) {
+    coachRailItems = Array.from({ length: stepCount }, () => document.createElement("span"));
+    coachRail.replaceChildren(...coachRailItems);
+  }
+  coachRailItems.forEach((item, index) => {
+    const step = index + 1;
+    const state = step < directive.step ? "done" : step === directive.step ? "active" : "next";
+    const label = COACH_STEP_LABELS[index] ?? `步骤${step}`;
+    const title =
+      step < directive.step
+        ? `${label}：已完成`
+        : step === directive.step
+          ? `${label}：当前目标，${directive.progress}`
+          : `${label}：后续目标`;
+    if (item.dataset.state !== state) item.dataset.state = state;
+    if (item.textContent !== label) item.textContent = label;
+    if (item.title !== title) item.title = title;
+    if (item.getAttribute("role") !== "listitem") item.setAttribute("role", "listitem");
+    if (state === "active") {
+      item.setAttribute("aria-current", "step");
+    } else {
+      item.removeAttribute("aria-current");
+    }
+  });
 }
 
 function buildObjectiveStripTitle(hint: ObjectiveHint): string {
