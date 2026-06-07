@@ -1196,10 +1196,81 @@ h1 {
 
 .panel p {
   max-width: 560px;
-  margin: 0 auto 24px;
+  margin: 0 auto 16px;
   color: #c8d9e8;
   font-size: clamp(15px, 2.4vw, 18px);
   line-height: 1.55;
+}
+
+#quick-brief {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  max-width: 660px;
+  margin: 0 auto 14px;
+  text-align: left;
+}
+
+#quick-brief[hidden] {
+  display: none;
+}
+
+#quick-brief article {
+  position: relative;
+  min-height: 66px;
+  padding: 10px 10px 10px 34px;
+  border: 1px solid rgba(126, 239, 255, 0.15);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(103, 244, 255, 0.11), rgba(255, 226, 122, 0.05)),
+    rgba(255, 255, 255, 0.04);
+}
+
+#quick-brief article::before {
+  content: "";
+  position: absolute;
+  top: 13px;
+  left: 11px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--ui-cyan);
+  box-shadow: 0 0 16px rgba(103, 244, 255, 0.4);
+}
+
+#quick-brief article[data-kind="lumen"]::before {
+  border-radius: 4px;
+  background: linear-gradient(135deg, #fff9c8, var(--ui-gold));
+  transform: rotate(45deg);
+}
+
+#quick-brief article[data-kind="danger"]::before {
+  background: var(--ui-rose);
+  box-shadow: 0 0 16px rgba(255, 95, 155, 0.42);
+}
+
+#quick-brief article[data-kind="gate"]::before {
+  border: 2px solid #86ffbd;
+  background: rgba(134, 255, 189, 0.12);
+  box-shadow: 0 0 16px rgba(134, 255, 189, 0.4);
+}
+
+#quick-brief b,
+#quick-brief span {
+  display: block;
+}
+
+#quick-brief b {
+  color: #fff3ad;
+  font-size: 12px;
+  font-weight: 1000;
+}
+
+#quick-brief span {
+  margin-top: 5px;
+  color: #d8eaf7;
+  font-size: 11px;
+  line-height: 1.28;
 }
 
 #game-dossier {
@@ -1207,7 +1278,7 @@ h1 {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   max-width: 660px;
-  margin: -8px auto 16px;
+  margin: 14px auto 16px;
   text-align: left;
 }
 
@@ -2249,6 +2320,32 @@ h1 {
   display: none;
 }
 
+.upgrade-brief {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 226, 122, 0.22);
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(255, 226, 122, 0.13), rgba(103, 244, 255, 0.07));
+  text-align: left;
+}
+
+.upgrade-brief strong,
+.upgrade-brief span {
+  display: block;
+}
+
+.upgrade-brief strong {
+  color: #fff3ad;
+  font-size: 13px;
+  font-weight: 1000;
+}
+
+.upgrade-brief span {
+  margin-top: 4px;
+  color: #d8eaf7;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .upgrade-option {
   width: 100%;
   padding: 11px 13px;
@@ -2258,6 +2355,14 @@ h1 {
   background: linear-gradient(90deg, rgba(103, 244, 255, 0.13), rgba(255, 226, 122, 0.08));
   cursor: pointer;
   text-align: left;
+}
+
+.upgrade-option[data-recommended="true"] {
+  border-color: rgba(255, 226, 122, 0.58);
+  background:
+    linear-gradient(90deg, rgba(255, 226, 122, 0.18), rgba(103, 244, 255, 0.12)),
+    rgba(255, 255, 255, 0.045);
+  box-shadow: 0 0 0 1px rgba(255, 226, 122, 0.08);
 }
 
 .upgrade-option strong {
@@ -2271,6 +2376,24 @@ h1 {
 .upgrade-option small {
   color: #7eefff;
   font-size: 11px;
+}
+
+.upgrade-option .upgrade-tag {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 7px;
+  padding: 4px 7px;
+  border: 1px solid rgba(255, 226, 122, 0.18);
+  border-radius: 999px;
+  color: #fff3ad;
+  background: rgba(255, 226, 122, 0.08);
+  font-size: 10px;
+  font-weight: 1000;
+}
+
+.upgrade-option[data-recommended="true"] .upgrade-tag {
+  color: #061018;
+  background: linear-gradient(90deg, var(--ui-cyan), var(--ui-gold));
 }
 
 .upgrade-option span {
@@ -2458,6 +2581,11 @@ h1 {
   }
 
   #game-dossier {
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  #quick-brief {
     gap: 6px;
     margin-bottom: 10px;
   }
@@ -2798,6 +2926,33 @@ h1 {
     margin-bottom: 10px;
   }
 
+  #quick-brief {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  #quick-brief article {
+    min-height: 54px;
+    padding: 8px 8px 8px 30px;
+  }
+
+  #quick-brief article::before {
+    top: 11px;
+    left: 10px;
+    width: 12px;
+    height: 12px;
+  }
+
+  #quick-brief b {
+    font-size: 11px;
+  }
+
+  #quick-brief span {
+    margin-top: 4px;
+    font-size: 10px;
+  }
+
   #game-dossier article {
     min-height: 58px;
     padding: 8px;
@@ -2959,6 +3114,20 @@ h1 {
   #session-tools button {
     min-height: 32px;
     padding: 7px 9px;
+    font-size: 11px;
+  }
+
+  .upgrade-brief {
+    padding: 9px 10px;
+  }
+
+  .upgrade-brief strong {
+    font-size: 12px;
+  }
+
+  .upgrade-brief span,
+  .upgrade-option span,
+  .upgrade-option em {
     font-size: 11px;
   }
 

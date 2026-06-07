@@ -129,6 +129,7 @@ const dailyDetail = document.querySelector<HTMLElement>("#daily-detail")!;
 const overlayEyebrow = overlay.querySelector<HTMLElement>(".eyebrow")!;
 const overlayTitle = overlay.querySelector<HTMLElement>("h1")!;
 const overlayCopy = overlay.querySelector<HTMLElement>("p")!;
+const quickBrief = document.querySelector<HTMLDivElement>("#quick-brief")!;
 const gameDossier = document.querySelector<HTMLDivElement>("#game-dossier")!;
 const launchBrief = document.querySelector<HTMLDivElement>("#launch-brief")!;
 const firstMinuteRoute = document.querySelector<HTMLDivElement>("#first-minute-route")!;
@@ -212,6 +213,12 @@ type NextRunGoal = {
   tone: "primary" | "steady" | "warning" | "complete";
 };
 
+type UpgradeRecommendation = {
+  id: UpgradeId;
+  label: string;
+  reason: string;
+};
+
 type RadarSnapshot = {
   arena: { width: number; height: number };
   gate: { open: boolean; position: { x: number; y: number } };
@@ -252,6 +259,7 @@ type RunEndDetail = {
 
 let latestUpgradeChoices: Upgrade[] = [];
 let latestUpgradeSummaries: UpgradeSummary[] = [];
+let latestEndDetail: RunEndDetail | undefined;
 let latestStatus: GameStatus = "menu";
 let latestScore = 0;
 let latestWave = 1;
@@ -398,6 +406,7 @@ function launchRun(upgradeId?: UpgradeId): void {
   runRecap.hidden = true;
   achievementUnlocks.hidden = true;
   upgradeChoices.hidden = true;
+  latestEndDetail = undefined;
   const runDifficulty = latestStatus === "won" ? latestDifficulty : selectedDifficulty;
   const routeSeed = latestStatus === "won" ? undefined : getRequestedRouteSeed();
   window.dispatchEvent(new CustomEvent("game:start", { detail: { difficulty: runDifficulty, routeSeed, upgradeId } }));
@@ -421,6 +430,7 @@ function launchDailyChallenge(): void {
   runRecap.hidden = true;
   achievementUnlocks.hidden = true;
   upgradeChoices.hidden = true;
+  latestEndDetail = undefined;
   window.dispatchEvent(
     new CustomEvent("game:start", {
       detail: { difficulty: selectedDifficulty, routeSeed: daily.seed }
@@ -523,6 +533,7 @@ window.addEventListener("game:ended", (event) => {
   latestBestCombo = detail.bestCombo;
   latestDifficulty = detail.difficulty;
   latestRoutePlan = detail.routePlan;
+  latestEndDetail = detail;
   const newlyUnlocked = persistRunResult(detail);
   overlay.classList.add("show");
   hideTacticalScan();
@@ -539,6 +550,7 @@ window.addEventListener("game:ended", (event) => {
   overlayTitle.textContent =
     detail.status === "completed" ? "五波完成" : detail.status === "won" ? "光网稳定" : "信号中断";
   overlayCopy.textContent = detail.message;
+  quickBrief.hidden = true;
   gameDossier.hidden = true;
   launchBrief.hidden = true;
   firstMinuteRoute.hidden = true;
@@ -551,7 +563,7 @@ window.addEventListener("game:ended", (event) => {
     detail.status === "completed" ? "再次救援" : detail.status === "won" ? "不升级，进入下一波" : "重新救援";
   upgradeChoices.hidden = detail.status !== "won";
   if (detail.status === "won") {
-    renderUpgradeChoices();
+    renderUpgradeChoices(detail);
   }
 });
 
@@ -560,19 +572,36 @@ window.addEventListener("game:feedback", (event) => {
   audioBus.play(detail.kind);
 });
 
-function renderUpgradeChoices(): void {
+function renderUpgradeChoices(detail = latestEndDetail): void {
   const choices = latestUpgradeChoices.length > 0 ? latestUpgradeChoices : Object.values(UPGRADE_CATALOG).slice(0, 3);
   const summaries = new Map(latestUpgradeSummaries.map((summary) => [summary.id, summary]));
+  const recommendation = detail ? buildUpgradeRecommendation(detail, choices) : undefined;
+  const header = document.createElement("div");
+  header.className = "upgrade-brief";
+  const headerTitle = document.createElement("strong");
+  const headerDetail = document.createElement("span");
+  headerTitle.textContent = recommendation
+    ? `升级建议：优先 ${UPGRADE_CATALOG[recommendation.id].name}`
+    : "选择一项改装";
+  headerDetail.textContent = recommendation
+    ? `短板原因：${recommendation.reason}`
+    : "根据下一波风险选择改装；每项都会显示升级前和升级后收益。";
+  header.append(headerTitle, headerDetail);
   upgradeChoices.replaceChildren(
+    header,
     ...choices.map((choice) => {
       const summary = summaries.get(choice.id);
+      const recommended = recommendation?.id === choice.id;
       const button = document.createElement("button");
       button.type = "button";
       button.className = "upgrade-option";
+      button.dataset.recommended = String(recommended);
       button.innerHTML = `
         <strong>${choice.name} <small>等级 ${summary?.level ?? 0}/${summary?.maxLevel ?? 3}</small></strong>
+        <span class="upgrade-tag">${recommended && recommendation ? `系统推荐 · ${recommendation.label}` : getUpgradeRoleLabel(choice.id)}</span>
         <span>${choice.description}</span>
-        <em>当前：${summary?.currentEffect ?? "基础配置"}</em>
+        <em>选择理由：${recommended && recommendation ? recommendation.reason : getUpgradeChoiceReason(choice.id)}</em>
+        <em>升级前：${summary?.currentEffect ?? "基础配置"}</em>
         <em>升级后：${summary?.nextEffect ?? "已满级"}</em>
       `;
       button.addEventListener("click", () => launchRun(choice.id));
@@ -1002,6 +1031,83 @@ function shortUpgradeName(id: UpgradeId): string {
   return names[id];
 }
 
+function buildUpgradeRecommendation(detail: RunEndDetail, choices: Upgrade[]): UpgradeRecommendation | undefined {
+  const available = new Set(choices.map((choice) => choice.id));
+  const pick = (id: UpgradeId, label: string, reason: string): UpgradeRecommendation | undefined =>
+    available.has(id) ? { id, label, reason } : undefined;
+  const contractPick = buildContractUpgradeRecommendation(detail, pick);
+  const candidates: Array<UpgradeRecommendation | undefined> = [
+    contractPick,
+    detail.charge < 34 || detail.stats.lumenCollected < Math.max(3, detail.wave * 2)
+      ? pick("capacitor", "续航修正", "电量或流明回收偏低，电容能提高最大电量和补给收益。")
+      : undefined,
+    detail.stats.stormSeconds > 2.2
+      ? pick("engine", "风暴脱离", "紫色风暴停留偏久，引擎能让推进和转场更可靠。")
+      : undefined,
+    detail.stats.hitsTaken > 0 && detail.stats.pulseUses === 0
+      ? pick("pulse", "碎片控场", "本波受击但几乎没用脉冲，扩大脉冲更适合处理贴脸碎片。")
+      : undefined,
+    detail.stats.hitsTaken >= 2 || detail.hull < 52
+      ? pick("shield", "容错提升", "受击或剩余机体压力偏高，曜盾能降低碰撞惩罚。")
+      : undefined,
+    detail.elapsed > detail.wave * 58
+      ? pick("repair", "提速清波", "清波时间偏长，信标织机能缩短维修窗口并提高信标收益。")
+      : undefined,
+    detail.rating.points < 62
+      ? pick("repair", "评级提分", "当前评级还有提升空间，更快修复能减少耗电并稳定过波节奏。")
+      : undefined,
+    detail.stats.hitsTaken === 0 && detail.contract.status === "completed"
+      ? pick("repair", "冲分路线", "本波路线稳定，信标织机能把稳定操作转成更高分数。")
+      : undefined,
+    pick(choices[0]?.id ?? "engine", "均衡强化", "继续强化当前可选改装，为下一波更高密度路线保留余量。")
+  ];
+  return candidates.find(Boolean);
+}
+
+function buildContractUpgradeRecommendation(
+  detail: RunEndDetail,
+  pick: (id: UpgradeId, label: string, reason: string) => UpgradeRecommendation | undefined
+): UpgradeRecommendation | undefined {
+  if (detail.contract.status !== "failed") return undefined;
+  if (detail.contract.id === "lumenRoute") {
+    return pick("capacitor", "合约补给", "流明航线失败，下一波先强化续航和补给收益。");
+  }
+  if (detail.contract.id === "relayRush") {
+    return pick("repair", "速修补强", "速修信标失败，信标织机能直接缩短第一座信标维修时间。");
+  }
+  if (detail.contract.id === "cleanWave") {
+    return detail.stats.pulseUses === 0
+      ? pick("pulse", "无损控场", "无损合约失败且脉冲使用不足，先强化脉冲处理贴脸碎片。")
+      : pick("shield", "无损容错", "无损合约失败，曜盾能降低碰撞造成的整局损失。");
+  }
+  if (detail.contract.id === "stormSkipper") {
+    return pick("engine", "绕风暴", "风暴掠行失败，引擎能让你更快离开紫色区域。");
+  }
+  return pick("engine", "节奏控制", "脉冲节律失败，先强化移动能力，减少被迫交技能的情况。");
+}
+
+function getUpgradeRoleLabel(id: UpgradeId): string {
+  const labels: Record<UpgradeId, string> = {
+    engine: "机动",
+    repair: "维修",
+    capacitor: "续航",
+    pulse: "控场",
+    shield: "防护"
+  };
+  return labels[id];
+}
+
+function getUpgradeChoiceReason(id: UpgradeId): string {
+  const reasons: Record<UpgradeId, string> = {
+    engine: "提高移动和推进效率，适合穿出风暴、赶往远端信标。",
+    repair: "缩短按住维修的风险时间，也能提高信标得分。",
+    capacitor: "提高最大电量和流明回电，让修到一半撤出补给更安全。",
+    pulse: "扩大脉冲范围，把贴脸粉色碎片推远，保护维修窗口。",
+    shield: "提高机体上限并降低碰撞伤害，适合先稳住通关。"
+  };
+  return reasons[id];
+}
+
 function showHelpOverlay(reason: "manual" | "interruption" = "manual"): void {
   resetVirtualInput();
   if (latestStatus === "playing") {
@@ -1023,6 +1129,7 @@ function showHelpOverlay(reason: "manual" | "interruption" = "manual"): void {
       : "游戏已暂停，不会耗电或受击。先看战术扫描确认流明、信标、危险和光门，再继续执行当前目标。"
     : "目标不是乱飞，而是在电量压力下规划路线：先补流明，再修信标，最后从北侧光门撤离。";
   runRecap.hidden = true;
+  quickBrief.hidden = paused;
   gameDossier.hidden = false;
   launchBrief.hidden = false;
   firstMinuteRoute.hidden = false;

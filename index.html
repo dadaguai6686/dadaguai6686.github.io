@@ -128,22 +128,22 @@
             你是一台维修无人机。城市光网正在坍缩：修复蓝色信标、收集金色流明、
             避开紫色风暴和粉色碎片，在电量耗尽前冲进北侧光门。
           </p>
-          <div id="game-dossier" aria-label="任务档案">
-            <article>
-              <strong>玩法类型</strong>
-              <span>单局五波的漂移维修街机</span>
+          <div id="quick-brief" aria-label="首屏快速目标">
+            <article data-kind="lumen">
+              <b>先补给</b>
+              <span>吃金色流明</span>
             </article>
-            <article>
-              <strong>胜利条件</strong>
-              <span>修好 4 座信标后进北侧光门</span>
+            <article data-kind="relay">
+              <b>再维修</b>
+              <span>按住 E / 修复键</span>
             </article>
-            <article>
-              <strong>失败条件</strong>
-              <span>电量归零或机体被碎片击毁</span>
+            <article data-kind="danger">
+              <b>躲危险</b>
+              <span>避开风暴和碎片</span>
             </article>
-            <article>
-              <strong>成长循环</strong>
-              <span>过波选升级，代号路线可复盘</span>
+            <article data-kind="gate">
+              <b>撤离升级</b>
+              <span>进北侧光门</span>
             </article>
           </div>
           <div id="tactical-scan" hidden aria-label="暂停战术扫描">
@@ -174,6 +174,24 @@
           <p id="daily-detail">今日挑战会使用当天固定救援代号。</p>
           <button id="start-button" type="button">开始标准救援</button>
           <button id="resume-button" type="button" hidden>继续游戏</button>
+          <div id="game-dossier" aria-label="任务档案">
+            <article>
+              <strong>玩法类型</strong>
+              <span>单局五波的漂移维修街机</span>
+            </article>
+            <article>
+              <strong>胜利条件</strong>
+              <span>修好 4 座信标后进北侧光门</span>
+            </article>
+            <article>
+              <strong>失败条件</strong>
+              <span>电量归零或机体被碎片击毁</span>
+            </article>
+            <article>
+              <strong>成长循环</strong>
+              <span>过波选升级，代号路线可复盘</span>
+            </article>
+          </div>
           <div id="launch-brief" aria-label="出航简报">
             <svg id="launch-map" viewBox="0 0 360 210" role="img" aria-label="首局路线示意图">
               <defs>

@@ -12,6 +12,7 @@ assert.ok(html.includes('id="radar-panel"'), "desktop radar panel should exist i
 assert.ok(html.includes('id="tactical-scan"'), "pause tactical scan should exist in HTML");
 assert.ok(html.includes('id="wave-intro"'), "wave intro briefing should exist in HTML");
 assert.ok(html.includes('id="mission-toast"'), "in-run mission transition toast should exist in HTML");
+assert.ok(html.includes('id="quick-brief"'), "menu should expose a compact first-screen objective brief");
 assert.ok(html.includes('id="game-dossier"'), "menu should explain the game fantasy and win/loss loop");
 assert.ok(html.includes('id="launch-brief"'), "menu should include an illustrated launch briefing");
 assert.ok(html.includes('id="launch-map"'), "launch briefing should include a route map");
@@ -21,6 +22,9 @@ assert.ok(html.includes('role="list"'), "route coach progress rail should expose
 assert.ok(html.includes("首局作战令"), "launch briefing should provide first-run orders in Chinese");
 assert.ok(html.includes("安全读图"), "launch briefing should explain the safe opening read phase");
 assert.ok(html.includes("北侧撤离"), "launch briefing should explain the evacuation target");
+assert.ok(html.includes("先补给"), "quick brief should explain the opening supply verb");
+assert.ok(html.includes("再维修"), "quick brief should explain the repair verb before long docs");
+assert.ok(html.includes("撤离升级"), "quick brief should explain the wave clear and upgrade verb");
 assert.ok(html.includes("读图补电"), "first-minute route should explain the opening supply step in Chinese");
 assert.ok(html.includes("E / 修复键"), "visible control copy should support keyboard and touch repair controls");
 assert.ok(html.includes("Space / 推进键"), "visible control copy should support keyboard and touch boost controls");
@@ -29,6 +33,14 @@ assert.ok(!html.includes("Roguelite"), "visible genre copy should be localized t
 assert.ok(
   html.indexOf('id="start-button"') < html.indexOf('id="mission-brief"'),
   "primary start action should appear before long mission copy on mobile"
+);
+assert.ok(
+  html.indexOf('id="quick-brief"') < html.indexOf('id="start-button"'),
+  "compact first-screen objective brief should appear before the primary start action"
+);
+assert.ok(
+  html.indexOf('id="start-button"') < html.indexOf('id="game-dossier"'),
+  "primary start action should appear before detailed dossier cards on mobile"
 );
 assert.ok(
   html.indexOf('id="start-button"') < html.indexOf('id="launch-brief"'),
@@ -62,6 +74,11 @@ assert.ok(main.includes("setPointerCapture"), "touch controls should capture act
 assert.ok(input.includes("resetKeys()"), "keyboard input should expose a full Phaser key reset");
 assert.ok(gameScene.includes("this.resetInput();"), "scene should reset keyboard state at run and pause boundaries");
 assert.ok(!main.includes("<small>Lv "), "upgrade cards should use localized level labels");
+assert.ok(main.includes("buildUpgradeRecommendation"), "upgrade choices should explain a recommendation based on the last wave");
+assert.ok(main.includes("升级建议：优先"), "upgrade choices should show a localized recommendation header");
+assert.ok(main.includes("短板原因"), "upgrade choices should explain why an upgrade is recommended");
+assert.ok(main.includes("系统推荐"), "recommended upgrade cards should be visibly labeled in Chinese");
+assert.ok(main.includes("选择理由"), "each upgrade card should explain when to choose it");
 assert.ok(main.includes("createRadarNodes"), "radar and scan should share SVG node construction");
 assert.ok(main.includes("radar-guide"), "radar and scan should draw the current navigation guide");
 assert.ok(main.includes("导航 "), "radar summary should name the current guide target");
@@ -87,6 +104,7 @@ assert.ok(main.includes("score:"), "audio bus should include a score feedback so
 assert.ok(styles.includes("#radar-panel"), "desktop radar should have CSS");
 assert.ok(styles.includes("#tactical-scan"), "pause tactical scan should have CSS");
 assert.ok(styles.includes("#mission-toast"), "mission transition toast should have CSS");
+assert.ok(styles.includes("#quick-brief"), "compact first-screen objective brief should have CSS");
 assert.ok(styles.includes("#launch-brief"), "launch briefing should have CSS");
 assert.ok(styles.includes(".launch-route-line"), "launch route map should render an obvious route line");
 assert.ok(styles.includes(".radar-guide"), "radar guide should have CSS");
@@ -95,6 +113,9 @@ assert.ok(styles.includes("#coach-rail"), "route coach progress rail should have
 assert.ok(styles.includes('span[data-state="active"]'), "route coach should visually mark the active step");
 assert.ok(styles.includes("#game-dossier"), "mission dossier should have CSS");
 assert.ok(styles.includes("#first-minute-route"), "first-minute route should have CSS");
+assert.ok(styles.includes(".upgrade-brief"), "upgrade recommendation header should have CSS");
+assert.ok(styles.includes('[data-recommended="true"]'), "recommended upgrade cards should have a highlighted style");
+assert.ok(styles.includes(".upgrade-tag"), "upgrade cards should have a visible role or recommendation tag");
 assert.ok(styles.includes("touch-action: none"), "mobile controls should disable browser touch gestures");
 assert.ok(styles.includes('[data-active="true"]'), "touch buttons should expose an active pressed state");
 assert.ok(styles.includes("@media (pointer: coarse), (hover: none)"), "touch devices wider than phones should still get controls");
