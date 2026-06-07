@@ -822,6 +822,8 @@ async function run() {
     runLogEmpty: document.querySelector('#premium-run-log-panel')?.dataset.empty || '',
     runLogCards: document.querySelectorAll('.arcade-run-log-item').length,
     debugRuns: window.__atherixDebug?.premium?.runs?.().length || 0,
+    coachPanel: !!document.querySelector('#premium-run-coach-panel'),
+    coachEmpty: document.querySelector('#premium-run-coach-panel')?.dataset.empty || '',
     difficultyPanel: !!document.querySelector('#premium-difficulty-panel'),
     difficultyCards: document.querySelectorAll('.arcade-difficulty-card').length,
     activeDifficulty: window.__atherixDebug?.premium?.difficulty?.().active || '',
@@ -859,6 +861,15 @@ async function run() {
       runBestMode: document.querySelector('#premium-run-best-mode')?.textContent || '',
       masteryAfter: window.__atherixDebug?.premium?.mastery?.().find(item => item.game === 'survivor') || {},
       masteryCardText: document.querySelector('[data-mastery-game="survivor"]')?.textContent || '',
+      coach: window.__atherixDebug?.premium?.coach?.() || null,
+      coachTitle: document.querySelector('#premium-coach-title')?.textContent || '',
+      coachSummary: document.querySelector('#premium-coach-summary')?.textContent || '',
+      coachMedal: document.querySelector('#premium-coach-medal')?.textContent || '',
+      coachDelta: document.querySelector('#premium-coach-delta')?.textContent || '',
+      coachTarget: document.querySelector('#premium-coach-target')?.textContent || '',
+      coachLaunchTarget: document.querySelector('#premium-coach-launch')?.dataset.coachTargetGame || '',
+      coachDifficulty: document.querySelector('#premium-coach-difficulty')?.dataset.coachDifficulty || '',
+      coachLoadout: document.querySelector('#premium-coach-loadout')?.dataset.coachLoadout || '',
       toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || '',
       total: document.querySelector('#premium-career-total')?.textContent || ''
     };
@@ -1426,6 +1437,7 @@ async function run() {
   assert(arcadeInitial.oldPrototypeCount === 0, 'old prototype mini-games should be replaced');
   assert(arcadeInitial.premiumTabs >= 6 && arcadeInitial.driftPanel && arcadeInitial.tacticsPanel, 'premium arcade should include drift and tactics modes');
   assert(arcadeInitial.runLogPanel && arcadeInitial.runLogEmpty === 'true' && arcadeInitial.runLogCards === 0 && arcadeInitial.debugRuns === 0, `premium arcade run telemetry should start empty: ${JSON.stringify(arcadeInitial)}`);
+  assert(arcadeInitial.coachPanel && arcadeInitial.coachEmpty === 'true', `premium arcade post-run coach should start empty: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.directorPanel && arcadeInitial.directorTarget && arcadeInitial.directorTitle.length > 5 && arcadeInitial.directorReason.length > 10 && /^\d+%$/.test(arcadeInitial.directorCompletion) && arcadeInitial.tabBadges >= 6, `premium arcade director should render actionable progression guidance: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.masteryPanel && arcadeInitial.masteryCards === 7 && arcadeInitial.debugMastery === 7 && /奖牌路线/.test(arcadeInitial.masteryTitle) && arcadeInitial.masterySummary.length > 10, `premium arcade mastery map should render all mode goals: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.contractBoard && arcadeInitial.contractCards === 3 && arcadeInitial.debugContracts === 3 && arcadeInitial.firstContractProgress === 0, `premium arcade contracts should render as daily progression goals: ${JSON.stringify(arcadeInitial)}`);
@@ -1433,6 +1445,7 @@ async function run() {
   assert(arcadeInitial.loadoutPanel && arcadeInitial.loadoutCards === 4 && arcadeInitial.activeLoadout === 'pulse' && arcadeInitial.loadoutUnlocked >= 1, `premium arcade loadout chips should render with a default build: ${JSON.stringify(arcadeInitial)}`);
   assert(contractProgressState.afterContracts === 3 && contractProgressState.cards === 3 && contractProgressState.afterFirst > contractProgressState.beforeFirst && /总声望/.test(contractProgressState.total), `premium arcade contracts should advance after a scored run: ${JSON.stringify(contractProgressState)}`);
   assert(contractProgressState.runCards >= 1 && contractProgressState.debugRuns === 1 && contractProgressState.latestRunGame === 'survivor' && contractProgressState.latestRunScore >= 900 && contractProgressState.latestRunDifficulty === 'standard', `premium arcade should record a replayable run log after scoring: ${JSON.stringify(contractProgressState)}`);
+  assert(contractProgressState.coach?.game === 'survivor' && /星核幸存者/.test(contractProgressState.coachTitle) && /铜牌/.test(contractProgressState.coachMedal) && /^\+/.test(contractProgressState.coachDelta) && /银牌/.test(contractProgressState.coachTarget) && contractProgressState.coachLaunchTarget === 'survivor' && contractProgressState.coachDifficulty === 'elite' && contractProgressState.coachLoadout === 'overdrive', `premium arcade coach should provide actionable post-run guidance: ${JSON.stringify(contractProgressState)}`);
   assert(
     contractProgressState.masteryAfter.score >= 900 &&
     contractProgressState.masteryAfter.progress > 0 &&

@@ -4378,6 +4378,147 @@ body.command-open {
   background: rgba(15, 23, 42, 0.34);
 }
 
+.arcade-coach-panel {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.2fr) minmax(260px, 1fr) minmax(220px, 0.9fr);
+  align-items: stretch;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem;
+  border: 1px solid rgba(167, 139, 250, 0.24);
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(167, 139, 250, 0.13), rgba(34, 211, 238, 0.07)),
+    rgba(3, 7, 18, 0.5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.arcade-coach-panel[data-empty="true"] {
+  border-color: rgba(148, 163, 184, 0.18);
+  background:
+    linear-gradient(135deg, rgba(148, 163, 184, 0.08), rgba(167, 139, 250, 0.05)),
+    rgba(3, 7, 18, 0.42);
+}
+
+.arcade-coach-panel[data-medal="gold"] {
+  border-color: rgba(251, 191, 36, 0.34);
+  background:
+    linear-gradient(135deg, rgba(251, 191, 36, 0.13), rgba(34, 211, 238, 0.07)),
+    rgba(3, 7, 18, 0.5);
+}
+
+.arcade-coach-panel[data-medal="silver"] {
+  border-color: rgba(226, 232, 240, 0.3);
+}
+
+.arcade-coach-panel[data-medal="bronze"] {
+  border-color: rgba(251, 146, 60, 0.3);
+}
+
+.arcade-coach-heading {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.arcade-coach-heading span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #ddd6fe;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.arcade-coach-heading svg,
+.arcade-coach-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+.arcade-coach-heading strong {
+  color: #fff;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.02rem;
+  line-height: 1.2;
+}
+
+.arcade-coach-heading small {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.38;
+}
+
+.arcade-coach-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.arcade-coach-grid span {
+  min-height: 78px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.2rem;
+  padding: 0.62rem;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.46);
+}
+
+.arcade-coach-grid small {
+  color: var(--text-muted);
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+
+.arcade-coach-grid strong {
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82rem;
+  line-height: 1.25;
+}
+
+.arcade-coach-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.48rem;
+}
+
+.arcade-coach-action {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.38rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.56);
+  color: #e2e8f0;
+  font-size: 0.72rem;
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.arcade-coach-primary {
+  border-color: rgba(34, 211, 238, 0.34);
+  background: rgba(34, 211, 238, 0.13);
+  color: #ecfeff;
+}
+
+.arcade-coach-action:hover,
+.arcade-coach-action:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(34, 211, 238, 0.42);
+  background: rgba(34, 211, 238, 0.16);
+}
+
 .arcade-director-panel {
   display: grid;
   grid-template-columns: minmax(240px, 1.2fr) minmax(230px, 0.85fr) auto;
@@ -5895,6 +6036,10 @@ body.command-open {
     grid-template-columns: 1fr;
   }
   .arcade-run-log-stats {
+    grid-template-columns: 1fr;
+  }
+  .arcade-coach-panel,
+  .arcade-coach-grid {
     grid-template-columns: 1fr;
   }
   .arcade-mastery-heading,

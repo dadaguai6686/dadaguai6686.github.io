@@ -1,9 +1,9 @@
-const CACHE_VERSION = 'atherix-static-v14-reader-path';
+const CACHE_VERSION = 'atherix-static-v15-arcade-coach';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/style.css?v=20260607-reader-path-v1',
-  '/app.js?v=20260607-reader-path-v1',
+  '/style.css?v=20260607-arcade-coach-v1',
+  '/app.js?v=20260607-arcade-coach-v1',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',

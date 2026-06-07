@@ -4533,6 +4533,32 @@ function init() {
         </div>
         <div class="arcade-run-log-list" id="premium-run-log-list"></div>
       </div>
+      <div class="arcade-coach-panel" id="premium-run-coach-panel" data-empty="true" aria-label="街机赛后教练">
+        <div class="arcade-coach-heading">
+          <span><i data-lucide="sparkles"></i> POST-RUN COACH</span>
+          <strong id="premium-coach-title">等待赛后复盘</strong>
+          <small id="premium-coach-summary">完成一局后，系统会根据奖牌、纪录和装备推荐下一把训练目标。</small>
+        </div>
+        <div class="arcade-coach-grid" aria-label="赛后复盘指标">
+          <span><small>奖牌推进</small><strong id="premium-coach-medal">--</strong></span>
+          <span><small>纪录变化</small><strong id="premium-coach-delta">--</strong></span>
+          <span><small>下一目标</small><strong id="premium-coach-target">--</strong></span>
+        </div>
+        <div class="arcade-coach-actions">
+          <button type="button" class="arcade-coach-action arcade-coach-primary" id="premium-coach-launch" data-coach-target-game="survivor">
+            <i data-lucide="crosshair"></i>
+            <span>进入复盘目标</span>
+          </button>
+          <button type="button" class="arcade-coach-action" id="premium-coach-difficulty" data-coach-difficulty="standard">
+            <i data-lucide="gauge"></i>
+            <span>切换推荐难度</span>
+          </button>
+          <button type="button" class="arcade-coach-action" id="premium-coach-loadout" data-coach-loadout="pulse">
+            <i data-lucide="cpu"></i>
+            <span>装备推荐芯片</span>
+          </button>
+        </div>
+      </div>
       <div class="arcade-director-panel" id="premium-arcade-director" data-tone="daily" aria-label="街机导演推荐">
         <div class="arcade-director-main">
           <span><i data-lucide="target"></i> NEXT RUN</span>
@@ -5282,6 +5308,113 @@ function init() {
         : '<div class="arcade-run-empty">暂无战报。完成一局高级街机后会自动生成复盘记录。</div>';
     }
 
+    function preferredCoachLoadout(game) {
+      const map = {
+        survivor: 'overdrive',
+        boss: 'aegis',
+        drift: 'overdrive',
+        heist: 'strategist',
+        chain: 'strategist',
+        tactics: 'strategist',
+        runner: 'pulse'
+      };
+      const preferred = loadoutDefs.find(def => def.id === map[game] && loadoutUnlocked(def));
+      return preferred || activeLoadoutDef();
+    }
+
+    function preferredCoachDifficulty(run, status) {
+      const bronze = (medalRules[run.game] || []).find(rule => rule.name === 'bronze')?.threshold || 0;
+      if (bronze && run.score < bronze * 0.78) return difficultyDefs.find(def => def.id === 'training') || activeDifficultyDef();
+      if (status.medal === 'gold') return difficultyDefs.find(def => def.id === 'nightmare') || activeDifficultyDef();
+      if (status.medal !== 'none') return difficultyDefs.find(def => def.id === 'elite') || activeDifficultyDef();
+      return activeDifficultyDef();
+    }
+
+    function coachFocusCopy(game) {
+      const copy = {
+        survivor: '优先清精英赏金，留 Space 超载处理陨雨与精英跃迁。',
+        boss: '练擦弹攒专注，等弱点窗口再冲刺贴近破招。',
+        drift: '保留 Q 相位刹车给高热度路段，连续 PERFECT 门能快速拉开劲敌。',
+        heist: '先扫路线再拿缓存，诱饵留给摄像头与守卫交叉区。',
+        chain: '先看提示预览，优先做 9 连与配方颜色，催化留给超载大团。',
+        tactics: '沿推荐路线吃掩体动量，爆破窗口优先打断锁定单位。',
+        runner: '先拿水晶与信标，冲刺留给连段窗口和航线合约。'
+      };
+      return copy[game] || '保持节奏，围绕下一枚奖牌目标打一局。';
+    }
+
+    function latestRunCoach() {
+      const run = Array.isArray(career.runs) ? career.runs[0] : null;
+      if (!run) return null;
+      const status = masteryStatusForGame(run.game);
+      const difficulty = preferredCoachDifficulty(run, status);
+      const loadout = preferredCoachLoadout(run.game);
+      const improved = Number(run.score || 0) > Number(run.previousBest || 0);
+      const deltaText = improved
+        ? `+${Math.max(0, Number(run.score || 0) - Number(run.previousBest || 0))}`
+        : '保持纪录';
+      return {
+        game: run.game,
+        gameLabel: premiumTabLabels[run.game] || titles[run.game] || run.game,
+        score: Number(run.score || 0),
+        medal: run.medal || 'none',
+        medalLabel: medalLabels[run.medal] || medalLabels.none,
+        improved,
+        deltaText,
+        previousBest: Number(run.previousBest || 0),
+        targetLabel: status.delta > 0 ? `${status.targetLabel} 差 ${status.delta}` : '金牌完成，刷新极限',
+        summary: coachFocusCopy(run.game),
+        difficulty: difficulty.id,
+        difficultyLabel: difficulty.short,
+        loadout: loadout.id,
+        loadoutLabel: loadout.label
+      };
+    }
+
+    function renderArcadeCoach() {
+      const panel = document.getElementById('premium-run-coach-panel');
+      if (!panel) return;
+      const coach = latestRunCoach();
+      const titleEl = document.getElementById('premium-coach-title');
+      const summaryEl = document.getElementById('premium-coach-summary');
+      const medalEl = document.getElementById('premium-coach-medal');
+      const deltaEl = document.getElementById('premium-coach-delta');
+      const targetEl = document.getElementById('premium-coach-target');
+      const launchBtn = document.getElementById('premium-coach-launch');
+      const difficultyBtn = document.getElementById('premium-coach-difficulty');
+      const loadoutBtn = document.getElementById('premium-coach-loadout');
+      panel.dataset.empty = coach ? 'false' : 'true';
+
+      if (!coach) {
+        delete panel.dataset.medal;
+        if (titleEl) titleEl.textContent = '等待赛后复盘';
+        if (summaryEl) summaryEl.textContent = '完成一局后，系统会根据奖牌、纪录和装备推荐下一把训练目标。';
+        if (medalEl) medalEl.textContent = '--';
+        if (deltaEl) deltaEl.textContent = '--';
+        if (targetEl) targetEl.textContent = '--';
+        return;
+      }
+
+      panel.dataset.medal = coach.medal;
+      if (titleEl) titleEl.textContent = `${coach.gameLabel} · ${coach.score}`;
+      if (summaryEl) summaryEl.textContent = coach.summary;
+      if (medalEl) medalEl.textContent = `${coach.medalLabel}牌`;
+      if (deltaEl) deltaEl.textContent = coach.deltaText;
+      if (targetEl) targetEl.textContent = coach.targetLabel;
+      if (launchBtn) {
+        launchBtn.dataset.coachTargetGame = coach.game;
+        launchBtn.querySelector('span').textContent = coach.game === 'runner' ? '前往主线复盘' : `再战 ${coach.gameLabel}`;
+      }
+      if (difficultyBtn) {
+        difficultyBtn.dataset.coachDifficulty = coach.difficulty;
+        difficultyBtn.querySelector('span').textContent = `推荐难度：${coach.difficultyLabel}`;
+      }
+      if (loadoutBtn) {
+        loadoutBtn.dataset.coachLoadout = coach.loadout;
+        loadoutBtn.querySelector('span').textContent = `推荐芯片：${coach.loadoutLabel}`;
+      }
+    }
+
     function loadoutUnlocked(def) {
       try {
         return !!def.unlock();
@@ -5620,6 +5753,7 @@ function init() {
       }
       renderAchievementFeed();
       renderArcadeRunLog();
+      renderArcadeCoach();
       renderArcadeDirector();
       renderArcadeMasteryMap();
       renderArcadeContracts();
@@ -5645,6 +5779,8 @@ function init() {
       const value = Math.max(0, Math.floor(rawValue * (1 + scoreBoost)));
       career.totalScore = Math.max(0, (career.totalScore || 0) + value);
       career.plays = (career.plays || 0) + 1;
+      const previousBest = Number(career.best[game] || 0);
+      const previousMedal = medalClass(career.medals[game] || medalFor(game, previousBest));
       career.best[game] = Math.max(Number(career.best[game] || 0), value);
       const medal = medalFor(game, value);
       if ((medalRank[medal] || 0) > (medalRank[career.medals[game] || 'none'] || 0)) {
@@ -5658,6 +5794,8 @@ function init() {
           rawScore: rawValue,
           score: value,
           medal,
+          previousBest,
+          previousMedal,
           difficulty: difficulty.id,
           loadout: loadout.id
         },
@@ -5694,6 +5832,7 @@ function init() {
       setDifficulty: setArcadeDifficulty,
       mastery: () => careerGameOrder.map(masteryStatusForGame),
       runs: () => (Array.isArray(career.runs) ? career.runs : []).map(run => ({ ...run })),
+      coach: () => latestRunCoach(),
       contracts: () => getDailyContracts().map(contract => ({
         id: contract.id,
         title: contract.title,
@@ -5787,6 +5926,23 @@ function init() {
     }
 
     document.getElementById('premium-director-start')?.addEventListener('click', launchDirectorChallenge);
+    document.getElementById('premium-coach-launch')?.addEventListener('click', () => {
+      const target = document.getElementById('premium-coach-launch')?.dataset.coachTargetGame || latestRunCoach()?.game;
+      if (!target) return;
+      if (target === 'runner') {
+        document.querySelector('.arcade-cabinet-bezel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        showToast('已定位到主线复盘目标', 'info');
+        return;
+      }
+      switchPremiumGame(target);
+      showToast(`已进入复盘目标：${titles[target] || target}`, 'success');
+    });
+    document.getElementById('premium-coach-difficulty')?.addEventListener('click', () => {
+      setArcadeDifficulty(document.getElementById('premium-coach-difficulty')?.dataset.coachDifficulty);
+    });
+    document.getElementById('premium-coach-loadout')?.addEventListener('click', () => {
+      setActiveLoadout(document.getElementById('premium-coach-loadout')?.dataset.coachLoadout);
+    });
 
     library.querySelectorAll('[data-premium-game]').forEach(btn => {
       btn.addEventListener('click', () => switchPremiumGame(btn.dataset.premiumGame));
@@ -10912,6 +11068,7 @@ function init() {
           })),
           contracts: () => window.atherixArcadeCareer?.contracts?.() || [],
           runs: () => window.atherixArcadeCareer?.runs?.() || [],
+          coach: () => window.atherixArcadeCareer?.coach?.() || null,
           loadout: () => window.atherixArcadeCareer?.loadout?.() || {},
           difficulty: () => window.atherixArcadeCareer?.difficulty?.() || {},
           mastery: () => window.atherixArcadeCareer?.mastery?.() || []
