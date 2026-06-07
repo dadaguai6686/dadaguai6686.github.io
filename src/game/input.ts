@@ -20,9 +20,11 @@ declare global {
 }
 
 export class InputMapper {
+  private readonly keyboard: Phaser.Input.Keyboard.KeyboardPlugin;
   private readonly keys: Record<string, Phaser.Input.Keyboard.Key>;
 
   constructor(keyboard: Phaser.Input.Keyboard.KeyboardPlugin) {
+    this.keyboard = keyboard;
     this.keys = keyboard.addKeys({
       up: "W",
       down: "S",
@@ -60,5 +62,9 @@ export class InputMapper {
       repair: this.keys.repair.isDown || virtualInput.repair,
       pulse: this.keys.pulse.isDown || virtualInput.pulse
     };
+  }
+
+  reset(): void {
+    this.keyboard.resetKeys();
   }
 }

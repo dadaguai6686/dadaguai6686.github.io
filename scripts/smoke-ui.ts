@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 
 const html = readFileSync("index.html", "utf8");
 const gameScene = readFileSync("src/game/GameScene.ts", "utf8");
+const input = readFileSync("src/game/input.ts", "utf8");
 const main = readFileSync("src/main.ts", "utf8");
 const styles = readFileSync("src/styles.css", "utf8");
 
@@ -35,6 +36,8 @@ assert.ok(main.includes('document.addEventListener("visibilitychange"'), "page v
 assert.ok(main.includes("resetVirtualInput"), "touch input should reset when pausing or losing focus");
 assert.ok(main.includes("lostpointercapture"), "touch controls should recover when pointer capture is lost");
 assert.ok(main.includes("setPointerCapture"), "touch controls should capture active pointers");
+assert.ok(input.includes("resetKeys()"), "keyboard input should expose a full Phaser key reset");
+assert.ok(gameScene.includes("this.resetInput();"), "scene should reset keyboard state at run and pause boundaries");
 assert.ok(!main.includes("<small>Lv "), "upgrade cards should use localized level labels");
 assert.ok(main.includes("createRadarNodes"), "radar and scan should share SVG node construction");
 assert.ok(gameScene.includes("SECTOR_VISUALS"), "Phaser scene should define sector-specific visual styles");

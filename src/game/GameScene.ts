@@ -222,8 +222,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   startRunWithUpgrade(upgradeId?: UpgradeId, difficulty?: DifficultyId, routeSeed?: number): void {
+    this.resetInput();
     this.state = restartRun(this.state, upgradeId, { difficulty, routeSeed });
     this.createWorld();
+    this.resetInput();
     this.renderState();
     this.emitHud();
   }
@@ -234,10 +236,13 @@ export class GameScene extends Phaser.Scene {
       this.startRunWithUpgrade(detail?.upgradeId, detail?.difficulty, detail?.routeSeed);
     });
     window.addEventListener("game:pause", () => {
+      this.resetInput();
       this.state = pauseRun(this.state);
+      this.resetInput();
       this.emitHud();
     });
     window.addEventListener("game:resume", () => {
+      this.resetInput();
       this.state = resumeRun(this.state);
       this.emitHud();
     });
@@ -249,6 +254,10 @@ export class GameScene extends Phaser.Scene {
         this.renderState();
       }
     });
+  }
+
+  private resetInput(): void {
+    this.inputMapper?.reset();
   }
 
   private createWorld(): void {
