@@ -290,6 +290,14 @@ function init() {
     return document.activeElement === element;
   }
 
+  function moveFocusBeforeHiding(container, fallback) {
+    const active = document.activeElement;
+    if (!container || !active || !container.contains(active)) return true;
+    if (restoreFocusTo(fallback) || restoreFocusTo(mainContent)) return true;
+    if (typeof active.blur === 'function') active.blur();
+    return !container.contains(document.activeElement);
+  }
+
   function focusInitialElement(container) {
     if (!container) return;
     const preferred = container.querySelector('[data-autofocus], input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), select:not([disabled])');
@@ -755,13 +763,11 @@ function init() {
     if (!commandPalette) return;
     const { restoreFocus = true } = options;
     const focusTarget = commandPaletteFocusOrigin || commandTrigger;
+    moveFocusBeforeHiding(commandPalette, restoreFocus ? (focusTarget || commandTrigger) : mainContent);
     commandPalette.classList.remove('active');
     commandPalette.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('command-open');
     commandPaletteFocusOrigin = null;
-    if (restoreFocus) {
-      requestAnimationFrame(() => restoreFocusTo(focusTarget || commandTrigger));
-    }
   }
 
   function executeCommandItem(index = commandActiveIndex) {
@@ -992,11 +998,9 @@ function init() {
     if (!modalEl) return;
     const { restoreFocus = true } = options;
     const focusTarget = modalFocusOrigins.get(modalEl);
+    moveFocusBeforeHiding(modalEl, restoreFocus ? focusTarget : mainContent);
     modalEl.classList.remove('active');
     modalEl.setAttribute('aria-hidden', 'true');
-    if (restoreFocus) {
-      requestAnimationFrame(() => restoreFocusTo(focusTarget));
-    }
     modalFocusOrigins.delete(modalEl);
     const timer = setTimeout(() => {
       modalEl.style.display = 'none';
@@ -6708,12 +6712,14 @@ function init() {
     function setCareerDialogOpen(open) {
       if (!careerDialog) return;
       renderCareerDialog();
-      careerDialog.classList.toggle('active', open);
-      careerDialog.setAttribute('aria-hidden', open ? 'false' : 'true');
       if (open) {
-        careerCloseBtn?.focus({ preventScroll: true });
+        careerDialog.classList.add('active');
+        careerDialog.setAttribute('aria-hidden', 'false');
+        restoreFocusTo(careerCloseBtn);
       } else {
-        careerOpenBtn?.focus({ preventScroll: true });
+        moveFocusBeforeHiding(careerDialog, careerOpenBtn);
+        careerDialog.classList.remove('active');
+        careerDialog.setAttribute('aria-hidden', 'true');
       }
     }
 
@@ -7685,6 +7691,7 @@ function init() {
       const draft = document.getElementById('premium-survivor-draft');
       const options = document.getElementById('premium-survivor-draft-options');
       if (draft) {
+        moveFocusBeforeHiding(draft, stage);
         draft.classList.remove('active');
         draft.setAttribute('aria-hidden', 'true');
       }
@@ -7696,6 +7703,7 @@ function init() {
       const options = document.getElementById('premium-survivor-draft-options');
       const title = document.getElementById('premium-survivor-draft-title');
       if (!draft || !options || !survivor.player) return;
+      if (!survivor.draftOpen) moveFocusBeforeHiding(draft, stage);
       draft.classList.toggle('active', survivor.draftOpen);
       draft.setAttribute('aria-hidden', survivor.draftOpen ? 'false' : 'true');
       if (title) title.textContent = `选择第 ${survivor.player.level} 级改造`;

@@ -1,9 +1,10 @@
-const CACHE_VERSION = 'atherix-static-v25-readable-links';
+const CACHE_VERSION = 'atherix-static-v26-offline-polish';
+const NAVIGATION_FALLBACK_URL = '/index.html';
 const STATIC_ASSETS = [
   '/',
-  '/index.html',
-  '/style.css?v=20260608-readable-links-v3',
-  '/app.js?v=20260608-readable-links-v3',
+  NAVIGATION_FALLBACK_URL,
+  '/style.css?v=20260608-offline-polish-v4',
+  '/app.js?v=20260608-offline-polish-v4',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',
@@ -23,15 +24,60 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
+  const navigationPreloadReady = self.registration.navigationPreload
+    ? self.registration.navigationPreload.enable().catch(() => undefined)
+    : Promise.resolve();
   event.waitUntil(
-    caches.keys()
+    Promise.all([
+      navigationPreloadReady,
+      caches.keys()
       .then(keys => Promise.all(keys
         .filter(key => key !== CACHE_VERSION)
         .map(key => caches.delete(key))
       ))
+    ])
       .then(() => self.clients.claim())
   );
 });
+
+async function cacheResponse(cacheKey, response) {
+  if (!response || !response.ok) return;
+  const clone = response.clone();
+  const cache = await caches.open(CACHE_VERSION);
+  await cache.put(cacheKey, clone);
+}
+
+async function navigationFallback(preloadResponse, request) {
+  try {
+    const preload = await preloadResponse;
+    if (preload) {
+      cacheResponse(NAVIGATION_FALLBACK_URL, preload);
+      return preload;
+    }
+  } catch {
+    // Continue to normal network fetch and then cached app shell fallback.
+  }
+
+  try {
+    const response = await fetch(request);
+    cacheResponse(NAVIGATION_FALLBACK_URL, response);
+    return response;
+  } catch {
+    const cached = await caches.match(NAVIGATION_FALLBACK_URL) || await caches.match('/');
+    if (cached) {
+      const body = await cached.text();
+      const headers = new Headers(cached.headers);
+      headers.set('X-Atherix-Offline-Shell', 'true');
+      headers.set('Cache-Control', 'no-store');
+      return new Response(body, { status: 200, statusText: 'OK', headers });
+    }
+    return new Response('<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>Atherix Offline</title><body><main><h1>Atherix 离线模式</h1><p>应用壳还没有完成缓存，请联网打开一次后再回来。</p></main></body></html>', {
+      status: 503,
+      statusText: 'Offline',
+      headers: { 'Content-Type': 'text/html; charset=utf-8', 'X-Atherix-Offline-Shell': 'true' }
+    });
+  }
+}
 
 self.addEventListener('fetch', (event) => {
   const request = event.request;
@@ -43,15 +89,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request)
-        .then(response => {
-          const clone = response.clone();
-          caches.open(CACHE_VERSION).then(cache => cache.put('/index.html', clone));
-          return response;
-        })
-        .catch(() => caches.match('/index.html'))
-    );
+    event.respondWith(navigationFallback(event.preloadResponse, request));
     return;
   }
 
@@ -60,8 +98,7 @@ self.addEventListener('fetch', (event) => {
       fetch(request)
         .then(response => {
           if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_VERSION).then(cache => cache.put(request, clone));
+            cacheResponse(request, response);
           }
           return response;
         })
@@ -74,8 +111,7 @@ self.addEventListener('fetch', (event) => {
     caches.match(request).then(cached => {
       const network = fetch(request).then(response => {
         if (response.ok) {
-          const clone = response.clone();
-          caches.open(CACHE_VERSION).then(cache => cache.put(request, clone));
+          cacheResponse(request, response);
         }
         return response;
       });

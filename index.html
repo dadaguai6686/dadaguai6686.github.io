@@ -32,8 +32,12 @@
   <link rel="alternate" type="application/rss+xml" title="Atherix Digital Space Feed" href="https://dadaguai6686.github.io/feed.xml">
   <link rel="icon" href="/assets/atherix-icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/assets/atherix-icon-192.png">
+  <link rel="preconnect" href="https://images.unsplash.com">
+  <link rel="preload" href="/style.css?v=20260608-offline-polish-v4" as="style">
+  <link rel="preload" href="/lucide.min.js" as="script">
+  <link rel="preload" href="/app.js?v=20260608-offline-polish-v4" as="script">
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="/style.css?v=20260608-readable-links-v3">
+  <link rel="stylesheet" href="/style.css?v=20260608-offline-polish-v4">
   <link rel="manifest" href="/manifest.webmanifest">
   <!-- Lucide Icons Local -->
   <script src="/lucide.min.js"></script>
@@ -112,7 +116,7 @@
         <div class="glass-card col-span-2 row-span-2 profile-card">
           <div class="profile-header">
             <div class="avatar-wrapper">
-              <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150" alt="Avatar" class="avatar-img" id="profile-avatar">
+              <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150" alt="Avatar" class="avatar-img" id="profile-avatar" loading="eager" decoding="async" fetchpriority="high">
               <div class="status-dot"></div>
             </div>
             <div class="profile-info">
@@ -579,12 +583,12 @@
               <div class="image-preview-panel" style="display: none;" id="image-preview-panel">
                 <div class="image-card">
                   <div class="stat-label">原始图片</div>
-                  <img id="orig-img-preview" src="" alt="Original Preview">
+                  <img id="orig-img-preview" src="" alt="Original Preview" loading="lazy" decoding="async">
                   <div class="image-details" id="orig-img-details">文件大小: <span>-</span></div>
                 </div>
                 <div class="image-card">
                   <div class="stat-label">压缩转换后</div>
-                  <img id="comp-img-preview" src="" alt="Compressed Preview">
+                  <img id="comp-img-preview" src="" alt="Compressed Preview" loading="lazy" decoding="async">
                   <div class="image-details" id="comp-img-details">预计大小: <span>-</span> (节约: <span>-</span>)</div>
                 </div>
               </div>
@@ -1226,7 +1230,7 @@
       </div>
       <h2 class="modal-title" id="modal-project-title">项目名称</h2>
       <div class="modal-banner">
-        <img id="modal-project-img" src="" alt="Project Banner">
+        <img id="modal-project-img" src="" alt="Project Banner" loading="lazy" decoding="async">
       </div>
       <div class="modal-text">
         <div class="modal-section">
@@ -1259,11 +1263,11 @@
       <form id="admin-login-form" style="display: flex; flex-direction: column; gap: 1.2rem;">
         <div class="form-group">
           <label for="admin-username">用户名</label>
-          <input type="text" id="admin-username" class="form-input" required placeholder="输入管理员账号" style="padding: 0.6rem 0.8rem;">
+          <input type="text" id="admin-username" class="form-input" required autocomplete="username" placeholder="输入管理员账号" style="padding: 0.6rem 0.8rem;">
         </div>
         <div class="form-group">
           <label for="admin-password">密码</label>
-          <input type="password" id="admin-password" class="form-input" required placeholder="输入登录密码" style="padding: 0.6rem 0.8rem;">
+          <input type="password" id="admin-password" class="form-input" required autocomplete="current-password" placeholder="输入登录密码" style="padding: 0.6rem 0.8rem;">
         </div>
         <div id="login-error-msg" class="json-error" style="text-align: center; font-size: 0.8rem; color: var(--danger); display: none;"></div>
         <button type="submit" class="action-btn action-btn-primary" style="justify-content: center; height: 38px;">
@@ -1397,6 +1401,6 @@
   <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <!-- Main JavaScript File -->
-  <script src="/app.js?v=20260608-readable-links-v3"></script>
+  <script src="/app.js?v=20260608-offline-polish-v4"></script>
 </body>
 </html>

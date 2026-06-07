@@ -133,12 +133,20 @@ async function run() {
     const serviceWorkerText = await serviceWorkerScript.text();
     assert(serviceWorkerText.includes('/feed.xml') && serviceWorkerText.includes('/sitemap.xml'), 'service worker should precache discovery metadata');
     assert(serviceWorkerText.includes('/assets/atherix-og-card.png') && serviceWorkerText.includes('/assets/atherix-icon-512.png'), 'service worker should precache branded PWA assets');
+    assert(serviceWorkerText.includes('atherix-static-v26-offline-polish'), 'service worker should use the latest offline-polish cache version');
+    assert(serviceWorkerText.includes('NAVIGATION_FALLBACK_URL') && serviceWorkerText.includes('navigationPreload') && serviceWorkerText.includes('X-Atherix-Offline-Shell'), 'service worker should provide a navigation-preload offline app shell');
+    assert(serviceWorkerText.includes('/style.css?v=20260608-offline-polish-v4') && serviceWorkerText.includes('/app.js?v=20260608-offline-polish-v4'), 'service worker should precache the latest versioned app assets');
 
     const indexHtml = await fetch(`${baseUrl}/`);
     const indexText = await indexHtml.text();
     assert(indexText.includes('rel="canonical" href="https://dadaguai6686.github.io/"'), 'index should expose an absolute canonical URL');
     assert(indexText.includes('type="application/rss+xml"'), 'index should link the RSS feed');
     assert(indexText.includes('href="/style.css') && indexText.includes('src="/app.js') && indexText.includes('src="/lucide.min.js"'), 'local app assets should use root-absolute URLs for deep links');
+    assert(indexText.includes('href="/style.css?v=20260608-offline-polish-v4"') && indexText.includes('src="/app.js?v=20260608-offline-polish-v4"'), 'index should reference the latest versioned app assets');
+    assert(indexText.includes('rel="preload" href="/style.css?v=20260608-offline-polish-v4" as="style"') && indexText.includes('rel="preload" href="/app.js?v=20260608-offline-polish-v4" as="script"') && indexText.includes('rel="preload" href="/lucide.min.js" as="script"'), 'index should preload critical local app assets');
+    assert(indexText.includes('rel="preconnect" href="https://images.unsplash.com"'), 'index should preconnect to the external avatar image origin');
+    assert(indexText.includes('id="admin-username"') && indexText.includes('autocomplete="username"') && indexText.includes('id="admin-password"') && indexText.includes('autocomplete="current-password"'), 'admin login inputs should include autocomplete hints');
+    assert(indexText.includes('id="profile-avatar" loading="eager" decoding="async" fetchpriority="high"') && indexText.includes('id="modal-project-img" src="" alt="Project Banner" loading="lazy" decoding="async"'), 'key images should expose loading and decoding hints');
     assert(indexText.includes('property="og:image" content="https://dadaguai6686.github.io/assets/atherix-og-card.png"'), 'index should expose the local branded Open Graph image');
     assert(indexText.includes('name="twitter:image" content="https://dadaguai6686.github.io/assets/atherix-og-card.png"'), 'index should expose the local Twitter card image');
     assert(indexText.includes('rel="apple-touch-icon" href="/assets/atherix-icon-192.png"'), 'index should expose an Apple touch icon');

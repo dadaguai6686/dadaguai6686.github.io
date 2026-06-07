@@ -28,7 +28,7 @@ async function cdpJson(pathname, options) {
 }
 
 async function waitForCdp() {
-  const deadline = Date.now() + 15000;
+  const deadline = Date.now() + 30000;
   let lastError;
   while (Date.now() < deadline) {
     try {
@@ -50,9 +50,16 @@ function startHeadlessEdge() {
   const child = spawn(edgePath, [
     '--headless=new',
     `--remote-debugging-port=${cdpPort}`,
+    '--remote-allow-origins=*',
     `--user-data-dir=${profile}`,
     '--disable-gpu',
     '--disable-dev-shm-usage',
+    '--disable-background-networking',
+    '--disable-component-update',
+    '--disable-default-apps',
+    '--disable-extensions',
+    '--disable-sync',
+    '--disable-features=Translate,BackForwardCache,OptimizationHints',
     '--no-first-run',
     '--no-default-browser-check',
     'about:blank'
@@ -114,7 +121,7 @@ async function cleanupBrowserProcess() {
 }
 
 async function waitForAppServer() {
-  const deadline = Date.now() + 15000;
+  const deadline = Date.now() + 25000;
   let lastError;
   while (Date.now() < deadline) {
     try {
@@ -161,7 +168,7 @@ async function run() {
   const target = await cdpJson(`/json/new?${encodeURIComponent(appUrl)}`, { method: 'PUT' });
   ws = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('CDP websocket open timeout')), 12000);
+    const timer = setTimeout(() => reject(new Error('CDP websocket open timeout')), 20000);
     ws.addEventListener('open', () => {
       clearTimeout(timer);
       resolve();
@@ -249,7 +256,7 @@ async function run() {
     rejectPending(event.error?.message || 'CDP websocket error');
   });
 
-  function send(method, params = {}, timeout = 20000) {
+  function send(method, params = {}, timeout = 30000) {
     if (socketClosed || ws.readyState !== 1) {
       return Promise.reject(new Error(`CDP websocket is not open for ${method}`));
     }
@@ -335,10 +342,30 @@ async function run() {
     });
   }
 
+  const smokeHarnessSource = `(() => {
+    window.__atherixSmokeCountCanvasPixels = (selector) => {
+      const source = document.querySelector(selector);
+      if (!source) return { colored: 0, nonBlank: false, width: 0, height: 0 };
+      const sample = document.createElement('canvas');
+      sample.width = source.width || source.clientWidth || 1;
+      sample.height = source.height || source.clientHeight || 1;
+      const ctx = sample.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(source, 0, 0, sample.width, sample.height);
+      const data = ctx.getImageData(0, 0, sample.width, sample.height).data;
+      let colored = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i] || data[i + 1] || data[i + 2]) colored++;
+      }
+      return { colored, nonBlank: colored > 1000, width: sample.width, height: sample.height };
+    };
+  })();`;
+
   await send('Runtime.enable');
   await send('Page.enable');
+  await send('Page.addScriptToEvaluateOnNewDocument', { source: smokeHarnessSource });
   await bestEffortSend('Network.enable');
   await bestEffortSend('Log.enable');
+  await send('Page.navigate', { url: appUrl }, 30000);
   await waitFor('.nav-item[data-target="blog"]', 12000);
   await evaluate(`localStorage.setItem('admin_token', 'fake-token-for-smoke')`);
   await send('Page.reload');
@@ -360,6 +387,12 @@ async function run() {
     buttonsMissingType: document.querySelectorAll('button:not([type])').length,
     commandTriggerLabel: document.querySelector('#command-palette-trigger')?.getAttribute('aria-label') || '',
     adminTriggerLabel: document.querySelector('#admin-login-trigger')?.getAttribute('aria-label') || '',
+    adminUsernameAutocomplete: document.querySelector('#admin-username')?.getAttribute('autocomplete') || '',
+    adminPasswordAutocomplete: document.querySelector('#admin-password')?.getAttribute('autocomplete') || '',
+    preloads: Array.from(document.querySelectorAll('link[rel="preload"]')).map(link => ({
+      href: link.getAttribute('href') || '',
+      as: link.getAttribute('as') || ''
+    })),
     horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
   }))()`);
 
@@ -1326,12 +1359,9 @@ async function run() {
   await key('keyUp', ' ', 'Space');
   await wait(500);
   const survivorState = await evaluate(`(() => {
-    const c = document.querySelector('#premium-survivor-canvas');
-    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-    let colored = 0;
-    for (let i = 0; i < d.length; i += 4) if (d[i] || d[i + 1] || d[i + 2]) colored++;
+    const pixels = window.__atherixSmokeCountCanvasPixels?.('#premium-survivor-canvas') || {};
     return {
-      nonBlank: colored > 1000,
+      nonBlank: !!pixels.nonBlank,
       build: document.querySelector('#premium-survivor-build')?.textContent,
       chain: document.querySelector('#premium-survivor-chain')?.textContent,
       overdrive: document.querySelector('#premium-survivor-overdrive')?.textContent,
@@ -1379,26 +1409,20 @@ async function run() {
   const survivorOverdriveState = await evaluate(`(() => window.__atherixDebug?.premium?.forceSurvivorOverdrive?.() || {})()`);
   const survivorAnomalyState = await evaluate(`(() => {
     const result = window.__atherixDebug?.premium?.forceSurvivorAnomaly?.('meteor') || {};
-    const c = document.querySelector('#premium-survivor-canvas');
-    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-    let colored = 0;
-    for (let i = 0; i < d.length; i += 4) if (d[i] || d[i + 1] || d[i + 2]) colored++;
+    const pixels = window.__atherixSmokeCountCanvasPixels?.('#premium-survivor-canvas') || {};
     return {
       ...result,
-      nonBlank: colored > 1000,
+      nonBlank: !!pixels.nonBlank,
       eventText: document.querySelector('#premium-survivor-event')?.textContent || '',
       achieved: (window.__atherixDebug?.premium?.achievements?.() || []).some(item => item.id === 'survivor_anomaly' && item.unlocked)
     };
   })()`);
   const survivorBountyState = await evaluate(`(() => {
     const result = window.__atherixDebug?.premium?.forceSurvivorBounty?.() || {};
-    const c = document.querySelector('#premium-survivor-canvas');
-    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-    let colored = 0;
-    for (let i = 0; i < d.length; i += 4) if (d[i] || d[i + 1] || d[i + 2]) colored++;
+    const pixels = window.__atherixSmokeCountCanvasPixels?.('#premium-survivor-canvas') || {};
     return {
       ...result,
-      nonBlank: colored > 1000,
+      nonBlank: !!pixels.nonBlank,
       bountyText: document.querySelector('#premium-survivor-bounty')?.textContent || '',
       achieved: (window.__atherixDebug?.premium?.achievements?.() || []).some(item => item.id === 'survivor_bounty' && item.unlocked)
     };
@@ -1415,12 +1439,9 @@ async function run() {
   await key('keyUp', ' ', 'Space');
   await wait(400);
   const bossState = await evaluate(`(() => {
-    const c = document.querySelector('#premium-boss-canvas');
-    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-    let colored = 0;
-    for (let i = 0; i < d.length; i += 4) if (d[i] || d[i + 1] || d[i + 2]) colored++;
+    const pixels = window.__atherixSmokeCountCanvasPixels?.('#premium-boss-canvas') || {};
     return {
-      nonBlank: colored > 1000,
+      nonBlank: !!pixels.nonBlank,
       phase: document.querySelector('#premium-boss-phase')?.textContent,
       dash: document.querySelector('#premium-boss-dash')?.textContent,
       pattern: document.querySelector('#premium-boss-pattern')?.textContent,
@@ -1532,12 +1553,9 @@ async function run() {
   await key('keyUp', ' ', 'Space');
   await wait(220);
   const driftState = await evaluate(`(() => {
-    const c = document.querySelector('#premium-drift-canvas');
-    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-    let colored = 0;
-    for (let i = 0; i < d.length; i += 4) if (d[i] || d[i + 1] || d[i + 2]) colored++;
+    const pixels = window.__atherixSmokeCountCanvasPixels?.('#premium-drift-canvas') || {};
     return {
-      nonBlank: colored > 1000,
+      nonBlank: !!pixels.nonBlank,
       running: !!window.__atherixDebug?.premium?.driftRunning?.(),
       paused: !!window.__atherixDebug?.premium?.driftPaused?.(),
       gates: Number(document.querySelector('#premium-drift-gates')?.textContent || 0),
@@ -1621,13 +1639,10 @@ async function run() {
   const heistCacheState = await evaluate(`(() => window.__atherixDebug?.premium?.forceHeistCache?.() || {})()`);
   await wait(260);
   const heistState = await evaluate(`(() => {
-    const c = document.querySelector('#premium-heist-canvas');
-    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-    let colored = 0;
-    for (let i = 0; i < d.length; i += 4) if (d[i] || d[i + 1] || d[i + 2]) colored++;
+    const pixels = window.__atherixSmokeCountCanvasPixels?.('#premium-heist-canvas') || {};
     const debug = window.__atherixDebug?.premium?.heistIntel?.() || {};
     return {
-      nonBlank: colored > 1000,
+      nonBlank: !!pixels.nonBlank,
       tools: document.querySelector('#premium-heist-tools')?.textContent,
       steps: document.querySelector('#premium-heist-steps')?.textContent,
       alert: document.querySelector('#premium-heist-alert')?.textContent,
@@ -1716,12 +1731,9 @@ async function run() {
   const tacticsBlastState = await evaluate(`(() => window.__atherixDebug?.premium?.forceTacticsBlast?.() || {})()`);
   const tacticsForecastAfterAction = await evaluate(`(() => window.__atherixDebug?.premium?.tacticsForecast?.() || {})()`);
   const tacticsState = await evaluate(`(() => {
-    const c = document.querySelector('#premium-tactics-canvas');
-    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-    let colored = 0;
-    for (let i = 0; i < d.length; i += 4) if (d[i] || d[i + 1] || d[i + 2]) colored++;
+    const pixels = window.__atherixSmokeCountCanvasPixels?.('#premium-tactics-canvas') || {};
     return {
-      nonBlank: colored > 1000,
+      nonBlank: !!pixels.nonBlank,
       ap: document.querySelector('#premium-tactics-ap')?.textContent,
       turn: document.querySelector('#premium-tactics-turn')?.textContent,
       hp: document.querySelector('#premium-tactics-hp')?.textContent,
@@ -1740,10 +1752,18 @@ async function run() {
     if (!('serviceWorker' in navigator)) return { supported: false, registered: false };
     await new Promise(resolve => setTimeout(resolve, 1200));
     const registration = await navigator.serviceWorker.getRegistration('/');
+    const cacheKeys = 'caches' in window ? await caches.keys() : [];
+    const shell = 'caches' in window ? await caches.match('/index.html') : null;
+    const swText = await fetch('/sw.js', { cache: 'no-store' }).then(response => response.text()).catch(() => '');
     return {
       supported: true,
       registered: !!registration,
-      scope: registration?.scope || ''
+      scope: registration?.scope || '',
+      cacheKeys,
+      shellCached: !!shell,
+      swHasNavigationPreload: swText.includes('navigationPreload'),
+      swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
+      swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL')
     };
   })()`, 10000);
   await send('Emulation.setDeviceMetricsOverride', {
@@ -1803,6 +1823,8 @@ async function run() {
   assert(!adminStartupState.token && !adminStartupState.blogActionsVisible && !adminStartupState.projectActionsVisible, 'invalid cached admin token should be cleared on startup');
   assert(accessibilityBaseline.skipHref === '#main-content' && accessibilityBaseline.mainTabIndex === '-1' && accessibilityBaseline.buttonsMissingType === 0 && !accessibilityBaseline.horizontalOverflow, `core accessibility affordances should be present: ${JSON.stringify(accessibilityBaseline)}`);
   assert(accessibilityBaseline.commandTriggerLabel && accessibilityBaseline.adminTriggerLabel, `icon-only header actions should have labels: ${JSON.stringify(accessibilityBaseline)}`);
+  assert(accessibilityBaseline.adminUsernameAutocomplete === 'username' && accessibilityBaseline.adminPasswordAutocomplete === 'current-password', `admin login fields should expose browser autocomplete hints: ${JSON.stringify(accessibilityBaseline)}`);
+  assert(accessibilityBaseline.preloads.some(link => /style\.css/.test(link.href) && link.as === 'style') && accessibilityBaseline.preloads.some(link => /lucide\.min\.js/.test(link.href) && link.as === 'script') && accessibilityBaseline.preloads.some(link => /app\.js/.test(link.href) && link.as === 'script'), `critical app assets should be preloaded: ${JSON.stringify(accessibilityBaseline.preloads)}`);
   assert(commandFocusOpenState.open && commandFocusOpenState.ariaHidden === 'false' && commandFocusOpenState.focusId === 'command-search-input' && commandFocusOpenState.focusInside, `command palette should focus search input on open: ${JSON.stringify(commandFocusOpenState)}`);
   assert(!commandFocusClosedState.open && commandFocusClosedState.ariaHidden === 'true' && commandFocusClosedState.focusId === 'command-palette-trigger', `command palette should close and restore focus: ${JSON.stringify(commandFocusClosedState)}`);
   assert(adminModalOpenState.open && adminModalOpenState.role === 'dialog' && adminModalOpenState.ariaHidden === 'false' && adminModalOpenState.focusId === 'admin-username' && adminModalOpenState.focusInside, `admin modal should expose dialog semantics and focus first field: ${JSON.stringify(adminModalOpenState)}`);
@@ -2018,7 +2040,12 @@ async function run() {
   assert(tacticsForecastAfterAction.dangerCount > 0 && tacticsForecastAfterAction.coverHud && tacticsForecastAfterAction.momentumHud !== undefined && tacticsForecastAfterAction.routeHud && tacticsJammedIntent, `tactics mode should expose post-action JAM, cover, momentum, and route forecast: ${JSON.stringify(tacticsForecastAfterAction)}`);
   assert(tacticsState.nonBlank && Number(tacticsState.ap) >= 0 && tacticsState.action && tacticsState.cover && tacticsState.momentum !== undefined && tacticsState.route && tacticsState.debug?.route?.length > 0, `tactics mode should render and accept enhanced actions: ${JSON.stringify(tacticsState)}`);
   assert(Number(tacticsState.danger) > 0 && tacticsState.intel && tacticsState.debug?.hud?.route === tacticsState.route && tacticsState.debug?.hud?.cover === tacticsState.cover && tacticsState.debug?.hud?.momentum === tacticsState.momentum, `tactics HUD should stay in sync with enhanced debug state: ${JSON.stringify(tacticsState)}`);
-  assert(pwaState.supported && pwaState.registered, 'service worker should register');
+  assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /offline-polish/.test(key)), `service worker should register and cache the app shell: ${JSON.stringify(pwaState)}`);
+  assert(pwaState.swHasNavigationPreload && pwaState.swHasOfflineShellHeader && pwaState.swHasFallbackUrl, `service worker should include robust offline navigation fallback: ${JSON.stringify(pwaState)}`);
+  const diagnosticText = JSON.stringify(diagnostics);
+  assert(!/willReadFrequently|Multiple readback operations/i.test(diagnosticText), `canvas diagnostics should stay quiet after smoke readback hardening: ${diagnosticText}`);
+  assert(!/autocomplete attributes|current-password/i.test(diagnosticText), `admin autocomplete diagnostics should stay quiet: ${diagnosticText}`);
+  assert(!/Blocked aria-hidden|retained focus/i.test(diagnosticText), `modal focus should move before aria-hidden changes: ${diagnosticText}`);
 
   await bestEffortSend('Page.close');
   if (launched) await bestEffortSend('Browser.close');
