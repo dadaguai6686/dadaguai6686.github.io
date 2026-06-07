@@ -4732,8 +4732,8 @@ function init() {
       <div class="arcade-library-header">
         <div>
           <span class="quick-card-kicker"><i data-lucide="sparkles"></i> PREMIUM ARCADE</span>
-          <h2>高能街机实验室</h2>
-          <p>六个高级街机模式：生存构筑、Boss 弹幕、霓虹漂移、潜行劫取、连锁解谜、回合战术。每局都有阶段事件、局内成长、特殊道具和最佳纪录。</p>
+          <h2>高级街机生涯实验室</h2>
+          <p>主线跑酷 + 六个高级模式：生存构筑、Boss 弹幕、霓虹漂移、潜行劫取、连锁解谜、回合战术。每局都会推进奖牌路线、每日契约、挑战联赛、战术芯片和个人名人堂。</p>
         </div>
         <div class="mini-game-scoreboard">
           <span>当前游戏</span>

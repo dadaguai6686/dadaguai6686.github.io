@@ -1,10 +1,10 @@
-const CACHE_VERSION = 'atherix-static-v30-confirm-cdp';
+const CACHE_VERSION = 'atherix-static-v31-arcade-shell';
 const NAVIGATION_FALLBACK_URL = '/index.html';
 const STATIC_ASSETS = [
   '/',
   NAVIGATION_FALLBACK_URL,
-  '/style.css?v=20260608-confirm-cdp-v1',
-  '/app.js?v=20260608-confirm-cdp-v1',
+  '/style.css?v=20260608-arcade-shell-v1',
+  '/app.js?v=20260608-arcade-shell-v1',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',

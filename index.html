@@ -32,11 +32,11 @@
   <link rel="alternate" type="application/rss+xml" title="Atherix Digital Space Feed" href="https://dadaguai6686.github.io/feed.xml">
   <link rel="icon" href="/assets/atherix-icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/assets/atherix-icon-192.png">
-  <link rel="preload" href="/style.css?v=20260608-confirm-cdp-v1" as="style">
+  <link rel="preload" href="/style.css?v=20260608-arcade-shell-v1" as="style">
   <link rel="preload" href="/lucide.min.js" as="script">
-  <link rel="preload" href="/app.js?v=20260608-confirm-cdp-v1" as="script">
+  <link rel="preload" href="/app.js?v=20260608-arcade-shell-v1" as="script">
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="/style.css?v=20260608-confirm-cdp-v1">
+  <link rel="stylesheet" href="/style.css?v=20260608-arcade-shell-v1">
   <link rel="manifest" href="/manifest.webmanifest">
   <!-- Lucide Icons Local -->
   <script src="/lucide.min.js"></script>
@@ -301,11 +301,11 @@
           <div class="game-card-mesh-bg" style="position: absolute; top:0; left:0; right:0; bottom:0; background: radial-gradient(circle at 80% 20%, rgba(139, 92, 246, 0.18) 0%, transparent 50%); z-index:1; pointer-events:none;"></div>
           <div class="card-title" style="z-index: 2; position: relative;">
             <i data-lucide="gamepad-2" style="width: 14px; height: 14px; color: var(--accent);"></i>
-            像素复古街机
+            Atherix 高级街机
           </div>
           <div class="game-launcher-body" style="z-index: 2; margin: 0.3rem 0; position: relative;">
-            <h4 style="font-size: 0.95rem; font-weight: 700; color: #fff; margin-bottom: 0.1rem; text-shadow: 0 0 10px rgba(139, 92, 246, 0.4);">Cyber Astro-Runner</h4>
-            <p style="font-size: 0.72rem; color: var(--text-secondary); line-height: 1.3;">经典横版马里奥式闯关跳跃游戏，极客复古音效，看你能几秒通关！</p>
+            <h4 style="font-size: 0.95rem; font-weight: 700; color: #fff; margin-bottom: 0.1rem; text-shadow: 0 0 10px rgba(139, 92, 246, 0.4);">Premium Arcade Suite</h4>
+            <p style="font-size: 0.72rem; color: var(--text-secondary); line-height: 1.3;">主线跑酷 + 6 个高级模式，带街机生涯、奖牌、联赛、契约和战术芯片。</p>
           </div>
           <div class="game-launcher-footer" style="z-index: 2; font-size: 0.78rem; color: var(--accent); font-weight: 600; display: flex; align-items: center; gap: 0.2rem; position: relative;">
             立即挑战 <i data-lucide="play-circle" style="width: 14px; height: 14px;"></i>
@@ -1124,88 +1124,75 @@
           <div class="arcade-library-header">
             <div>
               <span class="quick-card-kicker"><i data-lucide="sparkles"></i> PREMIUM ARCADE</span>
-              <h2>高能街机实验室</h2>
-              <p>四个完整街机模式：生存割草、Boss 弹幕、潜行劫取、连锁消除。每局都有目标、升级、阶段和最佳纪录。</p>
+              <h2>高级街机生涯实验室</h2>
+              <p>主线跑酷 + 六个高级模式：生存构筑、Boss 弹幕、霓虹漂移、潜行劫取、连锁解谜、回合战术。脚本接管后会载入奖牌路线、每日契约、挑战联赛、战术芯片和个人名人堂。</p>
             </div>
             <div class="mini-game-scoreboard">
-              <span>当前游戏</span>
-              <strong id="mini-active-title">星核幸存者 Starcore Survivor</strong>
+              <span>街机套件</span>
+              <strong>Atherix Premium Arcade Suite</strong>
             </div>
           </div>
 
-          <div class="mini-game-tabs" role="tablist" aria-label="小游戏选择">
-            <button type="button" class="mini-game-tab active" data-mini-game="snake">星核幸存者</button>
-            <button type="button" class="mini-game-tab" data-mini-game="breakout">棱镜 Boss</button>
-            <button type="button" class="mini-game-tab" data-mini-game="tile2048">赛博潜入</button>
-            <button type="button" class="mini-game-tab" data-mini-game="memory">连锁炼金</button>
+          <div class="mini-game-tabs arcade-shell-tabs" role="list" aria-label="高级街机模式预览">
+            <span class="mini-game-tab active">主线跑酷</span>
+            <span class="mini-game-tab">星核幸存者</span>
+            <span class="mini-game-tab">棱镜 Boss</span>
+            <span class="mini-game-tab">霓虹漂移</span>
+            <span class="mini-game-tab">赛博潜入</span>
+            <span class="mini-game-tab">连锁炼金</span>
+            <span class="mini-game-tab">裂隙战术</span>
           </div>
 
-          <div class="mini-game-stage" id="mini-game-stage" tabindex="0" aria-label="小游戏操作区">
-            <div class="mini-game-panel active" id="mini-snake">
-              <div class="mini-game-copy">
-                <h3>Starcore Survivor</h3>
-                <p>双摇杆式生存割草。WASD / 方向键移动，自动射击，吸收星核升级火力，在 90 秒内活得越久越强。</p>
-                <div class="mini-stats">
-                  <span>能量 <strong id="snake-score">0</strong></span>
-                  <span>最佳 <strong id="snake-best">0</strong></span>
-                  <span>等级 <strong id="survivor-level">1</strong></span>
-                  <span>生命 <strong id="survivor-hp">100</strong></span>
-                </div>
-                <div class="mini-actions">
-                  <button type="button" class="action-btn action-btn-primary" id="snake-start-btn">部署 / 重开</button>
-                  <button type="button" class="action-btn" id="snake-pause-btn">暂停</button>
-                </div>
+          <div class="mini-game-stage arcade-shell-stage" aria-label="高级街机首屏预览">
+            <div class="arcade-shell-hero">
+              <div>
+                <span>ARCADE CAREER READY</span>
+                <h3>7 条玩法线合并成一个长期街机档案</h3>
+                <p>首次绘制时先展示完整套件；加载完成后会切换为可玩的 Canvas 街机、触控/键盘/手柄输入、赛季进度、赛后教练和跨模式联赛。</p>
               </div>
-              <canvas class="mini-canvas mini-canvas-wide" id="snake-canvas" width="560" height="360"></canvas>
+              <div class="arcade-shell-metrics" aria-label="街机系统概览">
+                <span><strong>7</strong>玩法线</span>
+                <span><strong>26</strong>成就</span>
+                <span><strong>3</strong>联赛阶段</span>
+                <span><strong>4</strong>战术芯片</span>
+              </div>
             </div>
-
-            <div class="mini-game-panel" id="mini-breakout">
-              <div class="mini-game-copy">
-                <h3>Prism Boss Rush</h3>
-                <p>横版 Boss 弹幕战。A/D 移动，Space 过热冲刺，自动开火，躲开弹幕并击破三阶段棱镜核心。</p>
-                <div class="mini-stats">
-                  <span>分数 <strong id="breakout-score">0</strong></span>
-                  <span>机体 <strong id="breakout-lives">3</strong></span>
-                  <span>最佳 <strong id="breakout-best">0</strong></span>
-                  <span>Boss <strong id="boss-hp">100%</strong></span>
-                </div>
-                <div class="mini-actions">
-                  <button type="button" class="action-btn action-btn-primary" id="breakout-start-btn">开战 / 重开</button>
-                </div>
-              </div>
-              <canvas class="mini-canvas mini-canvas-wide" id="breakout-canvas" width="560" height="340"></canvas>
-            </div>
-
-            <div class="mini-game-panel" id="mini-tile2048">
-              <div class="mini-game-copy">
-                <h3>Cyber Heist</h3>
-                <p>潜入数据金库。WASD / 方向键移动，绕开扫描守卫，偷走密钥，抵达出口。每局地图都会重新生成。</p>
-                <div class="mini-stats">
-                  <span>密钥 <strong id="tile-score">0</strong>/4</span>
-                  <span>最佳 <strong id="tile-best">0</strong></span>
-                  <span>警戒 <strong id="heist-alert">LOW</strong></span>
-                </div>
-                <div class="mini-actions">
-                  <button type="button" class="action-btn action-btn-primary" id="tile-new-btn">生成任务</button>
-                </div>
-              </div>
-              <canvas class="mini-canvas mini-canvas-wide" id="tile-board" width="560" height="360" aria-label="潜入任务地图"></canvas>
-            </div>
-
-            <div class="mini-game-panel" id="mini-memory">
-              <div class="mini-game-copy">
-                <h3>Alchemy Chain</h3>
-                <p>点击相邻同色能量团触发连锁爆破。连得越大，爆炸越爽，限 30 步冲击高分。</p>
-                <div class="mini-stats">
-                  <span>步数 <strong id="memory-moves">30</strong></span>
-                  <span>连锁 <strong id="memory-pairs">0</strong></span>
-                  <span>最佳 <strong id="memory-best">--</strong></span>
-                </div>
-                <div class="mini-actions">
-                  <button type="button" class="action-btn action-btn-primary" id="memory-new-btn">重置能量场</button>
-                </div>
-              </div>
-              <div class="memory-board chain-board" id="memory-board" aria-label="连锁消除棋盘"></div>
+            <div class="arcade-shell-mode-grid" aria-label="高级街机模式">
+              <article class="arcade-shell-mode-card">
+                <span>01</span>
+                <strong>Cyber Astro-Runner</strong>
+                <p>8 关主线平台远征，跳跃、冲刺、护盾和关卡目标全部结算进生涯档案。</p>
+              </article>
+              <article class="arcade-shell-mode-card">
+                <span>02</span>
+                <strong>Starcore Survivor</strong>
+                <p>自动射击、生存构筑、星核升级、精英赏金和 90 秒深空事件。</p>
+              </article>
+              <article class="arcade-shell-mode-card">
+                <span>03</span>
+                <strong>Prism Boss Rush</strong>
+                <p>三阶段 Boss 弹幕、弱点破招、闪避窗口和反击倍率。</p>
+              </article>
+              <article class="arcade-shell-mode-card">
+                <span>04</span>
+                <strong>Neon Drift</strong>
+                <p>检查点漂移、量子加速、赞助合约、赛道热度和无人机追逐。</p>
+              </article>
+              <article class="arcade-shell-mode-card">
+                <span>05</span>
+                <strong>Cyber Heist</strong>
+                <p>潜入金库、隐身冷却、巡逻视野、终端破解和撤离路线。</p>
+              </article>
+              <article class="arcade-shell-mode-card">
+                <span>06</span>
+                <strong>Alchemy Chain</strong>
+                <p>大连锁消除、特殊核心、倍率爆发和限步高分挑战。</p>
+              </article>
+              <article class="arcade-shell-mode-card">
+                <span>07</span>
+                <strong>Rift Tactics</strong>
+                <p>行动点、敌人 AI、核心撤离、动量路线和回合战术决策。</p>
+              </article>
             </div>
           </div>
         </div>
@@ -1400,6 +1387,6 @@
   <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <!-- Main JavaScript File -->
-  <script src="/app.js?v=20260608-confirm-cdp-v1"></script>
+  <script src="/app.js?v=20260608-arcade-shell-v1"></script>
 </body>
 </html>
