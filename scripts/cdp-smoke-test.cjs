@@ -892,6 +892,8 @@ async function run() {
       dash: document.querySelector('#premium-boss-dash')?.textContent,
       pattern: document.querySelector('#premium-boss-pattern')?.textContent,
       hp: document.querySelector('#premium-boss-hp')?.textContent,
+      weak: document.querySelector('#premium-boss-weak')?.textContent,
+      breaks: Number(document.querySelector('#premium-boss-break')?.textContent || 0),
       lives: Number(document.querySelector('#premium-boss-lives')?.textContent || 0)
     };
   })()`);
@@ -909,11 +911,32 @@ async function run() {
     ...(window.__atherixDebug?.premium?.bossPattern?.() || {}),
     patternText: document.querySelector('#premium-boss-pattern')?.textContent || ''
   }))()`);
-  await wait(760);
-  const bossPatternReleasedState = await evaluate(`(() => ({
-    ...(window.__atherixDebug?.premium?.bossPattern?.() || {}),
-    patternText: document.querySelector('#premium-boss-pattern')?.textContent || ''
-  }))()`);
+  const bossCounterState = await evaluate(`(() => {
+    const result = window.__atherixDebug?.premium?.forceBossCounter?.('snipe') || {};
+    return {
+      ...result,
+      patternText: document.querySelector('#premium-boss-pattern')?.textContent || '',
+      weakText: document.querySelector('#premium-boss-weak')?.textContent || '',
+      breakText: document.querySelector('#premium-boss-break')?.textContent || '',
+      scoreText: document.querySelector('#premium-boss-score')?.textContent || ''
+    };
+  })()`);
+  const bossReleaseTelegraphState = await evaluate(`(() => {
+    const before = window.__atherixDebug?.premium?.forceBossTelegraph?.('snipe') || {};
+    return {
+      ...before,
+      patternText: document.querySelector('#premium-boss-pattern')?.textContent || ''
+    };
+  })()`);
+  let bossPatternReleasedState = {};
+  for (let i = 0; i < 24; i++) {
+    await wait(160);
+    bossPatternReleasedState = await evaluate(`(() => ({
+      ...(window.__atherixDebug?.premium?.bossPattern?.() || {}),
+      patternText: document.querySelector('#premium-boss-pattern')?.textContent || ''
+    }))()`);
+    if (!bossPatternReleasedState.queued && bossPatternReleasedState.current === 'snipe' && bossPatternReleasedState.bullets >= 7) break;
+  }
   await key('keyDown', 'p', 'KeyP');
   await key('keyUp', 'p', 'KeyP');
   await wait(180);
@@ -1245,9 +1268,21 @@ async function run() {
   assert(survivorDraftOpenState.open && survivorDraftOpenState.ariaHidden === 'false' && survivorDraftOpenState.optionCards === 3 && survivorDraftOpenState.choices.length === 3 && survivorDraftOpenState.running && !survivorDraftOpenState.paused, `survivor roguelite draft should open three upgrade choices without using pause state: ${JSON.stringify(survivorDraftOpenState)}`);
   assert(survivorDraftFreezeState.open && Math.abs(survivorDraftFreezeState.elapsedAfter - survivorDraftOpenState.beforeElapsed) < 1 && Math.abs(survivorDraftFreezeState.scoreAfter - survivorDraftOpenState.beforeScore) < 1, `survivor roguelite draft should freeze the run clock and score until a choice is made: ${JSON.stringify({ survivorDraftOpenState, survivorDraftFreezeState })}`);
   assert(!survivorDraftChosenState.open && survivorDraftChosenState.ariaHidden === 'true' && survivorDraftChosenState.optionCards === 0 && survivorDraftChosenState.running && Number(survivorDraftChosenState.level) >= 2 && survivorDraftChosenState.score > survivorDraftOpenState.beforeScore && survivorDraftChosenState.buildText.length > 2, `survivor roguelite draft should apply a chosen upgrade and resume the run: ${JSON.stringify(survivorDraftChosenState)}`);
-  assert(bossState.nonBlank && bossState.dash && bossState.lives >= 4, `boss canvas should render active state and apply equipped loadout: ${JSON.stringify(bossState)}`);
-  assert(bossTelegraphState.running && !bossTelegraphState.paused && bossTelegraphState.queued === 'snipe' && bossTelegraphState.current === 'snipe' && bossTelegraphState.bullets === 0 && /预警/.test(bossTelegraphState.patternText) && /锁定狙击/.test(bossTelegraphState.patternText), `boss mode should surface a readable attack telegraph before spawning bullets: ${JSON.stringify(bossTelegraphState)}`);
-  assert(bossTelegraphHoldState.queued === 'snipe' && bossTelegraphHoldState.bullets === 0 && bossTelegraphHoldState.telegraphMs > 0 && /预警/.test(bossTelegraphHoldState.patternText), `boss telegraph should hold a reaction window before release: ${JSON.stringify(bossTelegraphHoldState)}`);
+  assert(bossState.nonBlank && bossState.dash && bossState.weak && bossState.breaks === 0 && bossState.lives >= 4, `boss canvas should render active state and apply equipped loadout: ${JSON.stringify(bossState)}`);
+  assert(bossTelegraphState.running && !bossTelegraphState.paused && bossTelegraphState.queued === 'snipe' && bossTelegraphState.current === 'snipe' && bossTelegraphState.bullets === 0 && bossTelegraphState.weak?.active && bossTelegraphState.weak.remaining >= 1 && /^\d+\/\d+$/.test(bossTelegraphState.weakHud) && /预警/.test(bossTelegraphState.patternText) && /锁定狙击/.test(bossTelegraphState.patternText), `boss mode should surface a readable weakpoint telegraph before spawning bullets: ${JSON.stringify(bossTelegraphState)}`);
+  assert(bossTelegraphHoldState.queued === 'snipe' && bossTelegraphHoldState.bullets === 0 && bossTelegraphHoldState.telegraphMs > 0 && bossTelegraphHoldState.weak?.active && bossTelegraphHoldState.weak.timer > 0 && /预警/.test(bossTelegraphHoldState.patternText), `boss telegraph should hold a reaction window before release: ${JSON.stringify(bossTelegraphHoldState)}`);
+  assert(
+    bossCounterState.before?.weak?.active &&
+    !bossCounterState.after?.weak?.active &&
+    bossCounterState.after?.breakCount >= bossCounterState.before?.breakCount + 1 &&
+    bossCounterState.after?.bullets === 0 &&
+    !bossCounterState.after?.queued &&
+    Number(bossCounterState.after?.weak?.score || 0) > Number(bossCounterState.before?.weak?.score || 0) &&
+    (/BROKEN|LOCKED/.test(bossCounterState.weakText)) &&
+    Number(bossCounterState.breakText || 0) >= 1,
+    `boss weakpoint counter should break the queued attack, clear bullets, score, and update HUD: ${JSON.stringify(bossCounterState)}`
+  );
+  assert(bossReleaseTelegraphState.queued === 'snipe' && bossReleaseTelegraphState.weak?.active && bossReleaseTelegraphState.bullets === 0 && /预警/.test(bossReleaseTelegraphState.patternText), `boss should be able to queue a fresh telegraph after a counter break: ${JSON.stringify(bossReleaseTelegraphState)}`);
   assert(!bossPatternReleasedState.queued && bossPatternReleasedState.current === 'snipe' && bossPatternReleasedState.bullets >= 7 && /锁定狙击/.test(bossPatternReleasedState.patternText), `boss pattern should release bullets only after the telegraph window: ${JSON.stringify(bossPatternReleasedState)}`);
   assert(bossPauseState.running && bossPauseState.paused && bossPauseState.pauseButton === '继续', `boss mode should enter pause with keyboard: ${JSON.stringify(bossPauseState)}`);
   assert(

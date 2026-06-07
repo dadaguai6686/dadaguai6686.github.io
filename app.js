@@ -4440,6 +4440,8 @@ function init() {
               <span>Boss <strong id="premium-boss-hp">100%</strong></span>
               <span>阶段 <strong id="premium-boss-phase">I</strong></span>
               <span>招式 <strong id="premium-boss-pattern">扫描中</strong></span>
+              <span>弱点 <strong id="premium-boss-weak">LOCKED</strong></span>
+              <span>破招 <strong id="premium-boss-break">0</strong></span>
               <span>闪避 <strong id="premium-boss-dash">READY</strong></span>
             </div>
             <div class="mini-actions">
@@ -6152,6 +6154,10 @@ function init() {
       telegraphTimer: 0,
       telegraphDuration: 0,
       patternFlash: 0,
+      weakpoint: { active: false, hits: 0, required: 3, x: 280, y: 92, r: 20, pattern: '', timer: 0 },
+      breakCount: 0,
+      breakFlash: 0,
+      lastBreak: '',
       bonuses: {}
     };
 
@@ -6174,6 +6180,17 @@ function init() {
         patternEl.textContent = pattern
           ? `${bossMode.queuedPattern ? '预警 ' : ''}${bossPatternDefs[pattern]?.label || pattern}`
           : '扫描中';
+      }
+      const weakEl = document.getElementById('premium-boss-weak');
+      if (weakEl) {
+        const weak = bossMode.weakpoint;
+        weakEl.textContent = weak.active ? `${Math.max(0, weak.required - weak.hits)}/${weak.required}` : (bossMode.breakFlash > 0 ? 'BROKEN' : 'LOCKED');
+        weakEl.style.color = weak.active ? '#FDE68A' : bossMode.breakFlash > 0 ? '#34D399' : '#94A3B8';
+      }
+      const breakEl = document.getElementById('premium-boss-break');
+      if (breakEl) {
+        breakEl.textContent = bossMode.breakCount;
+        breakEl.style.color = bossMode.breakCount > 0 ? '#A7F3D0' : '#fff';
       }
       document.getElementById('premium-boss-dash').textContent = bossMode.player.dashCooldown > 0 ? `${Math.ceil(bossMode.player.dashCooldown / 1000)}s` : 'READY';
     }
@@ -6199,6 +6216,10 @@ function init() {
       bossMode.telegraphTimer = 0;
       bossMode.telegraphDuration = 0;
       bossMode.patternFlash = 0;
+      bossMode.weakpoint = { active: false, hits: 0, required: 3, x: 280, y: 92, r: 20, pattern: '', timer: 0 };
+      bossMode.breakCount = 0;
+      bossMode.breakFlash = 0;
+      bossMode.lastBreak = '';
       bossMode.bonuses = bonuses;
       setBossUi();
       updateBossPauseButton();
@@ -6254,6 +6275,95 @@ function init() {
       return pick(phase === 1 ? ['ring', 'snipe'] : phase === 2 ? ['ring', 'snipe', 'rain'] : ['ring', 'snipe', 'rain', 'sweep']);
     }
 
+    function bossWeakRequired(phase) {
+      return Math.min(5, 2 + phase);
+    }
+
+    function openBossWeakpoint(pattern, phase) {
+      const b = bossMode.boss;
+      bossMode.weakpoint = {
+        active: true,
+        hits: 0,
+        required: bossWeakRequired(phase),
+        x: b.x,
+        y: b.y,
+        r: 19 + phase * 2,
+        pattern,
+        timer: bossMode.telegraphDuration
+      };
+    }
+
+    function closeBossWeakpoint() {
+      bossMode.weakpoint = {
+        ...bossMode.weakpoint,
+        active: false,
+        hits: 0,
+        pattern: '',
+        timer: 0
+      };
+    }
+
+    function bossWeakpointActive() {
+      return !!bossMode.weakpoint?.active && !!bossMode.queuedPattern && bossMode.telegraphTimer > 0;
+    }
+
+    function bossWeakState() {
+      const weak = bossMode.weakpoint || {};
+      return {
+        active: !!weak.active,
+        hits: Number(weak.hits || 0),
+        required: Number(weak.required || 0),
+        remaining: Math.max(0, Number(weak.required || 0) - Number(weak.hits || 0)),
+        pattern: weak.pattern || '',
+        x: Math.round(Number(weak.x || 0)),
+        y: Math.round(Number(weak.y || 0)),
+        timer: Math.ceil(Number(weak.timer || 0)),
+        breakCount: bossMode.breakCount,
+        lastBreak: bossMode.lastBreak,
+        breakFlash: Math.ceil(bossMode.breakFlash),
+        bullets: bossMode.bullets.length,
+        score: Math.floor(bossMode.score),
+        hudWeak: document.getElementById('premium-boss-weak')?.textContent || '',
+        hudBreak: document.getElementById('premium-boss-break')?.textContent || ''
+      };
+    }
+
+    function breakBossPattern() {
+      if (!bossMode.weakpoint.active) return false;
+      const pattern = bossMode.weakpoint.pattern || bossMode.queuedPattern || bossMode.currentPattern || '';
+      const phase = bossPhaseFromHp();
+      const clearedBullets = bossMode.bullets.length;
+      bossMode.breakCount++;
+      bossMode.lastBreak = bossPatternDefs[pattern]?.label || pattern || '破招';
+      bossMode.breakFlash = 920;
+      bossMode.score += 420 + phase * 120 + clearedBullets * 8;
+      bossMode.boss.hp = Math.max(1, bossMode.boss.hp - (42 + phase * 12));
+      bossMode.player.invuln = Math.max(bossMode.player.invuln, 520);
+      bossMode.bullets = [];
+      bossMode.queuedPattern = '';
+      bossMode.currentPattern = '';
+      bossMode.telegraphTimer = 0;
+      bossMode.telegraphDuration = 0;
+      bossMode.patternTimer = -420;
+      bossSpark(bossMode.boss.x, bossMode.boss.y, '#34D399', 34);
+      closeBossWeakpoint();
+      setBossUi();
+      return true;
+    }
+
+    function hitBossWeakpoint(damage = 0) {
+      if (!bossWeakpointActive()) return false;
+      const weak = bossMode.weakpoint;
+      weak.hits++;
+      weak.timer = bossMode.telegraphTimer;
+      bossMode.score += 36 + weak.hits * 12;
+      bossMode.boss.hp = Math.max(1, bossMode.boss.hp - Math.max(3, Math.round(damage * 0.35)));
+      bossSpark(weak.x, weak.y, '#FDE68A', 7);
+      if (weak.hits >= weak.required) breakBossPattern();
+      else setBossUi();
+      return true;
+    }
+
     function startBossTelegraph(forcedPattern = '') {
       if (bossMode.queuedPattern) return bossMode.queuedPattern;
       const phase = bossPhaseFromHp();
@@ -6264,6 +6374,7 @@ function init() {
       bossMode.telegraphDuration = Math.max(430, (780 - phase * 70) / Math.sqrt(pressure));
       bossMode.telegraphTimer = bossMode.telegraphDuration;
       bossMode.patternFlash = bossMode.telegraphDuration;
+      openBossWeakpoint(pattern, phase);
       bossSpark(bossMode.boss.x, bossMode.boss.y, bossPatternDefs[pattern]?.color || '#BAE6FD', 18);
       setBossUi();
       return pattern;
@@ -6277,6 +6388,7 @@ function init() {
       bossMode.telegraphTimer = 0;
       bossMode.telegraphDuration = 0;
       bossMode.patternFlash = 320;
+      closeBossWeakpoint();
       if (pattern === 'ring') {
         const count = 14 + phase * 8;
         for (let i = 0; i < count; i++) {
@@ -6319,6 +6431,7 @@ function init() {
       bossMode.shotTimer += dt;
       bossMode.patternTimer += dt;
       bossMode.patternFlash = Math.max(0, bossMode.patternFlash - dt);
+      bossMode.breakFlash = Math.max(0, bossMode.breakFlash - dt);
       p.invuln = Math.max(0, p.invuln - dt);
       p.dash = Math.max(0, p.dash - dt);
       p.dashCooldown = Math.max(0, p.dashCooldown - dt);
@@ -6333,6 +6446,11 @@ function init() {
       }
       b.x = bossMode.canvas.width / 2 + Math.sin(bossMode.t / 850) * 130;
       b.y = 84 + Math.sin(bossMode.t / 520) * 18;
+      if (bossMode.weakpoint.active) {
+        bossMode.weakpoint.x = b.x;
+        bossMode.weakpoint.y = b.y;
+        bossMode.weakpoint.timer = bossMode.telegraphTimer;
+      }
       if (bossMode.shotTimer > 88) {
         bossMode.shotTimer = 0;
         bossMode.shots.push({ x: p.x, y: p.y - 16, vy: -470, r: 4, damage: 9 + Math.floor(p.graze / 9) });
@@ -6355,6 +6473,10 @@ function init() {
       bossMode.shots = bossMode.shots.filter(s => s.y > -20);
       bossMode.bullets = bossMode.bullets.filter(s => s.x > -40 && s.x < bossMode.canvas.width + 40 && s.y > -40 && s.y < bossMode.canvas.height + 40);
       bossMode.shots = bossMode.shots.filter(s => {
+        if (bossWeakpointActive() && Math.hypot(s.x - bossMode.weakpoint.x, s.y - bossMode.weakpoint.y) < s.r + bossMode.weakpoint.r) {
+          hitBossWeakpoint(s.damage);
+          return false;
+        }
         if (Math.hypot(s.x - b.x, s.y - b.y) < s.r + b.r) {
           b.hp -= s.damage;
           bossMode.score += 6;
@@ -6436,6 +6558,70 @@ function init() {
       ctx.restore();
     }
 
+    function drawBossWeakpoint(ctx) {
+      const weak = bossMode.weakpoint;
+      if (!weak?.active && bossMode.breakFlash <= 0) return;
+      ctx.save();
+      if (weak?.active) {
+        const required = Math.max(1, Number(weak.required || 1));
+        const hits = Math.min(required, Number(weak.hits || 0));
+        const progress = hits / required;
+        const timeProgress = clamp(1 - bossMode.telegraphTimer / Math.max(1, bossMode.telegraphDuration), 0, 1);
+        const pulse = Math.sin(bossMode.t / 56) * 2.5;
+        ctx.translate(weak.x, weak.y);
+        ctx.shadowColor = '#FDE68A';
+        ctx.shadowBlur = 18;
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#FDE68A';
+        ctx.beginPath();
+        ctx.arc(0, 0, weak.r + 4 + pulse, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = 'rgba(253, 230, 138, 0.5)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, weak.r + 12 + timeProgress * 22, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = '#34D399';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(0, 0, weak.r + 8, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
+        ctx.beginPath();
+        ctx.arc(0, 0, 13, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#FFF7ED';
+        ctx.font = '900 10px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`${Math.max(0, required - hits)}`, 0, 1);
+        ctx.restore();
+        ctx.save();
+        ctx.fillStyle = '#FDE68A';
+        ctx.font = '900 11px JetBrains Mono, monospace';
+        ctx.fillText(`COUNTER ${Math.max(0, required - hits)}/${required}`, Math.max(18, weak.x - 45), Math.max(32, weak.y - weak.r - 22));
+      }
+      if (bossMode.breakFlash > 0) {
+        const alpha = clamp(bossMode.breakFlash / 920, 0, 1);
+        ctx.globalAlpha = 0.18 + alpha * 0.28;
+        ctx.fillStyle = '#34D399';
+        ctx.fillRect(0, 0, bossMode.canvas.width, bossMode.canvas.height);
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = '#ECFDF5';
+        ctx.font = '900 24px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#34D399';
+        ctx.shadowBlur = 18;
+        ctx.fillText('COUNTER BREAK', bossMode.canvas.width / 2, 132);
+        if (bossMode.lastBreak) {
+          ctx.font = '800 12px JetBrains Mono, monospace';
+          ctx.fillText(`破招 ${bossMode.lastBreak}  +${bossMode.breakCount}`, bossMode.canvas.width / 2, 154);
+        }
+      }
+      ctx.restore();
+    }
+
     function drawBoss() {
       const { ctx, canvas: c, boss: b, player: p } = bossMode;
       if (!ctx || !c) return;
@@ -6460,6 +6646,7 @@ function init() {
       ctx.stroke();
       ctx.restore();
       drawBossTelegraph(ctx, c);
+      drawBossWeakpoint(ctx);
       bossMode.shots.forEach(s => { ctx.fillStyle = '#BAE6FD'; ctx.fillRect(s.x - 2, s.y - 8, 4, 12); });
       bossMode.bullets.forEach(s => { ctx.fillStyle = s.color; ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill(); });
       bossMode.particles.forEach(pt => {
@@ -6490,7 +6677,7 @@ function init() {
       ctx.fillRect(18, 16, (c.width - 36) * Math.max(0, b.hp / b.maxHp), 8);
       ctx.fillStyle = '#fff';
       ctx.font = '700 12px JetBrains Mono, monospace';
-      ctx.fillText(`PHASE ${b.phase}  GRAZE ${p.graze}`, 18, 42);
+      ctx.fillText(`PHASE ${b.phase}  GRAZE ${p.graze}  BREAK ${bossMode.breakCount}`, 18, 42);
     }
 
     document.getElementById('premium-boss-start').addEventListener('click', startBoss);
@@ -8339,8 +8526,13 @@ function init() {
             label: bossPatternDefs[bossMode.queuedPattern || bossMode.currentPattern]?.label || '',
             telegraphMs: Math.ceil(bossMode.telegraphTimer),
             bullets: bossMode.bullets.length,
-            hud: document.getElementById('premium-boss-pattern')?.textContent || ''
+            weak: bossWeakState(),
+            breakCount: bossMode.breakCount,
+            hud: document.getElementById('premium-boss-pattern')?.textContent || '',
+            weakHud: document.getElementById('premium-boss-weak')?.textContent || '',
+            breakHud: document.getElementById('premium-boss-break')?.textContent || ''
           }),
+          bossWeakState: () => bossWeakState(),
           forceBossTelegraph: (pattern = 'snipe') => {
             if (!bossMode.running) startBoss();
             bossMode.bullets = [];
@@ -8352,6 +8544,29 @@ function init() {
             startBossTelegraph(pattern);
             drawBoss();
             return window.__atherixDebug.premium.bossPattern();
+          },
+          forceBossCounter: (pattern = 'snipe') => {
+            if (!bossMode.running) startBoss();
+            bossMode.paused = false;
+            bossMode.bullets = [
+              { x: bossMode.boss.x, y: bossMode.boss.y + 42, vx: 0, vy: 120, r: 6, color: '#F97316', grazed: false },
+              { x: bossMode.boss.x - 28, y: bossMode.boss.y + 52, vx: -30, vy: 132, r: 5, color: '#A78BFA', grazed: false }
+            ];
+            bossMode.queuedPattern = '';
+            bossMode.currentPattern = '';
+            bossMode.telegraphTimer = 0;
+            bossMode.telegraphDuration = 0;
+            bossMode.patternTimer = 0;
+            startBossTelegraph(pattern);
+            const before = window.__atherixDebug.premium.bossPattern();
+            const required = Math.max(1, bossMode.weakpoint.required || 1);
+            for (let i = 0; i < required + 1 && bossWeakpointActive(); i++) hitBossWeakpoint(18);
+            drawBoss();
+            return {
+              before,
+              after: window.__atherixDebug.premium.bossPattern(),
+              weak: bossWeakState()
+            };
           },
           driftRunning: () => drift.running,
           driftPaused: () => drift.paused,
