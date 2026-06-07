@@ -105,6 +105,12 @@ type SectorVisual = {
   secondary: number;
 };
 
+type RoutePreviewWaypoint = {
+  color: number;
+  label: string;
+  position: { x: number; y: number };
+};
+
 const SECTOR_VISUALS: Record<GameState["sector"], SectorVisual> = {
   outerRing: {
     accent: 0x67f4ff,
@@ -155,6 +161,7 @@ export class GameScene extends Phaser.Scene {
   private gateView?: Phaser.GameObjects.Container;
   private navigatorView?: Phaser.GameObjects.Graphics;
   private readabilityView?: Phaser.GameObjects.Graphics;
+  private routePreviewLabels: Phaser.GameObjects.Text[] = [];
   private starLayer?: Phaser.GameObjects.Graphics;
   private trail?: Phaser.GameObjects.Particles.ParticleEmitter;
   private largeLabels = false;
@@ -266,6 +273,7 @@ export class GameScene extends Phaser.Scene {
     this.lumenViews.clear();
     this.hazardViews.clear();
     this.stormViews.clear();
+    this.routePreviewLabels = [];
 
     this.worldLayer = this.add.container(0, 0);
     this.starLayer = this.add.graphics();
@@ -897,15 +905,77 @@ export class GameScene extends Phaser.Scene {
     const graphics = this.readabilityView;
     if (!graphics) return;
     graphics.clear();
-    if (this.state.status !== "playing") return;
+    if (this.state.status !== "playing") {
+      this.hideRoutePreviewLabels();
+      return;
+    }
 
     const player = this.state.player.position;
     const pulse = Math.sin(this.time.now * 0.008) * 0.5 + 0.5;
 
+    this.renderOpeningRoutePreview(graphics, player, pulse);
     this.renderRepairReadability(graphics, player, pulse);
     this.renderContractFocus(graphics, pulse);
     this.renderHazardReadability(graphics, player, pulse);
     this.renderResourceReadability(graphics, player, pulse);
+  }
+
+  private renderOpeningRoutePreview(graphics: Phaser.GameObjects.Graphics, player: { x: number; y: number }, pulse: number): void {
+    const waypoints = buildOpeningRoutePreview(this.state);
+    if (!this.state.briefingActive || waypoints.length === 0) {
+      this.hideRoutePreviewLabels();
+      return;
+    }
+
+    const path = [player, ...waypoints.map((waypoint) => waypoint.position)];
+    path.slice(1).forEach((point, index) => {
+      const previous = path[index];
+      const color = waypoints[index].color;
+      const alpha = 0.24 + pulse * 0.12;
+      drawDashedLine(graphics, previous, point, color, alpha, 18, 12);
+      graphics.lineStyle(2, 0xffffff, 0.1 + pulse * 0.08);
+      graphics.strokeCircle(point.x, point.y, 34 + index * 3 + pulse * 8);
+      graphics.fillStyle(color, 0.14 + pulse * 0.08);
+      graphics.fillCircle(point.x, point.y, 22);
+      graphics.lineStyle(3, color, 0.5 + pulse * 0.22);
+      graphics.strokeCircle(point.x, point.y, 25 + pulse * 5);
+    });
+
+    this.syncRoutePreviewLabels(waypoints, pulse);
+  }
+
+  private syncRoutePreviewLabels(waypoints: RoutePreviewWaypoint[], pulse: number): void {
+    while (this.routePreviewLabels.length < waypoints.length) {
+      const label = this.add.text(0, 0, "", {
+        align: "center",
+        color: "#f7fbff",
+        fontFamily: "Inter, Segoe UI, sans-serif",
+        fontSize: this.largeLabels ? "15px" : "12px",
+        fontStyle: "900",
+        stroke: "#07111c",
+        strokeThickness: this.largeLabels ? 5 : 4
+      });
+      label.setOrigin(0.5);
+      this.worldLayer?.add(label);
+      this.routePreviewLabels.push(label);
+    }
+
+    this.routePreviewLabels.forEach((label, index) => {
+      const waypoint = waypoints[index];
+      if (!waypoint) {
+        label.setVisible(false);
+        return;
+      }
+      label.setVisible(true);
+      label.setText(`${index + 1} ${waypoint.label}`);
+      label.setPosition(waypoint.position.x, waypoint.position.y - 42);
+      label.setAlpha(0.82 + pulse * 0.14);
+      label.setScale(this.largeLabels ? 1.04 : 1);
+    });
+  }
+
+  private hideRoutePreviewLabels(): void {
+    this.routePreviewLabels.forEach((label) => label.setVisible(false));
   }
 
   private renderContractFocus(graphics: Phaser.GameObjects.Graphics, pulse: number): void {
@@ -1065,6 +1135,94 @@ function getContractFocusRadius(kind: ContractFocus["kind"]): number {
   if (kind === "relay") return 72;
   if (kind === "avoidStorm") return 96;
   return 56;
+}
+
+function buildOpeningRoutePreview(state: GameState): RoutePreviewWaypoint[] {
+  if (state.status !== "playing" || !state.briefingActive) return [];
+
+  const route: RoutePreviewWaypoint[] = [];
+  let cursor = state.player.position;
+  const lumenTargets = selectNearestWaypoints(
+    state.lumen.filter((drop) => !drop.collected).map((drop) => drop.position),
+    cursor,
+    Math.max(1, Math.min(2, 2 - Math.min(state.stats.lumenCollected, 2)))
+  );
+
+  lumenTargets.forEach((position) => {
+    route.push({ color: 0xffd76e, label: "补流明", position });
+    cursor = position;
+  });
+
+  const relay = selectNearestWaypoints(
+    state.relays.filter((target) => !target.repaired).map((target) => target.position),
+    cursor,
+    1
+  )[0];
+  if (relay) {
+    route.push({ color: 0x67f4ff, label: "修信标", position: relay });
+  }
+
+  if (state.gate.open) {
+    route.push({ color: 0xfff0a8, label: "撤离", position: state.gate.position });
+  }
+
+  return route.slice(0, 4);
+}
+
+function selectNearestWaypoints(
+  points: Array<{ x: number; y: number }>,
+  start: { x: number; y: number },
+  count: number
+): Array<{ x: number; y: number }> {
+  const remaining = points.map((point) => ({ ...point }));
+  const selected: Array<{ x: number; y: number }> = [];
+  let cursor = start;
+
+  while (selected.length < count && remaining.length > 0) {
+    let bestIndex = 0;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    remaining.forEach((point, index) => {
+      const candidateDistance = Math.hypot(point.x - cursor.x, point.y - cursor.y);
+      if (candidateDistance < bestDistance) {
+        bestDistance = candidateDistance;
+        bestIndex = index;
+      }
+    });
+    const [next] = remaining.splice(bestIndex, 1);
+    if (!next) break;
+    selected.push(next);
+    cursor = next;
+  }
+
+  return selected;
+}
+
+function drawDashedLine(
+  graphics: Phaser.GameObjects.Graphics,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  color: number,
+  alpha: number,
+  dash: number,
+  gap: number
+): void {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length = Math.hypot(dx, dy);
+  if (length <= 0) return;
+
+  const unitX = dx / length;
+  const unitY = dy / length;
+  graphics.lineStyle(3, color, alpha);
+  for (let distanceAlong = 0; distanceAlong < length; distanceAlong += dash + gap) {
+    const segmentEnd = Math.min(distanceAlong + dash, length);
+    graphics.lineBetween(
+      from.x + unitX * distanceAlong,
+      from.y + unitY * distanceAlong,
+      from.x + unitX * segmentEnd,
+      from.y + unitY * segmentEnd
+    );
+  }
 }
 
 function projectHazardPosition(

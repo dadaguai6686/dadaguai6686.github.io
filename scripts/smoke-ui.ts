@@ -43,6 +43,8 @@ assert.ok(main.includes("createRadarNodes"), "radar and scan should share SVG no
 assert.ok(gameScene.includes("SECTOR_VISUALS"), "Phaser scene should define sector-specific visual styles");
 assert.ok(gameScene.includes("drawSectorField"), "Phaser scene should render sector-specific backdrops");
 assert.ok(gameScene.includes("renderContractFocus"), "Phaser scene should render contract focus markers");
+assert.ok(gameScene.includes("renderOpeningRoutePreview"), "Phaser scene should draw the opening route preview");
+assert.ok(gameScene.includes("buildOpeningRoutePreview"), "opening route preview should derive route targets from game state");
 assert.ok(gameScene.includes("renderHazardTrajectories"), "Phaser scene should telegraph moving hazard paths");
 assert.ok(gameScene.includes("projectHazardPosition"), "hazard telegraphs should project future shard positions");
 assert.ok(main.includes('"data-kind": "relay"'), "radar nodes should expose stable data-kind markers");
