@@ -173,9 +173,14 @@ async function run() {
     assert(ogImage.status === 200 && (ogImage.headers.get('content-type') || '').includes('image/png'), 'branded Open Graph image should be publicly served as PNG');
     assert(Number(ogImage.headers.get('content-length') || 0) > 10000, 'branded Open Graph image should not be empty');
 
+    const postList = await waitForSeededPosts();
+    assert(Array.isArray(postList) && postList.length >= 1, 'seeded posts should be available');
+
     const sitemap = await fetch(`${baseUrl}/sitemap.xml`);
     const sitemapText = await sitemap.text();
     assert(sitemap.status === 200 && sitemapText.includes('<loc>https://dadaguai6686.github.io/</loc>'), 'sitemap should expose an absolute public URL');
+    assert(sitemapText.includes('<loc>https://dadaguai6686.github.io/?post=post-1</loc>'), 'sitemap should expose article discovery URLs');
+    assert(sitemap.headers.get('cache-control')?.includes('max-age=300'), 'dynamic sitemap should have a short public cache window');
 
     const robots = await fetch(`${baseUrl}/robots.txt`);
     const robotsText = await robots.text();
@@ -183,8 +188,10 @@ async function run() {
 
     const feed = await fetch(`${baseUrl}/feed.xml`);
     const feedText = await feed.text();
-    assert(feed.status === 200 && feedText.includes('<rss version="2.0"') && feedText.includes('atherix-post-1'), 'RSS feed should be publicly served with seeded posts');
+    assert(feed.status === 200 && feedText.includes('<rss version="2.0"') && feedText.includes('<link>https://dadaguai6686.github.io/?post=post-1</link>'), 'RSS feed should be publicly served with seeded post links');
+    assert(feedText.includes('<guid isPermaLink="true">https://dadaguai6686.github.io/?post=post-1</guid>'), 'RSS feed should use permalink article GUIDs');
     assert(feedText.includes('<url>https://dadaguai6686.github.io/assets/atherix-og-card.png</url>'), 'RSS feed should expose the branded channel image');
+    assert(feed.headers.get('cache-control')?.includes('max-age=300'), 'dynamic RSS feed should have a short public cache window');
 
     const sensitivePaths = [
       '/server.js',
@@ -208,9 +215,6 @@ async function run() {
       sensitiveResults[pathname] = response.status;
       assert(response.status === 404, `${pathname} should not be publicly served`);
     }
-
-    const postList = await waitForSeededPosts();
-    assert(Array.isArray(postList) && postList.length >= 1, 'seeded posts should be available');
 
     const missingToken = await fetch(`${baseUrl}/api/auth/verify`);
     assert(missingToken.status === 401, 'auth verify without token should return 401');

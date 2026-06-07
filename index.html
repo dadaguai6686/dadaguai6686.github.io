@@ -33,7 +33,7 @@
   <link rel="icon" href="/assets/atherix-icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/assets/atherix-icon-192.png">
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="/style.css?v=20260608-premium-mobile-v2">
+  <link rel="stylesheet" href="/style.css?v=20260608-readable-links-v3">
   <link rel="manifest" href="/manifest.webmanifest">
   <!-- Lucide Icons Local -->
   <script src="/lucide.min.js"></script>
@@ -907,16 +907,16 @@
           <div class="form-group">
             <label>选择个性表情头像</label>
             <div class="avatar-select-grid" id="avatar-select-grid">
-              <span class="avatar-option active" data-avatar="👨‍💻">👨‍💻</span>
-              <span class="avatar-option" data-avatar="👩‍💻">👩‍💻</span>
-              <span class="avatar-option" data-avatar="🚀">🚀</span>
-              <span class="avatar-option" data-avatar="🐱">🐱</span>
-              <span class="avatar-option" data-avatar="🦊">🦊</span>
-              <span class="avatar-option" data-avatar="🦄">🦄</span>
-              <span class="avatar-option" data-avatar="🤖">🤖</span>
-              <span class="avatar-option" data-avatar="🎨">🎨</span>
-              <span class="avatar-option" data-avatar="☕">☕</span>
-              <span class="avatar-option" data-avatar="🐼">🐼</span>
+              <button type="button" class="avatar-option active" data-avatar="👨‍💻" aria-pressed="true" aria-label="选择头像 程序员">👨‍💻</button>
+              <button type="button" class="avatar-option" data-avatar="👩‍💻" aria-pressed="false" aria-label="选择头像 开发者">👩‍💻</button>
+              <button type="button" class="avatar-option" data-avatar="🚀" aria-pressed="false" aria-label="选择头像 火箭">🚀</button>
+              <button type="button" class="avatar-option" data-avatar="🐱" aria-pressed="false" aria-label="选择头像 猫">🐱</button>
+              <button type="button" class="avatar-option" data-avatar="🦊" aria-pressed="false" aria-label="选择头像 狐狸">🦊</button>
+              <button type="button" class="avatar-option" data-avatar="🦄" aria-pressed="false" aria-label="选择头像 独角兽">🦄</button>
+              <button type="button" class="avatar-option" data-avatar="🤖" aria-pressed="false" aria-label="选择头像 机器人">🤖</button>
+              <button type="button" class="avatar-option" data-avatar="🎨" aria-pressed="false" aria-label="选择头像 调色板">🎨</button>
+              <button type="button" class="avatar-option" data-avatar="☕" aria-pressed="false" aria-label="选择头像 咖啡">☕</button>
+              <button type="button" class="avatar-option" data-avatar="🐼" aria-pressed="false" aria-label="选择头像 熊猫">🐼</button>
             </div>
             <input type="hidden" id="gb-avatar-val" value="👨‍💻">
           </div>
@@ -931,19 +931,19 @@
           <div class="form-actions-row">
             <div class="emoji-selector-trigger">
               <button type="button" class="emoji-btn" id="emoji-trigger" title="插入表情">😀</button>
-              <div class="emoji-popover" id="emoji-popover">
-                <span class="emoji-item">😀</span>
-                <span class="emoji-item">😂</span>
-                <span class="emoji-item">🔥</span>
-                <span class="emoji-item">👍</span>
-                <span class="emoji-item">🎉</span>
-                <span class="emoji-item">❤️</span>
-                <span class="emoji-item">😮</span>
-                <span class="emoji-item">🤔</span>
-                <span class="emoji-item">👀</span>
-                <span class="emoji-item">🚀</span>
-                <span class="emoji-item">🎨</span>
-                <span class="emoji-item">💡</span>
+              <div class="emoji-popover" id="emoji-popover" role="menu" aria-label="留言表情">
+                <button type="button" class="emoji-item" role="menuitem" aria-label="插入表情 笑脸">😀</button>
+                <button type="button" class="emoji-item" role="menuitem" aria-label="插入表情 大笑">😂</button>
+                <button type="button" class="emoji-item" role="menuitem" aria-label="插入表情 火焰">🔥</button>
+                <button type="button" class="emoji-item" role="menuitem" aria-label="插入表情 点赞">👍</button>
+                <button type="button" class="emoji-item" role="menuitem" aria-label="插入表情 庆祝">🎉</button>
+                <button type="button" class="emoji-item" role="menuitem" aria-label="插入表情 爱心">❤️</button>
+                <button type="button" class="emoji-item" role="menuitem" aria-label="插入表情 惊讶">😮</button>
+                <button type="button" class="emoji-item" role="menuitem" aria-label="插入表情 思考">🤔</button>
+                <button type="button" class="emoji-item" role="menuitem" aria-label="插入表情 关注">👀</button>
+                <button type="button" class="emoji-item" role="menuitem" aria-label="插入表情 火箭">🚀</button>
+                <button type="button" class="emoji-item" role="menuitem" aria-label="插入表情 调色板">🎨</button>
+                <button type="button" class="emoji-item" role="menuitem" aria-label="插入表情 灵感">💡</button>
               </div>
             </div>
             <button type="submit" class="action-btn action-btn-primary" id="guestbook-submit-btn">
@@ -1397,6 +1397,6 @@
   <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <!-- Main JavaScript File -->
-  <script src="/app.js?v=20260608-premium-mobile-v2"></script>
+  <script src="/app.js?v=20260608-readable-links-v3"></script>
 </body>
 </html>

@@ -16,6 +16,7 @@ const { authenticateToken, JWT_SECRET } = require('./auth');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
+const publicSiteUrl = (process.env.PUBLIC_SITE_URL || 'https://dadaguai6686.github.io').replace(/\/+$/, '');
 const trustProxy = process.env.TRUST_PROXY || '';
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .split(',')
@@ -182,6 +183,91 @@ function sendApiError(res, status, message) {
   return res.status(status).json({ error: message });
 }
 
+function escapeXml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function publicArticleUrl(postId = '') {
+  return `${publicSiteUrl}/?post=${encodeURIComponent(postId || '')}`;
+}
+
+function postDateValue(post) {
+  const parsed = Date.parse(post?.date || '');
+  return Number.isFinite(parsed) ? new Date(parsed) : new Date();
+}
+
+function sendStaticXmlFallback(res, filename, type) {
+  res.type(type);
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(__dirname, filename));
+}
+
+function renderFeedXml(posts) {
+  const ordered = [...posts].sort((a, b) => postDateValue(b) - postDateValue(a));
+  const lastBuild = ordered[0] ? postDateValue(ordered[0]).toUTCString() : new Date().toUTCString();
+  const items = ordered.map(post => {
+    const url = publicArticleUrl(post.id);
+    return `    <item>
+      <title>${escapeXml(post.title || '未命名文章')}</title>
+      <link>${escapeXml(url)}</link>
+      <guid isPermaLink="true">${escapeXml(url)}</guid>
+      <pubDate>${postDateValue(post).toUTCString()}</pubDate>
+      <category>${escapeXml(post.tag || '未分类')}</category>
+      <description>${escapeXml(post.excerpt || '')}</description>
+    </item>`;
+  }).join('\n');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Atherix Digital Space</title>
+    <link>${escapeXml(publicSiteUrl)}/</link>
+    <atom:link href="${escapeXml(publicSiteUrl)}/feed.xml" rel="self" type="application/rss+xml" />
+    <description>个人博客、开发者工具箱、项目展示与互动游戏组成的原生 Web 数字空间。</description>
+    <language>zh-CN</language>
+    <lastBuildDate>${lastBuild}</lastBuildDate>
+    <generator>Atherix Vanilla Web Stack</generator>
+    <image>
+      <url>${escapeXml(publicSiteUrl)}/assets/atherix-og-card.png</url>
+      <title>Atherix Digital Space</title>
+      <link>${escapeXml(publicSiteUrl)}/</link>
+      <width>144</width>
+      <height>76</height>
+    </image>
+${items}
+  </channel>
+</rss>
+`;
+}
+
+function renderSitemapXml(posts) {
+  const ordered = [...posts].sort((a, b) => postDateValue(b) - postDateValue(a));
+  const latest = ordered[0] ? postDateValue(ordered[0]).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+  const articleUrls = ordered.map(post => `  <url>
+    <loc>${escapeXml(publicArticleUrl(post.id))}</loc>
+    <lastmod>${postDateValue(post).toISOString().slice(0, 10)}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>${post.pinned ? '0.9' : '0.7'}</priority>
+  </url>`).join('\n');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>${escapeXml(publicSiteUrl)}/</loc>
+    <lastmod>${latest}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+${articleUrls}
+</urlset>
+`;
+}
+
 // Enable CORS, baseline hardening & JSON Parsing middleware
 app.disable('x-powered-by');
 app.use(cors({
@@ -291,6 +377,31 @@ const upload = multer({
 if (trustProxy) {
   app.set('trust proxy', parseTrustProxy(trustProxy));
 }
+
+app.get('/feed.xml', (req, res) => {
+  db.all('SELECT id, title, excerpt, tag, date, pinned FROM posts ORDER BY pinned DESC, date DESC', [], (err, rows) => {
+    if (err) {
+      console.warn('[feed]', err.message);
+      return sendStaticXmlFallback(res, 'feed.xml', 'application/rss+xml');
+    }
+    res.type('application/rss+xml');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.send(renderFeedXml(rows || []));
+  });
+});
+
+app.get('/sitemap.xml', (req, res) => {
+  db.all('SELECT id, title, excerpt, tag, date, pinned FROM posts ORDER BY pinned DESC, date DESC', [], (err, rows) => {
+    if (err) {
+      console.warn('[sitemap]', err.message);
+      return sendStaticXmlFallback(res, 'sitemap.xml', 'application/xml');
+    }
+    res.type('application/xml');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.send(renderSitemapXml(rows || []));
+  });
+});
+
 app.use('/uploads', express.static(uploadDir, {
   maxAge: '7d',
   immutable: false,

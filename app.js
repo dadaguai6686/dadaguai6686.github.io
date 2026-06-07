@@ -388,13 +388,27 @@ function init() {
   let currentPostId = '';
   let suppressHashSync = false;
 
+  function articleRoutePath(postId = '') {
+    return `/?post=${encodeURIComponent(postId || '')}`;
+  }
+
+  function articleHref(postId = '') {
+    return articleRoutePath(postId);
+  }
+
   function syncLocationHash(targetId, postId = '') {
     if (suppressHashSync) return;
-    const nextHash = targetId === 'blog-reader' && postId
-      ? `#post/${encodeURIComponent(postId)}`
-      : `#${targetId}`;
-    if (window.location.hash !== nextHash) {
-      window.history.pushState(null, '', nextHash);
+    const nextUrl = new URL(window.location.href);
+    nextUrl.pathname = '/';
+    nextUrl.search = '';
+    nextUrl.hash = targetId === 'blog-reader' && postId ? '' : `#${targetId}`;
+    if (targetId === 'blog-reader' && postId) {
+      nextUrl.searchParams.set('post', postId);
+    }
+    const nextRoute = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`;
+    const currentRouteUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (currentRouteUrl !== nextRoute) {
+      window.history.pushState(null, '', nextRoute);
     }
   }
 
@@ -483,6 +497,8 @@ function init() {
   // Featured Blog Card click route
   const quickBlogCard = document.getElementById('quick-blog-card');
   if (quickBlogCard) {
+    quickBlogCard.setAttribute('role', 'link');
+    quickBlogCard.setAttribute('tabindex', '0');
     quickBlogCard.addEventListener('click', () => {
       const featPost = blogPosts.find(p => p.pinned) || blogPosts[0];
       if (featPost) {
@@ -490,6 +506,11 @@ function init() {
       } else {
         navigateTo('blog');
       }
+    });
+    quickBlogCard.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      quickBlogCard.click();
     });
   }
 
@@ -1486,7 +1507,7 @@ function init() {
   }
 
   function currentArticleLink(postId = currentPostId) {
-    return `${window.location.origin}${window.location.pathname}#post/${encodeURIComponent(postId || '')}`;
+    return `${window.location.origin}${articleHref(postId || '')}`;
   }
 
   function getReaderFocusMode() {
@@ -1813,8 +1834,8 @@ function init() {
     if (!post || !blogReader || !readerContentEl) {
       showToast('没有找到这篇文章，已返回博客列表', 'warning');
       navigateTo('blog');
-      if (window.location.hash !== '#blog') {
-        window.history.replaceState(null, '', '#blog');
+      if (`${window.location.pathname}${window.location.search}${window.location.hash}` !== '/#blog') {
+        window.history.replaceState(null, '', '/#blog');
       }
       return;
     }
@@ -1939,8 +1960,13 @@ function init() {
       rawHash = decodeURIComponent(window.location.hash || '').replace(/^#/, '');
     } catch {
       showToast('文章链接格式无效，已返回博客列表', 'warning');
-      window.history.replaceState(null, '', '#blog');
+      window.history.replaceState(null, '', '/#blog');
       navigateTo('blog', { skipHash: true });
+      return;
+    }
+    const queryPostId = new URLSearchParams(window.location.search).get('post');
+    if (queryPostId) {
+      readArticle(queryPostId);
       return;
     }
     if (!rawHash) return;
@@ -1960,6 +1986,11 @@ function init() {
   }
 
   window.addEventListener('hashchange', () => {
+    suppressHashSync = true;
+    resolveInitialRoute();
+    suppressHashSync = false;
+  });
+  window.addEventListener('popstate', () => {
     suppressHashSync = true;
     resolveInitialRoute();
     suppressHashSync = false;
@@ -1995,12 +2026,11 @@ function init() {
     }
 
     filtered.forEach(post => {
-      const card = document.createElement('div');
+      const card = document.createElement('article');
       card.className = 'glass-card blog-post-card glow-card';
-      card.setAttribute('role', 'button');
-      card.setAttribute('tabindex', '0');
       card.dataset.postId = post.id || '';
       const postId = escapeHTML(post.id || '');
+      const postUrl = escapeHTML(articleHref(post.id || ''));
       const title = escapeHTML(post.title || '未命名文章');
       const tag = escapeHTML(post.tag || '未分类');
       const date = escapeHTML(post.date || '');
@@ -2033,11 +2063,11 @@ function init() {
           <span>&bull;</span>
           <span>${readTime}</span>
         </div>
-        <h3>${title}</h3>
+        <h3><a class="post-card-title-link" href="${postUrl}" data-post-link="${postId}">${title}</a></h3>
         <p class="post-excerpt">${excerpt}</p>
         <div class="post-state-row">${stateChips}</div>
         <div class="post-card-footer">
-          <span class="post-read-more">阅读全文 <i data-lucide="chevron-right" style="width: 14px; height: 14px;"></i></span>
+          <a class="post-read-more" href="${postUrl}" data-post-link="${postId}" aria-label="阅读全文：${title}">阅读全文 <i data-lucide="chevron-right" style="width: 14px; height: 14px;"></i></a>
           <div class="post-progress-cluster" aria-label="阅读进度 ${progress}%">
             <div class="post-progress-label">
               <span>进度</span>
@@ -2051,13 +2081,9 @@ function init() {
       // Card click reads, except if control was clicked
       card.addEventListener('click', (e) => {
         if (e.target.closest('.card-admin-btn')) return;
+        const postLink = e.target.closest('[data-post-link]');
+        if (postLink) e.preventDefault();
         readArticle(post.id);
-      });
-      card.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          readArticle(post.id);
-        }
       });
 
       blogPostsContainer.appendChild(card);
@@ -2084,11 +2110,16 @@ function init() {
     pinned.forEach(post => {
       const div = document.createElement('div');
       div.className = 'pinned-item';
+      const postUrl = escapeHTML(articleHref(post.id || ''));
+      const postId = escapeHTML(post.id || '');
       div.innerHTML = `
-        <h4>${escapeHTML(post.title || '未命名文章')}</h4>
+        <h4><a href="${postUrl}" data-pinned-post-link="${postId}">${escapeHTML(post.title || '未命名文章')}</a></h4>
         <span class="pinned-date">${escapeHTML(post.date || '')}</span>
       `;
-      div.addEventListener('click', () => readArticle(post.id));
+      div.querySelector('[data-pinned-post-link]')?.addEventListener('click', (event) => {
+        event.preventDefault();
+        readArticle(post.id);
+      });
       pinnedPostsContainer.appendChild(div);
     });
   }
@@ -2509,8 +2540,12 @@ function init() {
   // Handle avatar select
   avatarOptions.forEach(opt => {
     opt.addEventListener('click', () => {
-      avatarOptions.forEach(o => o.classList.remove('active'));
+      avatarOptions.forEach(o => {
+        o.classList.remove('active');
+        o.setAttribute('aria-pressed', 'false');
+      });
       opt.classList.add('active');
+      opt.setAttribute('aria-pressed', 'true');
       document.getElementById('gb-avatar-val').value = opt.getAttribute('data-avatar');
     });
   });
@@ -2651,13 +2686,23 @@ function init() {
 
   // Emoji Popover
   if (emojiTrigger) {
+    emojiTrigger.setAttribute('aria-haspopup', 'menu');
+    emojiTrigger.setAttribute('aria-expanded', 'false');
+    const setEmojiPopoverOpen = (open) => {
+      if (!emojiPopover) return;
+      emojiPopover.classList.toggle('active', open);
+      emojiTrigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
     emojiTrigger.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (emojiPopover) emojiPopover.classList.toggle('active');
+      setEmojiPopoverOpen(!emojiPopover?.classList.contains('active'));
     });
 
     document.addEventListener('click', () => {
-      if (emojiPopover) emojiPopover.classList.remove('active');
+      setEmojiPopoverOpen(false);
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') setEmojiPopoverOpen(false);
     });
 
     document.querySelectorAll('.emoji-item').forEach(item => {
@@ -2668,7 +2713,7 @@ function init() {
           updateGuestbookCounter();
           gbContent.focus();
         }
-        if (emojiPopover) emojiPopover.classList.remove('active');
+        setEmojiPopoverOpen(false);
       });
     });
   }

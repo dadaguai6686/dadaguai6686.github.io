@@ -1705,7 +1705,23 @@ main {
   transition: color 0.2s ease;
 }
 
-.blog-post-card:hover h3 {
+.post-card-title-link,
+.pinned-item a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.post-card-title-link:focus-visible,
+.post-read-more:focus-visible,
+.pinned-item a:focus-visible,
+.quick-blog-card:focus-visible {
+  outline: 2px solid rgba(52, 211, 153, 0.6);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+.blog-post-card:hover h3,
+.post-card-title-link:focus-visible {
   color: var(--accent);
 }
 
@@ -1727,6 +1743,7 @@ main {
   font-size: 0.85rem;
   color: var(--accent);
   font-weight: 600;
+  text-decoration: none;
   width: fit-content;
   transition: transform 0.2s ease;
 }
@@ -1859,7 +1876,8 @@ main {
   transition: color 0.2s ease;
 }
 
-.pinned-item:hover h4 {
+.pinned-item:hover h4,
+.pinned-item a:focus-visible {
   color: var(--accent);
 }
 
@@ -2852,6 +2870,9 @@ body.command-open {
 .emoji-item {
   width: 1.8rem;
   height: 1.8rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2861,8 +2882,15 @@ body.command-open {
   transition: background 0.2s ease;
 }
 
-.emoji-item:hover {
+.emoji-item:hover,
+.emoji-item:focus-visible {
   background: var(--glass-bg-hover);
+}
+
+.emoji-item:focus-visible,
+.avatar-option:focus-visible {
+  outline: 2px solid rgba(52, 211, 153, 0.58);
+  outline-offset: 3px;
 }
 
 .comments-list {
@@ -3280,6 +3308,7 @@ body.command-open {
   border-radius: 10px;
   border: 1px solid var(--glass-border);
   background: var(--glass-bg);
+  color: inherit;
   display: flex;
   align-items: center;
   justify-content: center;

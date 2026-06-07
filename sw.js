@@ -1,9 +1,9 @@
-const CACHE_VERSION = 'atherix-static-v24-premium-mobile';
+const CACHE_VERSION = 'atherix-static-v25-readable-links';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/style.css?v=20260608-premium-mobile-v2',
-  '/app.js?v=20260608-premium-mobile-v2',
+  '/style.css?v=20260608-readable-links-v3',
+  '/app.js?v=20260608-readable-links-v3',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',

@@ -590,6 +590,11 @@ async function run() {
       total: Number(document.querySelector('#blog-total-count')?.textContent || 0),
       filters: document.querySelectorAll('[data-reader-filter]').length,
       cards: document.querySelectorAll('.blog-post-card').length,
+      cardLinks: document.querySelectorAll('.blog-post-card a[data-post-link]').length,
+      firstCardHref: document.querySelector('.blog-post-card a[data-post-link]')?.getAttribute('href') || '',
+      pinnedLinks: document.querySelectorAll('[data-pinned-post-link]').length,
+      quickRole: document.querySelector('#quick-blog-card')?.getAttribute('role') || '',
+      quickTabIndex: document.querySelector('#quick-blog-card')?.getAttribute('tabindex') || '',
       progressCards: document.querySelectorAll('.post-state-chip.is-progress').length,
       progressText: document.querySelector('.post-state-chip.is-progress')?.textContent || '',
       average: document.querySelector('#blog-average-progress')?.textContent || '',
@@ -603,9 +608,10 @@ async function run() {
   await click('#reader-mark-read-btn');
   await wait(150);
   const readerCompletionState = await evaluate(`(() => {
-    const postId = location.hash.replace(/^#post\\//, '');
+    const postId = new URLSearchParams(location.search).get('post') || location.hash.replace(/^#post\\//, '');
     return {
       postId,
+      search: location.search,
       stored: localStorage.getItem(\`atherix_reader_progress_\${postId}\`) || '',
       label: document.querySelector('#reader-mark-read-btn')?.textContent.trim() || '',
       pressed: document.querySelector('#reader-mark-read-btn')?.getAttribute('aria-pressed') === 'true',
@@ -615,9 +621,10 @@ async function run() {
   await click('#reader-mark-read-btn');
   await wait(150);
   const readerResetState = await evaluate(`(() => {
-    const postId = location.hash.replace(/^#post\\//, '');
+    const postId = new URLSearchParams(location.search).get('post') || location.hash.replace(/^#post\\//, '');
     return {
       postId,
+      search: location.search,
       stored: localStorage.getItem(\`atherix_reader_progress_\${postId}\`) || '',
       label: document.querySelector('#reader-mark-read-btn')?.textContent.trim() || '',
       pressed: document.querySelector('#reader-mark-read-btn')?.getAttribute('aria-pressed') === 'true',
@@ -630,6 +637,7 @@ async function run() {
   await waitFor('#reader-next-panel.active [data-reader-next-open]', 5000);
   const blogState = await evaluate(`(() => ({
     hash: location.hash,
+    search: location.search,
     visibleArticle: document.querySelector('#blog-reader')?.classList.contains('active') && !!document.querySelector('#reader-post-content')?.innerText.trim(),
     articleChars: document.querySelector('#reader-post-content')?.innerText.trim().length || 0,
     toolbar: [
@@ -663,6 +671,8 @@ async function run() {
   const readerNextOpenState = await evaluate(`(() => ({
     clicked: ${JSON.stringify(readerNextClicked)},
     hash: location.hash,
+    search: location.search,
+    route: location.pathname + location.search + location.hash,
     title: document.querySelector('#reader-post-title')?.textContent.trim() || '',
     expectedTitle: ${JSON.stringify(blogState.nextFirstTitle)},
     expectedPostId: ${JSON.stringify(blogState.nextFirstPostId)},
@@ -718,7 +728,7 @@ async function run() {
   }))()`);
   const badPostRouteState = await evaluate(`(async () => {
     const fireHash = hash => {
-      history.pushState(null, '', hash);
+      history.pushState(null, '', \`/\${hash}\`);
       window.dispatchEvent(new HashChangeEvent('hashchange'));
     };
     fireHash('#post/not-found-smoke');
@@ -736,7 +746,56 @@ async function run() {
       readerActive: document.querySelector('#blog-reader')?.classList.contains('active') || false,
       toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || ''
     };
-    return { missing, malformed };
+    history.pushState(null, '', '/?post=not-found-query-smoke');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    await new Promise(resolve => setTimeout(resolve, 180));
+    const badQuery = {
+      pathname: location.pathname,
+      search: location.search,
+      hash: location.hash,
+      blogActive: document.querySelector('#blog')?.classList.contains('active') || false,
+      readerActive: document.querySelector('#blog-reader')?.classList.contains('active') || false
+    };
+    history.pushState(null, '', '/?post=post-1');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    await new Promise(resolve => setTimeout(resolve, 220));
+    const queryOpen = {
+      pathname: location.pathname,
+      search: location.search,
+      hash: location.hash,
+      readerActive: document.querySelector('#blog-reader')?.classList.contains('active') || false,
+      title: document.querySelector('#reader-post-title')?.textContent.trim() || ''
+    };
+    return { missing, malformed, badQuery, queryOpen };
+  })()`);
+
+  await click('.nav-item[data-target="guestbook"]');
+  await waitFor('#guestbook-form');
+  await wait(180);
+  const guestbookA11yState = await evaluate(`(() => {
+    const content = document.querySelector('#gb-content');
+    if (content) content.value = '';
+    const avatars = [...document.querySelectorAll('.avatar-option')];
+    avatars[1]?.click();
+    const trigger = document.querySelector('#emoji-trigger');
+    trigger?.click();
+    const firstEmoji = document.querySelector('.emoji-item');
+    firstEmoji?.focus();
+    const focusedEmoji = document.activeElement === firstEmoji;
+    firstEmoji?.click();
+    return {
+      avatarButtons: avatars.length,
+      avatarButtonTypes: avatars.filter(btn => btn.tagName === 'BUTTON' && btn.getAttribute('type') === 'button').length,
+      activeAvatar: document.querySelector('.avatar-option.active')?.dataset.avatar || '',
+      activePressed: document.querySelector('.avatar-option.active')?.getAttribute('aria-pressed') || '',
+      inactivePressed: document.querySelector('.avatar-option:not(.active)')?.getAttribute('aria-pressed') || '',
+      hiddenAvatar: document.querySelector('#gb-avatar-val')?.value || '',
+      emojiButtons: document.querySelectorAll('.emoji-item[role="menuitem"]').length,
+      triggerExpandedAfterClose: trigger?.getAttribute('aria-expanded') || '',
+      focusedEmoji,
+      contentValue: content?.value || '',
+      horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+    };
   })()`);
 
   await click('.nav-item[data-target="projects"]');
@@ -1760,19 +1819,21 @@ async function run() {
   assert(/Vault restored task/.test(vaultImportState.todoStored), `data vault import should restore local tool state: ${JSON.stringify(vaultImportState)}`);
   assert(legacyVaultHydrationState.survivorBest === 4321 && legacyVaultHydrationState.survivorMedal === 'gold' && legacyVaultHydrationState.totalScore >= 4321 && legacyVaultHydrationState.leaderboardTopGame === 'survivor' && legacyVaultHydrationState.leaderboardTopScore === 4321 && legacyVaultHydrationState.profileTopGame === 'survivor' && legacyVaultHydrationState.profileMedals >= 1 && legacyVaultHydrationState.masterySurvivorScore === 4321 && legacyVaultHydrationState.prizeTotal >= 4321 && legacyVaultHydrationState.prizeProgress > 0 && legacyVaultHydrationState.prizeUnlocked >= 3 && /4321/.test(legacyVaultHydrationState.totalText), `legacy arcade best imports should hydrate the premium career profile and season track: ${JSON.stringify(legacyVaultHydrationState)}`);
   assert(blogHubBefore.panel && blogHubBefore.total >= 1 && blogHubBefore.filters >= 3 && blogHubBefore.cards >= 1, `blog reading hub should render stats and filters: ${JSON.stringify(blogHubBefore)}`);
+  assert(blogHubBefore.cardLinks >= blogHubBefore.cards && /^\/\?post=/.test(blogHubBefore.firstCardHref) && blogHubBefore.pinnedLinks >= 1 && blogHubBefore.quickRole === 'link' && blogHubBefore.quickTabIndex === '0', `blog cards and featured entry should expose native article links: ${JSON.stringify(blogHubBefore)}`);
   assert(blogHubBefore.progressCards >= 1 && /42/.test(blogHubBefore.progressText) && !blogHubBefore.horizontalOverflow, `blog reading hub should show resumable progress without overflow: ${JSON.stringify(blogHubBefore)}`);
   assert(blogState.toolbar && blogState.bookmarkPressed, 'blog reader toolbar should render and toggle bookmark state');
   assert(readerCompletionState.stored === '100' && readerCompletionState.pressed && /重新阅读/.test(readerCompletionState.label) && readerCompletionState.progress === '100%', `blog reader should support explicit completion: ${JSON.stringify(readerCompletionState)}`);
   assert(readerResetState.stored === '0' && !readerResetState.pressed && /标记读完/.test(readerResetState.label) && readerResetState.progress === '0%', `blog reader should support reread reset: ${JSON.stringify(readerResetState)}`);
   assert(blogState.nextPanel && blogState.nextCards >= 1 && blogState.nextFirstTitle && blogState.nextFirstPostId, `blog reader should recommend a next article: ${JSON.stringify(blogState)}`);
   assert(blogState.nextReasons.some(reason => /同主题延伸|拓展视角|未开始|读到|稍后读|精选|适合复盘/.test(reason)) && /^\d+%$/.test(blogState.nextProgress), `blog reader recommendations should explain ranking and progress: ${JSON.stringify(blogState)}`);
-  assert(readerNextOpenState.clicked && readerNextOpenState.visibleArticle && readerNextOpenState.title === readerNextOpenState.expectedTitle && readerNextOpenState.hash.includes(readerNextOpenState.expectedPostId) && readerNextOpenState.nextPanel && readerNextOpenState.nextCards >= 1 && !readerNextOpenState.horizontalOverflow, `blog reader recommendation should open another article cleanly: ${JSON.stringify(readerNextOpenState)}`);
+  assert(readerNextOpenState.clicked && readerNextOpenState.visibleArticle && readerNextOpenState.title === readerNextOpenState.expectedTitle && readerNextOpenState.route.includes(`post=${encodeURIComponent(readerNextOpenState.expectedPostId)}`) && readerNextOpenState.nextPanel && readerNextOpenState.nextCards >= 1 && !readerNextOpenState.horizontalOverflow, `blog reader recommendation should open another article cleanly: ${JSON.stringify(readerNextOpenState)}`);
   assert(readerToolState.shareButton && readerToolState.exportButton && readerToolState.modePressed && readerToolState.focusClass && readerToolState.storedMode === 'enabled' && !readerToolState.horizontalOverflow, `blog reader tools should support focus mode without overflow: ${JSON.stringify(readerToolState)}`);
   assert(readerExportState.clicks.length === 1 && /\.md$/i.test(readerExportState.clicks[0].download) && readerExportState.blobInfo?.size > 100 && /markdown/i.test(readerExportState.blobInfo.type), `blog reader should export the current article as markdown: ${JSON.stringify(readerExportState)}`);
   assert(blogState.tocActive && blogState.tocLinks >= 2, 'blog reader should build a table of contents from article headings');
   assert(/^\d+%$/.test(blogState.progress), 'blog reader should report reading progress');
   assert(blogHubAfterBookmark.activeFilter && blogHubAfterBookmark.bookmarkCount >= 1 && blogHubAfterBookmark.bookmarkedCards >= 1 && !blogHubAfterBookmark.horizontalOverflow, `blog reading hub should filter bookmarked articles: ${JSON.stringify(blogHubAfterBookmark)}`);
-  assert(badPostRouteState.missing.hash === '#blog' && badPostRouteState.missing.blogActive && !badPostRouteState.missing.readerActive && badPostRouteState.malformed.hash === '#blog' && badPostRouteState.malformed.blogActive && !badPostRouteState.malformed.readerActive, `bad blog post hashes should recover to the blog list: ${JSON.stringify(badPostRouteState)}`);
+  assert(badPostRouteState.missing.hash === '#blog' && badPostRouteState.missing.blogActive && !badPostRouteState.missing.readerActive && badPostRouteState.malformed.hash === '#blog' && badPostRouteState.malformed.blogActive && !badPostRouteState.malformed.readerActive && badPostRouteState.badQuery.pathname === '/' && badPostRouteState.badQuery.search === '' && badPostRouteState.badQuery.hash === '#blog' && badPostRouteState.badQuery.blogActive && !badPostRouteState.badQuery.readerActive && badPostRouteState.queryOpen.search === '?post=post-1' && badPostRouteState.queryOpen.readerActive && badPostRouteState.queryOpen.title, `bad blog routes should recover and query article routes should open: ${JSON.stringify(badPostRouteState)}`);
+  assert(guestbookA11yState.avatarButtons >= 10 && guestbookA11yState.avatarButtonTypes === guestbookA11yState.avatarButtons && guestbookA11yState.activeAvatar === guestbookA11yState.hiddenAvatar && guestbookA11yState.activePressed === 'true' && guestbookA11yState.inactivePressed === 'false' && guestbookA11yState.emojiButtons >= 12 && guestbookA11yState.focusedEmoji && guestbookA11yState.triggerExpandedAfterClose === 'false' && guestbookA11yState.contentValue.length > 0 && !guestbookA11yState.horizontalOverflow, `guestbook avatar and emoji controls should be keyboard-accessible buttons: ${JSON.stringify(guestbookA11yState)}`);
   assert(
     blogState.codeBlocks >= 1,
     `blog markdown should preserve fenced code blocks: ${JSON.stringify(blogState)}`
@@ -1990,6 +2051,7 @@ async function run() {
     readerExportState,
     blogHubAfterBookmark,
     badPostRouteState,
+    guestbookA11yState,
     projectViewportState,
     projectState,
     projectModalClosedState,
