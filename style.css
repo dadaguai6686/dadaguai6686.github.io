@@ -4064,10 +4064,19 @@ body.command-open {
 
 @media (max-width: 760px) {
   .arcade-page-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
     padding-top: 3.2rem !important;
   }
 
+  .arcade-library {
+    order: 1;
+    margin-top: 0;
+  }
+
   .arcade-cabinet-bezel {
+    order: 2;
     padding: 0.9rem !important;
     border-radius: 10px !important;
   }
@@ -4114,6 +4123,8 @@ body.command-open {
 
 /* Mini Game Library */
 .arcade-library {
+  display: flex;
+  flex-direction: column;
   margin-top: 1.5rem;
   border-radius: 12px;
 }
@@ -4157,6 +4168,144 @@ body.command-open {
 .mini-game-scoreboard strong {
   color: #fff;
   font-size: 0.95rem;
+}
+
+.arcade-cockpit-panel {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.15fr) minmax(360px, 1.25fr) minmax(210px, auto);
+  gap: 0.75rem;
+  align-items: stretch;
+  margin-bottom: 1rem;
+  padding: 0.9rem;
+  overflow: hidden;
+  border: 1px solid rgba(34, 211, 238, 0.28);
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, 0.12), rgba(52, 211, 153, 0.08)),
+    rgba(3, 7, 18, 0.58);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 16px 34px rgba(2, 6, 23, 0.18);
+}
+
+.arcade-cockpit-panel[data-tone="medal"],
+.arcade-cockpit-panel[data-tone="league"] {
+  border-color: rgba(251, 191, 36, 0.34);
+  background:
+    linear-gradient(135deg, rgba(251, 191, 36, 0.12), rgba(34, 211, 238, 0.08)),
+    rgba(3, 7, 18, 0.58);
+}
+
+.arcade-cockpit-panel[data-tone="mastery"],
+.arcade-cockpit-panel[data-complete="true"] {
+  border-color: rgba(167, 139, 250, 0.34);
+  background:
+    linear-gradient(135deg, rgba(167, 139, 250, 0.13), rgba(52, 211, 153, 0.08)),
+    rgba(3, 7, 18, 0.58);
+}
+
+.arcade-cockpit-main {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 0.36rem;
+}
+
+.arcade-cockpit-main span,
+.arcade-cockpit-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.36rem;
+}
+
+.arcade-cockpit-main span {
+  color: #a5f3fc;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.arcade-cockpit-main svg,
+.arcade-cockpit-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+.arcade-cockpit-main strong {
+  color: #fff;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.12rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.arcade-cockpit-main small {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.38;
+}
+
+.arcade-cockpit-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.arcade-cockpit-grid span {
+  min-height: 62px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.18rem;
+  padding: 0.55rem 0.62rem;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.48);
+}
+
+.arcade-cockpit-grid small {
+  color: var(--text-muted);
+  font-size: 0.66rem;
+  font-weight: 850;
+}
+
+.arcade-cockpit-grid strong {
+  min-width: 0;
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.arcade-cockpit-actions {
+  display: grid;
+  gap: 0.55rem;
+  align-content: stretch;
+}
+
+.arcade-cockpit-action {
+  min-width: 178px;
+  justify-content: center;
+  border: 1px solid rgba(34, 211, 238, 0.34);
+  border-radius: 8px;
+  background: rgba(14, 116, 144, 0.16);
+  color: #e0f2fe;
+  font-size: 0.75rem;
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.arcade-cockpit-primary {
+  border-color: rgba(52, 211, 153, 0.42);
+  background: linear-gradient(135deg, rgba(20, 184, 166, 0.28), rgba(34, 211, 238, 0.18));
+  color: #ecfeff;
+}
+
+.arcade-cockpit-action:hover,
+.arcade-cockpit-action:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(251, 191, 36, 0.46);
+  background: rgba(30, 41, 59, 0.62);
 }
 
 .arcade-career-panel {
@@ -6911,7 +7060,24 @@ body.command-open {
   filter: brightness(1.15);
 }
 
+.premium-action-pad:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+  filter: grayscale(0.35);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
+}
+
 @media (max-width: 1100px) {
+  .arcade-cockpit-panel {
+    grid-template-columns: minmax(260px, 1fr) minmax(300px, 1fr);
+  }
+  .arcade-cockpit-actions {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .arcade-cockpit-action {
+    min-height: 44px;
+  }
   .arcade-run-log-list,
   .arcade-leaderboard-list,
   .arcade-mastery-grid,
@@ -6946,9 +7112,51 @@ body.command-open {
 }
 
 @media (max-width: 760px) {
+  .arcade-cockpit-panel {
+    order: 0;
+    grid-template-columns: 1fr;
+    padding: 0.78rem;
+  }
+  .arcade-cockpit-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .arcade-cockpit-grid span {
+    min-height: 54px;
+  }
+  .arcade-cockpit-actions {
+    grid-template-columns: 1fr;
+  }
+  .arcade-cockpit-action {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+  }
   .arcade-library-header {
+    order: 3;
     align-items: stretch;
     flex-direction: column;
+  }
+  .mini-game-tabs {
+    order: 1;
+    margin-bottom: 0.75rem;
+  }
+  .mini-game-stage {
+    order: 2;
+  }
+  .arcade-career-panel,
+  .arcade-profile-panel,
+  .arcade-prize-track,
+  .arcade-run-log-panel,
+  .arcade-leaderboard-panel,
+  .arcade-rival-panel,
+  .arcade-coach-panel,
+  .arcade-director-panel,
+  .arcade-mastery-panel,
+  .arcade-contract-board,
+  .arcade-league-panel,
+  .arcade-difficulty-panel,
+  .arcade-loadout-panel {
+    order: 4;
   }
   .arcade-career-panel {
     grid-template-columns: 1fr;

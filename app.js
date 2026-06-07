@@ -443,6 +443,7 @@ function init() {
 
     // Stop game and music if switching away from game tab, initialize if entering
     if (targetId !== 'game') {
+      window.__atherixPausePremiumRealtimeGames?.('navigate');
       gameRunning = false;
       cancelAnimationFrame(gameLoopId);
       cancelAnimationFrame(deathAnimationId);
@@ -1812,6 +1813,9 @@ function init() {
     if (!post || !blogReader || !readerContentEl) {
       showToast('没有找到这篇文章，已返回博客列表', 'warning');
       navigateTo('blog');
+      if (window.location.hash !== '#blog') {
+        window.history.replaceState(null, '', '#blog');
+      }
       return;
     }
 
@@ -1822,7 +1826,10 @@ function init() {
     if (readerTag) readerTag.textContent = post.tag || '未分类';
     if (readerDate) readerDate.textContent = post.date || '';
     if (readerReadTime) readerReadTime.textContent = post.readTime || '';
-    if (readerTitle) readerTitle.textContent = post.title || '未命名文章';
+    if (readerTitle) {
+      readerTitle.textContent = post.title || '未命名文章';
+      readerTitle.setAttribute('tabindex', '-1');
+    }
     readerContentEl.innerHTML = renderMarkdown(post.content || '');
     document.title = `${post.title || '文章'} - Atherix`;
     currentPostId = post.id;
@@ -1838,6 +1845,7 @@ function init() {
     }
 
     safeCreateIcons();
+    setTimeout(() => readerTitle?.focus({ preventScroll: true }), 40);
     const savedProgress = Number(localStorage.getItem(readerProgressKey(post.id)) || 0);
     setTimeout(() => {
       if (savedProgress > 8 && savedProgress < 92 && readerContentEl) {
@@ -1926,7 +1934,15 @@ function init() {
   }
 
   function resolveInitialRoute() {
-    const rawHash = decodeURIComponent(window.location.hash || '').replace(/^#/, '');
+    let rawHash = '';
+    try {
+      rawHash = decodeURIComponent(window.location.hash || '').replace(/^#/, '');
+    } catch {
+      showToast('文章链接格式无效，已返回博客列表', 'warning');
+      window.history.replaceState(null, '', '#blog');
+      navigateTo('blog', { skipHash: true });
+      return;
+    }
     if (!rawHash) return;
 
     if (rawHash.startsWith('post/')) {
@@ -4503,6 +4519,29 @@ function init() {
           <strong id="premium-active-title">星核幸存者 Starcore Survivor</strong>
         </div>
       </div>
+      <div class="arcade-cockpit-panel" id="premium-cockpit-panel" data-tone="daily" aria-label="街机作战驾驶舱">
+        <div class="arcade-cockpit-main">
+          <span><i data-lucide="radio-tower"></i> ARCADE COCKPIT</span>
+          <strong id="premium-cockpit-title">作战驾驶舱初始化中...</strong>
+          <small id="premium-cockpit-summary">把推荐目标、当前模式、难度芯片和赛季进度合并成一眼能开局的控制台。</small>
+        </div>
+        <div class="arcade-cockpit-grid">
+          <span><small>当前模式</small><strong id="premium-cockpit-mode">星核幸存者</strong></span>
+          <span><small>难度</small><strong id="premium-cockpit-difficulty">标准</strong></span>
+          <span><small>芯片</small><strong id="premium-cockpit-loadout">脉冲校准</strong></span>
+          <span><small>赛季</small><strong id="premium-cockpit-season">0%</strong></span>
+        </div>
+        <div class="arcade-cockpit-actions">
+          <button type="button" class="arcade-cockpit-action arcade-cockpit-primary" id="premium-cockpit-play">
+            <i data-lucide="play"></i>
+            <span>立即开局</span>
+          </button>
+          <button type="button" class="arcade-cockpit-action" id="premium-cockpit-target" data-cockpit-target-game="survivor">
+            <i data-lucide="crosshair"></i>
+            <span>挑战推荐</span>
+          </button>
+        </div>
+      </div>
       <div class="arcade-career-panel" aria-label="街机生涯总览">
         <div class="career-rank-card">
           <span>街机评级</span>
@@ -4702,7 +4741,7 @@ function init() {
           <div class="career-dialog-achievements" id="premium-career-achievements"></div>
         </div>
       </div>
-      <div class="mini-game-tabs" role="tablist" aria-label="精品小游戏选择">
+      <div class="mini-game-tabs" id="premium-game-tabs" role="tablist" aria-label="精品小游戏选择">
         <button type="button" class="mini-game-tab active" data-premium-game="survivor">星核幸存者</button>
         <button type="button" class="mini-game-tab" data-premium-game="boss">棱镜 Boss</button>
         <button type="button" class="mini-game-tab" data-premium-game="drift">霓虹漂移</button>
@@ -6363,6 +6402,63 @@ function init() {
       }
     }
 
+    function arcadeCockpitSnapshot() {
+      const directive = arcadeDirective();
+      const prize = arcadePrizeTrackSnapshot();
+      const difficulty = activeDifficultyDef();
+      const loadout = activeLoadoutDef();
+      const activeLabel = premiumTabLabels[premiumActive] || titles[premiumActive] || premiumActive;
+      const targetGame = directive.game || prize.targetGame || 'survivor';
+      const targetLabel = targetGame === 'runner'
+        ? '主线远征'
+        : (premiumTabLabels[targetGame] || titles[targetGame] || targetGame);
+      return {
+        activeGame: premiumActive,
+        activeLabel,
+        targetGame,
+        targetLabel,
+        tone: directive.tone,
+        title: directive.title,
+        summary: `${directive.reason} 当前 ${activeLabel} · ${difficulty.short}协议 · ${loadout.label}。`,
+        difficulty: difficulty.short,
+        loadout: loadout.label,
+        seasonProgress: prize.progress,
+        seasonText: prize.complete ? '完成' : `${prize.progress}%`,
+        complete: prize.complete
+      };
+    }
+
+    function renderArcadeCockpit() {
+      const panel = document.getElementById('premium-cockpit-panel');
+      if (!panel) return;
+      const snapshot = arcadeCockpitSnapshot();
+      const titleEl = document.getElementById('premium-cockpit-title');
+      const summaryEl = document.getElementById('premium-cockpit-summary');
+      const modeEl = document.getElementById('premium-cockpit-mode');
+      const difficultyEl = document.getElementById('premium-cockpit-difficulty');
+      const loadoutEl = document.getElementById('premium-cockpit-loadout');
+      const seasonEl = document.getElementById('premium-cockpit-season');
+      const playBtn = document.getElementById('premium-cockpit-play');
+      const targetBtn = document.getElementById('premium-cockpit-target');
+      panel.dataset.tone = snapshot.tone;
+      panel.dataset.complete = snapshot.complete ? 'true' : 'false';
+      if (titleEl) titleEl.textContent = snapshot.title;
+      if (summaryEl) summaryEl.textContent = snapshot.summary;
+      if (modeEl) modeEl.textContent = snapshot.activeLabel;
+      if (difficultyEl) difficultyEl.textContent = snapshot.difficulty;
+      if (loadoutEl) loadoutEl.textContent = snapshot.loadout;
+      if (seasonEl) seasonEl.textContent = snapshot.seasonText;
+      if (playBtn) {
+        playBtn.querySelector('span').textContent = `开局 ${snapshot.activeLabel}`;
+        playBtn.setAttribute('aria-label', `开局 ${snapshot.activeLabel}`);
+      }
+      if (targetBtn) {
+        targetBtn.dataset.cockpitTargetGame = snapshot.targetGame;
+        targetBtn.querySelector('span').textContent = `推荐 ${snapshot.targetLabel}`;
+        targetBtn.setAttribute('aria-label', `进入推荐挑战 ${snapshot.targetLabel}`);
+      }
+    }
+
     function updatePremiumTabBadges() {
       library.querySelectorAll('[data-premium-game]').forEach(btn => {
         const game = btn.dataset.premiumGame;
@@ -6446,6 +6542,7 @@ function init() {
           : '完成后解锁限定徽章';
       }
       renderAchievementFeed();
+      renderArcadeCockpit();
       renderArcadeProfile();
       renderArcadePrizeTrack();
       renderArcadeRunLog();
@@ -6657,6 +6754,30 @@ function init() {
       if (name !== 'drift' && drift.running && !drift.paused) toggleDriftPause(true);
     }
 
+    function updatePremiumTouchLabels() {
+      const labels = {
+        survivor: { action: '星爆', tool: '', actionLabel: '释放星爆', toolLabel: '' },
+        boss: { action: '闪避', tool: '', actionLabel: '闪避冲刺', toolLabel: '' },
+        drift: { action: '加速', tool: '相位', actionLabel: '量子加速', toolLabel: '相位刹车' },
+        heist: { action: '隐身', tool: '诱饵', actionLabel: '启动隐身', toolLabel: '部署诱饵' },
+        chain: { action: '', tool: '催化', actionLabel: '', toolLabel: '触发催化' },
+        tactics: { action: '爆破', tool: '', actionLabel: '相位爆破或架盾', toolLabel: '' }
+      };
+      const config = labels[premiumActive] || labels.survivor;
+      const actionBtn = library.querySelector('[data-premium-control="action"]');
+      const toolBtn = library.querySelector('[data-premium-control="tool"]');
+      if (actionBtn) {
+        actionBtn.textContent = config.action || 'ACT';
+        actionBtn.disabled = !config.action;
+        actionBtn.setAttribute('aria-label', config.actionLabel || '当前模式无主要动作');
+      }
+      if (toolBtn) {
+        toolBtn.textContent = config.tool || 'TOOL';
+        toolBtn.disabled = !config.tool;
+        toolBtn.setAttribute('aria-label', config.toolLabel || '当前模式无工具动作');
+      }
+    }
+
     function switchPremiumGame(name) {
       premiumActive = name;
       pauseRealtimePremiumGamesExcept(name);
@@ -6670,6 +6791,8 @@ function init() {
       if (title) title.textContent = titles[name];
       if (name === 'tactics') drawTactics();
       if (name === 'drift') drawDrift();
+      updatePremiumTouchLabels();
+      renderArcadeCockpit();
       focusStage();
     }
 
@@ -6723,6 +6846,17 @@ function init() {
     }
 
     document.getElementById('premium-director-start')?.addEventListener('click', launchDirectorChallenge);
+    document.getElementById('premium-cockpit-play')?.addEventListener('click', () => {
+      focusStage();
+      startPremiumActiveGame();
+      stage?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      showToast(`开局：${premiumTabLabels[premiumActive] || titles[premiumActive] || premiumActive}`, 'success');
+    });
+    document.getElementById('premium-cockpit-target')?.addEventListener('click', () => {
+      const target = document.getElementById('premium-cockpit-target')?.dataset.cockpitTargetGame || arcadeDirective().game;
+      launchMasteryTarget(target, { announce: false });
+      showToast(`驾驶舱推荐：${target === 'runner' ? '主线远征' : (titles[target] || target)}`, 'info');
+    });
     document.getElementById('premium-league-start')?.addEventListener('click', launchLeagueStage);
     document.getElementById('premium-rival-start')?.addEventListener('click', launchRivalChallenge);
     document.getElementById('premium-profile-target')?.addEventListener('click', () => {
@@ -6779,21 +6913,35 @@ function init() {
       }
     }
 
+    const activePremiumTouchPointers = new Map();
     library.querySelectorAll('[data-premium-control]').forEach(btn => {
       const control = btn.dataset.premiumControl;
       const press = (event) => {
         event.preventDefault();
+        if (btn.disabled) return;
+        activePremiumTouchPointers.set(event.pointerId, control);
+        try {
+          btn.setPointerCapture?.(event.pointerId);
+        } catch {}
         focusStage();
         applyPremiumControl(control, true, 'touch');
       };
       const release = (event) => {
         event.preventDefault();
+        if (activePremiumTouchPointers.get(event.pointerId) !== control) return;
+        activePremiumTouchPointers.delete(event.pointerId);
         applyPremiumControl(control, false, 'touch');
+        try {
+          btn.releasePointerCapture?.(event.pointerId);
+        } catch {}
       };
       btn.addEventListener('pointerdown', press);
       btn.addEventListener('pointerup', release);
-      btn.addEventListener('pointerleave', release);
+      btn.addEventListener('pointerleave', (event) => {
+        if (!btn.hasPointerCapture?.(event.pointerId)) release(event);
+      });
       btn.addEventListener('pointercancel', release);
+      btn.addEventListener('lostpointercapture', release);
     });
 
     function firstConnectedGamepad() {
@@ -11697,6 +11845,8 @@ function init() {
         ...(window.__atherixDebug || {}),
         premium: {
           active: () => premiumActive,
+          cockpit: () => arcadeCockpitSnapshot(),
+          pauseRealtime: (reason = 'debug') => pauseAllPremiumRealtimeGames(reason),
           survivorRunning: () => survivor.running,
           survivorPaused: () => survivor.paused,
           survivorElapsed: () => survivor.elapsed,
@@ -12025,11 +12175,42 @@ function init() {
       };
     }
 
+    function pauseAllPremiumRealtimeGames(reason = 'auto') {
+      const paused = [];
+      if (survivor.running && !survivor.paused) {
+        survivor.paused = true;
+        survivor.last = performance.now();
+        updateSurvivorPauseButton();
+        paused.push('survivor');
+      }
+      if (bossMode.running && !bossMode.paused) {
+        bossMode.paused = true;
+        bossMode.last = performance.now();
+        updateBossPauseButton();
+        paused.push('boss');
+      }
+      if (drift.running && !drift.paused) {
+        drift.paused = true;
+        drift.last = performance.now();
+        updateDriftPauseButton();
+        paused.push('drift');
+      }
+      if (paused.length) clearPremiumKeys();
+      return { reason, paused, active: premiumActive };
+    }
+
+    window.__atherixPausePremiumRealtimeGames = pauseAllPremiumRealtimeGames;
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) pauseAllPremiumRealtimeGames('hidden');
+    });
+
     window.addEventListener('keydown', (e) => {
       if (!isGameSectionActive() || isEditableTarget(e.target) || !document.activeElement?.closest?.('#premium-game-stage')) return;
       const codes = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyQ', 'KeyP', 'Escape', 'Digit1', 'Digit2', 'Digit3'];
       if (!codes.includes(e.code)) return;
       e.preventDefault();
+      const discreteCodes = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyQ'];
+      if (e.repeat && ['heist', 'tactics', 'chain'].includes(premiumActive) && discreteCodes.includes(e.code)) return;
       if (premiumActive === 'survivor' && survivor.draftOpen) {
         if (['Digit1', 'Digit2', 'Digit3'].includes(e.code)) {
           selectSurvivorUpgrade(survivor.draftChoices[Number(e.code.replace('Digit', '')) - 1]?.id);
@@ -12059,7 +12240,11 @@ function init() {
       if (e.code === 'KeyQ') applyPremiumControl('tool', false, 'keyboard');
     });
 
-    window.addEventListener('blur', clearPremiumKeys);
+    updatePremiumTouchLabels();
+    window.addEventListener('blur', () => {
+      clearPremiumKeys();
+      pauseAllPremiumRealtimeGames('blur');
+    });
   })();
 
   // 4. Cyber Astro-Runner Mario-style Game Engine

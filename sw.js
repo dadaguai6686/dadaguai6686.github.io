@@ -1,9 +1,9 @@
-const CACHE_VERSION = 'atherix-static-v22-prize-track';
+const CACHE_VERSION = 'atherix-static-v24-premium-mobile';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/style.css?v=20260608-prize-track-v1',
-  '/app.js?v=20260608-prize-track-v1',
+  '/style.css?v=20260608-premium-mobile-v2',
+  '/app.js?v=20260608-premium-mobile-v2',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',

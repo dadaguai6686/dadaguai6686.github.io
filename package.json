@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "check": "node --check app.js && node --check server.js && node --check db.js && node --check auth.js",
+    "check": "node --check app.js && node --check server.js && node --check db.js && node --check auth.js && node --check sw.js && node --check scripts/cdp-smoke-test.cjs && node --check scripts/api-smoke-test.cjs",
     "health": "node -e \"fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/api/health').then(r=>r.json()).then(console.log)\"",
     "smoke:api": "node scripts/api-smoke-test.cjs",
     "smoke:games": "node scripts/cdp-smoke-test.cjs"

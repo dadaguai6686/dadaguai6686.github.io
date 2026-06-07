@@ -284,6 +284,32 @@ async function run() {
     const createdPostBody = await createdPost.json();
     assert(createdPostBody.postId === smokePostId, 'created smoke post id should be returned');
 
+    const createdPostList = await fetch(`${baseUrl}/api/posts`);
+    const createdPostRows = await createdPostList.json();
+    const createdSmokePost = createdPostRows.find(post => post.id === smokePostId);
+    assert(createdSmokePost?.date, 'created smoke post should receive a date');
+
+    const updatedPostWithoutDate = await fetch(`${baseUrl}/api/posts/${encodeURIComponent(smokePostId)}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${loginBody.token}`
+      },
+      body: JSON.stringify({
+        title: 'Smoke Test Draft Updated',
+        excerpt: 'updated draft',
+        content: '# Smoke Test Draft Updated\n\nTemporary updated test content.',
+        tag: '测试',
+        readTime: '2 分钟阅读',
+        pinned: false
+      })
+    });
+    assert(updatedPostWithoutDate.status === 200, 'admin post update without date should succeed');
+    const updatedPostList = await fetch(`${baseUrl}/api/posts`);
+    const updatedPostRows = await updatedPostList.json();
+    const updatedSmokePost = updatedPostRows.find(post => post.id === smokePostId);
+    assert(updatedSmokePost?.date === createdSmokePost.date, 'admin post update without date should preserve the original date');
+
     const deletedPost = await fetch(`${baseUrl}/api/posts/${encodeURIComponent(smokePostId)}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${loginBody.token}` }
@@ -370,6 +396,7 @@ async function run() {
       spamTrapStatus: spamTrap.status,
       linkSpamStatus: linkSpam.status,
       adminWriteLimit: createdPost.headers.get('ratelimit-limit'),
+      preservedPostDate: updatedSmokePost?.date || '',
       unsafeUploadPathStatus: unsafeProjectPath.status,
       unsafeEncodedUploadPathStatus: unsafeProjectEncodedPath.status,
       safeUploadPathProjectStatus: createdProject.status,

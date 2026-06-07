@@ -437,14 +437,16 @@ app.put('/api/posts/:id', authenticateToken, writeLimiter, (req, res) => {
   const excerpt = readTextField(res, 'Excerpt', req.body.excerpt, { max: 500 });
   const content = readTextField(res, 'Content', req.body.content, { required: true, max: 60000 });
   const tag = readTextField(res, 'Tag', req.body.tag, { max: 80, fallback: '未分类' });
-  const date = readTextField(res, 'Date', req.body.date, { max: 32 });
+  const hasDate = Object.prototype.hasOwnProperty.call(req.body || {}, 'date');
+  const date = hasDate ? readTextField(res, 'Date', req.body.date, { max: 32 }) : '';
   const readTime = readTextField(res, 'Read time', req.body.readTime, { max: 32, fallback: '5 分钟阅读' });
   if ([title, excerpt, content, tag, date, readTime].some(value => value === undefined)) return;
+  const shouldUpdateDate = Boolean(String(date || '').trim());
   const postPinned = req.body.pinned ? 1 : 0;
 
   db.run(
-    'UPDATE posts SET title = ?, excerpt = ?, content = ?, tag = ?, date = ?, readTime = ?, pinned = ? WHERE id = ?',
-    [title, excerpt, content, tag, date, readTime, postPinned, postId],
+    'UPDATE posts SET title = ?, excerpt = ?, content = ?, tag = ?, date = CASE WHEN ? THEN ? ELSE date END, readTime = ?, pinned = ? WHERE id = ?',
+    [title, excerpt, content, tag, shouldUpdateDate ? 1 : 0, date, readTime, postPinned, postId],
     function(err) {
       if (err) {
         return sendDatabaseError(res, err);

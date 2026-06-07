@@ -175,6 +175,24 @@ async function run() {
   let id = 0;
   const pending = new Map();
   let socketClosed = false;
+  const diagnostics = {
+    console: [],
+    exceptions: [],
+    networkFailures: [],
+    logs: []
+  };
+  function remember(list, item, limit = 12) {
+    list.push(item);
+    if (list.length > limit) list.splice(0, list.length - limit);
+  }
+  function diagnosticsSummary() {
+    return {
+      console: diagnostics.console.slice(-5),
+      exceptions: diagnostics.exceptions.slice(-5),
+      networkFailures: diagnostics.networkFailures.slice(-5),
+      logs: diagnostics.logs.slice(-5)
+    };
+  }
   function rejectPending(reason) {
     for (const [callId, slot] of pending.entries()) {
       clearTimeout(slot.timer);
@@ -187,6 +205,32 @@ async function run() {
     try {
       message = JSON.parse(event.data);
     } catch {
+      return;
+    }
+    if (!message.id) {
+      if (message.method === 'Runtime.consoleAPICalled') {
+        remember(diagnostics.console, {
+          type: message.params?.type || '',
+          text: (message.params?.args || []).map(arg => arg.value ?? arg.description ?? '').join(' ').slice(0, 240)
+        });
+      } else if (message.method === 'Runtime.exceptionThrown') {
+        remember(diagnostics.exceptions, {
+          text: message.params?.exceptionDetails?.text || '',
+          description: message.params?.exceptionDetails?.exception?.description || ''
+        });
+      } else if (message.method === 'Network.loadingFailed') {
+        remember(diagnostics.networkFailures, {
+          url: message.params?.requestId || '',
+          errorText: message.params?.errorText || '',
+          type: message.params?.type || ''
+        });
+      } else if (message.method === 'Log.entryAdded') {
+        remember(diagnostics.logs, {
+          level: message.params?.entry?.level || '',
+          text: String(message.params?.entry?.text || '').slice(0, 240),
+          url: message.params?.entry?.url || ''
+        });
+      }
       return;
     }
     if (!message.id || !pending.has(message.id)) return;
@@ -213,7 +257,7 @@ async function run() {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.delete(callId);
-        reject(new Error(`${method} timeout`));
+        reject(new Error(`${method} timeout; diagnostics=${JSON.stringify(diagnosticsSummary())}`));
       }, timeout);
       pending.set(callId, { resolve, reject, timer });
       try {
@@ -293,6 +337,8 @@ async function run() {
 
   await send('Runtime.enable');
   await send('Page.enable');
+  await bestEffortSend('Network.enable');
+  await bestEffortSend('Log.enable');
   await waitFor('.nav-item[data-target="blog"]', 12000);
   await evaluate(`localStorage.setItem('admin_token', 'fake-token-for-smoke')`);
   await send('Page.reload');
@@ -670,6 +716,28 @@ async function run() {
     progressCards: document.querySelectorAll('.post-state-chip.is-progress').length,
     horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
   }))()`);
+  const badPostRouteState = await evaluate(`(async () => {
+    const fireHash = hash => {
+      history.pushState(null, '', hash);
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    };
+    fireHash('#post/not-found-smoke');
+    await new Promise(resolve => setTimeout(resolve, 180));
+    const missing = {
+      hash: location.hash,
+      blogActive: document.querySelector('#blog')?.classList.contains('active') || false,
+      readerActive: document.querySelector('#blog-reader')?.classList.contains('active') || false
+    };
+    fireHash('#post/%E0%A4%A');
+    await new Promise(resolve => setTimeout(resolve, 180));
+    const malformed = {
+      hash: location.hash,
+      blogActive: document.querySelector('#blog')?.classList.contains('active') || false,
+      readerActive: document.querySelector('#blog-reader')?.classList.contains('active') || false,
+      toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || ''
+    };
+    return { missing, malformed };
+  })()`);
 
   await click('.nav-item[data-target="projects"]');
   await waitFor('.project-card');
@@ -862,6 +930,16 @@ async function run() {
     premium: !!document.querySelector('#premium-game-stage'),
     careerPanel: !!document.querySelector('#premium-career-rating'),
     dailyChallenge: document.querySelector('#premium-daily-challenge')?.textContent || '',
+    cockpitPanel: !!document.querySelector('#premium-cockpit-panel'),
+    cockpitTitle: document.querySelector('#premium-cockpit-title')?.textContent || '',
+    cockpitSummary: document.querySelector('#premium-cockpit-summary')?.textContent || '',
+    cockpitMode: document.querySelector('#premium-cockpit-mode')?.textContent || '',
+    cockpitDifficulty: document.querySelector('#premium-cockpit-difficulty')?.textContent || '',
+    cockpitLoadout: document.querySelector('#premium-cockpit-loadout')?.textContent || '',
+    cockpitSeason: document.querySelector('#premium-cockpit-season')?.textContent || '',
+    cockpitTarget: document.querySelector('#premium-cockpit-target')?.dataset.cockpitTargetGame || '',
+    cockpitActionLabel: document.querySelector('#premium-cockpit-play')?.getAttribute('aria-label') || '',
+    debugCockpit: window.__atherixDebug?.premium?.cockpit?.() || {},
     directorPanel: !!document.querySelector('#premium-arcade-director'),
     directorTarget: document.querySelector('#premium-director-start')?.dataset.targetGame || '',
     directorTitle: document.querySelector('#premium-director-title')?.textContent || '',
@@ -961,6 +1039,25 @@ async function run() {
       released,
       statusText: document.querySelector('#premium-gamepad-status')?.textContent || '',
       statusTone: document.querySelector('#premium-gamepad-status')?.dataset.tone || ''
+    };
+  })()`);
+  const premiumPauseHookState = await evaluate(`(() => {
+    document.querySelector('[data-premium-game="boss"]')?.click();
+    document.querySelector('#premium-boss-start')?.click();
+    const before = {
+      active: window.__atherixDebug?.premium?.active?.() || '',
+      running: !!window.__atherixDebug?.premium?.bossRunning?.(),
+      paused: !!window.__atherixDebug?.premium?.bossPaused?.()
+    };
+    const result = window.__atherixPausePremiumRealtimeGames?.('smoke') || {};
+    return {
+      before,
+      result,
+      after: {
+        running: !!window.__atherixDebug?.premium?.bossRunning?.(),
+        paused: !!window.__atherixDebug?.premium?.bossPaused?.(),
+        pauseButton: document.querySelector('#premium-boss-pause')?.textContent || ''
+      }
     };
   })()`);
   const contractProgressState = await evaluate(`(() => {
@@ -1137,8 +1234,31 @@ async function run() {
     toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || '',
     horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
   }))()`);
+  await click('#premium-cockpit-target');
+  await wait(180);
+  const cockpitTargetState = await evaluate(`(() => ({
+    target: document.querySelector('#premium-cockpit-target')?.dataset.cockpitTargetGame || '',
+    active: window.__atherixDebug?.premium?.active?.() || '',
+    activeTitle: document.querySelector('#premium-active-title')?.textContent || '',
+    mode: document.querySelector('#premium-cockpit-mode')?.textContent || '',
+    difficulty: document.querySelector('#premium-cockpit-difficulty')?.textContent || '',
+    loadout: document.querySelector('#premium-cockpit-loadout')?.textContent || '',
+    season: document.querySelector('#premium-cockpit-season')?.textContent || '',
+    toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || '',
+    horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+  }))()`);
   await click('[data-premium-game="survivor"]');
   await wait(120);
+  await click('#premium-cockpit-play');
+  await wait(260);
+  const cockpitPlayState = await evaluate(`(() => ({
+    active: window.__atherixDebug?.premium?.active?.() || '',
+    running: !!window.__atherixDebug?.premium?.survivorRunning?.(),
+    paused: !!window.__atherixDebug?.premium?.survivorPaused?.(),
+    actionLabel: document.querySelector('[data-premium-control="action"]')?.textContent || '',
+    toolDisabled: !!document.querySelector('[data-premium-control="tool"]')?.disabled,
+    toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || ''
+  }))()`);
 
   await click('#premium-survivor-start');
   await wait(900);
@@ -1576,8 +1696,37 @@ async function run() {
   await send('Page.navigate', { url: `${appUrl}/#game` });
   await waitFor('#runner-touch-controls', 12000);
   await wait(700);
+  const premiumMobileState = await evaluate(`(() => {
+    const cockpit = document.querySelector('#premium-cockpit-panel');
+    const tabs = document.querySelector('.arcade-library .mini-game-tabs');
+    const stage = document.querySelector('#premium-game-stage');
+    const controls = document.querySelector('.premium-touch-controls');
+    const career = document.querySelector('.arcade-career-panel');
+    const rectFor = el => {
+      const rect = el?.getBoundingClientRect();
+      return rect ? {
+        top: Math.round(rect.top),
+        bottom: Math.round(rect.bottom),
+        width: Math.round(rect.width),
+        visible: rect.bottom > 0 && rect.top < window.innerHeight
+      } : null;
+    };
+    return {
+      width: document.documentElement.clientWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+      cockpit: rectFor(cockpit),
+      tabs: rectFor(tabs),
+      stage: rectFor(stage),
+      controls: rectFor(controls),
+      career: rectFor(career),
+      actionText: document.querySelector('[data-premium-control="action"]')?.textContent || '',
+      toolText: document.querySelector('[data-premium-control="tool"]')?.textContent || '',
+      horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+    };
+  })()`);
   const runnerMobileState = await evaluate(`(() => {
     const pad = document.querySelector('#runner-touch-controls');
+    pad?.scrollIntoView({ block: 'center' });
     const rect = pad?.getBoundingClientRect();
     return {
       width: document.documentElement.clientWidth,
@@ -1585,7 +1734,7 @@ async function run() {
       controls: document.querySelectorAll('[data-runner-control]').length,
       padTop: rect ? Math.round(rect.top) : null,
       padBottom: rect ? Math.round(rect.bottom) : null,
-      visibleInFirstViewport: !!rect && rect.top < window.innerHeight && rect.bottom > 0,
+      visibleAfterScroll: !!rect && rect.top < window.innerHeight && rect.bottom > 0,
       horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
     };
   })()`);
@@ -1623,6 +1772,7 @@ async function run() {
   assert(blogState.tocActive && blogState.tocLinks >= 2, 'blog reader should build a table of contents from article headings');
   assert(/^\d+%$/.test(blogState.progress), 'blog reader should report reading progress');
   assert(blogHubAfterBookmark.activeFilter && blogHubAfterBookmark.bookmarkCount >= 1 && blogHubAfterBookmark.bookmarkedCards >= 1 && !blogHubAfterBookmark.horizontalOverflow, `blog reading hub should filter bookmarked articles: ${JSON.stringify(blogHubAfterBookmark)}`);
+  assert(badPostRouteState.missing.hash === '#blog' && badPostRouteState.missing.blogActive && !badPostRouteState.missing.readerActive && badPostRouteState.malformed.hash === '#blog' && badPostRouteState.malformed.blogActive && !badPostRouteState.malformed.readerActive, `bad blog post hashes should recover to the blog list: ${JSON.stringify(badPostRouteState)}`);
   assert(
     blogState.codeBlocks >= 1,
     `blog markdown should preserve fenced code blocks: ${JSON.stringify(blogState)}`
@@ -1658,10 +1808,12 @@ async function run() {
   assert(runnerTouchState.forceContract?.after?.contract?.completed > runnerTouchState.forceContract?.before?.contract?.completed && runnerTouchState.forceContract?.after?.score > runnerTouchState.forceContract?.before?.score && runnerTouchState.forceContract?.achieved, `runner route contract should complete, score, and unlock achievement: ${JSON.stringify(runnerTouchState)}`);
   assert(Number(runnerTouchState.scoreHud) === runnerTouchState.debug?.score && runnerTouchState.comboHud === runnerTouchState.debug?.comboHud && runnerTouchState.contractHud === runnerTouchState.debug?.contractHud && runnerTouchState.statusHud === runnerTouchState.debug?.statusHud, `runner HUD should remain synchronized after forced contract: ${JSON.stringify(runnerTouchState)}`);
   assert(runnerGamepadState.running && runnerGamepadState.afterX > runnerGamepadState.beforeX && runnerGamepadState.movingPad?.keys?.right && /PAD/.test(runnerGamepadState.statusText), `runner gamepad bridge should move the player and update PAD status: ${JSON.stringify(runnerGamepadState)}`);
-  assert(runnerMobileState.controls >= 7 && runnerMobileState.visibleInFirstViewport && !runnerMobileState.horizontalOverflow, `runner touch controls should be reachable on mobile: ${JSON.stringify(runnerMobileState)}`);
+  assert(runnerMobileState.controls >= 7 && runnerMobileState.visibleAfterScroll && !runnerMobileState.horizontalOverflow, `runner touch controls should remain reachable on mobile after premium-first layout: ${JSON.stringify(runnerMobileState)}`);
+  assert(premiumMobileState.cockpit?.visible && premiumMobileState.tabs?.top >= premiumMobileState.cockpit?.bottom - 8 && premiumMobileState.stage?.top >= premiumMobileState.tabs?.bottom - 8 && premiumMobileState.career?.top >= premiumMobileState.stage?.bottom - 8 && !premiumMobileState.horizontalOverflow, `premium arcade cockpit, tabs, and stage should be prioritized before meta panels on mobile: ${JSON.stringify(premiumMobileState)}`);
   assert(arcadeInitial.premium && arcadeInitial.careerPanel, 'premium arcade career panel should render');
   assert(arcadeInitial.oldPrototypeCount === 0, 'old prototype mini-games should be replaced');
   assert(arcadeInitial.premiumTabs >= 6 && arcadeInitial.driftPanel && arcadeInitial.tacticsPanel, 'premium arcade should include drift and tactics modes');
+  assert(arcadeInitial.cockpitPanel && arcadeInitial.cockpitTarget === arcadeInitial.debugCockpit?.targetGame && arcadeInitial.cockpitMode === arcadeInitial.debugCockpit?.activeLabel && arcadeInitial.cockpitDifficulty && arcadeInitial.cockpitLoadout && (arcadeInitial.cockpitSeason === '完成' || /^\d+%$/.test(arcadeInitial.cockpitSeason)) && arcadeInitial.cockpitActionLabel.includes(arcadeInitial.cockpitMode), `premium arcade cockpit should summarize the next playable run: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.runLogPanel && arcadeInitial.runLogEmpty === 'true' && arcadeInitial.runLogCards === 0 && arcadeInitial.debugRuns === 0, `premium arcade run telemetry should start empty: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.leaderboardPanel && arcadeInitial.leaderboardEmpty === 'true' && arcadeInitial.leaderboardCards === 0 && arcadeInitial.debugLeaderboard?.entries?.length === 0 && arcadeInitial.leaderboardTotal === '0', `premium arcade hall of fame should start empty: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.rivalPanel && arcadeInitial.debugRival?.game && arcadeInitial.rivalActionTarget === arcadeInitial.debugRival.game && Number(arcadeInitial.rivalTarget) === Number(arcadeInitial.debugRival.target) && Number(arcadeInitial.rivalTarget) > 0 && /·/.test(arcadeInitial.rivalTitle), `premium arcade rival intel should render an actionable opening rival: ${JSON.stringify(arcadeInitial)}`);
@@ -1701,6 +1853,9 @@ async function run() {
   assert(['runner', 'survivor', 'boss', 'drift', 'heist', 'chain', 'tactics'].includes(directorLaunchState.target) && (directorLaunchState.target === 'runner' || directorLaunchState.active === directorLaunchState.target) && !directorLaunchState.horizontalOverflow, `premium arcade director should launch the recommended target: ${JSON.stringify(directorLaunchState)}`);
   assert(arcadeInitial.touchControls >= 5, 'premium touch controls should be available');
   assert(/PAD/.test(arcadeInitial.gamepadStatus) && premiumGamepadState.after?.player?.x < premiumGamepadState.before?.player?.x && premiumGamepadState.held?.keys?.left && /PAD/.test(premiumGamepadState.statusText), `premium arcade gamepad bridge should drive tactics movement and status: ${JSON.stringify(premiumGamepadState)}`);
+  assert(premiumPauseHookState.before.running && premiumPauseHookState.result?.paused?.includes('boss') && premiumPauseHookState.after.running && premiumPauseHookState.after.paused && premiumPauseHookState.after.pauseButton === '继续', `premium realtime pause hook should freeze active realtime games: ${JSON.stringify(premiumPauseHookState)}`);
+  assert(cockpitTargetState.target && (cockpitTargetState.target === 'runner' || cockpitTargetState.active === cockpitTargetState.target) && /驾驶舱推荐/.test(cockpitTargetState.toast) && !cockpitTargetState.horizontalOverflow, `premium cockpit target should launch the recommended mode: ${JSON.stringify(cockpitTargetState)}`);
+  assert(cockpitPlayState.active === 'survivor' && cockpitPlayState.running && !cockpitPlayState.paused && /星爆/.test(cockpitPlayState.actionLabel) && cockpitPlayState.toolDisabled && /开局/.test(cockpitPlayState.toast), `premium cockpit play should start the active mode and refresh touch labels: ${JSON.stringify(cockpitPlayState)}`);
   assert(survivorState.nonBlank && survivorState.threat && /\dx$/.test(survivorState.chain) && survivorState.overdrive && survivorState.bounty && survivorState.debug?.hud?.chain === survivorState.chain && survivorState.debug?.hud?.bounty === survivorState.bounty, `survivor canvas should render active state with chain, overdrive, and bounty HUD: ${JSON.stringify(survivorState)}`);
   assert(survivorDraftOpenState.open && survivorDraftOpenState.ariaHidden === 'false' && survivorDraftOpenState.optionCards === 3 && survivorDraftOpenState.choices.length === 3 && survivorDraftOpenState.running && !survivorDraftOpenState.paused, `survivor roguelite draft should open three upgrade choices without using pause state: ${JSON.stringify(survivorDraftOpenState)}`);
   assert(survivorDraftFreezeState.open && Math.abs(survivorDraftFreezeState.elapsedAfter - survivorDraftOpenState.beforeElapsed) < 1 && Math.abs(survivorDraftFreezeState.scoreAfter - survivorDraftOpenState.beforeScore) < 1, `survivor roguelite draft should freeze the run clock and score until a choice is made: ${JSON.stringify({ survivorDraftOpenState, survivorDraftFreezeState })}`);
@@ -1834,6 +1989,7 @@ async function run() {
     readerToolState,
     readerExportState,
     blogHubAfterBookmark,
+    badPostRouteState,
     projectViewportState,
     projectState,
     projectModalClosedState,
@@ -1842,8 +1998,10 @@ async function run() {
     runnerTouchState,
     runnerGamepadState,
     runnerMobileState,
+    premiumMobileState,
     arcadeInitial,
     premiumGamepadState,
+    premiumPauseHookState,
     contractProgressState,
     coachLaunchState,
     leagueProgressState,
@@ -1853,6 +2011,8 @@ async function run() {
     profileLaunchState,
     prizeLaunchState,
     directorLaunchState,
+    cockpitTargetState,
+    cockpitPlayState,
     survivorState,
     survivorDraftOpenState,
     survivorDraftFreezeState,
@@ -1884,7 +2044,8 @@ async function run() {
     tacticsBlastState,
     tacticsForecastAfterAction,
     tacticsState,
-    pwaState
+    pwaState,
+    diagnostics: diagnosticsSummary()
   };
 }
 
