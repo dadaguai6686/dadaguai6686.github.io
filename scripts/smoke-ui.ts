@@ -19,6 +19,7 @@ assert.ok(html.includes('id="tactical-scan"'), "pause tactical scan should exist
 assert.ok(html.includes('id="wave-intro"'), "wave intro briefing should exist in HTML");
 assert.ok(html.includes('id="mission-toast"'), "in-run mission transition toast should exist in HTML");
 assert.ok(html.includes('id="combat-log"'), "in-run combat feedback log should exist in HTML");
+assert.ok(html.includes('id="combat-log-history"'), "combat feedback log should keep a short recent event history");
 assert.ok(html.includes("战斗记录"), "combat feedback log should be labeled in Chinese");
 assert.ok(html.includes('id="quick-brief"'), "menu should expose a compact first-screen objective brief");
 assert.ok(html.includes('id="game-dossier"'), "menu should explain the game fantasy and win/loss loop");
@@ -68,6 +69,9 @@ assert.ok(main.includes("updateWaveIntro(detail)"), "HUD updates should render w
 assert.ok(main.includes("renderMissionToast(detail)"), "HUD updates should render in-run mission transition toasts");
 assert.ok(main.includes("showCombatLog"), "HUD should show localized in-run combat feedback details");
 assert.ok(main.includes("hideCombatLog"), "HUD should hide combat feedback when leaving play");
+assert.ok(main.includes("COMBAT_LOG_HISTORY_LIMIT"), "combat feedback should cap recent event history");
+assert.ok(main.includes("renderCombatLogHistory"), "combat feedback should render a recent event history");
+assert.ok(main.includes("clearCombatLogHistory"), "combat feedback should clear old events outside active play");
 assert.ok(main.includes("feedbackToneFor"), "combat feedback should map event kinds to visual tones");
 assert.ok(main.includes("合约完成，切回主目标"), "mission toast should clearly transition completed contracts back to the main objective");
 assert.ok(main.includes("合约失败，主目标仍可完成"), "mission toast should keep failed contracts from feeling like run failure");
@@ -159,7 +163,9 @@ assert.ok(styles.includes("#radar-panel"), "desktop radar should have CSS");
 assert.ok(styles.includes("#tactical-scan"), "pause tactical scan should have CSS");
 assert.ok(styles.includes("#mission-toast"), "mission transition toast should have CSS");
 assert.ok(styles.includes("#combat-log"), "combat feedback log should have CSS");
+assert.ok(styles.includes("#combat-log-history"), "combat feedback history should have CSS");
 assert.ok(styles.includes('#combat-log[data-tone="danger"]'), "combat feedback log should style danger events");
+assert.ok(styles.includes("#combat-log-history li:nth-child(n + 2)"), "mobile combat feedback should limit old event history height");
 assert.ok(styles.includes('#shell[data-status="playing"] #combat-log'), "mobile play should position combat feedback away from touch controls");
 assert.ok(styles.includes("#quick-brief"), "compact first-screen objective brief should have CSS");
 assert.ok(styles.includes("#launch-brief"), "launch briefing should have CSS");

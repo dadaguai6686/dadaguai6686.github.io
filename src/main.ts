@@ -69,6 +69,7 @@ const missionToastDetail = document.querySelector<HTMLElement>("#mission-toast-d
 const combatLog = document.querySelector<HTMLDivElement>("#combat-log")!;
 const combatLogTitle = document.querySelector<HTMLElement>("#combat-log-title")!;
 const combatLogDetail = document.querySelector<HTMLElement>("#combat-log-detail")!;
+const combatLogHistory = document.querySelector<HTMLOListElement>("#combat-log-history")!;
 const startButton = document.querySelector<HTMLButtonElement>("#start-button")!;
 const sessionTools = document.querySelector<HTMLDivElement>("#session-tools")!;
 const copyRouteButton = document.querySelector<HTMLButtonElement>("#copy-route-button")!;
@@ -173,6 +174,12 @@ const STORAGE_KEY = "lumen-drift-save-v1";
 
 type MissionToastTone = "danger" | "primary" | "success" | "warning";
 type CombatLogTone = MissionToastTone;
+
+type CombatLogEntry = {
+  detail: string;
+  title: string;
+  tone: CombatLogTone;
+};
 
 type SaveData = {
   achievements: AchievementId[];
@@ -309,6 +316,8 @@ let waveIntroTimer: number | undefined;
 let latestMissionToastKey = "";
 let missionToastTimer: number | undefined;
 let combatLogTimer: number | undefined;
+let combatLogEntries: CombatLogEntry[] = [];
+const COMBAT_LOG_HISTORY_LIMIT = 3;
 
 window.__lumenVirtualInput = {
   move: { x: 0, y: 0 },
@@ -845,9 +854,11 @@ function hideMissionToast(immediate = false): void {
 function showCombatLog(title: string, detail: string, tone: CombatLogTone): void {
   if (latestStatus !== "playing") return;
   window.clearTimeout(combatLogTimer);
+  combatLogEntries = [{ detail, title, tone }, ...combatLogEntries].slice(0, COMBAT_LOG_HISTORY_LIMIT);
   combatLog.dataset.tone = tone;
   combatLogTitle.textContent = title;
   combatLogDetail.textContent = detail;
+  renderCombatLogHistory();
   combatLog.hidden = false;
   window.requestAnimationFrame(() => {
     combatLog.classList.add("show");
@@ -857,17 +868,45 @@ function showCombatLog(title: string, detail: string, tone: CombatLogTone): void
 
 function hideCombatLog(immediate = false): void {
   window.clearTimeout(combatLogTimer);
-  if (combatLog.hidden) return;
+  if (combatLog.hidden) {
+    if (immediate) clearCombatLogHistory();
+    return;
+  }
   combatLog.classList.remove("show");
   if (immediate) {
     combatLog.hidden = true;
+    clearCombatLogHistory();
     return;
   }
   combatLogTimer = window.setTimeout(() => {
     if (!combatLog.classList.contains("show")) {
       combatLog.hidden = true;
+      clearCombatLogHistory();
     }
   }, 200);
+}
+
+function renderCombatLogHistory(): void {
+  const previousEntries = combatLogEntries.slice(1);
+  combatLogHistory.hidden = previousEntries.length === 0;
+  combatLogHistory.replaceChildren(
+    ...previousEntries.map((entry) => {
+      const item = document.createElement("li");
+      item.dataset.tone = entry.tone;
+      const titleNode = document.createElement("b");
+      const detailNode = document.createElement("span");
+      titleNode.textContent = entry.title;
+      detailNode.textContent = entry.detail;
+      item.append(titleNode, detailNode);
+      return item;
+    })
+  );
+}
+
+function clearCombatLogHistory(): void {
+  combatLogEntries = [];
+  combatLogHistory.hidden = true;
+  combatLogHistory.replaceChildren();
 }
 
 function feedbackToneFor(kind: SoundKind): CombatLogTone {

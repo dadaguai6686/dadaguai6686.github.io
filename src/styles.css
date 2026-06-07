@@ -264,6 +264,48 @@ button {
   line-height: 1.38;
 }
 
+#combat-log-history {
+  display: grid;
+  gap: 3px;
+  margin: 8px 0 0;
+  padding: 7px 0 0;
+  border-top: 1px solid rgba(216, 234, 247, 0.12);
+  list-style: none;
+}
+
+#combat-log-history[hidden] {
+  display: none;
+}
+
+#combat-log-history li {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  gap: 7px;
+  align-items: start;
+  min-width: 0;
+  color: rgba(216, 234, 247, 0.76);
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+#combat-log-history b,
+#combat-log-history span {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#combat-log-history b {
+  color: rgba(255, 243, 173, 0.82);
+  font-size: 10px;
+}
+
+#combat-log-history li[data-tone="danger"] b {
+  color: rgba(255, 151, 185, 0.92);
+}
+
 #combat-log[data-tone="success"] {
   border-color: rgba(255, 226, 122, 0.3);
   background:
@@ -2921,7 +2963,7 @@ h1 {
     right: auto;
     bottom: 188px;
     width: calc(100vw - 16px);
-    max-height: 58px;
+    max-height: 82px;
     padding: 8px 10px;
     overflow: hidden;
   }
@@ -2933,6 +2975,20 @@ h1 {
   #shell[data-status="playing"] #combat-log span {
     font-size: 10px;
     line-height: 1.3;
+  }
+
+  #shell[data-status="playing"] #combat-log-history {
+    margin-top: 5px;
+    padding-top: 5px;
+  }
+
+  #shell[data-status="playing"] #combat-log-history li {
+    grid-template-columns: 58px minmax(0, 1fr);
+    font-size: 9px;
+  }
+
+  #shell[data-status="playing"] #combat-log-history li:nth-child(n + 2) {
+    display: none;
   }
 
   #shell[data-status="playing"] #wave-intro {
