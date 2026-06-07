@@ -936,6 +936,7 @@ async function run() {
       pattern: document.querySelector('#premium-boss-pattern')?.textContent,
       hp: document.querySelector('#premium-boss-hp')?.textContent,
       weak: document.querySelector('#premium-boss-weak')?.textContent,
+      focus: document.querySelector('#premium-boss-focus')?.textContent,
       breaks: Number(document.querySelector('#premium-boss-break')?.textContent || 0),
       lives: Number(document.querySelector('#premium-boss-lives')?.textContent || 0)
     };
@@ -962,6 +963,15 @@ async function run() {
       weakText: document.querySelector('#premium-boss-weak')?.textContent || '',
       breakText: document.querySelector('#premium-boss-break')?.textContent || '',
       scoreText: document.querySelector('#premium-boss-score')?.textContent || ''
+    };
+  })()`);
+  const bossFocusSurgeState = await evaluate(`(() => {
+    const result = window.__atherixDebug?.premium?.forceBossFocusSurge?.() || {};
+    return {
+      ...result,
+      focusText: document.querySelector('#premium-boss-focus')?.textContent || '',
+      scoreText: document.querySelector('#premium-boss-score')?.textContent || '',
+      achieved: (window.__atherixDebug?.premium?.achievements?.() || []).some(item => item.id === 'boss_focus_surge' && item.unlocked)
     };
   })()`);
   const bossReleaseTelegraphState = await evaluate(`(() => {
@@ -1334,6 +1344,17 @@ async function run() {
     Number(bossCounterState.breakText || 0) >= 1,
     `boss weakpoint counter should break the queued attack, clear bullets, score, and update HUD: ${JSON.stringify(bossCounterState)}`
   );
+  assert(
+    bossFocusSurgeState.after?.focusSurge > 0 &&
+    bossFocusSurgeState.after?.focusSurges >= 1 &&
+    bossFocusSurgeState.after?.graze >= 6 &&
+    bossFocusSurgeState.after?.bestGrazeStreak >= bossFocusSurgeState.after?.grazeStreak &&
+    bossFocusSurgeState.after?.focus === 0 &&
+    bossFocusSurgeState.focusText === 'SURGE' &&
+    Number(bossFocusSurgeState.after?.score || 0) > Number(bossFocusSurgeState.before?.score || 0) &&
+    bossFocusSurgeState.achieved,
+    `boss focus surge should reward graze chains with a timed damage state and achievement: ${JSON.stringify(bossFocusSurgeState)}`
+  );
   assert(bossReleaseTelegraphState.queued === 'snipe' && bossReleaseTelegraphState.weak?.active && bossReleaseTelegraphState.bullets === 0 && /预警/.test(bossReleaseTelegraphState.patternText), `boss should be able to queue a fresh telegraph after a counter break: ${JSON.stringify(bossReleaseTelegraphState)}`);
   assert(!bossPatternReleasedState.queued && bossPatternReleasedState.current === 'snipe' && bossPatternReleasedState.bullets >= 7 && /锁定狙击/.test(bossPatternReleasedState.patternText), `boss pattern should release bullets only after the telegraph window: ${JSON.stringify(bossPatternReleasedState)}`);
   assert(bossPauseState.running && bossPauseState.paused && bossPauseState.pauseButton === '继续', `boss mode should enter pause with keyboard: ${JSON.stringify(bossPauseState)}`);
@@ -1435,6 +1456,7 @@ async function run() {
     bossState,
     bossTelegraphState,
     bossTelegraphHoldState,
+    bossFocusSurgeState,
     bossPatternReleasedState,
     bossPauseState,
     bossPauseFreezeState,
