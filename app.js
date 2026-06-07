@@ -4567,7 +4567,7 @@ function init() {
         </div>
         <div class="arcade-director-meters" aria-label="街机完成度">
           <span>奖牌 <strong id="premium-director-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-director-achievements">0/24</strong></span>
+          <span>成就 <strong id="premium-director-achievements">0/25</strong></span>
           <span>完成度 <strong id="premium-director-completion">0%</strong></span>
         </div>
         <button type="button" class="arcade-director-action" id="premium-director-start" data-target-game="survivor">
@@ -4589,6 +4589,22 @@ function init() {
           <strong>今日契约</strong>
         </div>
         <div class="arcade-contract-grid" id="premium-contract-list"></div>
+      </div>
+      <div class="arcade-league-panel" id="premium-league-panel" aria-label="街机挑战联赛">
+        <div class="arcade-league-heading">
+          <span><i data-lucide="shield-half"></i> CHALLENGE LEAGUE</span>
+          <strong id="premium-league-title">联赛路线生成中...</strong>
+          <small id="premium-league-summary">完成每日 3 段跨模式路线，结算整条联赛声望和限定徽章。</small>
+        </div>
+        <div class="arcade-league-route" id="premium-league-route"></div>
+        <div class="arcade-league-side">
+          <span>阶段 <strong id="premium-league-progress">0/3</strong></span>
+          <span>奖励 <strong id="premium-league-reward">+0</strong></span>
+          <button type="button" class="arcade-league-action" id="premium-league-start" data-league-target-game="survivor">
+            <i data-lucide="flag"></i>
+            <span>进入联赛阶段</span>
+          </button>
+        </div>
       </div>
       <div class="arcade-difficulty-panel" id="premium-difficulty-panel" aria-label="街机难度矩阵">
         <div class="arcade-difficulty-heading">
@@ -4887,7 +4903,8 @@ function init() {
       { id: 'runner_contract', label: '航线承包', desc: '主线远征完成一张航线合约' },
       { id: 'runner_final', label: '星门远征', desc: '通关主线最终关' },
       { id: 'contract_clear', label: '契约猎手', desc: '完成任意街机契约' },
-      { id: 'daily_clear', label: '今日制霸', desc: '完成每日街机挑战' }
+      { id: 'daily_clear', label: '今日制霸', desc: '完成每日街机挑战' },
+      { id: 'league_clear', label: '联赛冠军', desc: '完成一条每日挑战联赛路线' }
     ];
     const dailyChallenges = [
       { id: 'survivor_1200', label: '星核幸存者得分 1200+', game: 'survivor', check: (game, score) => game === 'survivor' && score >= 1200 },
@@ -4905,6 +4922,41 @@ function init() {
       { id: 'combat_contract', title: '火线突破', desc: '幸存者 800+ 或 Boss 700+', tone: 'combat', type: 'target_games', games: ['survivor', 'boss'], scoreTarget: 700, targetCount: 1, reward: 280 },
       { id: 'mind_contract', title: '冷静解法', desc: '连锁 4500+ 或战术 850+', tone: 'mind', type: 'target_games', games: ['chain', 'tactics'], scoreTarget: 850, targetCount: 1, reward: 300 },
       { id: 'speed_contract', title: '高速航线', desc: '主线 900+ 或漂移 850+', tone: 'speed', type: 'target_games', games: ['runner', 'drift'], scoreTarget: 850, targetCount: 1, reward: 300 }
+    ];
+    const leagueDefs = [
+      {
+        id: 'frontline_circuit',
+        title: '星火突围联赛',
+        summary: '从自动射击到 Boss 战再到高速漂移，考验操作连续稳定性。',
+        reward: 680,
+        stages: [
+          { id: 'frontline-survivor', game: 'survivor', target: 900, tip: '用星爆处理第一波精英潮' },
+          { id: 'frontline-boss', game: 'boss', target: 800, tip: '擦弹攒专注，抓弱点窗口反击' },
+          { id: 'frontline-drift', game: 'drift', target: 950, tip: '保持 PERFECT 门与低热度' }
+        ]
+      },
+      {
+        id: 'shadow_mind',
+        title: '幽影解法联赛',
+        summary: '潜入、连锁与战术三连，强调规划、路线和风险控制。',
+        reward: 720,
+        stages: [
+          { id: 'shadow-heist', game: 'heist', target: 650, tip: '先拿缓存，再用诱饵拆视野交叉' },
+          { id: 'shadow-chain', game: 'chain', target: 5200, tip: '优先 9 连与配方颜色' },
+          { id: 'shadow-tactics', game: 'tactics', target: 950, tip: '沿推荐路线吃掩体动量' }
+        ]
+      },
+      {
+        id: 'grand_tour',
+        title: '霓虹巡回联赛',
+        summary: '主线远征开局，接入星核幸存者和战术撤离，像正式赛季一样推进。',
+        reward: 760,
+        stages: [
+          { id: 'grand-runner', game: 'runner', target: 1000, tip: '保持连段，完成航线合约' },
+          { id: 'grand-survivor', game: 'survivor', target: 1100, tip: '留 Space 超载处理异常事件' },
+          { id: 'grand-tactics', game: 'tactics', target: 1050, tip: '爆破锁定单位后撤离核心' }
+        ]
+      }
     ];
     const loadoutDefs = [
       {
@@ -5024,11 +5076,28 @@ function init() {
       return selected.map(contract => ({ ...contract, date: key }));
     }
 
+    function getDailyLeagueRoute(date = todayKey()) {
+      const seed = String(date).split('').reduce((sum, char, index) => sum + char.charCodeAt(0) * (index + 5), 0);
+      return { ...leagueDefs[seed % leagueDefs.length], date };
+    }
+
     function createDefaultContractState(date = todayKey()) {
       return {
         date,
         claimed: [],
         progress: {}
+      };
+    }
+
+    function createDefaultLeagueState(date = todayKey()) {
+      const route = getDailyLeagueRoute(date);
+      return {
+        date,
+        routeId: route.id,
+        stageIndex: 0,
+        completed: false,
+        rewarded: false,
+        stageScores: {}
       };
     }
 
@@ -5041,6 +5110,7 @@ function init() {
         achievements: [],
         daily: {},
         contracts: createDefaultContractState(),
+        league: createDefaultLeagueState(),
         loadout: { active: 'pulse' },
         difficulty: 'standard',
         runs: []
@@ -5056,12 +5126,17 @@ function init() {
         merged.achievements = Array.isArray(merged.achievements) ? merged.achievements : [];
         merged.daily = merged.daily && typeof merged.daily === 'object' ? merged.daily : {};
         merged.contracts = merged.contracts && typeof merged.contracts === 'object' ? merged.contracts : createDefaultContractState();
+        merged.league = merged.league && typeof merged.league === 'object' ? merged.league : createDefaultLeagueState();
         merged.loadout = merged.loadout && typeof merged.loadout === 'object' ? merged.loadout : { active: 'pulse' };
         if (!loadoutDefs.some(def => def.id === merged.loadout.active)) merged.loadout.active = 'pulse';
         if (!difficultyDefs.some(def => def.id === merged.difficulty)) merged.difficulty = 'standard';
         merged.runs = Array.isArray(merged.runs) ? merged.runs.slice(0, 12).filter(run => run && typeof run === 'object') : [];
         if (!Array.isArray(merged.contracts.claimed)) merged.contracts.claimed = [];
         if (!merged.contracts.progress || typeof merged.contracts.progress !== 'object') merged.contracts.progress = {};
+        if (!merged.league.stageScores || typeof merged.league.stageScores !== 'object') merged.league.stageScores = {};
+        merged.league.stageIndex = Number.isFinite(Number(merged.league.stageIndex)) ? Number(merged.league.stageIndex) : 0;
+        merged.league.completed = !!merged.league.completed;
+        merged.league.rewarded = !!merged.league.rewarded;
         merged.totalScore = Number.isFinite(Number(merged.totalScore)) ? Number(merged.totalScore) : 0;
         merged.plays = Number.isFinite(Number(merged.plays)) ? Number(merged.plays) : 0;
         return merged;
@@ -5084,6 +5159,19 @@ function init() {
       if (!Array.isArray(career.contracts.claimed)) career.contracts.claimed = [];
       if (!career.contracts.progress || typeof career.contracts.progress !== 'object') career.contracts.progress = {};
       return career.contracts;
+    }
+
+    function ensureLeagueForToday() {
+      const date = todayKey();
+      const route = getDailyLeagueRoute(date);
+      if (!career.league || career.league.date !== date || career.league.routeId !== route.id) {
+        career.league = createDefaultLeagueState(date);
+      }
+      if (!career.league.stageScores || typeof career.league.stageScores !== 'object') career.league.stageScores = {};
+      career.league.stageIndex = Math.max(0, Math.min(route.stages.length, Number(career.league.stageIndex || 0)));
+      career.league.completed = !!career.league.completed || career.league.stageIndex >= route.stages.length;
+      career.league.rewarded = !!career.league.rewarded;
+      return career.league;
     }
 
     function contractProgressEntry(contractId) {
@@ -5571,6 +5659,100 @@ function init() {
       }).join('');
     }
 
+    function leagueSnapshot() {
+      const state = ensureLeagueForToday();
+      const route = getDailyLeagueRoute(state.date);
+      const stageIndex = Math.max(0, Math.min(route.stages.length, Number(state.stageIndex || 0)));
+      const completed = !!state.completed || stageIndex >= route.stages.length;
+      const stages = route.stages.map((stage, index) => {
+        const done = completed || index < stageIndex;
+        return {
+          ...stage,
+          label: premiumTabLabels[stage.game] || titles[stage.game] || stage.game,
+          best: Number(career.best?.[stage.game] || 0),
+          score: Number(state.stageScores?.[stage.id] || 0),
+          state: done ? 'complete' : index === stageIndex ? 'active' : 'locked'
+        };
+      });
+      const completedCount = completed ? route.stages.length : stageIndex;
+      return {
+        id: route.id,
+        title: route.title,
+        summary: route.summary,
+        reward: route.reward,
+        date: route.date,
+        stageIndex,
+        completed,
+        progressText: `${completedCount}/${route.stages.length}`,
+        activeStage: completed ? null : stages[stageIndex],
+        stages
+      };
+    }
+
+    function renderArcadeLeague() {
+      const panel = document.getElementById('premium-league-panel');
+      const routeEl = document.getElementById('premium-league-route');
+      if (!panel || !routeEl) return;
+      const league = leagueSnapshot();
+      const titleEl = document.getElementById('premium-league-title');
+      const summaryEl = document.getElementById('premium-league-summary');
+      const progressEl = document.getElementById('premium-league-progress');
+      const rewardEl = document.getElementById('premium-league-reward');
+      const actionBtn = document.getElementById('premium-league-start');
+      panel.dataset.complete = league.completed ? 'true' : 'false';
+      if (titleEl) titleEl.textContent = league.completed ? `${league.title} · 已夺冠` : league.title;
+      if (summaryEl) {
+        summaryEl.textContent = league.completed
+          ? `整条路线已完成，+${league.reward} 联赛声望已结算。`
+          : `${league.summary} 当前目标：${league.activeStage?.label || '赛季完成'} ${league.activeStage?.target || ''}+。`;
+      }
+      if (progressEl) progressEl.textContent = league.progressText;
+      if (rewardEl) rewardEl.textContent = `+${league.reward}`;
+      if (actionBtn) {
+        const target = league.activeStage?.game || masteryFocusTarget()?.game || 'survivor';
+        actionBtn.dataset.leagueTargetGame = target;
+        actionBtn.querySelector('span').textContent = league.completed ? '继续刷新纪录' : `挑战 ${league.activeStage?.label || '下一阶段'}`;
+      }
+      routeEl.innerHTML = league.stages.map((stage, index) => `
+        <article class="arcade-league-stage" data-state="${escapeHTML(stage.state)}">
+          <span>${index + 1}</span>
+          <div>
+            <strong>${escapeHTML(stage.label)}</strong>
+            <small>${escapeHTML(stage.tip)} · 目标 ${escapeHTML(String(stage.target))}+</small>
+          </div>
+          <b>${stage.state === 'complete' ? 'DONE' : stage.state === 'active' ? 'LIVE' : 'LOCK'}</b>
+        </article>
+      `).join('');
+    }
+
+    function updateArcadeLeague(game, score, details = {}) {
+      const state = ensureLeagueForToday();
+      const route = getDailyLeagueRoute(state.date);
+      if (state.completed) return { advanced: false, completed: true, details };
+      const stage = route.stages[Math.max(0, Math.min(route.stages.length - 1, Number(state.stageIndex || 0)))];
+      if (!stage) return { advanced: false, completed: true, details };
+      if (stage.game === game) {
+        state.stageScores[stage.id] = Math.max(Number(state.stageScores[stage.id] || 0), Number(score || 0));
+      }
+      if (stage.game !== game || Number(score || 0) < Number(stage.target || 0)) {
+        return { advanced: false, completed: false, details };
+      }
+      state.stageIndex = Math.min(route.stages.length, Number(state.stageIndex || 0) + 1);
+      if (state.stageIndex >= route.stages.length) {
+        state.completed = true;
+        if (!state.rewarded) {
+          state.rewarded = true;
+          career.totalScore = Math.max(0, Number(career.totalScore || 0) + Number(route.reward || 0));
+          unlockAchievement('league_clear');
+          showToast(`联赛夺冠：${route.title} +${route.reward}`, 'success');
+        }
+      } else {
+        const next = route.stages[state.stageIndex];
+        showToast(`联赛推进：下一站 ${premiumTabLabels[next.game] || titles[next.game] || next.game}`, 'success');
+      }
+      return { advanced: true, completed: !!state.completed, details };
+    }
+
     function updateArcadeContracts(game, score, details = {}) {
       const state = ensureContractsForToday();
       const completed = [];
@@ -5612,6 +5794,16 @@ function init() {
           tone: 'daily',
           title: `今日挑战 · ${daily.label}`,
           reason: '限定挑战尚未完成，优先拿下今日徽章与额外声望。'
+        };
+      }
+
+      const league = leagueSnapshot();
+      if (league.activeStage) {
+        return {
+          game: league.activeStage.game,
+          tone: 'league',
+          title: `联赛阶段 ${league.stageIndex + 1} · ${league.activeStage.label}`,
+          reason: `${league.title} 正在推进，当前目标 ${league.activeStage.target}+。`
         };
       }
 
@@ -5757,6 +5949,7 @@ function init() {
       renderArcadeDirector();
       renderArcadeMasteryMap();
       renderArcadeContracts();
+      renderArcadeLeague();
       renderArcadeDifficulty();
       renderArcadeLoadouts();
       updatePremiumTabBadges();
@@ -5807,6 +6000,7 @@ function init() {
         unlockAchievement('daily_clear');
       }
       updateArcadeContracts(game, value, { ...details, rawScore: rawValue, loadout: loadout.id, difficulty: difficulty.id });
+      updateArcadeLeague(game, value, { ...details, rawScore: rawValue, loadout: loadout.id, difficulty: difficulty.id });
       saveCareer();
       updateCareerPanel();
     }
@@ -5833,6 +6027,7 @@ function init() {
       mastery: () => careerGameOrder.map(masteryStatusForGame),
       runs: () => (Array.isArray(career.runs) ? career.runs : []).map(run => ({ ...run })),
       coach: () => latestRunCoach(),
+      league: () => leagueSnapshot(),
       contracts: () => getDailyContracts().map(contract => ({
         id: contract.id,
         title: contract.title,
@@ -5844,6 +6039,7 @@ function init() {
     document.addEventListener('atherix:vault-imported', () => {
       career = loadCareer();
       ensureContractsForToday();
+      ensureLeagueForToday();
       updateCareerPanel();
     });
     updateCareerPanel();
@@ -5925,7 +6121,22 @@ function init() {
       showToast(`已锁定推荐挑战：${titles[target] || target}`, 'success');
     }
 
+    function launchLeagueStage() {
+      const league = leagueSnapshot();
+      const target = document.getElementById('premium-league-start')?.dataset.leagueTargetGame || league.activeStage?.game;
+      if (!target) return;
+      if (target === 'runner') {
+        document.querySelector('.arcade-cabinet-bezel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        showToast('已定位到联赛主线阶段', 'info');
+        return;
+      }
+      switchPremiumGame(target);
+      stage?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      showToast(`已进入联赛阶段：${titles[target] || target}`, 'success');
+    }
+
     document.getElementById('premium-director-start')?.addEventListener('click', launchDirectorChallenge);
+    document.getElementById('premium-league-start')?.addEventListener('click', launchLeagueStage);
     document.getElementById('premium-coach-launch')?.addEventListener('click', () => {
       const target = document.getElementById('premium-coach-launch')?.dataset.coachTargetGame || latestRunCoach()?.game;
       if (!target) return;
@@ -11069,6 +11280,7 @@ function init() {
           contracts: () => window.atherixArcadeCareer?.contracts?.() || [],
           runs: () => window.atherixArcadeCareer?.runs?.() || [],
           coach: () => window.atherixArcadeCareer?.coach?.() || null,
+          league: () => window.atherixArcadeCareer?.league?.() || {},
           loadout: () => window.atherixArcadeCareer?.loadout?.() || {},
           difficulty: () => window.atherixArcadeCareer?.difficulty?.() || {},
           mastery: () => window.atherixArcadeCareer?.mastery?.() || []
