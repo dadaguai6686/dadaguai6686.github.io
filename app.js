@@ -4591,6 +4591,14 @@ function init() {
           </button>
         </div>
       </div>
+      <div class="arcade-feedback-console" id="premium-feedback-console" data-muted="false" aria-label="街机反馈控制台">
+        <span><i data-lucide="waves"></i> FEEDBACK</span>
+        <strong id="premium-feedback-status">沉浸反馈开启</strong>
+        <button type="button" class="arcade-feedback-toggle" id="premium-feedback-toggle" aria-pressed="true">
+          <i data-lucide="volume-2"></i>
+          <span>反馈 ON</span>
+        </button>
+      </div>
       <div class="arcade-career-panel" aria-label="街机生涯总览">
         <div class="career-rank-card">
           <span>街机评级</span>
@@ -4799,6 +4807,7 @@ function init() {
         <button type="button" class="mini-game-tab" data-premium-game="tactics">裂隙战术</button>
       </div>
       <div class="mini-game-stage" id="premium-game-stage" tabindex="0" aria-label="精品街机操作区">
+        <div class="premium-stage-feedback" id="premium-stage-feedback" aria-hidden="true"></div>
         <div class="mini-game-panel active" id="premium-survivor">
           <div class="mini-game-copy">
             <h3>Starcore Survivor</h3>
@@ -4986,6 +4995,37 @@ function init() {
       name: '',
       previous: { up: false, down: false, left: false, right: false, action: false, tool: false, start: false, pause: false },
       lastSeen: 0
+    };
+    const premiumFeedbackKey = 'atherix_premium_arcade_feedback_muted';
+    const premiumFeedback = {
+      muted: localStorage.getItem(premiumFeedbackKey) === 'true',
+      total: 0,
+      visualTriggers: 0,
+      soundRequests: 0,
+      audioTriggers: 0,
+      hapticTriggers: 0,
+      suppressed: 0,
+      lastTone: '',
+      lastLabel: '',
+      lastAt: 0,
+      tones: {}
+    };
+    let premiumFeedbackAudioCtx = null;
+    let premiumFeedbackGain = null;
+    let premiumFeedbackFlashTimer = null;
+    let premiumFeedbackAudioArmed = false;
+    let premiumFeedbackHapticArmed = false;
+    const premiumFeedbackToneMap = {
+      switch: { label: 'SWITCH', freq: 420, end: 640, color: '#38BDF8', pattern: [10] },
+      start: { label: 'START', freq: 330, end: 720, color: '#34D399', pattern: [18] },
+      action: { label: 'ACTION', freq: 520, end: 740, color: '#BAE6FD', pattern: [8] },
+      tool: { label: 'TOOL', freq: 360, end: 560, color: '#A78BFA', pattern: [10, 20, 10] },
+      pause: { label: 'PAUSE', freq: 240, end: 180, color: '#FDE68A', pattern: [14] },
+      achievement: { label: 'BADGE', freq: 660, end: 1040, color: '#FBBF24', pattern: [24, 24, 18] },
+      result: { label: 'RESULT', freq: 480, end: 880, color: '#22D3EE', pattern: [18, 18, 18] },
+      special: { label: 'SURGE', freq: 740, end: 1180, color: '#FDE68A', pattern: [26] },
+      danger: { label: 'DANGER', freq: 180, end: 120, color: '#EF4444', pattern: [30] },
+      move: { label: 'MOVE', freq: 280, end: 340, color: '#94A3B8', pattern: [5] }
     };
     let premiumActive = 'survivor';
     const titles = {
@@ -6613,6 +6653,8 @@ function init() {
       career.achievements.push(id);
       saveCareer();
       updateCareerPanel();
+      const def = achievementDefs.find(item => item.id === id);
+      triggerPremiumFeedback('achievement', { label: def?.label || 'BADGE' });
       return true;
     }
 
@@ -6660,6 +6702,7 @@ function init() {
       }
       saveCareer();
       updateCareerPanel();
+      triggerPremiumFeedback('result', { label: `${premiumTabLabels[game] || game} +${value}` });
     }
 
     window.atherixArcadeCareer = {
@@ -6791,12 +6834,15 @@ function init() {
       if (premiumActive === 'heist') newHeist();
       if (premiumActive === 'chain') newChain();
       if (premiumActive === 'tactics') newTactics({ shouldFocus: true });
+      triggerPremiumFeedback('start', { label: `START ${premiumTabLabels[premiumActive] || premiumActive}` });
     }
 
     function togglePremiumActivePause() {
-      if (premiumActive === 'survivor' && survivor.running) toggleSurvivorPause();
-      if (premiumActive === 'boss' && bossMode.running) toggleBossPause();
-      if (premiumActive === 'drift' && drift.running) toggleDriftPause();
+      let changed = false;
+      if (premiumActive === 'survivor' && survivor.running) changed = toggleSurvivorPause();
+      if (premiumActive === 'boss' && bossMode.running) changed = toggleBossPause();
+      if (premiumActive === 'drift' && drift.running) changed = toggleDriftPause();
+      if (changed) triggerPremiumFeedback('pause', { label: 'PAUSE' });
     }
 
     function pauseRealtimePremiumGamesExcept(name) {
@@ -6830,6 +6876,7 @@ function init() {
     }
 
     function switchPremiumGame(name) {
+      const previous = premiumActive;
       premiumActive = name;
       pauseRealtimePremiumGamesExcept(name);
       clearPremiumKeys();
@@ -6844,6 +6891,7 @@ function init() {
       if (name === 'drift') drawDrift();
       updatePremiumTouchLabels();
       renderArcadeCockpit();
+      if (previous !== name) triggerPremiumFeedback('switch', { label: premiumTabLabels[name] || titles[name] || name });
       focusStage();
     }
 
@@ -6929,18 +6977,33 @@ function init() {
       if (!latestRunCoach()) return;
       setActiveLoadout(document.getElementById('premium-coach-loadout')?.dataset.coachLoadout);
     });
+    document.getElementById('premium-feedback-toggle')?.addEventListener('click', () => {
+      setPremiumFeedbackMuted(!premiumFeedback.muted);
+      focusStage();
+    });
+    stage?.addEventListener('pointerdown', armPremiumFeedbackDevices, { capture: true, passive: true });
+    stage?.addEventListener('mousedown', armPremiumFeedbackDevices, { capture: true, passive: true });
+    stage?.addEventListener('touchstart', armPremiumFeedbackDevices, { capture: true, passive: true });
+    stage?.addEventListener('keydown', armPremiumFeedbackDevices, { capture: true });
 
     library.querySelectorAll('[data-premium-game]').forEach(btn => {
       btn.addEventListener('click', () => switchPremiumGame(btn.dataset.premiumGame));
     });
+    updatePremiumFeedbackUi();
 
     function applyPremiumControl(control, pressed, source = 'touch', options = {}) {
       if (pressed && premiumActive === 'survivor' && survivor.draftOpen && control === 'action') {
+        triggerPremiumFeedback('special', { label: 'UPGRADE' });
         selectSurvivorUpgrade(survivor.draftChoices[0]?.id);
         return;
       }
       const changed = setPremiumSourceControl(source, control, pressed);
       if (options.edgeOnly && !changed) return;
+      if (pressed && changed) {
+        triggerPremiumFeedback(['up', 'down', 'left', 'right'].includes(control) ? 'move' : (control === 'tool' ? 'tool' : 'action'), {
+          label: `${premiumTabLabels[premiumActive] || premiumActive} ${control.toUpperCase()}`
+        });
+      }
       if (pressed && premiumActive === 'heist') {
         if (control === 'up') moveHeist(0, -1);
         if (control === 'down') moveHeist(0, 1);
@@ -7128,6 +7191,161 @@ function init() {
 
     const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
     const pick = (items) => items[Math.floor(Math.random() * items.length)];
+
+    function updatePremiumFeedbackUi() {
+      const panel = document.getElementById('premium-feedback-console');
+      const status = document.getElementById('premium-feedback-status');
+      const toggle = document.getElementById('premium-feedback-toggle');
+      if (panel) panel.dataset.muted = String(premiumFeedback.muted);
+      if (status) {
+        status.textContent = premiumFeedback.muted
+          ? '沉浸反馈关闭'
+          : `${premiumFeedback.lastLabel || '沉浸反馈开启'} · ${premiumFeedback.total}`;
+      }
+      if (toggle) {
+        toggle.setAttribute('aria-pressed', String(!premiumFeedback.muted));
+        toggle.innerHTML = `
+          <i data-lucide="${premiumFeedback.muted ? 'volume-x' : 'volume-2'}"></i>
+          <span>反馈 ${premiumFeedback.muted ? 'OFF' : 'ON'}</span>
+        `;
+        safeCreateIcons(toggle);
+      }
+    }
+
+    function resetPremiumFeedbackState({ muted = premiumFeedback.muted } = {}) {
+      premiumFeedback.muted = !!muted;
+      premiumFeedback.total = 0;
+      premiumFeedback.visualTriggers = 0;
+      premiumFeedback.soundRequests = 0;
+      premiumFeedback.audioTriggers = 0;
+      premiumFeedback.hapticTriggers = 0;
+      premiumFeedback.suppressed = 0;
+      premiumFeedback.lastTone = '';
+      premiumFeedback.lastLabel = '';
+      premiumFeedback.lastAt = 0;
+      premiumFeedback.tones = {};
+      localStorage.setItem(premiumFeedbackKey, String(premiumFeedback.muted));
+      if (premiumFeedbackFlashTimer) clearTimeout(premiumFeedbackFlashTimer);
+      premiumFeedbackFlashTimer = null;
+      if (stage) {
+        stage.classList.remove('is-feedbacking');
+        delete stage.dataset.feedbackTone;
+        delete stage.dataset.feedback;
+      }
+      updatePremiumFeedbackUi();
+    }
+
+    function armPremiumFeedbackDevices(event) {
+      if (event && event.isTrusted === false) return;
+      const activation = navigator.userActivation;
+      if (!activation || activation.isActive || activation.hasBeenActive) {
+        premiumFeedbackAudioArmed = true;
+        if (event?.type === 'pointerdown' || event?.type === 'touchstart' || event?.type === 'mousedown') {
+          premiumFeedbackHapticArmed = true;
+        }
+      }
+    }
+
+    function canUsePremiumFeedbackAudio() {
+      const activation = navigator.userActivation;
+      return premiumFeedbackAudioArmed || !!activation?.isActive;
+    }
+
+    function canUsePremiumFeedbackHaptic() {
+      const activation = navigator.userActivation;
+      return premiumFeedbackHapticArmed && (!activation || activation.isActive || activation.hasBeenActive);
+    }
+
+    function setPremiumFeedbackMuted(muted, { announce = true } = {}) {
+      premiumFeedback.muted = !!muted;
+      localStorage.setItem(premiumFeedbackKey, String(premiumFeedback.muted));
+      updatePremiumFeedbackUi();
+      if (announce) showToast(premiumFeedback.muted ? '街机沉浸反馈已关闭' : '街机沉浸反馈已开启', premiumFeedback.muted ? 'info' : 'success');
+      if (announce && !premiumFeedback.muted) triggerPremiumFeedback('switch', { label: 'FEEDBACK ON', haptic: false });
+      return !premiumFeedback.muted;
+    }
+
+    function ensurePremiumFeedbackAudio() {
+      const AudioCtor = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtor) return null;
+      if (!premiumFeedbackAudioCtx) {
+        premiumFeedbackAudioCtx = new AudioCtor();
+        premiumFeedbackGain = premiumFeedbackAudioCtx.createGain();
+        premiumFeedbackGain.gain.setValueAtTime(0.055, premiumFeedbackAudioCtx.currentTime);
+        premiumFeedbackGain.connect(premiumFeedbackAudioCtx.destination);
+      }
+      if (premiumFeedbackAudioCtx.state === 'suspended') {
+        premiumFeedbackAudioCtx.resume().catch(() => {});
+      }
+      return premiumFeedbackAudioCtx;
+    }
+
+    function playPremiumFeedbackTone(config) {
+      premiumFeedback.soundRequests++;
+      try {
+        const ctx = ensurePremiumFeedbackAudio();
+        if (!ctx || !premiumFeedbackGain) return false;
+        const now = ctx.currentTime;
+        const duration = 0.11;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(config.freq, now);
+        osc.frequency.exponentialRampToValueAtTime(Math.max(80, config.end), now + duration);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.linearRampToValueAtTime(0.12, now + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+        osc.connect(gain);
+        gain.connect(premiumFeedbackGain);
+        osc.start(now);
+        osc.stop(now + duration + 0.02);
+        premiumFeedback.audioTriggers++;
+        return true;
+      } catch (err) {
+        return false;
+      }
+    }
+
+    function flashPremiumStage(tone, config, label) {
+      if (!stage) return;
+      premiumFeedback.visualTriggers++;
+      stage.dataset.feedbackTone = tone;
+      stage.dataset.feedback = label || config.label;
+      stage.classList.remove('is-feedbacking');
+      void stage.offsetWidth;
+      stage.classList.add('is-feedbacking');
+      if (premiumFeedbackFlashTimer) clearTimeout(premiumFeedbackFlashTimer);
+      premiumFeedbackFlashTimer = setTimeout(() => {
+        stage.classList.remove('is-feedbacking');
+      }, 360);
+    }
+
+    function triggerPremiumFeedback(tone = 'action', options = {}) {
+      if (premiumFeedback.muted && !options.force) {
+        premiumFeedback.suppressed++;
+        updatePremiumFeedbackUi();
+        return false;
+      }
+      const config = premiumFeedbackToneMap[tone] || premiumFeedbackToneMap.action;
+      const now = Date.now();
+      const throttleMs = Number(options.throttleMs ?? (tone === 'move' ? 90 : 28));
+      if (now - premiumFeedback.lastAt < throttleMs && premiumFeedback.lastTone === tone) return false;
+      const label = options.label || config.label;
+      premiumFeedback.total++;
+      premiumFeedback.lastTone = tone;
+      premiumFeedback.lastLabel = label;
+      premiumFeedback.lastAt = now;
+      premiumFeedback.tones[tone] = (premiumFeedback.tones[tone] || 0) + 1;
+      if (options.visual !== false) flashPremiumStage(tone, config, label);
+      if (options.audio !== false && canUsePremiumFeedbackAudio()) playPremiumFeedbackTone(config);
+      if (options.haptic !== false && canUsePremiumFeedbackHaptic() && navigator.vibrate && Array.isArray(config.pattern)) {
+        try {
+          if (navigator.vibrate(config.pattern)) premiumFeedback.hapticTriggers++;
+        } catch (err) {}
+      }
+      updatePremiumFeedbackUi();
+      return true;
+    }
 
     const survivor = {
       canvas: document.getElementById('premium-survivor-canvas'),
@@ -7787,9 +8005,9 @@ function init() {
 
     function triggerSurvivorNova() {
       const p = survivor.player;
-      if (!p) return;
+      if (!p) return false;
       const overdrive = survivor.overdrive >= 100;
-      if (p.novaCooldown > 0 && !overdrive) return;
+      if (p.novaCooldown > 0 && !overdrive) return false;
       if (overdrive) {
         survivor.overdrive = 0;
         survivor.overdriveFlash = 740;
@@ -7817,6 +8035,8 @@ function init() {
         }
       });
       survivorBurst(p.x, p.y, overdrive ? '#FDE68A' : '#BAE6FD', overdrive ? 110 : 68);
+      triggerPremiumFeedback(overdrive ? 'special' : 'action', { label: overdrive ? 'OMEGA BURST' : 'NOVA' });
+      return true;
     }
 
     function finishSurvivor(text) {
@@ -8245,9 +8465,12 @@ function init() {
       };
     }
 
-    document.getElementById('premium-survivor-start').addEventListener('click', startSurvivor);
+    document.getElementById('premium-survivor-start').addEventListener('click', () => {
+      startSurvivor();
+      triggerPremiumFeedback('start', { label: 'START SURVIVOR' });
+    });
     document.getElementById('premium-survivor-pause').addEventListener('click', () => {
-      toggleSurvivorPause();
+      if (toggleSurvivorPause()) triggerPremiumFeedback('pause', { label: 'PAUSE SURVIVOR' });
     });
     setSurvivorUi();
     drawSurvivor();
@@ -8414,6 +8637,7 @@ function init() {
       bossMode.score += 260 + Math.min(360, Number(p.bestGrazeStreak || 0) * 18);
       unlockAchievement('boss_focus_surge');
       bossSpark(p.x, p.y, '#FDE68A', 40);
+      triggerPremiumFeedback('special', { label: 'FOCUS SURGE' });
       setBossUi();
       return true;
     }
@@ -8534,6 +8758,7 @@ function init() {
       closeBossWeakpoint();
       if (bossMode.breakChain >= 2) unlockAchievement('boss_counter_chain');
       if (bossMode.player.focus >= 100) activateBossFocusSurge();
+      triggerPremiumFeedback('special', { label: `BREAK x${bossMode.breakChain}` });
       setBossUi();
       return true;
     }
@@ -8912,9 +9137,12 @@ function init() {
       ctx.fillText(`PHASE ${b.phase}  GRAZE ${p.graze}  FOCUS ${p.focusSurge > 0 ? 'SURGE' : Math.round(Number(p.focus || 0)) + '%'}  BREAK ${bossMode.breakCount}  COUNTER ${bossMode.counterWindow > 0 ? `${bossMode.breakChain}x` : '0x'}`, 18, 42);
     }
 
-    document.getElementById('premium-boss-start').addEventListener('click', startBoss);
+    document.getElementById('premium-boss-start').addEventListener('click', () => {
+      startBoss();
+      triggerPremiumFeedback('start', { label: 'START BOSS' });
+    });
     document.getElementById('premium-boss-pause').addEventListener('click', () => {
-      toggleBossPause();
+      if (toggleBossPause()) triggerPremiumFeedback('pause', { label: 'PAUSE BOSS' });
     });
     setBossUi();
     updateBossPauseButton();
@@ -9049,6 +9277,7 @@ function init() {
       driftSpark(drift.player.x, drift.player.y, '#FDE68A', 34);
       setDriftUi();
       drawDrift();
+      triggerPremiumFeedback('special', { label: 'PHASE BRAKE' });
       return true;
     }
 
@@ -9728,9 +9957,12 @@ function init() {
       });
     }
 
-    document.getElementById('premium-drift-start').addEventListener('click', startDrift);
+    document.getElementById('premium-drift-start').addEventListener('click', () => {
+      startDrift();
+      triggerPremiumFeedback('start', { label: 'START DRIFT' });
+    });
     document.getElementById('premium-drift-pause').addEventListener('click', () => {
-      toggleDriftPause();
+      if (toggleDriftPause()) triggerPremiumFeedback('pause', { label: 'PAUSE DRIFT' });
     });
     document.getElementById('premium-drift-phase-btn').addEventListener('click', triggerDriftPhaseBrake);
     setDriftUi();
@@ -10145,7 +10377,7 @@ function init() {
     }
 
     function triggerHeistCloak() {
-      if (premiumActive !== 'heist' || heist.won || heist.cloakTurns > 0 || heist.cloaks <= 0) return;
+      if (premiumActive !== 'heist' || heist.won || heist.cloakTurns > 0 || heist.cloaks <= 0) return false;
       heist.cloaks--;
       heist.cloakTurns = 4;
       heist.alert = 'GHOST';
@@ -10153,10 +10385,12 @@ function init() {
       unlockAchievement('heist_ghost');
       setHeistUi();
       drawHeist();
+      triggerPremiumFeedback('special', { label: 'CLOAK' });
+      return true;
     }
 
     function triggerHeistDecoy() {
-      if (premiumActive !== 'heist' || heist.won || heist.decoys <= 0 || heist.decoy?.timer > 0) return;
+      if (premiumActive !== 'heist' || heist.won || heist.decoys <= 0 || heist.decoy?.timer > 0) return false;
       heist.decoys--;
       heist.decoy = {
         x: heist.player.x,
@@ -10170,6 +10404,8 @@ function init() {
       heist.bestChain = Math.max(heist.bestChain, heist.chain);
       setHeistUi();
       drawHeist();
+      triggerPremiumFeedback('tool', { label: 'DECOY' });
+      return true;
     }
 
     function heistCaught(cause = 'HIGH') {
@@ -10414,7 +10650,10 @@ function init() {
       if (heist.won) overlay(ctx, c.width, c.height, 'VAULT CLEAR', '高分已保存 · 点击生成任务再来一局');
     }
 
-    document.getElementById('premium-heist-new').addEventListener('click', newHeist);
+    document.getElementById('premium-heist-new').addEventListener('click', () => {
+      newHeist();
+      triggerPremiumFeedback('start', { label: 'START HEIST' });
+    });
     newHeist();
 
     const chain = {
@@ -10868,6 +11107,7 @@ function init() {
       settleChain();
       finishChainIfNeeded();
       renderChain();
+      triggerPremiumFeedback('special', { label: 'CATALYST' });
     }
 
     function chainDebugState() {
@@ -11053,7 +11293,10 @@ function init() {
       chain.board.dataset.recipe = chainRecipeDetail();
     }
 
-    document.getElementById('premium-chain-new').addEventListener('click', newChain);
+    document.getElementById('premium-chain-new').addEventListener('click', () => {
+      newChain();
+      triggerPremiumFeedback('start', { label: 'START CHAIN' });
+    });
     document.getElementById('premium-chain-catalyst').addEventListener('click', triggerChainCatalyst);
     newChain();
 
@@ -11570,7 +11813,7 @@ function init() {
     }
 
     function triggerTacticsAction() {
-      if (premiumActive !== 'tactics' || tactics.won || tactics.lost) return;
+      if (premiumActive !== 'tactics' || tactics.won || tactics.lost) return false;
       const p = tactics.player;
       if (p.charge <= 0) {
         const cover = tacticsCoverProfile();
@@ -11580,7 +11823,8 @@ function init() {
         spendTacticsAp(1);
         setTacticsUi();
         drawTactics();
-        return;
+        triggerPremiumFeedback('tool', { label: 'GUARD' });
+        return true;
       }
       const targets = tacticsBlastTargets();
       if (!targets.length) {
@@ -11610,6 +11854,8 @@ function init() {
       spendTacticsAp(1);
       setTacticsUi();
       drawTactics();
+      triggerPremiumFeedback('special', { label: targets.length ? 'PHASE BLAST' : 'JAM PULSE' });
+      return true;
     }
 
     function enemyTacticsTurn() {
@@ -11834,7 +12080,10 @@ function init() {
       if (tactics.lost) overlay(ctx, c.width, c.height, 'MECH DOWN', '点击开始行动重开战术任务');
     }
 
-    document.getElementById('premium-tactics-start').addEventListener('click', () => newTactics({ shouldFocus: true }));
+    document.getElementById('premium-tactics-start').addEventListener('click', () => {
+      newTactics({ shouldFocus: true });
+      triggerPremiumFeedback('start', { label: 'START TACTICS' });
+    });
     document.getElementById('premium-tactics-action').addEventListener('click', () => {
       focusStage();
       triggerTacticsAction();
@@ -12209,6 +12458,23 @@ function init() {
             status: document.getElementById('premium-gamepad-status')?.textContent || ''
           }),
           simulateGamepad: (snapshot = {}) => applyPremiumGamepadSnapshot({ connected: true, name: 'Smoke Pad', ...snapshot }, { force: true }),
+          feedback: () => ({
+            muted: premiumFeedback.muted,
+            total: premiumFeedback.total,
+            visualTriggers: premiumFeedback.visualTriggers,
+            soundRequests: premiumFeedback.soundRequests,
+            audioTriggers: premiumFeedback.audioTriggers,
+            hapticTriggers: premiumFeedback.hapticTriggers,
+            suppressed: premiumFeedback.suppressed,
+            lastTone: premiumFeedback.lastTone,
+            lastLabel: premiumFeedback.lastLabel,
+            tones: { ...premiumFeedback.tones },
+            status: document.getElementById('premium-feedback-status')?.textContent || '',
+            togglePressed: document.getElementById('premium-feedback-toggle')?.getAttribute('aria-pressed') || ''
+          }),
+          setFeedbackMuted: (muted) => setPremiumFeedbackMuted(!!muted, { announce: false }),
+          triggerFeedback: (tone = 'action') => triggerPremiumFeedback(tone, { label: `DEBUG ${String(tone).toUpperCase()}`, haptic: false }),
+          resetFeedback: (muted = false) => resetPremiumFeedbackState({ muted: !!muted }),
           achievements: () => achievementDefs.map(def => ({
             ...def,
             unlocked: career.achievements.includes(def.id)
@@ -12271,9 +12537,11 @@ function init() {
         return;
       }
       if (e.code === 'KeyP' || e.code === 'Escape') {
-        if (premiumActive === 'survivor') toggleSurvivorPause();
-        if (premiumActive === 'boss') toggleBossPause();
-        if (premiumActive === 'drift') toggleDriftPause();
+        let changed = false;
+        if (premiumActive === 'survivor') changed = toggleSurvivorPause();
+        if (premiumActive === 'boss') changed = toggleBossPause();
+        if (premiumActive === 'drift') changed = toggleDriftPause();
+        if (changed) triggerPremiumFeedback('pause', { label: `PAUSE ${premiumTabLabels[premiumActive] || premiumActive}` });
         return;
       }
       if (e.code === 'ArrowUp' || e.code === 'KeyW') applyPremiumControl('up', true, 'keyboard');

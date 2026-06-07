@@ -1018,6 +1018,7 @@ async function run() {
       debug: api?.runnerState?.() || {}
     };
   })()`, 3000);
+  await evaluate(`window.__atherixDebug?.premium?.resetFeedback?.(false)`);
   const arcadeInitial = await evaluate(`(() => ({
     premium: !!document.querySelector('#premium-game-stage'),
     careerPanel: !!document.querySelector('#premium-career-rating'),
@@ -1112,7 +1113,12 @@ async function run() {
     touchControls: document.querySelectorAll('[data-premium-control]').length,
     gamepadStatus: document.querySelector('#premium-gamepad-status')?.textContent || '',
     chainCells: document.querySelectorAll('#premium-chain-board .chain-cell').length,
-    chainTarget: document.querySelector('#premium-chain-target')?.textContent
+    chainTarget: document.querySelector('#premium-chain-target')?.textContent,
+    feedbackPanel: !!document.querySelector('#premium-feedback-console'),
+    feedbackStage: !!document.querySelector('#premium-stage-feedback'),
+    feedbackStatus: document.querySelector('#premium-feedback-status')?.textContent || '',
+    feedbackTogglePressed: document.querySelector('#premium-feedback-toggle')?.getAttribute('aria-pressed') || '',
+    feedbackDebug: window.__atherixDebug?.premium?.feedback?.() || {}
   }))()`);
   const premiumGamepadState = await evaluate(`(() => {
     const api = window.__atherixDebug?.premium;
@@ -1349,7 +1355,8 @@ async function run() {
     paused: !!window.__atherixDebug?.premium?.survivorPaused?.(),
     actionLabel: document.querySelector('[data-premium-control="action"]')?.textContent || '',
     toolDisabled: !!document.querySelector('[data-premium-control="tool"]')?.disabled,
-    toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || ''
+    toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || '',
+    feedback: window.__atherixDebug?.premium?.feedback?.() || {}
   }))()`);
 
   await click('#premium-survivor-start');
@@ -1368,7 +1375,29 @@ async function run() {
       threat: document.querySelector('#premium-survivor-threat')?.textContent,
       bounty: document.querySelector('#premium-survivor-bounty')?.textContent,
       hp: document.querySelector('#premium-survivor-hp')?.textContent,
-      debug: window.__atherixDebug?.premium?.survivorState?.() || {}
+      debug: window.__atherixDebug?.premium?.survivorState?.() || {},
+      feedback: window.__atherixDebug?.premium?.feedback?.() || {},
+      feedbackTone: document.querySelector('#premium-game-stage')?.dataset.feedbackTone || '',
+      feedbackLabel: document.querySelector('#premium-game-stage')?.dataset.feedback || ''
+    };
+  })()`);
+  const feedbackMuteState = await evaluate(`(() => {
+    const api = window.__atherixDebug?.premium;
+    const before = api?.feedback?.() || {};
+    api?.setFeedbackMuted?.(true);
+    const muted = api?.feedback?.() || {};
+    api?.triggerFeedback?.('special');
+    const afterSuppressed = api?.feedback?.() || {};
+    api?.setFeedbackMuted?.(false);
+    const unmuted = api?.feedback?.() || {};
+    return {
+      before,
+      muted,
+      afterSuppressed,
+      unmuted,
+      panelMuted: document.querySelector('#premium-feedback-console')?.dataset.muted || '',
+      status: document.querySelector('#premium-feedback-status')?.textContent || '',
+      togglePressed: document.querySelector('#premium-feedback-toggle')?.getAttribute('aria-pressed') || ''
     };
   })()`);
   const survivorDraftOpenState = await evaluate(`(() => {
@@ -1907,6 +1936,7 @@ async function run() {
   assert(arcadeInitial.premium && arcadeInitial.careerPanel, 'premium arcade career panel should render');
   assert(arcadeInitial.oldPrototypeCount === 0, 'old prototype mini-games should be replaced');
   assert(arcadeInitial.premiumTabs >= 6 && arcadeInitial.driftPanel && arcadeInitial.tacticsPanel, 'premium arcade should include drift and tactics modes');
+  assert(arcadeInitial.feedbackPanel && arcadeInitial.feedbackStage && arcadeInitial.feedbackTogglePressed === 'true' && arcadeInitial.feedbackDebug?.muted === false && arcadeInitial.feedbackDebug?.total === 0 && /沉浸反馈/.test(arcadeInitial.feedbackStatus), `premium arcade feedback console should start enabled and observable: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.cockpitPanel && arcadeInitial.cockpitTarget === arcadeInitial.debugCockpit?.targetGame && arcadeInitial.cockpitMode === arcadeInitial.debugCockpit?.activeLabel && arcadeInitial.cockpitDifficulty && arcadeInitial.cockpitLoadout && (arcadeInitial.cockpitSeason === '完成' || /^\d+%$/.test(arcadeInitial.cockpitSeason)) && arcadeInitial.cockpitActionLabel.includes(arcadeInitial.cockpitMode), `premium arcade cockpit should summarize the next playable run: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.runLogPanel && arcadeInitial.runLogEmpty === 'true' && arcadeInitial.runLogCards === 0 && arcadeInitial.debugRuns === 0, `premium arcade run telemetry should start empty: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.leaderboardPanel && arcadeInitial.leaderboardEmpty === 'true' && arcadeInitial.leaderboardCards === 0 && arcadeInitial.debugLeaderboard?.entries?.length === 0 && arcadeInitial.leaderboardTotal === '0', `premium arcade hall of fame should start empty: ${JSON.stringify(arcadeInitial)}`);
@@ -1950,7 +1980,10 @@ async function run() {
   assert(premiumPauseHookState.before.running && premiumPauseHookState.result?.paused?.includes('boss') && premiumPauseHookState.after.running && premiumPauseHookState.after.paused && premiumPauseHookState.after.pauseButton === '继续', `premium realtime pause hook should freeze active realtime games: ${JSON.stringify(premiumPauseHookState)}`);
   assert(cockpitTargetState.target && (cockpitTargetState.target === 'runner' || cockpitTargetState.active === cockpitTargetState.target) && /驾驶舱推荐/.test(cockpitTargetState.toast) && !cockpitTargetState.horizontalOverflow, `premium cockpit target should launch the recommended mode: ${JSON.stringify(cockpitTargetState)}`);
   assert(cockpitPlayState.active === 'survivor' && cockpitPlayState.running && !cockpitPlayState.paused && /星爆/.test(cockpitPlayState.actionLabel) && cockpitPlayState.toolDisabled && /开局/.test(cockpitPlayState.toast), `premium cockpit play should start the active mode and refresh touch labels: ${JSON.stringify(cockpitPlayState)}`);
+  assert(cockpitPlayState.feedback?.tones?.start >= 1 && cockpitPlayState.feedback?.visualTriggers >= 1 && /START|开局/.test(cockpitPlayState.feedback?.status || ''), `premium arcade feedback should respond to cockpit start: ${JSON.stringify(cockpitPlayState)}`);
   assert(survivorState.nonBlank && survivorState.threat && /\dx$/.test(survivorState.chain) && survivorState.overdrive && survivorState.bounty && survivorState.debug?.hud?.chain === survivorState.chain && survivorState.debug?.hud?.bounty === survivorState.bounty, `survivor canvas should render active state with chain, overdrive, and bounty HUD: ${JSON.stringify(survivorState)}`);
+  assert(survivorState.feedback?.tones?.action >= 1 && survivorState.feedback?.visualTriggers >= 1 && survivorState.feedbackTone === 'action' && /ACTION|NOVA/.test(survivorState.feedbackLabel), `premium arcade feedback should treat Space as an action signal, not restart: ${JSON.stringify(survivorState)}`);
+  assert(feedbackMuteState.muted?.muted === true && feedbackMuteState.muted?.togglePressed === 'false' && feedbackMuteState.afterSuppressed?.suppressed > feedbackMuteState.muted?.suppressed && feedbackMuteState.afterSuppressed?.total === feedbackMuteState.muted?.total && feedbackMuteState.unmuted?.muted === false && feedbackMuteState.unmuted?.togglePressed === 'true' && feedbackMuteState.panelMuted === 'false', `premium arcade feedback mute should suppress events and restore cleanly: ${JSON.stringify(feedbackMuteState)}`);
   assert(survivorDraftOpenState.open && survivorDraftOpenState.ariaHidden === 'false' && survivorDraftOpenState.optionCards === 3 && survivorDraftOpenState.choices.length === 3 && survivorDraftOpenState.running && !survivorDraftOpenState.paused, `survivor roguelite draft should open three upgrade choices without using pause state: ${JSON.stringify(survivorDraftOpenState)}`);
   assert(survivorDraftFreezeState.open && Math.abs(survivorDraftFreezeState.elapsedAfter - survivorDraftOpenState.beforeElapsed) < 1 && Math.abs(survivorDraftFreezeState.scoreAfter - survivorDraftOpenState.beforeScore) < 1, `survivor roguelite draft should freeze the run clock and score until a choice is made: ${JSON.stringify({ survivorDraftOpenState, survivorDraftFreezeState })}`);
   assert(!survivorDraftChosenState.open && survivorDraftChosenState.ariaHidden === 'true' && survivorDraftChosenState.optionCards === 0 && survivorDraftChosenState.running && Number(survivorDraftChosenState.level) >= 2 && survivorDraftChosenState.score > survivorDraftOpenState.beforeScore && survivorDraftChosenState.buildText.length > 2, `survivor roguelite draft should apply a chosen upgrade and resume the run: ${JSON.stringify(survivorDraftChosenState)}`);
@@ -2051,7 +2084,7 @@ async function run() {
   assert(tacticsForecastAfterAction.dangerCount > 0 && tacticsForecastAfterAction.coverHud && tacticsForecastAfterAction.momentumHud !== undefined && tacticsForecastAfterAction.routeHud && tacticsJammedIntent, `tactics mode should expose post-action JAM, cover, momentum, and route forecast: ${JSON.stringify(tacticsForecastAfterAction)}`);
   assert(tacticsState.nonBlank && Number(tacticsState.ap) >= 0 && tacticsState.action && tacticsState.cover && tacticsState.momentum !== undefined && tacticsState.route && tacticsState.debug?.route?.length > 0, `tactics mode should render and accept enhanced actions: ${JSON.stringify(tacticsState)}`);
   assert(Number(tacticsState.danger) > 0 && tacticsState.intel && tacticsState.debug?.hud?.route === tacticsState.route && tacticsState.debug?.hud?.cover === tacticsState.cover && tacticsState.debug?.hud?.momentum === tacticsState.momentum, `tactics HUD should stay in sync with enhanced debug state: ${JSON.stringify(tacticsState)}`);
-  assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /mobile-controls/.test(key)), `service worker should register and cache the app shell: ${JSON.stringify(pwaState)}`);
+  assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /arcade-feedback/.test(key)), `service worker should register and cache the app shell: ${JSON.stringify(pwaState)}`);
   assert(pwaState.swHasNavigationPreload && pwaState.swHasOfflineShellHeader && pwaState.swHasFallbackUrl, `service worker should include robust offline navigation fallback: ${JSON.stringify(pwaState)}`);
   const diagnosticText = JSON.stringify(diagnostics);
   assert(!/willReadFrequently|Multiple readback operations/i.test(diagnosticText), `canvas diagnostics should stay quiet after smoke readback hardening: ${diagnosticText}`);

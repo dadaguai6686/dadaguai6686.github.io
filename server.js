@@ -39,12 +39,9 @@ const contentSecurityPolicy = [
 ].join('; ');
 const permissionsPolicy = [
   'accelerometer=()',
-  'ambient-light-sensor=()',
   'autoplay=(self)',
-  'battery=()',
   'camera=()',
   'display-capture=()',
-  'document-domain=()',
   'encrypted-media=()',
   'fullscreen=(self)',
   'geolocation=()',

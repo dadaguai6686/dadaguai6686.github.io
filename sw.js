@@ -1,10 +1,10 @@
-const CACHE_VERSION = 'atherix-static-v27-mobile-controls';
+const CACHE_VERSION = 'atherix-static-v28-arcade-feedback';
 const NAVIGATION_FALLBACK_URL = '/index.html';
 const STATIC_ASSETS = [
   '/',
   NAVIGATION_FALLBACK_URL,
-  '/style.css?v=20260608-mobile-controls-v6',
-  '/app.js?v=20260608-mobile-controls-v6',
+  '/style.css?v=20260608-mobile-controls-v7-arcade-feedback',
+  '/app.js?v=20260608-mobile-controls-v7-arcade-feedback',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',
