@@ -2965,10 +2965,23 @@ h1 {
   }
 
 #shell[data-status="playing"] #objective-strip {
-  bottom: 132px;
+  bottom: 140px;
   left: 8px;
   width: calc(100vw - 16px);
   padding: 8px 10px;
+}
+
+#shell[data-status="playing"] #objective-strip strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#shell[data-status="playing"] #objective-strip span {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 #shell[data-status="playing"] #mission-toast {

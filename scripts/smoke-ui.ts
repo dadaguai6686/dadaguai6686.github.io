@@ -174,6 +174,7 @@ assert.ok(styles.includes("#game-wrap:focus"), "game surface focus should avoid 
 assert.ok(styles.includes('#combat-log[data-tone="danger"]'), "combat feedback log should style danger events");
 assert.ok(styles.includes("#combat-log-history li:nth-child(n + 2)"), "mobile combat feedback should limit old event history height");
 assert.ok(styles.includes('#shell[data-status="playing"] #combat-log'), "mobile play should position combat feedback away from touch controls");
+assert.ok(styles.includes("#objective-strip span") && styles.includes("-webkit-line-clamp: 2"), "mobile objective strip should clamp long route details");
 assert.ok(styles.includes('#shell[data-status="playing"] #combo-timer[data-state="idle"]'), "mobile play should collapse the idle combo timer until a chain starts");
 assert.ok(styles.includes("#quick-brief"), "compact first-screen objective brief should have CSS");
 assert.ok(styles.includes("#launch-brief"), "launch briefing should have CSS");
