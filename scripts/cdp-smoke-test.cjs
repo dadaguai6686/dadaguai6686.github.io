@@ -702,6 +702,8 @@ async function run() {
     };
     const controls = document.querySelectorAll('[data-runner-control]').length;
     const beforeX = window.__atherixDebug?.player?.x || 0;
+    const scoreBefore = Number(document.querySelector('#game-score')?.textContent || 0);
+    const initialDebug = window.__atherixDebug?.runnerState?.() || {};
     firePointer('#btn-start-led', 'pointerdown');
     firePointer('#btn-start-led', 'pointerup');
     await new Promise(resolve => setTimeout(resolve, 180));
@@ -711,6 +713,10 @@ async function run() {
     firePointer('#btn-dash-led', 'pointerdown');
     firePointer('#btn-dash-led', 'pointerup');
     await new Promise(resolve => setTimeout(resolve, 220));
+    const scoreAfterDash = Number(document.querySelector('#game-score')?.textContent || 0);
+    const comboAfterDash = document.querySelector('#game-combo')?.textContent || '';
+    const contractAfterDash = document.querySelector('#game-contract')?.textContent || '';
+    const debugAfterDash = window.__atherixDebug?.runnerState?.() || {};
     const timerBeforePause = document.querySelector('#game-timer')?.textContent || '';
     firePointer('#btn-pause-led', 'pointerdown');
     firePointer('#btn-pause-led', 'pointerup');
@@ -730,6 +736,9 @@ async function run() {
     await new Promise(resolve => setTimeout(resolve, 180));
     const pausedAfterResume = !!window.__atherixDebug?.gamePaused?.();
     const runningAfterResume = !!window.__atherixDebug?.gameRunning?.();
+    const forceContract = window.__atherixDebug?.forceRunnerContract?.() || {};
+    await new Promise(resolve => setTimeout(resolve, 120));
+    const debug = window.__atherixDebug?.runnerState?.() || {};
     const player = window.__atherixDebug?.player || {};
     return {
       controls,
@@ -739,6 +748,18 @@ async function run() {
       dashReady: !!player.dashReady,
       dashCooldownUntil: player.dashCooldownUntil || 0,
       running: !!window.__atherixDebug?.gameRunning?.(),
+      scoreBefore,
+      scoreAfterDash,
+      comboAfterDash,
+      contractAfterDash,
+      initialDebug,
+      debugAfterDash,
+      forceContract,
+      debug,
+      scoreHud: document.querySelector('#game-score')?.textContent || '',
+      comboHud: document.querySelector('#game-combo')?.textContent || '',
+      contractHud: document.querySelector('#game-contract')?.textContent || '',
+      statusHud: document.querySelector('#game-status')?.textContent || '',
       timerBeforePause,
       pauseVisible,
       timerAtPause,
@@ -1346,6 +1367,11 @@ async function run() {
   assert(runnerTouchState.pauseVisible === 'flex' && runnerTouchState.pausedDuringHold && !runnerTouchState.runningAfterPause, `runner pause overlay should freeze the game: ${JSON.stringify(runnerTouchState)}`);
   assert(runnerTouchState.timerAtPause === runnerTouchState.timerAfterPauseWait && Math.abs(runnerTouchState.xAfterPauseWait - runnerTouchState.xAtPause) < 0.01, `runner should not advance while paused: ${JSON.stringify(runnerTouchState)}`);
   assert(runnerTouchState.runningAfterResume && !runnerTouchState.pausedAfterResume, `runner should resume from pause: ${JSON.stringify(runnerTouchState)}`);
+  assert(runnerTouchState.scoreAfterDash > runnerTouchState.scoreBefore && runnerTouchState.debugAfterDash?.score === runnerTouchState.scoreAfterDash, `runner dash should award synced route score: ${JSON.stringify(runnerTouchState)}`);
+  assert(/^\d+x$/.test(runnerTouchState.comboAfterDash) && runnerTouchState.debugAfterDash?.comboHud === runnerTouchState.comboAfterDash, `runner combo HUD should use a stable Nx format and sync with debug state: ${JSON.stringify(runnerTouchState)}`);
+  assert(runnerTouchState.contractAfterDash && runnerTouchState.debugAfterDash?.contractHud === runnerTouchState.contractAfterDash, `runner contract HUD should sync with debug state: ${JSON.stringify(runnerTouchState)}`);
+  assert(runnerTouchState.forceContract?.after?.contract?.completed > runnerTouchState.forceContract?.before?.contract?.completed && runnerTouchState.forceContract?.after?.score > runnerTouchState.forceContract?.before?.score && runnerTouchState.forceContract?.achieved, `runner route contract should complete, score, and unlock achievement: ${JSON.stringify(runnerTouchState)}`);
+  assert(Number(runnerTouchState.scoreHud) === runnerTouchState.debug?.score && runnerTouchState.comboHud === runnerTouchState.debug?.comboHud && runnerTouchState.contractHud === runnerTouchState.debug?.contractHud && runnerTouchState.statusHud === runnerTouchState.debug?.statusHud, `runner HUD should remain synchronized after forced contract: ${JSON.stringify(runnerTouchState)}`);
   assert(runnerMobileState.controls >= 7 && runnerMobileState.visibleInFirstViewport && !runnerMobileState.horizontalOverflow, `runner touch controls should be reachable on mobile: ${JSON.stringify(runnerMobileState)}`);
   assert(arcadeInitial.premium && arcadeInitial.careerPanel, 'premium arcade career panel should render');
   assert(arcadeInitial.oldPrototypeCount === 0, 'old prototype mini-games should be replaced');

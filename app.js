@@ -4483,7 +4483,7 @@ function init() {
         </div>
         <div class="arcade-director-meters" aria-label="街机完成度">
           <span>奖牌 <strong id="premium-director-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-director-achievements">0/22</strong></span>
+          <span>成就 <strong id="premium-director-achievements">0/23</strong></span>
           <span>完成度 <strong id="premium-director-completion">0%</strong></span>
         </div>
         <button type="button" class="arcade-director-action" id="premium-director-start" data-target-game="survivor">
@@ -4789,6 +4789,7 @@ function init() {
       { id: 'tactics_clear', label: '裂隙撤离', desc: '完成裂隙战术撤离' },
       { id: 'tactics_sweep', label: '战术清场', desc: '裂隙战术中击破全部敌人' },
       { id: 'tactics_clean', label: '无损机甲', desc: '高装甲完成裂隙战术' },
+      { id: 'runner_contract', label: '航线承包', desc: '主线远征完成一张航线合约' },
       { id: 'runner_final', label: '星门远征', desc: '通关主线最终关' },
       { id: 'contract_clear', label: '契约猎手', desc: '完成任意街机契约' },
       { id: 'daily_clear', label: '今日制霸', desc: '完成每日街机挑战' }
@@ -10701,6 +10702,9 @@ function init() {
   const gameTimerSpan = document.getElementById('game-timer');
   const gameCoinsSpan = document.getElementById('game-coins');
   const gameBestTimeSpan = document.getElementById('game-best-time');
+  const gameScoreSpan = document.getElementById('game-score');
+  const gameComboSpan = document.getElementById('game-combo');
+  const gameContractSpan = document.getElementById('game-contract');
 
   // New DOM elements for retro controls
   const levelSelect = document.getElementById('game-level-select');
@@ -10727,6 +10731,21 @@ function init() {
   let gameElapsedBeforePause = 0;
   let gamePauseStartedAt = 0;
   let statusTimeoutId = null;
+  let runnerScore = 0;
+  let runnerCombo = 0;
+  let runnerBestCombo = 0;
+  let runnerComboUntil = 0;
+  let runnerContractIndex = 0;
+  let runnerContractProgress = 0;
+  let runnerContractsCompleted = 0;
+  let runnerLastContract = '';
+  let runnerLastAction = '';
+  let runnerLastScoreGain = 0;
+  const runnerContractDefs = [
+    { id: 'crystal', label: 'CRYSTAL', target: 3, reward: 420, events: ['crystal'], color: '#FDE68A' },
+    { id: 'stomp', label: 'STOMP', target: 2, reward: 560, events: ['stomp'], color: '#FCA5A5' },
+    { id: 'signal', label: 'SIGNAL', target: 1, reward: 480, events: ['checkpoint', 'powerup', 'dash'], color: '#BAE6FD' }
+  ];
 
   // Level elements and particles
   let platforms = [];
@@ -10798,6 +10817,145 @@ function init() {
     gameShieldSpan.style.color = player.shield > 0 ? '#34D399' : '#64748B';
   }
 
+  function currentRunnerContract() {
+    return runnerContractDefs[runnerContractIndex % runnerContractDefs.length];
+  }
+
+  function formatRunnerContract() {
+    const contract = currentRunnerContract();
+    if (!contract) return 'READY';
+    return `${contract.label} ${Math.min(runnerContractProgress, contract.target)}/${contract.target}`;
+  }
+
+  function setRunnerMetaUi() {
+    if (gameScoreSpan) {
+      gameScoreSpan.textContent = String(Math.max(0, Math.floor(runnerScore)));
+      gameScoreSpan.style.color = runnerLastScoreGain > 0 ? '#BAE6FD' : '#94A3B8';
+    }
+    if (gameComboSpan) {
+      gameComboSpan.textContent = `${Math.max(0, runnerCombo)}x`;
+      gameComboSpan.style.color = runnerCombo >= 5 ? '#FDE68A' : runnerCombo >= 2 ? '#A7F3D0' : '#94A3B8';
+    }
+    if (gameContractSpan) {
+      const contract = currentRunnerContract();
+      gameContractSpan.textContent = formatRunnerContract();
+      gameContractSpan.style.color = runnerLastContract ? '#FDE68A' : runnerContractProgress > 0 ? '#A7F3D0' : (contract?.color || '#CBD5E1');
+    }
+  }
+
+  function resetRunnerMeta() {
+    runnerScore = 0;
+    runnerCombo = 0;
+    runnerBestCombo = 0;
+    runnerComboUntil = 0;
+    runnerContractIndex = 0;
+    runnerContractProgress = 0;
+    runnerContractsCompleted = 0;
+    runnerLastContract = '';
+    runnerLastAction = 'READY';
+    runnerLastScoreGain = 0;
+    setRunnerMetaUi();
+  }
+
+  function addRunnerScore(amount, reason, options = {}) {
+    const base = Number(amount || 0);
+    if (!Number.isFinite(base) || base === 0) return 0;
+    const comboEnabled = options.combo !== false && base > 0;
+    const now = Date.now();
+    if (comboEnabled) {
+      runnerCombo = now <= runnerComboUntil ? runnerCombo + 1 : 1;
+      runnerBestCombo = Math.max(runnerBestCombo, runnerCombo);
+      runnerComboUntil = now + Number(options.comboMs || 2800);
+    }
+    const multiplier = comboEnabled ? 1 + Math.min(5, Math.max(0, runnerCombo - 1)) * 0.14 : 1;
+    const gain = Math.floor(base * multiplier);
+    runnerScore = Math.max(0, runnerScore + gain);
+    runnerLastAction = reason || runnerLastAction || 'SCORE';
+    runnerLastScoreGain = gain;
+    setRunnerMetaUi();
+    return gain;
+  }
+
+  function resolveRunnerContract(eventType, amount = 1) {
+    const contract = currentRunnerContract();
+    if (!contract || !contract.events.includes(eventType)) {
+      setRunnerMetaUi();
+      return { completed: false, label: contract?.label || '', reward: 0 };
+    }
+    runnerContractProgress += Math.max(1, Math.floor(amount || 1));
+    runnerLastContract = '';
+    if (runnerContractProgress < contract.target) {
+      runnerLastAction = `${contract.label} ${runnerContractProgress}/${contract.target}`;
+      setRunnerMetaUi();
+      return { completed: false, label: contract.label, reward: 0 };
+    }
+    runnerContractProgress = 0;
+    runnerContractIndex++;
+    runnerContractsCompleted++;
+    runnerLastContract = contract.label;
+    runnerLastAction = `${contract.label} CLEAR`;
+    addRunnerScore(contract.reward, `${contract.label} CONTRACT`, { combo: false });
+    setGameStatus(`${contract.label} +${contract.reward}`, contract.color || '#FDE68A', 1200);
+    window.atherixArcadeCareer?.unlock?.('runner_contract');
+    if (typeof player !== 'undefined') {
+      createParticleExplosion(player.x + player.width / 2, player.y + player.height / 2, contract.color || '#FDE68A', 30);
+    }
+    setRunnerMetaUi();
+    return { completed: true, label: contract.label, reward: contract.reward };
+  }
+
+  function runnerDebugState() {
+    const contract = currentRunnerContract();
+    return {
+      running: !!gameRunning,
+      paused: !!gamePaused,
+      elapsedMs: getRunnerElapsedMs(),
+      score: Math.max(0, Math.floor(runnerScore)),
+      combo: runnerCombo,
+      bestCombo: runnerBestCombo,
+      comboRemainingMs: Math.max(0, runnerComboUntil - Date.now()),
+      contract: {
+        id: contract?.id || '',
+        label: contract?.label || '',
+        progress: runnerContractProgress,
+        target: contract?.target || 0,
+        completed: runnerContractsCompleted
+      },
+      lastContract: runnerLastContract,
+      lastAction: runnerLastAction,
+      lastScoreGain: runnerLastScoreGain,
+      scoreHud: gameScoreSpan?.textContent || '',
+      comboHud: gameComboSpan?.textContent || '',
+      contractHud: gameContractSpan?.textContent || '',
+      statusHud: gameStatusSpan?.textContent || ''
+    };
+  }
+
+  function forceRunnerContract() {
+    if (gamePaused) resumeRunnerGame();
+    if (!gameRunning) startLevel();
+    runnerContractIndex = 0;
+    runnerContractProgress = 0;
+    runnerLastContract = '';
+    setRunnerMetaUi();
+    const before = runnerDebugState();
+    let attempts = 0;
+    while (runnerContractsCompleted <= before.contract.completed && attempts < 4) {
+      addRunnerScore(90, 'DEBUG CRYSTAL', { combo: true, comboMs: 4000 });
+      resolveRunnerContract('crystal');
+      attempts++;
+    }
+    setRunnerMetaUi();
+    drawGame();
+    const achievements = window.__atherixDebug?.premium?.achievements?.() || [];
+    return {
+      attempts,
+      before,
+      after: runnerDebugState(),
+      achieved: achievements.some(item => item.id === 'runner_contract' && item.unlocked)
+    };
+  }
+
   function consumeShieldOrDie(hitX, hitY) {
     if (player.shield > 0 && Date.now() > player.invulnerableUntil) {
       player.shield--;
@@ -10808,6 +10966,9 @@ function init() {
       setGameStatus('SHIELD HIT', '#34D399');
       createParticleExplosion(hitX, hitY, '#34D399', 26);
       playArcadeSound('shield');
+      runnerCombo = 0;
+      runnerComboUntil = 0;
+      addRunnerScore(35, 'SHIELD SAVE', { combo: false });
       return false;
     }
     triggerDeath();
@@ -10824,6 +10985,8 @@ function init() {
     setGameStatus('DASH', '#60A5FA', 700);
     playArcadeSound('dash');
     createParticleExplosion(player.x + player.width / 2, player.y + player.height / 2, '#60A5FA', 14);
+    addRunnerScore(25, 'DASH', { combo: true, comboMs: 1800 });
+    resolveRunnerContract('dash');
   }
 
   function hasActiveCheckpoint() {
@@ -10901,6 +11064,7 @@ function init() {
     ['dashCooldownUntil', 'dashBurstUntil', 'invulnerableUntil'].forEach(key => {
       if (player[key] && player[key] > 0) player[key] += deltaMs;
     });
+    if (runnerComboUntil > 0) runnerComboUntil += deltaMs;
   }
 
   clearRunnerPauseState = function() {
@@ -11812,7 +11976,9 @@ function init() {
       },
       gameRunning: () => gameRunning,
       gamePaused: () => gamePaused,
-      runnerElapsedMs: () => getRunnerElapsedMs()
+      runnerElapsedMs: () => getRunnerElapsedMs(),
+      runnerState: () => runnerDebugState(),
+      forceRunnerContract: () => forceRunnerContract()
     };
   }
 
@@ -11859,6 +12025,7 @@ function init() {
     player.invulnerableUntil = 0;
 
     particles = [];
+    resetRunnerMeta();
 
     if (gameCoinsSpan) gameCoinsSpan.textContent = '0';
     if (gameTimerSpan) gameTimerSpan.textContent = '0.0';
@@ -12085,12 +12252,27 @@ function init() {
       localStorage.setItem(`atherix_astro_runner_best_lvl_${currentLevelIndex}`, finishTime);
       if (gameBestTimeSpan) gameBestTimeSpan.textContent = `${finishTime}s`;
     }
-    const campaignScore = Math.max(120, Math.round(2200 - parseFloat(finishTime) * 24 + currentLevelIndex * 260 + player.shield * 80));
+    addRunnerScore(350 + currentLevelIndex * 120 + player.coinsCollected * 35, 'ROUTE CLEAR', { combo: false });
+    const campaignScore = Math.max(120, Math.round(
+      2200 -
+      parseFloat(finishTime) * 24 +
+      currentLevelIndex * 260 +
+      player.shield * 80 +
+      runnerScore +
+      runnerBestCombo * 45 +
+      runnerContractsCompleted * 520
+    ));
     if (window.atherixArcadeCareer) {
       window.atherixArcadeCareer.recordResult('runner', campaignScore, {
         level: currentLevelIndex + 1,
-        finishTime: parseFloat(finishTime)
+        finishTime: parseFloat(finishTime),
+        routeScore: Math.floor(runnerScore),
+        bestCombo: runnerBestCombo,
+        contractsCompleted: runnerContractsCompleted
       });
+      if (runnerContractsCompleted > 0) {
+        window.atherixArcadeCareer.unlock('runner_contract');
+      }
       if (currentLevelIndex === gameLevels.length - 1) {
         window.atherixArcadeCareer.unlock('runner_final');
       }
@@ -12105,6 +12287,7 @@ function init() {
       
       const nextLevelAvail = currentLevelIndex < gameLevels.length - 1;
       let victoryMsg = `通关用时: <strong style="color:#FFF; font-size:1.4rem;">${finishTime}s</strong><br>`;
+      victoryMsg += `航线评分: <strong style="color:#BAE6FD;">${Math.floor(runnerScore)}</strong> · 最佳连段 <strong style="color:#A7F3D0;">${runnerBestCombo}x</strong> · 合约 <strong style="color:#FDE68A;">${runnerContractsCompleted}</strong><br>`;
       if (nextLevelAvail) {
         victoryMsg += `点击此处或按 [Enter] 开启下一关卡挑战！`;
       } else {
@@ -12142,6 +12325,14 @@ function init() {
     if (!player.dashReady && now >= player.dashCooldownUntil) {
       player.dashReady = true;
       setGameStatus('READY', '#8B5CF6', 0);
+    }
+
+    if (runnerCombo > 0 && runnerComboUntil > 0 && now > runnerComboUntil) {
+      runnerCombo = 0;
+      runnerComboUntil = 0;
+      runnerLastAction = 'COMBO RESET';
+      runnerLastScoreGain = 0;
+      setRunnerMetaUi();
     }
 
     player.vy += 0.45;
@@ -12244,6 +12435,8 @@ function init() {
         createParticleExplosion(checkpoint.x + checkpoint.w / 2, checkpoint.y + checkpoint.h / 2, '#A78BFA', 24);
         playArcadeSound('checkpoint');
         setGameStatus('CHECKPOINT', '#A78BFA');
+        addRunnerScore(160, 'CHECKPOINT', { combo: true, comboMs: 3400 });
+        resolveRunnerContract('checkpoint');
       }
     }
 
@@ -12257,13 +12450,16 @@ function init() {
           setGameStatus('SHIELD +1', '#34D399');
           createParticleExplosion(powerUp.x + powerUp.w / 2, powerUp.y + powerUp.h / 2, '#34D399', 18);
           playArcadeSound('shield');
+          addRunnerScore(130, 'SHIELD CELL', { combo: true, comboMs: 3200 });
         } else {
           player.dashReady = true;
           player.dashCooldownUntil = 0;
           setGameStatus('DASH READY', '#60A5FA');
           createParticleExplosion(powerUp.x + powerUp.w / 2, powerUp.y + powerUp.h / 2, '#60A5FA', 18);
           playArcadeSound('dash');
+          addRunnerScore(120, 'DASH CELL', { combo: true, comboMs: 3200 });
         }
+        resolveRunnerContract('powerup');
       }
     }
 
@@ -12276,6 +12472,8 @@ function init() {
         
         createParticleExplosion(coin.x + coin.w/2, coin.y + coin.h/2, '#FBBF24', 12);
         playArcadeSound('coin');
+        addRunnerScore(95, 'CRYSTAL', { combo: true, comboMs: 3000 });
+        resolveRunnerContract('crystal');
         if (player.coinsCollected === targetCoins) {
           setGameStatus('PORTAL OPEN', '#10B981');
         }
@@ -12303,6 +12501,8 @@ function init() {
           createParticleExplosion(enemy.x + enemy.w/2, enemy.y + enemy.h/2, '#EF4444', 16);
           playArcadeSound('squash');
           setGameStatus('BOUNCE', '#EF4444');
+          addRunnerScore(190, 'STOMP', { combo: true, comboMs: 3600 });
+          resolveRunnerContract('stomp');
         } else {
           if (consumeShieldOrDie(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2)) {
             return;
@@ -12566,6 +12766,26 @@ function init() {
       gameCtx.fill();
       gameCtx.restore();
     }
+
+    gameCtx.save();
+    gameCtx.globalAlpha = 0.92;
+    gameCtx.fillStyle = 'rgba(8, 13, 28, 0.72)';
+    gameCtx.fillRect(12, 10, 188, 50);
+    gameCtx.fillRect(arcadeCanvas.width - 210, 10, 198, 50);
+    gameCtx.globalAlpha = 1;
+    gameCtx.font = 'bold 11px monospace';
+    gameCtx.textBaseline = 'top';
+    gameCtx.fillStyle = '#BAE6FD';
+    gameCtx.fillText(`SCORE ${Math.floor(runnerScore)}`, 20, 18, 170);
+    gameCtx.fillStyle = runnerCombo >= 2 ? '#A7F3D0' : '#94A3B8';
+    gameCtx.fillText(`COMBO ${runnerCombo}x`, 20, 38, 170);
+    gameCtx.textAlign = 'right';
+    gameCtx.fillStyle = runnerLastContract ? '#FDE68A' : '#CBD5E1';
+    gameCtx.fillText(formatRunnerContract(), arcadeCanvas.width - 20, 18, 178);
+    const actionText = runnerLastAction ? `${runnerLastAction}${runnerLastScoreGain > 0 ? ` +${runnerLastScoreGain}` : ''}` : 'ROUTE READY';
+    gameCtx.fillStyle = runnerLastScoreGain > 0 ? '#FDE68A' : '#94A3B8';
+    gameCtx.fillText(actionText, arcadeCanvas.width - 20, 38, 178);
+    gameCtx.restore();
   };
 
   function startLevel() {
