@@ -4419,6 +4419,140 @@ body.command-open {
   background: rgba(15, 23, 42, 0.34);
 }
 
+.arcade-profile-panel {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.1fr) minmax(360px, 1.4fr) auto;
+  gap: 0.7rem;
+  align-items: stretch;
+  margin-bottom: 1rem;
+  padding: 0.85rem;
+  overflow: hidden;
+  border: 1px solid rgba(34, 211, 238, 0.24);
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, 0.11), rgba(167, 139, 250, 0.08)),
+    rgba(3, 7, 18, 0.5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.arcade-profile-panel[data-rank="s"],
+.arcade-profile-panel[data-rank="ss"],
+.arcade-profile-panel[data-rank="sss"] {
+  border-color: rgba(251, 191, 36, 0.34);
+  background:
+    linear-gradient(135deg, rgba(251, 191, 36, 0.12), rgba(34, 211, 238, 0.08)),
+    rgba(3, 7, 18, 0.52);
+}
+
+.arcade-profile-main {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 0.35rem;
+}
+
+.arcade-profile-main span,
+.arcade-profile-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.arcade-profile-main span {
+  color: #a5f3fc;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.arcade-profile-main svg,
+.arcade-profile-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+.arcade-profile-main strong {
+  min-width: 0;
+  color: #fff;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.05rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.arcade-profile-main small {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.arcade-profile-progress {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.arcade-profile-progress i {
+  display: block;
+  height: 100%;
+  max-width: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22d3ee, #a78bfa, #fbbf24);
+  box-shadow: 0 0 16px rgba(34, 211, 238, 0.22);
+}
+
+.arcade-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.arcade-profile-grid span {
+  min-height: 58px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.16rem;
+  padding: 0.52rem 0.62rem;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.46);
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
+.arcade-profile-grid strong {
+  min-width: 0;
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.arcade-profile-action {
+  min-width: 168px;
+  justify-content: center;
+  align-self: stretch;
+  border: 1px solid rgba(34, 211, 238, 0.32);
+  border-radius: 8px;
+  background: rgba(14, 116, 144, 0.16);
+  color: #e0f2fe;
+  font-size: 0.75rem;
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.arcade-profile-action:hover,
+.arcade-profile-action:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(34, 211, 238, 0.52);
+  background: rgba(14, 116, 144, 0.24);
+}
+
 .arcade-leaderboard-panel {
   margin-bottom: 1rem;
   padding: 0.85rem;
@@ -6615,6 +6749,13 @@ body.command-open {
   .arcade-rival-panel {
     grid-template-columns: minmax(220px, 1fr) minmax(250px, 1fr);
   }
+  .arcade-profile-panel {
+    grid-template-columns: minmax(260px, 1fr) minmax(300px, 1fr);
+  }
+  .arcade-profile-action {
+    grid-column: 1 / -1;
+    min-height: 44px;
+  }
   .arcade-rival-action {
     width: 100%;
   }
@@ -6643,6 +6784,14 @@ body.command-open {
   .arcade-leaderboard-heading,
   .arcade-leaderboard-list {
     grid-template-columns: 1fr;
+  }
+  .arcade-profile-panel,
+  .arcade-profile-grid {
+    grid-template-columns: 1fr;
+  }
+  .arcade-profile-action {
+    width: 100%;
+    min-width: 0;
   }
   .arcade-run-log-stats,
   .arcade-leaderboard-stats {

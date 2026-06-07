@@ -4520,6 +4520,26 @@ function init() {
         </div>
         <div class="career-achievements" id="premium-achievement-feed" aria-live="polite"></div>
       </div>
+      <div class="arcade-profile-panel" id="premium-profile-panel" data-rank="c" aria-label="街机指挥档案">
+        <div class="arcade-profile-main">
+          <span><i data-lucide="id-card"></i> COMMAND PROFILE</span>
+          <strong id="premium-profile-title">档案初始化中...</strong>
+          <small id="premium-profile-summary">完成任意模式后，档案会汇总奖牌、成就、最近战报与下一突破。</small>
+          <div class="arcade-profile-progress" id="premium-profile-progressbar" role="progressbar" aria-label="街机完成度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="街机完成度 0%">
+            <i id="premium-profile-progress" style="width: 0%" aria-hidden="true"></i>
+          </div>
+        </div>
+        <div class="arcade-profile-grid">
+          <span>完成度 <strong id="premium-profile-completion">0%</strong></span>
+          <span>奖牌 <strong id="premium-profile-medals">0/7</strong></span>
+          <span>成就 <strong id="premium-profile-achievements">0/26</strong></span>
+          <span>最近 <strong id="premium-profile-latest">--</strong></span>
+        </div>
+        <button type="button" class="arcade-profile-action" id="premium-profile-target" data-profile-target-game="survivor">
+          <i data-lucide="radar"></i>
+          <span>锁定下一突破</span>
+        </button>
+      </div>
       <div class="arcade-run-log-panel" id="premium-run-log-panel" aria-label="街机战报复盘">
         <div class="arcade-run-log-heading">
           <span><i data-lucide="activity"></i> RUN TELEMETRY</span>
@@ -5271,6 +5291,47 @@ function init() {
         : '<span class="career-badge career-badge-muted">等待首枚徽章</span>';
     }
 
+    function renderArcadeProfile() {
+      const panel = document.getElementById('premium-profile-panel');
+      if (!panel) return;
+      const profile = arcadeProfileSnapshot();
+      const titleEl = document.getElementById('premium-profile-title');
+      const summaryEl = document.getElementById('premium-profile-summary');
+      const progressEl = document.getElementById('premium-profile-progress');
+      const progressBarEl = document.getElementById('premium-profile-progressbar');
+      const completionEl = document.getElementById('premium-profile-completion');
+      const medalsEl = document.getElementById('premium-profile-medals');
+      const achievementsEl = document.getElementById('premium-profile-achievements');
+      const latestEl = document.getElementById('premium-profile-latest');
+      const actionBtn = document.getElementById('premium-profile-target');
+
+      panel.dataset.rank = profile.rankTier;
+      if (titleEl) titleEl.textContent = `${profile.rating} · ${profile.identity}`;
+      if (summaryEl) {
+        summaryEl.textContent = profile.focus
+          ? `下一突破：${profile.focus.label} ${profile.focus.targetLabel}，还差 ${profile.focus.delta} 分。`
+          : profile.top
+            ? `金牌路线已收束，当前王牌模式 ${profile.top.label} · ${profile.top.score}。`
+            : '完成任意模式后，档案会汇总奖牌、成就、最近战报与下一突破。';
+      }
+      if (progressEl) progressEl.style.width = `${profile.completion}%`;
+      if (progressBarEl) {
+        progressBarEl.setAttribute('aria-valuenow', String(profile.completion));
+        progressBarEl.setAttribute('aria-valuetext', `街机完成度 ${profile.completion}%`);
+      }
+      if (completionEl) completionEl.textContent = `${profile.completion}%`;
+      if (medalsEl) medalsEl.textContent = `${profile.medalCount}/${careerGameOrder.length}`;
+      if (achievementsEl) achievementsEl.textContent = `${profile.unlocked}/${profile.achievementTotal}`;
+      if (latestEl) latestEl.textContent = profile.latest ? `${profile.latest.label} ${profile.latest.score}` : '--';
+      if (actionBtn) {
+        actionBtn.dataset.profileTargetGame = profile.targetGame;
+        const targetLabel = profile.targetGame === 'runner'
+          ? '主线远征'
+          : (premiumTabLabels[profile.targetGame] || titles[profile.targetGame] || profile.targetGame);
+        actionBtn.querySelector('span').textContent = profile.focus ? `突破 ${targetLabel}` : `挑战 ${targetLabel}`;
+      }
+    }
+
     function medalClass(medal) {
       return ['bronze', 'silver', 'gold'].includes(medal) ? medal : 'none';
     }
@@ -5307,6 +5368,67 @@ function init() {
       }).length;
     }
 
+    function arcadeRankTier(rating = careerRating()) {
+      return String(rating || 'RANK C').replace('RANK ', '').toLowerCase();
+    }
+
+    function arcadeProfileSnapshot() {
+      const rating = careerRating();
+      const completion = arcadeCompletionPercent();
+      const statuses = careerGameOrder.map(masteryStatusForGame);
+      const medalCount = statuses.filter(item => item.medal !== 'none').length;
+      const goldCount = statuses.filter(item => item.medal === 'gold').length;
+      const unlocked = Array.isArray(career.achievements) ? career.achievements.length : 0;
+      const board = careerLeaderboard();
+      const stats = careerRunStats();
+      const focus = masteryFocusTarget();
+      const latest = stats.last;
+      const top = board.entries[0] || null;
+      const targetGame = focus?.game || top?.game || latest?.game || 'survivor';
+      const identity = goldCount >= 5
+        ? '金牌收藏家'
+        : medalCount >= 4
+          ? '跨模式王牌'
+          : unlocked >= 4
+            ? '成就猎手'
+            : latest
+              ? '晋级挑战者'
+              : '待命新人';
+      return {
+        rating,
+        rankTier: arcadeRankTier(rating),
+        identity,
+        completion,
+        medalCount,
+        goldCount,
+        unlocked,
+        achievementTotal: achievementDefs.length,
+        plays: Number(career.plays || 0),
+        totalScore: Number(career.totalScore || 0),
+        average: stats.average,
+        latest: latest ? {
+          game: latest.game,
+          label: premiumTabLabels[latest.game] || titles[latest.game] || latest.game,
+          score: Number(latest.score || 0),
+          medal: latest.medal || 'none'
+        } : null,
+        top: top ? {
+          game: top.game,
+          label: top.label,
+          score: top.score,
+          medal: top.medal
+        } : null,
+        focus: focus ? {
+          game: focus.game,
+          label: focus.label,
+          targetLabel: focus.targetLabel,
+          delta: focus.delta,
+          progress: focus.progress
+        } : null,
+        targetGame
+      };
+    }
+
     function masteryStatusForGame(game) {
       const score = Number(career.best?.[game] || 0);
       const medal = medalClass(career.medals?.[game] || medalFor(game, score));
@@ -5335,16 +5457,16 @@ function init() {
         .sort((a, b) => a.delta - b.delta || b.score - a.score)[0] || null;
     }
 
-    function launchMasteryTarget(game) {
+    function launchMasteryTarget(game, { announce = true } = {}) {
       if (!game) return;
       if (game === 'runner') {
         document.querySelector('.arcade-cabinet-bezel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        showToast('已定位到主线远征，冲刺下一枚奖牌', 'info');
+        if (announce) showToast('已定位到主线远征，冲刺下一枚奖牌', 'info');
         return;
       }
       switchPremiumGame(game);
       stage?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      showToast(`已切换到大师地图目标：${titles[game] || game}`, 'success');
+      if (announce) showToast(`已切换到大师地图目标：${titles[game] || game}`, 'success');
     }
 
     function renderArcadeMasteryMap() {
@@ -6155,6 +6277,7 @@ function init() {
           : '完成后解锁限定徽章';
       }
       renderAchievementFeed();
+      renderArcadeProfile();
       renderArcadeRunLog();
       renderArcadeLeaderboard();
       renderArcadeRival();
@@ -6242,6 +6365,7 @@ function init() {
       rival: () => arcadeRivalIntel(),
       runs: () => (Array.isArray(career.runs) ? career.runs : []).map(run => ({ ...run })),
       coach: () => latestRunCoach(),
+      profile: () => arcadeProfileSnapshot(),
       league: () => leagueSnapshot(),
       contracts: () => getDailyContracts().map(contract => ({
         id: contract.id,
@@ -6407,6 +6531,11 @@ function init() {
     document.getElementById('premium-director-start')?.addEventListener('click', launchDirectorChallenge);
     document.getElementById('premium-league-start')?.addEventListener('click', launchLeagueStage);
     document.getElementById('premium-rival-start')?.addEventListener('click', launchRivalChallenge);
+    document.getElementById('premium-profile-target')?.addEventListener('click', () => {
+      const target = document.getElementById('premium-profile-target')?.dataset.profileTargetGame || arcadeProfileSnapshot().targetGame;
+      launchMasteryTarget(target, { announce: false });
+      showToast(`档案目标：${target === 'runner' ? '主线远征' : (titles[target] || target)}`, 'info');
+    });
     document.getElementById('premium-coach-launch')?.addEventListener('click', () => {
       const target = document.getElementById('premium-coach-launch')?.dataset.coachTargetGame || latestRunCoach()?.game;
       if (!target) return;
@@ -11693,6 +11822,7 @@ function init() {
           contracts: () => window.atherixArcadeCareer?.contracts?.() || [],
           runs: () => window.atherixArcadeCareer?.runs?.() || [],
           coach: () => window.atherixArcadeCareer?.coach?.() || null,
+          profile: () => window.atherixArcadeCareer?.profile?.() || {},
           league: () => window.atherixArcadeCareer?.league?.() || {},
           leaderboard: () => window.atherixArcadeCareer?.leaderboard?.() || {},
           rival: () => window.atherixArcadeCareer?.rival?.() || {},

@@ -1,9 +1,9 @@
-const CACHE_VERSION = 'atherix-static-v20-gamepad-bridge';
+const CACHE_VERSION = 'atherix-static-v21-arcade-profile';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/style.css?v=20260607-gamepad-bridge-v1',
-  '/app.js?v=20260607-gamepad-bridge-v1',
+  '/style.css?v=20260607-arcade-profile-v1',
+  '/app.js?v=20260607-arcade-profile-v1',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',
