@@ -408,6 +408,34 @@ if (trustProxy) {
   app.set('trust proxy', parseTrustProxy(trustProxy));
 }
 
+app.use((req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+  if (req.path.startsWith('/api/')) return next();
+  let requestPath = req.path;
+  try {
+    requestPath = decodeURIComponent(req.path);
+  } catch (err) {
+    return res.status(400).send('Bad request');
+  }
+  const suspiciousPathPart = requestPath
+    .split('/')
+    .some(part => part === '..' || (part.startsWith('.') && part.length > 1));
+  if (suspiciousPathPart) {
+    return res.status(404).send('Not found');
+  }
+  if (publicRootFiles.has(requestPath) || publicPathPrefixes.some(prefix => requestPath.startsWith(prefix))) {
+    return next();
+  }
+  if (blockedRootFiles.has(requestPath) ||
+      blockedPathPrefixes.some(prefix => requestPath.startsWith(prefix))) {
+    return res.status(404).send('Not found');
+  }
+  if (path.extname(requestPath)) {
+    return res.status(404).send('Not found');
+  }
+  next();
+});
+
 app.get('/feed.xml', (req, res) => {
   db.all('SELECT id, title, excerpt, tag, date, pinned FROM posts ORDER BY pinned DESC, date DESC', [], (err, rows) => {
     if (err) {
@@ -440,33 +468,6 @@ app.use('/uploads', express.static(uploadDir, {
     res.setHeader('Cache-Control', 'public, max-age=604800');
   }
 }));
-app.use((req, res, next) => {
-  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
-  if (req.path.startsWith('/api/')) return next();
-  let requestPath = req.path;
-  try {
-    requestPath = decodeURIComponent(req.path);
-  } catch (err) {
-    return res.status(400).send('Bad request');
-  }
-  const suspiciousPathPart = requestPath
-    .split('/')
-    .some(part => part === '..' || (part.startsWith('.') && part.length > 1));
-  if (suspiciousPathPart) {
-    return res.status(404).send('Not found');
-  }
-  if (publicRootFiles.has(requestPath) || publicPathPrefixes.some(prefix => requestPath.startsWith(prefix))) {
-    return next();
-  }
-  if (blockedRootFiles.has(requestPath) ||
-      blockedPathPrefixes.some(prefix => requestPath.startsWith(prefix))) {
-    return res.status(404).send('Not found');
-  }
-  if (path.extname(requestPath)) {
-    return res.status(404).send('Not found');
-  }
-  next();
-});
 app.use(express.static(__dirname, {
   etag: true,
   maxAge: '1h',

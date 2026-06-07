@@ -231,7 +231,11 @@ async function run() {
       '/node_modules/sqlite3/package.json',
       '/data/blog.db',
       '/README.md',
-      '/SECURITY.md'
+      '/SECURITY.md',
+      '/uploads/%2e%2e/server.js',
+      '/assets/%2e%2e/server.js',
+      '/uploads/.hidden.png',
+      '/assets/.hidden.svg'
     ];
     const sensitiveResults = {};
     for (const pathname of sensitivePaths) {
