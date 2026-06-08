@@ -2659,7 +2659,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasMobileMetaVersion: swText.includes('atherix-static-v42-mobile-meta') && swText.includes('/style.css?v=20260608-mobile-meta-v1') && swText.includes('/app.js?v=20260608-mobile-meta-v1'),
+      swHasQualityVersion: swText.includes('atherix-static-v43-quality') && swText.includes('/style.css?v=20260608-quality-v2') && swText.includes('/app.js?v=20260608-quality-v2'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
@@ -3353,7 +3353,7 @@ async function run() {
   assert(tacticsForecastAfterAction.dangerCount > 0 && tacticsForecastAfterAction.coverHud && tacticsForecastAfterAction.momentumHud !== undefined && tacticsForecastAfterAction.comboHud && tacticsForecastAfterAction.surgeHud && tacticsForecastAfterAction.routeHud && tacticsJammedIntent, `tactics mode should expose post-action JAM, cover, momentum, combo, surge, and route forecast: ${JSON.stringify(tacticsForecastAfterAction)}`);
   assert(tacticsState.nonBlank && Number(tacticsState.ap) >= 0 && tacticsState.action && tacticsState.cover && tacticsState.momentum !== undefined && tacticsState.combo && tacticsState.surge && tacticsState.route && tacticsState.debug?.route?.length > 0, `tactics mode should render and accept enhanced actions: ${JSON.stringify(tacticsState)}`);
   assert(Number(tacticsState.danger) > 0 && tacticsState.intel && tacticsState.debug?.hud?.route === tacticsState.route && tacticsState.debug?.hud?.cover === tacticsState.cover && tacticsState.debug?.hud?.momentum === tacticsState.momentum && tacticsState.debug?.hud?.combo === tacticsState.combo && tacticsState.debug?.hud?.surge === tacticsState.surge && tacticsState.debug?.hud?.shield === tacticsState.shield, `tactics HUD should stay in sync with enhanced debug state: ${JSON.stringify(tacticsState)}`);
-  assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /mobile-meta/.test(key)) && pwaState.swHasMobileMetaVersion && pwaState.swHasNetworkFirstDiscovery, `service worker should register, cache the latest app shell, and keep discovery metadata fresh: ${JSON.stringify(pwaState)}`);
+  assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /quality/.test(key)) && pwaState.swHasQualityVersion && pwaState.swHasNetworkFirstDiscovery, `service worker should register, cache the latest app shell, and keep discovery metadata fresh: ${JSON.stringify(pwaState)}`);
   assert(pwaState.swHasLocalProjectAssets, `service worker should precache local portfolio assets: ${JSON.stringify(pwaState)}`);
   assert(pwaState.swHasNavigationPreload && pwaState.swHasOfflineShellHeader && pwaState.swHasFallbackUrl, `service worker should include robust offline navigation fallback: ${JSON.stringify(pwaState)}`);
   const diagnosticText = JSON.stringify(diagnostics);
@@ -3578,7 +3578,7 @@ function summarizeSmokeResult(result) {
       registered: result.pwaState?.registered,
       shellCached: result.pwaState?.shellCached,
       cacheKeys: result.pwaState?.cacheKeys,
-      latestVersion: result.pwaState?.swHasMobileMetaVersion,
+      latestVersion: result.pwaState?.swHasQualityVersion,
       networkFirstDiscovery: result.pwaState?.swHasNetworkFirstDiscovery
     },
     diagnostics: result.diagnostics
