@@ -28,6 +28,7 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .filter(Boolean);
 const loginUsernameMaxLength = 80;
 const loginPasswordMaxLength = 256;
+const loginDummyPasswordHash = '$2a$10$nJt2hjnq0YN7EelNOMKyr.gWkw61CHmhvh1xv64F4VMjrJciQYd2m';
 const contentSecurityPolicy = [
   "default-src 'self'",
   "script-src 'self'",
@@ -721,13 +722,10 @@ app.post('/api/auth/login', authLimiter, (req, res) => {
     if (err) {
       return res.status(500).json({ error: 'Database query error.' });
     }
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid username or password.' });
-    }
 
-    // Verify Password
-    const passwordIsValid = bcrypt.compareSync(password, user.password);
-    if (!passwordIsValid) {
+    const passwordHash = user?.password || loginDummyPasswordHash;
+    const passwordIsValid = bcrypt.compareSync(password, passwordHash);
+    if (!user || !passwordIsValid) {
       return res.status(401).json({ error: 'Invalid username or password.' });
     }
 

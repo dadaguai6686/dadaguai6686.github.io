@@ -344,10 +344,12 @@ async function run() {
     const appScriptCacheControl = appScript.headers.get('cache-control') || '';
     assert(appScriptCacheControl.includes('max-age=31536000') && appScriptCacheControl.includes('immutable'), 'versioned app script should use long-lived immutable caching');
     const appScriptText = await appScript.text();
+    const serverText = fs.readFileSync(path.resolve(__dirname, '..', 'server.js'), 'utf8');
     assert(appScript.status === 200 && appScriptText.includes('AbortController') && appScriptText.includes('apiTimeoutFor') && appScriptText.includes('timeoutMs'), 'frontend API helper should enforce request timeouts so fallback paths can run');
     assert(appScriptText.includes('id="premium-tab-survivor" role="tab"') && appScriptText.includes('role="tabpanel" aria-labelledby="premium-tab-tactics"') && appScriptText.includes('window.__atherixSwitchPremiumGame') && appScriptText.includes('focusPremiumGameTabByOffset'), 'premium arcade tabs should expose semantic tabpanel markup and roving keyboard activation');
     assert(appScriptText.includes('premiumRestartConfirmMs') && appScriptText.includes('CONFIRM RESTART') && appScriptText.includes('restartRequest: () =>'), 'premium arcade realtime restarts should require an explicit confirmation step');
     assert(appScriptText.includes('normalizeCareerState') && appScriptText.includes('normalizeCareerRuns') && appScriptText.includes('persistNormalizedCareer'), 'premium arcade career imports should be normalized before use');
+    assert(serverText.includes('loginDummyPasswordHash') && serverText.includes('user?.password || loginDummyPasswordHash') && serverText.includes('!user || !passwordIsValid'), 'login should use a dummy bcrypt hash for missing users to reduce username-enumeration timing leaks');
     const compressedStyleSheet = await rawHttpGet('/style.css?v=20260608-quality-v13', { 'Accept-Encoding': 'gzip' });
     assert(compressedStyleSheet.status === 200 && compressedStyleSheet.headers['content-encoding'] === 'gzip', `versioned stylesheet should be gzip-compressed for repeat visits: ${JSON.stringify(compressedStyleSheet.headers)}`);
     assert(compressedStyleSheet.body.length < Buffer.byteLength(styleText, 'utf8') * 0.75, 'compressed stylesheet should be materially smaller than the source CSS');
@@ -521,6 +523,22 @@ async function run() {
     assert(sanitizedBody.comment.website === 'https://example.com/profile', 'https website should be preserved');
 
     trace('auth and admin writes');
+    const unknownUserLogin = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'missing-admin', password: smokeAdminPassword })
+    });
+    const unknownUserBody = await unknownUserLogin.json();
+    assert(unknownUserLogin.status === 401 && unknownUserBody.error === 'Invalid username or password.', 'unknown usernames should receive the same login failure response as bad credentials');
+
+    const wrongPasswordLogin = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'WrongPassword#2026!' })
+    });
+    const wrongPasswordBody = await wrongPasswordLogin.json();
+    assert(wrongPasswordLogin.status === 401 && wrongPasswordBody.error === unknownUserBody.error, 'wrong passwords and unknown users should share the same login failure response');
+
     const login = await fetch(`${baseUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -833,6 +851,8 @@ async function run() {
       sanitizedAvatar: sanitizedBody.comment.avatar,
       spamTrapStatus: spamTrap.status,
       linkSpamStatus: linkSpam.status,
+      unknownUserLoginStatus: unknownUserLogin.status,
+      wrongPasswordLoginStatus: wrongPasswordLogin.status,
       adminWriteLimit: createdPost.headers.get('ratelimit-limit'),
       preservedPostDate: updatedSmokePost?.date || '',
       unsafeUploadPathStatus: unsafeProjectPath.status,
