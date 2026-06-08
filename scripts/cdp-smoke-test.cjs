@@ -405,7 +405,7 @@ async function run() {
       options = timeout;
       timeout = options.timeout;
     }
-    const hasSideEffects = /(?:\.click\s*\(|dispatchEvent\s*\(|localStorage\.(?:setItem|removeItem|clear)\s*\()/.test(expression);
+    const hasSideEffects = /(?:\.click\s*\(|dispatchEvent\s*\(|(?:localStorage|sessionStorage)\??\.(?:setItem|removeItem|clear)\s*\()/.test(expression);
     const retryOnTimeout = options.retryOnTimeout !== false && !hasSideEffects;
     let result;
     try {
@@ -518,7 +518,10 @@ async function run() {
   await bestEffortSend('Log.enable');
   await navigate(appUrl);
   await waitFor('.nav-item[data-target="blog"]', 12000);
-  await evaluate(`localStorage.setItem('admin_token', 'fake-token-for-smoke')`);
+  await evaluate(`(() => {
+    window.sessionStorage?.removeItem('admin_token');
+    localStorage.setItem('admin_token', 'fake-token-for-smoke');
+  })()`);
   await reload();
   await waitFor('.nav-item[data-target="blog"]', 12000);
   await wait(800);
@@ -526,7 +529,8 @@ async function run() {
     const blogActions = document.querySelector('#blog-admin-actions');
     const projectActions = document.querySelector('#project-admin-actions');
     return {
-      token: localStorage.getItem('admin_token'),
+      localToken: localStorage.getItem('admin_token') || '',
+      sessionToken: window.sessionStorage?.getItem('admin_token') || '',
       blogActionsVisible: !!blogActions && getComputedStyle(blogActions).display !== 'none',
       projectActionsVisible: !!projectActions && getComputedStyle(projectActions).display !== 'none'
     };
@@ -651,6 +655,54 @@ async function run() {
     focusId: document.activeElement?.id || ''
   }))()`);
 
+  let adminLoginSessionState = null;
+  if (managedServer) {
+    adminLoginSessionState = await evaluate(`(async () => {
+      window.sessionStorage?.removeItem('admin_token');
+      localStorage.removeItem('admin_token');
+      document.querySelector('#admin-login-trigger')?.click();
+      await new Promise(resolve => setTimeout(resolve, 180));
+
+      const form = document.querySelector('#admin-login-form');
+      const username = document.querySelector('#admin-username');
+      const password = document.querySelector('#admin-password');
+      if (!form || !username || !password) return { missingForm: true };
+
+      username.value = 'admin';
+      username.dispatchEvent(new Event('input', { bubbles: true }));
+      password.value = 'admin123';
+      password.dispatchEvent(new Event('input', { bubbles: true }));
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
+
+      const deadline = Date.now() + 3500;
+      while (Date.now() < deadline && !(window.sessionStorage?.getItem('admin_token') || '')) {
+        await new Promise(resolve => setTimeout(resolve, 120));
+      }
+
+      const blogActions = document.querySelector('#blog-admin-actions');
+      const projectActions = document.querySelector('#project-admin-actions');
+      const state = {
+        missingForm: false,
+        sessionTokenStored: (window.sessionStorage?.getItem('admin_token') || '').length > 20,
+        localToken: localStorage.getItem('admin_token') || '',
+        blogActionsVisible: !!blogActions && getComputedStyle(blogActions).display !== 'none',
+        projectActionsVisible: !!projectActions && getComputedStyle(projectActions).display !== 'none'
+      };
+
+      document.querySelector('#admin-login-trigger')?.click();
+      await new Promise(resolve => setTimeout(resolve, 240));
+      state.sessionAfterLogout = window.sessionStorage?.getItem('admin_token') || '';
+      state.localAfterLogout = localStorage.getItem('admin_token') || '';
+      state.blogActionsAfterLogout = !!blogActions && getComputedStyle(blogActions).display !== 'none';
+      state.projectActionsAfterLogout = !!projectActions && getComputedStyle(projectActions).display !== 'none';
+      return state;
+    })()`, 7000, { retryOnTimeout: false });
+  }
+
   await click('#command-palette-trigger');
   await waitFor('#command-palette.active');
   await evaluate(`(() => {
@@ -702,6 +754,7 @@ async function run() {
 
   const vaultExportState = await evaluate(`(async () => {
     localStorage.setItem('admin_token', 'vault-secret-should-not-export');
+    window.sessionStorage?.setItem('admin_token', 'vault-session-should-not-export');
     localStorage.setItem('atherix_reader_progress_vault-smoke', '64');
     localStorage.setItem('atherix_premium_survivor_best', '1234');
     window.__atherixDebug?.vault?.summary?.();
@@ -730,11 +783,12 @@ async function run() {
 
     const blobText = await blobTextPromise;
     const payload = JSON.parse(blobText || '{}');
-    return {
+    const state = {
       clicks,
       schema: payload.schema || '',
       keys: Object.keys(payload.storage || {}).length,
       hasAdminToken: Object.prototype.hasOwnProperty.call(payload.storage || {}, 'admin_token'),
+      sessionTokenAfter: window.sessionStorage?.getItem('admin_token') || '',
       readerValue: payload.storage?.['atherix_reader_progress_vault-smoke'] || '',
       survivorBest: payload.storage?.['atherix_premium_survivor_best'] || '',
       keyCountText: document.querySelector('#vault-key-count')?.textContent || '',
@@ -743,6 +797,9 @@ async function run() {
       arcadeText: document.querySelector('#vault-arcade-count')?.textContent || '',
       toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || ''
     };
+    localStorage.removeItem('admin_token');
+    window.sessionStorage?.removeItem('admin_token');
+    return state;
   })()`, 5000);
 
   const vaultImportState = await evaluate(`(async () => {
@@ -766,7 +823,8 @@ async function run() {
       }
     };
     clearArcadeState();
-    localStorage.setItem('admin_token', 'vault-secret-preserved');
+    window.sessionStorage?.setItem('admin_token', 'vault-session-preserved');
+    localStorage.removeItem('admin_token');
     localStorage.removeItem('outside_key');
     localStorage.removeItem('atherix_reader_progress_vault-smoke');
     const result = window.__atherixDebug.vault.importText(JSON.stringify(payload));
@@ -776,7 +834,8 @@ async function run() {
       ignored: result.ignored,
       progress: localStorage.getItem('atherix_reader_progress_vault-smoke') || '',
       survivorBest: localStorage.getItem('atherix_premium_survivor_best') || '',
-      tokenAfter: localStorage.getItem('admin_token') || '',
+      tokenAfter: window.sessionStorage?.getItem('admin_token') || '',
+      localTokenAfter: localStorage.getItem('admin_token') || '',
       outsideKey: localStorage.getItem('outside_key') || '',
       theme: document.documentElement.getAttribute('data-theme') || '',
       keyCountText: document.querySelector('#vault-key-count')?.textContent || '',
@@ -787,6 +846,7 @@ async function run() {
       toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || ''
     };
     localStorage.removeItem('admin_token');
+    window.sessionStorage?.removeItem('admin_token');
     return state;
   })()`, 5000);
   const vaultClearConfirmState = await evaluate(`(async () => {
@@ -2569,7 +2629,7 @@ async function run() {
   await send('Emulation.clearDeviceMetricsOverride');
 
   assert(blogState.visibleArticle && blogState.articleChars > 100, 'blog reader should open a populated article');
-  assert(!adminStartupState.token && !adminStartupState.blogActionsVisible && !adminStartupState.projectActionsVisible, 'invalid cached admin token should be cleared on startup');
+  assert(!adminStartupState.localToken && !adminStartupState.sessionToken && !adminStartupState.blogActionsVisible && !adminStartupState.projectActionsVisible, `legacy cached admin token should be cleared on startup: ${JSON.stringify(adminStartupState)}`);
   assert(accessibilityBaseline.skipHref === '#main-content' && accessibilityBaseline.mainTabIndex === '-1' && accessibilityBaseline.buttonsMissingType === 0 && !accessibilityBaseline.horizontalOverflow, `core accessibility affordances should be present: ${JSON.stringify(accessibilityBaseline)}`);
   assert(accessibilityBaseline.commandTriggerLabel && accessibilityBaseline.adminTriggerLabel, `icon-only header actions should have labels: ${JSON.stringify(accessibilityBaseline)}`);
   assert(accessibilityBaseline.adminUsernameAutocomplete === 'username' && accessibilityBaseline.adminPasswordAutocomplete === 'current-password', `admin login fields should expose browser autocomplete hints: ${JSON.stringify(accessibilityBaseline)}`);
@@ -2578,15 +2638,18 @@ async function run() {
   assert(!commandFocusClosedState.open && commandFocusClosedState.ariaHidden === 'true' && commandFocusClosedState.focusId === 'command-palette-trigger', `command palette should close and restore focus: ${JSON.stringify(commandFocusClosedState)}`);
   assert(adminModalOpenState.open && adminModalOpenState.role === 'dialog' && adminModalOpenState.ariaHidden === 'false' && adminModalOpenState.focusId === 'admin-username' && adminModalOpenState.focusInside, `admin modal should expose dialog semantics and focus first field: ${JSON.stringify(adminModalOpenState)}`);
   assert(!adminModalClosedState.open && adminModalClosedState.ariaHidden === 'true' && adminModalClosedState.display === 'none' && adminModalClosedState.focusId === 'admin-login-trigger', `admin modal should close on Escape and restore focus: ${JSON.stringify(adminModalClosedState)}`);
+  if (managedServer) {
+    assert(adminLoginSessionState && !adminLoginSessionState.missingForm && adminLoginSessionState.sessionTokenStored && !adminLoginSessionState.localToken && adminLoginSessionState.blogActionsVisible && adminLoginSessionState.projectActionsVisible && !adminLoginSessionState.sessionAfterLogout && !adminLoginSessionState.localAfterLogout && !adminLoginSessionState.blogActionsAfterLogout && !adminLoginSessionState.projectActionsAfterLogout, `admin login should use session-only storage and clear cleanly on logout: ${JSON.stringify(adminLoginSessionState)}`);
+  }
   assert(commandBeforeExecute.open && commandBeforeExecute.results >= 1 && /Rift Tactics/.test(commandBeforeExecute.firstTitle), `command palette should find tactics mode: ${JSON.stringify(commandBeforeExecute)}`);
   assert(commandState.closed && commandState.gameActive && commandState.tacticsActive && /Rift Tactics/.test(commandState.activeTitle), `command palette should execute game navigation: ${JSON.stringify(commandState)}`);
   assert(vaultCommandBeforeExecute.open && vaultCommandBeforeExecute.results >= 1 && /数据保险库/.test(vaultCommandBeforeExecute.firstTitle), `command palette should find the data vault: ${JSON.stringify(vaultCommandBeforeExecute)}`);
   assert(vaultCommandState.closed && vaultCommandState.toolboxActive && vaultCommandState.vaultActive && vaultCommandState.navActive && vaultCommandState.debugReady && !vaultCommandState.horizontalOverflow, `data vault command should open the vault panel: ${JSON.stringify(vaultCommandState)}`);
   assert(vaultExportState.clicks.length === 1 && /atherix-vault-\d{8}-\d{6}\.json/.test(vaultExportState.clicks[0].download), `data vault should trigger a dated JSON export: ${JSON.stringify(vaultExportState)}`);
-  assert(vaultExportState.schema === 'atherix-vault-v1' && vaultExportState.keys >= 2 && !vaultExportState.hasAdminToken && vaultExportState.readerValue === '64' && vaultExportState.survivorBest === '1234', `data vault export should include allowed state without leaking admin token: ${JSON.stringify(vaultExportState)}`);
+  assert(vaultExportState.schema === 'atherix-vault-v1' && vaultExportState.keys >= 2 && !vaultExportState.hasAdminToken && vaultExportState.sessionTokenAfter === 'vault-session-should-not-export' && vaultExportState.readerValue === '64' && vaultExportState.survivorBest === '1234', `data vault export should include allowed state without leaking admin token: ${JSON.stringify(vaultExportState)}`);
   assert(/\d/.test(vaultExportState.keyCountText) && /\d/.test(vaultExportState.readerText) && /\d/.test(vaultExportState.arcadeText), `data vault should refresh summary after export: ${JSON.stringify(vaultExportState)}`);
   assert(vaultImportState.progress === '77' && vaultImportState.survivorBest === '4321' && vaultImportState.theme === 'light' && vaultImportState.listHasProgress, `data vault import should restore whitelisted state and refresh UI: ${JSON.stringify(vaultImportState)}`);
-  assert(vaultImportState.tokenAfter === 'vault-secret-preserved' && !vaultImportState.outsideKey && vaultImportState.ignored.includes('admin_token') && vaultImportState.ignored.includes('outside_key'), `data vault import should ignore unsafe or unknown keys: ${JSON.stringify(vaultImportState)}`);
+  assert(vaultImportState.tokenAfter === 'vault-session-preserved' && !vaultImportState.localTokenAfter && !vaultImportState.outsideKey && vaultImportState.ignored.includes('admin_token') && vaultImportState.ignored.includes('outside_key'), `data vault import should ignore unsafe or unknown keys without touching the active admin session: ${JSON.stringify(vaultImportState)}`);
   assert(/Vault restored task/.test(vaultImportState.todoStored), `data vault import should restore local tool state: ${JSON.stringify(vaultImportState)}`);
   assert(vaultClearConfirmState.openBeforeCancel && vaultClearConfirmState.role === 'dialog' && vaultClearConfirmState.ariaHiddenBeforeCancel === 'false' && vaultClearConfirmState.focusedCancel && /清空本地状态/.test(vaultClearConfirmState.title) && /Atherix/.test(vaultClearConfirmState.message), `data vault clear should use the accessible in-app confirmation dialog: ${JSON.stringify(vaultClearConfirmState)}`);
   assert(vaultClearConfirmState.stillStoredAfterCancel === '31' && vaultClearConfirmState.closedAfterCancel && vaultClearConfirmState.openBeforeAccept && vaultClearConfirmState.clearedAfterAccept && vaultClearConfirmState.ariaHiddenAfterAccept === 'true' && /本地状态已清空/.test(vaultClearConfirmState.clearToast), `data vault clear confirmation should cancel safely and only clear after explicit accept: ${JSON.stringify(vaultClearConfirmState)}`);
@@ -3006,6 +3069,7 @@ async function run() {
     commandFocusClosedState,
     adminModalOpenState,
     adminModalClosedState,
+    adminLoginSessionState,
     commandBeforeExecute,
     commandState,
     vaultCommandBeforeExecute,

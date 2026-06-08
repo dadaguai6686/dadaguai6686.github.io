@@ -74,6 +74,71 @@ function init() {
     });
     return api;
   })();
+  const adminTokenKey = 'admin_token';
+  const adminSessionStorage = (() => {
+    const memory = new Map();
+    let nativeStorage = null;
+    try {
+      nativeStorage = window.sessionStorage;
+      const probeKey = '__atherix_admin_session_probe__';
+      nativeStorage.setItem(probeKey, '1');
+      nativeStorage.removeItem(probeKey);
+    } catch (err) {
+      nativeStorage = null;
+      console.warn('sessionStorage unavailable for admin session, using in-memory fallback:', err.message);
+    }
+
+    return {
+      getItem(key) {
+        try {
+          const value = nativeStorage?.getItem(key);
+          return value ?? (memory.has(key) ? memory.get(key) : null);
+        } catch {
+          return memory.has(key) ? memory.get(key) : null;
+        }
+      },
+      setItem(key, value) {
+        const normalized = String(value);
+        try {
+          if (nativeStorage) {
+            nativeStorage.setItem(key, normalized);
+            memory.delete(key);
+          } else {
+            memory.set(key, normalized);
+          }
+        } catch (err) {
+          memory.set(key, normalized);
+          console.warn(`Could not keep admin session ${key}:`, err.message);
+        }
+      },
+      removeItem(key) {
+        memory.delete(key);
+        try {
+          nativeStorage?.removeItem(key);
+        } catch (err) {
+          console.warn(`Could not clear admin session ${key}:`, err.message);
+        }
+      }
+    };
+  })();
+
+  function getAdminToken() {
+    return adminSessionStorage.getItem(adminTokenKey) || '';
+  }
+
+  function setAdminToken(token) {
+    if (!token) {
+      clearAdminToken();
+      return;
+    }
+    adminSessionStorage.setItem(adminTokenKey, token);
+    localStorage.removeItem(adminTokenKey);
+  }
+
+  function clearAdminToken() {
+    adminSessionStorage.removeItem(adminTokenKey);
+    localStorage.removeItem(adminTokenKey);
+  }
 
   // Safe helper to create icons without throwing ReferenceError
   function normalizeButtonTypes(scope = document) {
@@ -490,7 +555,7 @@ function init() {
   // ==========================================
   async function fetchAPI(url, options = {}) {
     // Add bearer authorization token if admin is logged in
-    const token = localStorage.getItem('admin_token');
+    const token = getAdminToken();
     if (token) {
       options.headers = {
         ...options.headers,
@@ -1092,7 +1157,7 @@ function init() {
     adminLoginTrigger.addEventListener('click', () => {
       if (isAdmin) {
         // Logout directly if already logged in
-        localStorage.removeItem('admin_token');
+        clearAdminToken();
         setAdminMode(false);
         showToast('管理员已安全退出管理模式', 'success');
       } else {
@@ -1118,7 +1183,7 @@ function init() {
         });
 
         if (data.success && data.token) {
-          localStorage.setItem('admin_token', data.token);
+          setAdminToken(data.token);
           setAdminMode(true);
           closeModal(adminLoginModal);
           adminLoginForm.reset();
@@ -1132,18 +1197,19 @@ function init() {
   }
 
   async function checkAdminTokenOnStartup() {
-    const token = localStorage.getItem('admin_token');
+    localStorage.removeItem(adminTokenKey);
+    const token = getAdminToken();
     if (!token) return;
     try {
       const data = await fetchAPI('/api/auth/verify');
       if (data.valid) {
         setAdminMode(true);
       } else {
-        localStorage.removeItem('admin_token');
+        clearAdminToken();
         setAdminMode(false);
       }
     } catch (e) {
-      localStorage.removeItem('admin_token');
+      clearAdminToken();
       setAdminMode(false);
     }
   }
@@ -1152,7 +1218,7 @@ function init() {
   const logoutBtn = document.getElementById('logout-btn');
   if (logoutBtn) {
     logoutBtn.addEventListener('click', () => {
-      localStorage.removeItem('admin_token');
+      clearAdminToken();
       setAdminMode(false);
       showToast('已退出管理模式', 'success');
     });
@@ -3111,6 +3177,7 @@ function init() {
     'atherix_reader_progress_',
     'atherix_astro_runner_best_lvl_'
   ];
+  const vaultDeniedKeys = new Set([adminTokenKey, 'admin_session_token']);
 
   function vaultTextBytes(value) {
     return new Blob([String(value ?? '')]).size;
@@ -3125,7 +3192,7 @@ function init() {
 
   function isVaultAllowedKey(key) {
     const name = String(key || '');
-    if (!name || name === 'admin_token') return false;
+    if (!name || vaultDeniedKeys.has(name)) return false;
     return vaultAllowedExactKeys.has(name) || vaultAllowedPrefixes.some(prefix => name.startsWith(prefix));
   }
 
