@@ -212,6 +212,7 @@ function init() {
   function normalizeUrl(value, { allowRelativeUpload = false, allowRelativeAsset = false } = {}) {
     const raw = String(value || '').trim();
     if (!raw || raw === '#') return '';
+    if (/[\u0000-\u001f\u007f]/.test(raw)) return '';
     if (allowRelativeUpload && raw.startsWith('/uploads/')) {
       return safeUploadUrlPattern.test(raw) ? raw : '';
     }
@@ -223,6 +224,47 @@ function init() {
       const url = new URL(raw, window.location.origin);
       return ['http:', 'https:'].includes(url.protocol) ? url.href : '';
     } catch (err) {
+      return '';
+    }
+  }
+
+  function normalizeMarkdownLinkUrl(value) {
+    const raw = String(value || '').trim();
+    if (!raw || /[\u0000-\u001f\u007f]/.test(raw)) return null;
+    if (raw.startsWith('#')) {
+      return /^#[A-Za-z][\w:.-]{0,96}$/.test(raw)
+        ? { href: raw, internal: true }
+        : null;
+    }
+    try {
+      const url = new URL(raw, window.location.origin);
+      if (!['http:', 'https:'].includes(url.protocol)) return null;
+      const internal = url.origin === window.location.origin;
+      return {
+        href: internal ? `${url.pathname}${url.search}${url.hash}` : url.href,
+        internal
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  function normalizeMarkdownImageUrl(value) {
+    const raw = String(value || '').trim();
+    if (!raw || /[\u0000-\u001f\u007f]/.test(raw)) return '';
+    if (raw.startsWith('/uploads/')) return safeUploadUrlPattern.test(raw) ? raw : '';
+    if (raw.startsWith('/assets/')) return safeAssetUrlPattern.test(raw) ? raw : '';
+    try {
+      const url = new URL(raw, window.location.origin);
+      if (!['http:', 'https:'].includes(url.protocol)) return '';
+      if (url.origin === window.location.origin) {
+        const localPath = `${url.pathname}${url.search}${url.hash}`;
+        return safeUploadUrlPattern.test(url.pathname) || safeAssetUrlPattern.test(url.pathname)
+          ? localPath
+          : '';
+      }
+      return url.href;
+    } catch {
       return '';
     }
   }
@@ -1542,27 +1584,49 @@ function init() {
 
   function renderMarkdown(mdText) {
     const codeBlocks = [];
+    const codeTokenPrefix = `@@ATHERIX_CODE_BLOCK_${Math.random().toString(36).slice(2)}_`;
     const source = String(mdText ?? '')
       .replace(/\r\n?/g, '\n')
       .replace(/```([a-zA-Z0-9_-]*)\n?([\s\S]*?)```/g, (_, lang, code) => {
         const language = String(lang || '').trim().replace(/[^\w-]/g, '').slice(0, 32);
         const className = language ? ` class="language-${escapeHTML(language)}"` : '';
         const normalizedCode = String(code || '').replace(/^\n|\n$/g, '');
-        const token = `@@ATHERIX_CODE_BLOCK_${codeBlocks.length}@@`;
+        const token = `${codeTokenPrefix}${codeBlocks.length}@@`;
         codeBlocks.push(`<pre><code${className}>${escapeHTML(normalizedCode)}</code></pre>`);
         return `\n\n${token}\n\n`;
       });
 
     function formatInline(text) {
-      return escapeHTML(text)
-        .replace(/`([^`\n]+)`/g, '<code>$1</code>')
-        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-        .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (match, label, href) => {
-          const safeHref = normalizeUrl(href);
-          return safeHref
-            ? `<a href="${escapeHTML(safeHref)}" target="_blank" rel="noopener noreferrer">${label}</a>`
-            : label;
+      const inlineTokens = [];
+      const inlineTokenPrefix = `@@ATHERIX_INLINE_${Math.random().toString(36).slice(2)}_`;
+      const stashInline = (html) => {
+        const token = `${inlineTokenPrefix}${inlineTokens.length}@@`;
+        inlineTokens.push(html);
+        return token;
+      };
+
+      const withProtectedInline = String(text ?? '')
+        .replace(/`([^`\n]+)`/g, (_, code) => stashInline(`<code>${escapeHTML(code)}</code>`))
+        .replace(/!\[([^\]\n]*)\]\(([^)\s]+)\)/g, (match, alt, src) => {
+          const safeSrc = normalizeMarkdownImageUrl(src);
+          const safeAlt = escapeHTML(String(alt || '').slice(0, 180));
+          return safeSrc
+            ? stashInline(`<img class="reader-markdown-image" src="${escapeHTML(safeSrc)}" alt="${safeAlt}" loading="lazy" decoding="async" referrerpolicy="no-referrer">`)
+            : String(alt || '');
+        })
+        .replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (match, label, href) => {
+          const safeLink = normalizeMarkdownLinkUrl(href);
+          if (!safeLink) return label;
+          const externalAttrs = safeLink.internal ? '' : ' target="_blank" rel="noopener noreferrer"';
+          return stashInline(`<a href="${escapeHTML(safeLink.href)}"${externalAttrs}>${escapeHTML(label)}</a>`);
         });
+
+      return escapeHTML(withProtectedInline)
+        .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/__([^_\n]+)__/g, '<strong>$1</strong>')
+        .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
+        .replace(/~([^~\n]+)~/g, '<em>$1</em>')
+        .replace(new RegExp(`${inlineTokenPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\d+)@@`, 'g'), (_, index) => inlineTokens[Number(index)] || '');
     }
 
     return source
@@ -1570,7 +1634,7 @@ function init() {
       .map(block => block.trim())
       .filter(Boolean)
       .map(block => {
-        const codeMatch = block.match(/^@@ATHERIX_CODE_BLOCK_(\d+)@@$/);
+        const codeMatch = block.match(new RegExp(`^${codeTokenPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\d+)@@$`));
         if (codeMatch) return codeBlocks[Number(codeMatch[1])] || '';
 
         const headingMatch = block.match(/^(#{1,3})\s+(.+)$/);

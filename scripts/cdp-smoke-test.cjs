@@ -449,6 +449,66 @@ async function run() {
     };
   })()`);
 
+  const markdownSmokeEnabled = managedServer;
+  const markdownSmokePostId = `smoke-md-${Date.now()}`;
+  if (markdownSmokeEnabled) {
+    const markdownSmokeContent = `# Markdown Security Smoke
+
+这篇文章验证安全 Markdown 渲染：**粗体**、*强调*、\`inlineCode()\`、[站内游戏入口](/#game)、[带查询的站内链接](/?post=post-1&source=md)、[外部链接](https://example.com/docs?a=1&b=2)、[危险链接](javascript:window.__atherixMarkdownSmokeXss='link')。
+
+![品牌预览](/assets/atherix-og-card.png)
+![危险图片](javascript:window.__atherixMarkdownSmokeXss='image')
+
+<script>window.__atherixMarkdownSmokeXss='script'</script>
+<img src=x onerror="window.__atherixMarkdownSmokeXss='raw-image'">
+
+## 安全列表
+
+1. 第一项
+2. 第二项
+3. 第三项
+
+- 本地资源图片应该渲染
+- 危险协议应该降级
+- 原始 HTML 应保持为文本
+
+\`\`\`html
+<button onclick="window.__atherixMarkdownSmokeXss='code'">code stays inert</button>
+\`\`\`
+
+### 结论
+
+如果这里没有危险节点，也没有错误执行的全局变量，阅读器就能承载更真实的文章内容。`;
+    const loginResponse = await fetch(`${appUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'admin123' })
+    });
+    assert(loginResponse.ok, `smoke admin login should succeed for temp development DB: ${loginResponse.status}`);
+    const loginBody = await loginResponse.json();
+    assert(loginBody.token, 'smoke admin login should return a token');
+    const markdownPostResponse = await fetch(`${appUrl}/api/posts`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${loginBody.token}`
+      },
+      body: JSON.stringify({
+        id: markdownSmokePostId,
+        title: 'Markdown 安全渲染回归测试',
+        excerpt: '覆盖站内链接、外链、图片、代码块以及恶意 HTML 降级。',
+        content: markdownSmokeContent,
+        tag: '质量保障',
+        readTime: '4 分钟阅读',
+        pinned: true
+      })
+    });
+    assert(markdownPostResponse.ok, `smoke markdown post should be created: ${markdownPostResponse.status}`);
+    await reload();
+    await waitFor('.nav-item[data-target="blog"]', 12000);
+    await wait(500);
+  }
+
   const accessibilityBaseline = await evaluate(`(() => ({
     skipHref: document.querySelector('.skip-link')?.getAttribute('href') || '',
     mainTabIndex: document.querySelector('#main-content')?.getAttribute('tabindex') || '',
@@ -813,7 +873,26 @@ async function run() {
     codeBlocks: document.querySelectorAll('#reader-post-content pre code').length,
     inlineCode: document.querySelectorAll('#reader-post-content p code, #reader-post-content li code').length,
     orderedItems: document.querySelectorAll('#reader-post-content ol li').length,
-    unorderedItems: document.querySelectorAll('#reader-post-content ul li').length
+    unorderedItems: document.querySelectorAll('#reader-post-content ul li').length,
+    markdownSecurity: {
+      smokePost: document.querySelector('#reader-post-title')?.textContent.trim() === 'Markdown 安全渲染回归测试',
+      executed: window.__atherixMarkdownSmokeXss || '',
+      rawScriptTags: document.querySelectorAll('#reader-post-content script').length,
+      rawImageHandlers: document.querySelectorAll('#reader-post-content img[onerror], #reader-post-content img[onclick]').length,
+      javascriptLinks: [...document.querySelectorAll('#reader-post-content a')].filter(anchor => /^javascript:/i.test(anchor.getAttribute('href') || '')).length,
+      javascriptImages: [...document.querySelectorAll('#reader-post-content img')].filter(img => /^javascript:/i.test(img.getAttribute('src') || '')).length,
+      localImages: [...document.querySelectorAll('#reader-post-content img.reader-markdown-image')].filter(img => /\\/assets\\/atherix-og-card\\.png$/.test(new URL(img.getAttribute('src'), location.origin).pathname)).length,
+      internalGameHref: [...document.querySelectorAll('#reader-post-content a')].find(anchor => anchor.textContent.trim() === '站内游戏入口')?.getAttribute('href') || '',
+      internalGameTarget: [...document.querySelectorAll('#reader-post-content a')].find(anchor => anchor.textContent.trim() === '站内游戏入口')?.getAttribute('target') || '',
+      internalQueryHref: [...document.querySelectorAll('#reader-post-content a')].find(anchor => anchor.textContent.trim() === '带查询的站内链接')?.getAttribute('href') || '',
+      externalHref: [...document.querySelectorAll('#reader-post-content a')].find(anchor => anchor.textContent.trim() === '外部链接')?.getAttribute('href') || '',
+      externalTarget: [...document.querySelectorAll('#reader-post-content a')].find(anchor => anchor.textContent.trim() === '外部链接')?.getAttribute('target') || '',
+      externalRel: [...document.querySelectorAll('#reader-post-content a')].find(anchor => anchor.textContent.trim() === '外部链接')?.getAttribute('rel') || '',
+      dangerousLinkText: document.querySelector('#reader-post-content')?.innerText.includes('危险链接') || false,
+      dangerousImageText: document.querySelector('#reader-post-content')?.innerText.includes('危险图片') || false,
+      escapedRawHtml: document.querySelector('#reader-post-content')?.innerText.includes('<script>window.__atherixMarkdownSmokeXss') || false,
+      codeContainsUnsafeText: document.querySelector('#reader-post-content pre code')?.textContent.includes('onclick=') || false
+    }
   }))()`);
   const readerNextClicked = await click('#reader-next-panel [data-reader-next-open]');
   if (blogState.nextFirstTitle) {
@@ -1958,7 +2037,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasPlayfieldFirstVersion: swText.includes('atherix-static-v32-playfield-first') && swText.includes('/style.css?v=20260608-playfield-first-v1') && swText.includes('/app.js?v=20260608-playfield-first-v1'),
+      swHasMarkdownSafeVersion: swText.includes('atherix-static-v33-markdown-safe') && swText.includes('/style.css?v=20260608-markdown-safe-v1') && swText.includes('/app.js?v=20260608-markdown-safe-v1'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
   })()`, 10000);
@@ -2072,6 +2151,35 @@ async function run() {
     blogState.orderedItems >= 3 && blogState.unorderedItems >= 3,
     `blog markdown should render ordered and unordered lists: ${JSON.stringify(blogState)}`
   );
+  if (markdownSmokeEnabled) {
+    assert(
+      blogState.markdownSecurity?.smokePost &&
+        !blogState.markdownSecurity.executed &&
+        blogState.markdownSecurity.rawScriptTags === 0 &&
+        blogState.markdownSecurity.rawImageHandlers === 0 &&
+        blogState.markdownSecurity.javascriptLinks === 0 &&
+        blogState.markdownSecurity.javascriptImages === 0,
+      `blog markdown should render unsafe author content inertly: ${JSON.stringify(blogState.markdownSecurity)}`
+    );
+    assert(
+      blogState.markdownSecurity?.localImages >= 1 &&
+        blogState.markdownSecurity.internalGameHref === '/#game' &&
+        blogState.markdownSecurity.internalGameTarget === '' &&
+        blogState.markdownSecurity.internalQueryHref === '/?post=post-1&source=md' &&
+        blogState.markdownSecurity.externalHref === 'https://example.com/docs?a=1&b=2' &&
+        blogState.markdownSecurity.externalTarget === '_blank' &&
+        /noopener/.test(blogState.markdownSecurity.externalRel) &&
+        /noreferrer/.test(blogState.markdownSecurity.externalRel),
+      `blog markdown should preserve safe internal links, external links, and local images: ${JSON.stringify(blogState.markdownSecurity)}`
+    );
+    assert(
+      blogState.markdownSecurity?.dangerousLinkText &&
+        blogState.markdownSecurity.dangerousImageText &&
+        blogState.markdownSecurity.escapedRawHtml &&
+        blogState.markdownSecurity.codeContainsUnsafeText,
+      `blog markdown should keep rejected or code content readable as inert text: ${JSON.stringify(blogState.markdownSecurity)}`
+    );
+  }
   assert(
     projectViewportState.scrollY <= 80 && projectViewportState.sectionVisible,
     `project navigation should reset scroll into visible content: ${JSON.stringify(projectViewportState)}`
@@ -2269,7 +2377,7 @@ async function run() {
   assert(tacticsForecastAfterAction.dangerCount > 0 && tacticsForecastAfterAction.coverHud && tacticsForecastAfterAction.momentumHud !== undefined && tacticsForecastAfterAction.routeHud && tacticsJammedIntent, `tactics mode should expose post-action JAM, cover, momentum, and route forecast: ${JSON.stringify(tacticsForecastAfterAction)}`);
   assert(tacticsState.nonBlank && Number(tacticsState.ap) >= 0 && tacticsState.action && tacticsState.cover && tacticsState.momentum !== undefined && tacticsState.route && tacticsState.debug?.route?.length > 0, `tactics mode should render and accept enhanced actions: ${JSON.stringify(tacticsState)}`);
   assert(Number(tacticsState.danger) > 0 && tacticsState.intel && tacticsState.debug?.hud?.route === tacticsState.route && tacticsState.debug?.hud?.cover === tacticsState.cover && tacticsState.debug?.hud?.momentum === tacticsState.momentum, `tactics HUD should stay in sync with enhanced debug state: ${JSON.stringify(tacticsState)}`);
-  assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /playfield-first/.test(key)) && pwaState.swHasPlayfieldFirstVersion, `service worker should register and cache the latest app shell: ${JSON.stringify(pwaState)}`);
+  assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /markdown-safe/.test(key)) && pwaState.swHasMarkdownSafeVersion, `service worker should register and cache the latest app shell: ${JSON.stringify(pwaState)}`);
   assert(pwaState.swHasLocalProjectAssets, `service worker should precache local portfolio assets: ${JSON.stringify(pwaState)}`);
   assert(pwaState.swHasNavigationPreload && pwaState.swHasOfflineShellHeader && pwaState.swHasFallbackUrl, `service worker should include robust offline navigation fallback: ${JSON.stringify(pwaState)}`);
   const diagnosticText = JSON.stringify(diagnostics);

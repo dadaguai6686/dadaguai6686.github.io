@@ -1,10 +1,10 @@
-const CACHE_VERSION = 'atherix-static-v32-playfield-first';
+const CACHE_VERSION = 'atherix-static-v33-markdown-safe';
 const NAVIGATION_FALLBACK_URL = '/index.html';
 const STATIC_ASSETS = [
   '/',
   NAVIGATION_FALLBACK_URL,
-  '/style.css?v=20260608-playfield-first-v1',
-  '/app.js?v=20260608-playfield-first-v1',
+  '/style.css?v=20260608-markdown-safe-v1',
+  '/app.js?v=20260608-markdown-safe-v1',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',

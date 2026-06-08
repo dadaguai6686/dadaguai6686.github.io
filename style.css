@@ -2110,6 +2110,15 @@ main {
   margin: 1.5rem 0;
 }
 
+.reader-content img.reader-markdown-image {
+  display: block;
+  width: min(100%, 920px);
+  height: auto;
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.24);
+}
+
 .reader-content pre {
   overflow-x: auto;
   padding: 1rem;
