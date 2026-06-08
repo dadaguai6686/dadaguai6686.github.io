@@ -1078,6 +1078,16 @@ async function run() {
     inlineCode: document.querySelectorAll('#reader-post-content p code, #reader-post-content li code').length,
     orderedItems: document.querySelectorAll('#reader-post-content ol li').length,
     unorderedItems: document.querySelectorAll('#reader-post-content ul li').length,
+    meta: {
+      title: document.title,
+      description: document.querySelector('meta[name="description"]')?.getAttribute('content') || '',
+      canonical: document.querySelector('link[rel="canonical"]')?.getAttribute('href') || '',
+      ogType: document.querySelector('meta[property="og:type"]')?.getAttribute('content') || '',
+      ogUrl: document.querySelector('meta[property="og:url"]')?.getAttribute('content') || '',
+      twitterTitle: document.querySelector('meta[name="twitter:title"]')?.getAttribute('content') || '',
+      articlePublished: document.querySelector('meta[property="article:published_time"]')?.getAttribute('content') || '',
+      articleTag: document.querySelector('meta[property="article:tag"]')?.getAttribute('content') || ''
+    },
     markdownSecurity: {
       smokePost: document.querySelector('#reader-post-title')?.textContent.trim() === 'Markdown 安全渲染回归测试',
       executed: window.__atherixMarkdownSmokeXss || '',
@@ -1693,6 +1703,56 @@ async function run() {
     overlay: document.querySelector('#game-overlay-screen')?.style.display || '',
     debug: window.__atherixDebug?.runnerState?.() || {}
   }))()`);
+  const runnerPagehideState = await evaluate(`(async () => {
+    window.dispatchEvent(new Event('pagehide'));
+    await new Promise(resolve => setTimeout(resolve, 220));
+    return {
+      running: !!window.__atherixDebug?.gameRunning?.(),
+      paused: !!window.__atherixDebug?.gamePaused?.(),
+      pauseOverlay: document.querySelector('#game-pause-screen')?.style.display || '',
+      keys: window.__atherixDebug?.runnerState?.().keys || {}
+    };
+  })()`);
+  const premiumPanelStartState = await evaluate(`(async () => {
+    const api = window.__atherixDebug;
+    document.querySelector('#game-pause-resume')?.click();
+    await new Promise(resolve => setTimeout(resolve, 260));
+    let before = {
+      runnerRunning: !!api?.gameRunning?.(),
+      runnerPaused: !!api?.gamePaused?.(),
+      runnerElapsedMs: Number(api?.runnerElapsedMs?.() || 0),
+      bossRunning: !!api?.premium?.bossRunning?.(),
+      bossPaused: !!api?.premium?.bossPaused?.()
+    };
+    if (!before.runnerRunning) {
+      document.querySelector('#game-overlay-action')?.click();
+      await new Promise(resolve => setTimeout(resolve, 260));
+      before = {
+        runnerRunning: !!api?.gameRunning?.(),
+        runnerPaused: !!api?.gamePaused?.(),
+        runnerElapsedMs: Number(api?.runnerElapsedMs?.() || 0),
+        bossRunning: !!api?.premium?.bossRunning?.(),
+        bossPaused: !!api?.premium?.bossPaused?.()
+      };
+    }
+    document.querySelector('[data-premium-game="boss"]')?.click();
+    await new Promise(resolve => setTimeout(resolve, 120));
+    document.querySelector('#premium-boss-start')?.click();
+    await new Promise(resolve => setTimeout(resolve, 280));
+    const after = {
+      active: api?.premium?.active?.() || '',
+      runnerRunning: !!api?.gameRunning?.(),
+      runnerPaused: !!api?.gamePaused?.(),
+      runnerElapsedMs: Number(api?.runnerElapsedMs?.() || 0),
+      bossRunning: !!api?.premium?.bossRunning?.(),
+      bossPaused: !!api?.premium?.bossPaused?.(),
+      runnerPauseOverlay: document.querySelector('#game-pause-screen')?.style.display || '',
+      feedback: api?.premium?.feedback?.() || {}
+    };
+    await new Promise(resolve => setTimeout(resolve, 260));
+    const frozenElapsedMs = Number(api?.runnerElapsedMs?.() || 0);
+    return { before, after, frozenElapsedMs };
+  })()`, 5000);
   const runnerOverlayMachineState = await evaluate(`(async () => {
     const api = window.__atherixDebug;
     const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -2256,6 +2316,12 @@ async function run() {
       paused: !!window.__atherixDebug?.premium?.bossPaused?.()
     };
     const result = window.__atherixPausePremiumRealtimeGames?.('smoke') || {};
+    document.querySelector('#premium-boss-pause')?.click();
+    const beforePagehide = {
+      running: !!window.__atherixDebug?.premium?.bossRunning?.(),
+      paused: !!window.__atherixDebug?.premium?.bossPaused?.()
+    };
+    window.dispatchEvent(new Event('pagehide'));
     return {
       before,
       result,
@@ -2267,7 +2333,17 @@ async function run() {
         touchPauseDisabled: !!document.querySelector('#premium-touch-pause')?.disabled,
         touchPauseLabel: document.querySelector('#premium-touch-pause')?.getAttribute('aria-label') || ''
       },
-      pad: window.__atherixDebug?.premium?.gamepadState?.() || {}
+      pad: window.__atherixDebug?.premium?.gamepadState?.() || {},
+      pagehide: {
+        before: beforePagehide,
+        after: {
+          running: !!window.__atherixDebug?.premium?.bossRunning?.(),
+          paused: !!window.__atherixDebug?.premium?.bossPaused?.(),
+          pauseButton: document.querySelector('#premium-boss-pause')?.textContent || '',
+          touchPause: document.querySelector('#premium-touch-pause')?.textContent || '',
+          pad: window.__atherixDebug?.premium?.gamepadState?.() || {}
+        }
+      }
     };
   })()`);
   const contractProgressState = await evaluate(`(() => {
@@ -2601,6 +2677,8 @@ async function run() {
     api?.simulateGamepadUnforced?.({ start: true });
     await new Promise(resolve => setTimeout(resolve, 140));
     api?.simulateGamepadUnforced?.({ start: false });
+    document.querySelector('#premium-survivor-start')?.click();
+    await new Promise(resolve => setTimeout(resolve, 140));
     const choicesAfter = [...document.querySelectorAll('[data-survivor-upgrade]')].map(btn => btn.dataset.survivorUpgrade || '');
     return {
       before,
@@ -2613,6 +2691,7 @@ async function run() {
         level: document.querySelector('#premium-survivor-level')?.textContent || '',
         choices: choicesAfter,
         startDisabled: !!document.querySelector('#premium-touch-start')?.disabled,
+        panelStartText: document.querySelector('#premium-survivor-start')?.textContent || '',
         startText: document.querySelector('#premium-touch-start')?.textContent || '',
         readoutStart: document.querySelector('#premium-input-start')?.textContent || '',
         feedback: api?.feedback?.() || {}
@@ -3064,7 +3143,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v62-quality') && swText.includes('/style.css?v=20260608-quality-v8') && swText.includes('/app.js?v=20260608-quality-v20'),
+      swHasQualityVersion: swText.includes('atherix-static-v63-quality') && swText.includes('/style.css?v=20260608-quality-v8') && swText.includes('/app.js?v=20260608-quality-v21'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
@@ -3367,6 +3446,7 @@ async function run() {
   assert(blogHubBefore.cardLinks >= blogHubBefore.cards && /^\/\?post=/.test(blogHubBefore.firstCardHref) && blogHubBefore.pinnedLinks >= 1 && blogHubBefore.quickRole === 'link' && blogHubBefore.quickTabIndex === '0', `blog cards and featured entry should expose native article links: ${JSON.stringify(blogHubBefore)}`);
   assert(blogHubBefore.progressCards >= 1 && /42/.test(blogHubBefore.progressText) && !blogHubBefore.horizontalOverflow, `blog reading hub should show resumable progress without overflow: ${JSON.stringify(blogHubBefore)}`);
   assert(blogState.toolbar && blogState.bookmarkPressed, 'blog reader toolbar should render and toggle bookmark state');
+  assert(blogState.meta?.ogType === 'article' && blogState.meta?.canonical?.includes(`?post=${blogState.search.replace('?post=', '')}`) && blogState.meta?.ogUrl?.includes(blogState.search) && blogState.meta?.twitterTitle === blogState.meta?.title && blogState.meta?.description.length > 20 && blogState.meta?.articlePublished && blogState.meta?.articleTag, `blog reader should synchronize article SEO/social metadata on client navigation: ${JSON.stringify(blogState.meta)}`);
   assert(readerCompletionState.stored === '100' && readerCompletionState.pressed && /重新阅读/.test(readerCompletionState.label) && readerCompletionState.progress === '100%', `blog reader should support explicit completion: ${JSON.stringify(readerCompletionState)}`);
   assert(readerResetState.stored === '0' && !readerResetState.pressed && /标记读完/.test(readerResetState.label) && readerResetState.progress === '0%', `blog reader should support reread reset: ${JSON.stringify(readerResetState)}`);
   assert(blogState.nextPanel && blogState.nextCards >= 1 && blogState.nextFirstTitle && blogState.nextFirstPostId, `blog reader should recommend a next article: ${JSON.stringify(blogState)}`);
@@ -3533,6 +3613,8 @@ async function run() {
   assert(runnerLifecycleState.beforeSameNav.running && runnerLifecycleState.afterSameNav.running && !runnerLifecycleState.afterSameNav.paused && runnerLifecycleState.afterSameNav.debug?.elapsedMs >= runnerLifecycleState.beforeSameNav.debug?.elapsedMs && runnerLifecycleState.afterSameNav.overlay === 'none', `runner same-page game navigation should not reset an active run: ${JSON.stringify(runnerLifecycleState)}`);
   assert(runnerLifecycleState.paused.paused && runnerLifecycleState.paused.overlay === 'flex' && runnerLifecycleState.paused.activeElement === 'game-pause-resume' && runnerLifecycleState.frozen.timer === runnerLifecycleState.paused.timer && Math.abs((runnerLifecycleState.frozen.player?.x || 0) - (runnerLifecycleState.paused.player?.x || 0)) < 0.01, `runner should auto-pause and freeze on blur: ${JSON.stringify(runnerLifecycleState)}`);
   assert(runnerLifecycleState.returned.gameActive && !runnerLifecycleState.returned.running && !runnerLifecycleState.returned.paused && runnerLifecycleState.returned.overlay === 'flex' && runnerReturnEnterState.running && !runnerReturnEnterState.paused && runnerReturnEnterState.overlay === 'none', `runner should restore an Enter-startable idle overlay after leaving and returning to the game page: ${JSON.stringify({ runnerLifecycleState, runnerReturnEnterState })}`);
+  assert(!runnerPagehideState.running && runnerPagehideState.paused && runnerPagehideState.pauseOverlay === 'flex' && Object.values(runnerPagehideState.keys || {}).every(value => value === false), `runner should auto-pause and clear held inputs on pagehide: ${JSON.stringify(runnerPagehideState)}`);
+  assert(premiumPanelStartState.before?.runnerRunning && !premiumPanelStartState.before?.runnerPaused && premiumPanelStartState.after?.active === 'boss' && !premiumPanelStartState.after?.runnerRunning && premiumPanelStartState.after?.runnerPaused && premiumPanelStartState.after?.bossRunning && !premiumPanelStartState.after?.bossPaused && Math.abs(Number(premiumPanelStartState.frozenElapsedMs || 0) - Number(premiumPanelStartState.after?.runnerElapsedMs || 0)) < 25, `premium panel start buttons should route through the unified start path and pause the main runner: ${JSON.stringify(premiumPanelStartState)}`);
   assert(
     runnerOverlayMachineState.gameover?.state === 'gameover' &&
       runnerOverlayMachineState.afterRetry?.running &&
@@ -3796,6 +3878,7 @@ async function run() {
   assert(arcadeInitial.touchControls >= 5, 'premium touch controls should be available');
   assert(/PAD/.test(arcadeInitial.gamepadStatus) && premiumGamepadState.applied?.active && premiumGamepadState.applied?.context && premiumGamepadState.after?.player?.x < premiumGamepadState.before?.player?.x && premiumGamepadState.held?.keys?.left && !premiumGamepadState.released?.held?.length && premiumGamepadState.suppressedStart?.active === false && premiumGamepadState.suppressedPad?.previous?.start === true && premiumGamepadState.heldStartAfterFocus?.active === true && premiumGamepadState.releasedStart?.active === true && !premiumGamepadState.releasedStart?.held?.length && /PAD/.test(premiumGamepadState.statusText), `premium arcade gamepad bridge should accept armed arcade focus, clear releases, and suppress held Start edges: ${JSON.stringify(premiumGamepadState)}`);
   assert(premiumPauseHookState.before.running && premiumPauseHookState.result?.paused?.includes('boss') && premiumPauseHookState.after.running && premiumPauseHookState.after.paused && premiumPauseHookState.after.pauseButton === '继续' && premiumPauseHookState.after.touchPause === '继续' && !premiumPauseHookState.after.touchPauseDisabled && /继续/.test(premiumPauseHookState.after.touchPauseLabel) && Object.values(premiumPauseHookState.pad?.keys || {}).every(value => value === false), `premium realtime pause hook should freeze active realtime games and refresh sticky controls: ${JSON.stringify(premiumPauseHookState)}`);
+  assert(premiumPauseHookState.pagehide?.before?.running && !premiumPauseHookState.pagehide?.before?.paused && premiumPauseHookState.pagehide?.after?.running && premiumPauseHookState.pagehide?.after?.paused && premiumPauseHookState.pagehide?.after?.pauseButton === '继续' && premiumPauseHookState.pagehide?.after?.touchPause === '继续' && Object.values(premiumPauseHookState.pagehide?.after?.pad?.keys || {}).every(value => value === false), `premium realtime games should pause and clear inputs on pagehide: ${JSON.stringify(premiumPauseHookState.pagehide)}`);
   assert(cockpitTargetState.target && (cockpitTargetState.target === 'runner' || cockpitTargetState.active === cockpitTargetState.target) && /驾驶舱推荐/.test(cockpitTargetState.toast) && !cockpitTargetState.horizontalOverflow, `premium cockpit target should launch the recommended mode: ${JSON.stringify(cockpitTargetState)}`);
   assert(cockpitPlayState.active === 'survivor' && cockpitPlayState.running && !cockpitPlayState.paused && /星爆/.test(cockpitPlayState.actionLabel) && cockpitPlayState.toolDisabled && /开局/.test(cockpitPlayState.toast), `premium cockpit play should start the active mode and refresh touch labels: ${JSON.stringify(cockpitPlayState)}`);
   assert(cockpitPlayState.feedback?.tones?.start >= 1 && cockpitPlayState.feedback?.visualTriggers >= 1 && /START|开局/.test(cockpitPlayState.feedback?.status || ''), `premium arcade feedback should respond to cockpit start: ${JSON.stringify(cockpitPlayState)}`);
@@ -3806,7 +3889,7 @@ async function run() {
   assert(survivorDraftOpenState.open && survivorDraftOpenState.ariaHidden === 'false' && survivorDraftOpenState.optionCards === 3 && survivorDraftOpenState.choices.length === 3 && survivorDraftOpenState.running && !survivorDraftOpenState.paused && survivorDraftOpenState.readoutState === 'draft' && survivorDraftOpenState.readoutStateText === '升级' && survivorDraftOpenState.readoutAction === '选升级' && survivorDraftOpenState.readoutStart === '1/2/3 选择' && survivorDraftOpenState.touchStart === '选择' && survivorDraftOpenState.touchStartDisabled && /升级选择中/.test(survivorDraftOpenState.touchStartLabel) && survivorDraftOpenState.touchPause === '选择中' && survivorDraftOpenState.touchPauseDisabled && /升级选择中/.test(survivorDraftOpenState.touchPauseLabel), `survivor roguelite draft should open three upgrade choices with clear draft-state controls and without using pause state: ${JSON.stringify(survivorDraftOpenState)}`);
   assert(survivorDraftFreezeState.open && Math.abs(survivorDraftFreezeState.elapsedAfter - survivorDraftOpenState.beforeElapsed) < 1 && Math.abs(survivorDraftFreezeState.scoreAfter - survivorDraftOpenState.beforeScore) < 1, `survivor roguelite draft should freeze the run clock and score until a choice is made: ${JSON.stringify({ survivorDraftOpenState, survivorDraftFreezeState })}`);
   assert(survivorDraftAutoPauseState.open && survivorDraftAutoPauseState.running && !survivorDraftAutoPauseState.paused && !(survivorDraftAutoPauseState.result?.paused || []).includes('survivor') && survivorDraftAutoPauseState.readoutState === 'draft' && survivorDraftAutoPauseState.readoutStateText === '升级' && survivorDraftAutoPauseState.touchPause === '选择中' && survivorDraftAutoPauseState.touchPauseDisabled, `survivor draft should ignore global auto-pause because the upgrade sheet already freezes play: ${JSON.stringify(survivorDraftAutoPauseState)}`);
-  assert(survivorDraftStartGuardState.before?.open && survivorDraftStartGuardState.after?.open && survivorDraftStartGuardState.after?.running && !survivorDraftStartGuardState.after?.paused && survivorDraftStartGuardState.after?.level === survivorDraftStartGuardState.before?.level && survivorDraftStartGuardState.after?.choices?.join('|') === survivorDraftStartGuardState.before?.choices?.join('|') && Math.abs(survivorDraftStartGuardState.after?.elapsed - survivorDraftStartGuardState.before?.elapsed) < 1 && survivorDraftStartGuardState.after?.startDisabled && survivorDraftStartGuardState.after?.startText === '选择' && survivorDraftStartGuardState.after?.readoutStart === '1/2/3 选择', `survivor draft should block touch/gamepad Start from restarting before an upgrade is chosen: ${JSON.stringify(survivorDraftStartGuardState)}`);
+  assert(survivorDraftStartGuardState.before?.open && survivorDraftStartGuardState.after?.open && survivorDraftStartGuardState.after?.running && !survivorDraftStartGuardState.after?.paused && survivorDraftStartGuardState.after?.level === survivorDraftStartGuardState.before?.level && survivorDraftStartGuardState.after?.choices?.join('|') === survivorDraftStartGuardState.before?.choices?.join('|') && Math.abs(survivorDraftStartGuardState.after?.elapsed - survivorDraftStartGuardState.before?.elapsed) < 1 && survivorDraftStartGuardState.after?.startDisabled && survivorDraftStartGuardState.after?.startText === '选择' && survivorDraftStartGuardState.after?.readoutStart === '1/2/3 选择' && survivorDraftStartGuardState.after?.feedback?.lastLabel === 'CHOOSE UPGRADE', `survivor draft should block touch/gamepad/panel Start from restarting before an upgrade is chosen: ${JSON.stringify(survivorDraftStartGuardState)}`);
   assert(!survivorDraftChosenState.open && survivorDraftChosenState.ariaHidden === 'true' && survivorDraftChosenState.optionCards === 0 && survivorDraftChosenState.running && !survivorDraftChosenState.paused && Number(survivorDraftChosenState.level) >= 2 && survivorDraftChosenState.score > survivorDraftOpenState.beforeScore && survivorDraftChosenState.buildText.length > 2 && survivorDraftChosenState.readoutState === 'running' && survivorDraftChosenState.readoutStateText === '运行' && survivorDraftChosenState.readoutAction === '星爆' && survivorDraftChosenState.readoutStart === 'Enter 重开' && survivorDraftChosenState.touchPause === '暂停' && !survivorDraftChosenState.touchPauseDisabled && /暂停/.test(survivorDraftChosenState.touchPauseLabel), `survivor roguelite draft should apply a chosen upgrade and restore running controls: ${JSON.stringify(survivorDraftChosenState)}`);
   assert(survivorOverdriveState.before?.overdrive >= 100 && survivorOverdriveState.before?.hud?.overdrive === 'READY' && survivorOverdriveState.after?.overdrive === 0 && survivorOverdriveState.after?.overdriveFlash > 0 && survivorOverdriveState.after?.score > survivorOverdriveState.before?.score && survivorOverdriveState.after?.slowed >= 1 && survivorOverdriveState.after?.enemies < survivorOverdriveState.before?.enemies && survivorOverdriveState.after?.chain >= survivorOverdriveState.before?.chain, `survivor overdrive should consume a full meter, slow enemies, kill targets, and score: ${JSON.stringify(survivorOverdriveState)}`);
   assert(survivorAnomalyState.started && survivorAnomalyState.nonBlank && survivorAnomalyState.state?.anomaly?.type === 'meteor' && survivorAnomalyState.state?.hazards?.length >= 3 && survivorAnomalyState.state?.hud?.event === 'METEOR' && survivorAnomalyState.eventText === 'METEOR' && survivorAnomalyState.achieved, `survivor anomaly events should create a readable deep-space crisis with hazards and achievement credit: ${JSON.stringify(survivorAnomalyState)}`);
@@ -4063,6 +4146,7 @@ async function run() {
     runnerGamepadState,
     runnerLifecycleState,
     runnerReturnEnterState,
+    premiumPanelStartState,
     runnerOverlayMachineState,
     runnerShieldState,
     runnerLockedPortalState,
@@ -4202,6 +4286,7 @@ function summarizeSmokeResult(result) {
       lockedPortalRemaining: result.runnerLockedPortalState?.remaining,
       blurAutoPaused: result.runnerLifecycleState?.paused?.paused,
       returnEnterStarts: result.runnerReturnEnterState?.running,
+      panelStartPausesRunner: result.premiumPanelStartState?.after?.runnerPaused,
       gamepadStatus: result.runnerGamepadState?.statusText
     },
     games: {

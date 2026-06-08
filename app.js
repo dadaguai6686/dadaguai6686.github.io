@@ -557,26 +557,63 @@ function init() {
   // ==========================================
   // API CALL HANDLING (TUN / PROXY SAFE RELATIVE PATHS)
   // ==========================================
+  function apiTimeoutFor(url, options = {}) {
+    if (Number.isFinite(Number(options.timeoutMs))) return Math.max(1000, Number(options.timeoutMs));
+    if (options.body instanceof FormData) return 45000;
+    const method = String(options.method || 'GET').toUpperCase();
+    return method === 'GET' ? 8000 : 15000;
+  }
+
+  function composeAbortSignal(timeoutMs, externalSignal) {
+    const controller = new AbortController();
+    let settled = false;
+    const abort = (reason) => {
+      if (settled || controller.signal.aborted) return;
+      settled = true;
+      try {
+        controller.abort(reason);
+      } catch {
+        controller.abort();
+      }
+    };
+    const timer = setTimeout(() => abort(new DOMException('API request timed out.', 'TimeoutError')), timeoutMs);
+    const cleanup = () => clearTimeout(timer);
+
+    if (externalSignal) {
+      if (externalSignal.aborted) abort(externalSignal.reason);
+      else externalSignal.addEventListener('abort', () => abort(externalSignal.reason), { once: true });
+    }
+
+    controller.signal.addEventListener('abort', cleanup, { once: true });
+    return { signal: controller.signal, cleanup };
+  }
+
   async function fetchAPI(url, options = {}) {
+    const requestOptions = { ...options };
+    const externalSignal = requestOptions.signal;
+    const timeoutMs = apiTimeoutFor(url, requestOptions);
+    delete requestOptions.timeoutMs;
     // Add bearer authorization token if admin is logged in
     const token = getAdminToken();
     if (token) {
-      options.headers = {
-        ...options.headers,
+      requestOptions.headers = {
+        ...requestOptions.headers,
         'Authorization': `Bearer ${token}`
       };
     }
     // Set headers for json bodies
-    if (options.body && typeof options.body === 'object' && !(options.body instanceof FormData)) {
-      options.headers = {
-        ...options.headers,
+    if (requestOptions.body && typeof requestOptions.body === 'object' && !(requestOptions.body instanceof FormData)) {
+      requestOptions.headers = {
+        ...requestOptions.headers,
         'Content-Type': 'application/json'
       };
-      options.body = JSON.stringify(options.body);
+      requestOptions.body = JSON.stringify(requestOptions.body);
     }
 
+    const timeout = composeAbortSignal(timeoutMs, externalSignal);
+    requestOptions.signal = timeout.signal;
     try {
-      const response = await fetch(url, options);
+      const response = await fetch(url, requestOptions);
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || `HTTP error ${response.status}`);
@@ -585,6 +622,8 @@ function init() {
     } catch (err) {
       console.warn(`API call to ${url} failed. Offline fallback in action:`, err.message);
       throw err;
+    } finally {
+      timeout.cleanup();
     }
   }
 
@@ -647,6 +686,99 @@ function init() {
     return articleRoutePath(postId);
   }
 
+  const defaultDocumentMeta = {
+    title: 'Atherix - 个人博客与数字空间',
+    description: 'Atherix的个人主页与技术博客。集成精美的Bento Dashboard、数字化工具箱（JSON格式化、图片WebP压缩、Markdown编辑器、番茄钟）以及个人项目展示与留言板。',
+    url: new URL('/', window.location.origin).href,
+    image: document.querySelector('meta[property="og:image"]')?.getAttribute('content') || new URL('/assets/atherix-og-card.png', window.location.origin).href
+  };
+
+  function stripMarkdownForMeta(value) {
+    return String(value ?? '')
+      .replace(/```[\s\S]*?```/g, ' ')
+      .replace(/!\[[^\]]*]\([^)]*\)/g, ' ')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/^#{1,6}\s+/gm, '')
+      .replace(/^>\s?/gm, '')
+      .replace(/^\s*(?:[-*]|\d+\.)\s+/gm, '')
+      .replace(/[*_`~]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function clampMetaText(value, max = 180) {
+    const text = stripMarkdownForMeta(value);
+    return text.length > max ? `${text.slice(0, Math.max(0, max - 1)).trim()}…` : text;
+  }
+
+  function setMetaContent(selector, value) {
+    const el = document.querySelector(selector);
+    if (el) el.setAttribute('content', value);
+  }
+
+  function ensureDynamicArticleMeta(property, value) {
+    if (!value) return;
+    let el = document.querySelector(`meta[property="${property}"]`);
+    if (!el) {
+      el = document.createElement('meta');
+      el.setAttribute('property', property);
+      el.dataset.dynamicArticleMeta = 'true';
+      document.head.appendChild(el);
+    }
+    el.setAttribute('content', value);
+  }
+
+  function clearDynamicArticleMeta() {
+    document.querySelectorAll('meta[data-dynamic-article-meta="true"]').forEach(el => el.remove());
+  }
+
+  function setCanonicalUrl(value) {
+    let canonical = document.querySelector('link[rel="canonical"]');
+    if (!canonical) {
+      canonical = document.createElement('link');
+      canonical.setAttribute('rel', 'canonical');
+      document.head.appendChild(canonical);
+    }
+    canonical.setAttribute('href', value);
+  }
+
+  function restoreDefaultDocumentMeta() {
+    clearDynamicArticleMeta();
+    document.title = defaultDocumentMeta.title;
+    setMetaContent('meta[name="description"]', defaultDocumentMeta.description);
+    setMetaContent('meta[property="og:title"]', defaultDocumentMeta.title);
+    setMetaContent('meta[property="og:description"]', '一个集个人博客、开发者工具箱、项目展示与互动游戏于一体的原生 Web 数字空间。');
+    setMetaContent('meta[property="og:type"]', 'website');
+    setMetaContent('meta[property="og:url"]', defaultDocumentMeta.url);
+    setMetaContent('meta[property="og:image"]', defaultDocumentMeta.image);
+    setMetaContent('meta[property="og:image:secure_url"]', defaultDocumentMeta.image);
+    setMetaContent('meta[name="twitter:title"]', defaultDocumentMeta.title);
+    setMetaContent('meta[name="twitter:description"]', '个人博客、开发者工具箱、项目展示与互动街机游戏组成的原生 Web 数字空间。');
+    setMetaContent('meta[name="twitter:image"]', defaultDocumentMeta.image);
+    setCanonicalUrl(defaultDocumentMeta.url);
+  }
+
+  function updateArticleDocumentMeta(post) {
+    const title = `${clampMetaText(post?.title || '文章', 90)} - Atherix`;
+    const description = clampMetaText(post?.excerpt || post?.content || defaultDocumentMeta.description, 180);
+    const url = new URL(articleHref(post?.id || ''), window.location.origin).href;
+    document.title = title;
+    setMetaContent('meta[name="description"]', description);
+    setMetaContent('meta[property="og:title"]', title);
+    setMetaContent('meta[property="og:description"]', description);
+    setMetaContent('meta[property="og:type"]', 'article');
+    setMetaContent('meta[property="og:url"]', url);
+    setMetaContent('meta[property="og:image"]', defaultDocumentMeta.image);
+    setMetaContent('meta[property="og:image:secure_url"]', defaultDocumentMeta.image);
+    setMetaContent('meta[name="twitter:title"]', title);
+    setMetaContent('meta[name="twitter:description"]', description);
+    setMetaContent('meta[name="twitter:image"]', defaultDocumentMeta.image);
+    setCanonicalUrl(url);
+    clearDynamicArticleMeta();
+    ensureDynamicArticleMeta('article:published_time', post?.date || '');
+    ensureDynamicArticleMeta('article:tag', post?.tag || '');
+  }
+
   function shouldUseNativeLinkBehavior(event) {
     return event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
   }
@@ -682,7 +814,7 @@ function init() {
     currentRoute = targetId;
     if (targetId !== 'blog-reader') currentPostId = '';
     if (targetId !== 'blog-reader') {
-      document.title = 'Atherix - 个人博客与数字空间';
+      restoreDefaultDocumentMeta();
     }
     const activeNavTarget = targetId === 'blog-reader' ? 'blog' : targetId;
     navItems.forEach(item => {
@@ -2236,7 +2368,7 @@ function init() {
       readerTitle.setAttribute('tabindex', '-1');
     }
     readerContentEl.innerHTML = renderMarkdown(post.content || '');
-    document.title = `${post.title || '文章'} - Atherix`;
+    updateArticleDocumentMeta(post);
     currentPostId = post.id;
     buildReaderToc(post.id);
     updateReaderBookmarkState();
@@ -2332,7 +2464,7 @@ function init() {
     readerBackBtn.addEventListener('click', () => {
       if (blogReaderCard) blogReaderCard.classList.remove('active');
       if (readerNextPanel) readerNextPanel.hidden = true;
-      document.title = 'Atherix - 个人博客与数字空间';
+      restoreDefaultDocumentMeta();
       navigateTo('blog');
       renderBlogList();
     });
@@ -7807,6 +7939,12 @@ function init() {
       return true;
     }
 
+    function startPremiumModeFromPanel(mode) {
+      if (mode && premiumActive !== mode) switchPremiumGame(mode);
+      focusStage();
+      return startPremiumActiveGame();
+    }
+
     function togglePremiumActivePause() {
       let changed = false;
       if (premiumActive === 'survivor' && survivor.running) changed = toggleSurvivorPause();
@@ -9531,10 +9669,7 @@ function init() {
       return survivorDebugState();
     }
 
-    document.getElementById('premium-survivor-start').addEventListener('click', () => {
-      startSurvivor();
-      triggerPremiumFeedback('start', { label: 'START SURVIVOR' });
-    });
+    document.getElementById('premium-survivor-start').addEventListener('click', () => startPremiumModeFromPanel('survivor'));
     document.getElementById('premium-survivor-pause').addEventListener('click', () => {
       if (toggleSurvivorPause()) triggerPremiumFeedback('pause', { label: 'PAUSE SURVIVOR' });
     });
@@ -10402,10 +10537,7 @@ function init() {
       ctx.fillText(`PHASE ${b.phase}  SHIELD ${bossShieldLabel()}  GRAZE ${p.graze}  FOCUS ${p.focusSurge > 0 ? 'SURGE' : Math.round(Number(p.focus || 0)) + '%'}  BREAK ${bossMode.breakCount}  COUNTER ${bossMode.counterWindow > 0 ? `${bossMode.breakChain}x` : '0x'}`, 18, 42);
     }
 
-    document.getElementById('premium-boss-start').addEventListener('click', () => {
-      startBoss();
-      triggerPremiumFeedback('start', { label: 'START BOSS' });
-    });
+    document.getElementById('premium-boss-start').addEventListener('click', () => startPremiumModeFromPanel('boss'));
     document.getElementById('premium-boss-pause').addEventListener('click', () => {
       if (toggleBossPause()) triggerPremiumFeedback('pause', { label: 'PAUSE BOSS' });
     });
@@ -11229,10 +11361,7 @@ function init() {
       });
     }
 
-    document.getElementById('premium-drift-start').addEventListener('click', () => {
-      startDrift();
-      triggerPremiumFeedback('start', { label: 'START DRIFT' });
-    });
+    document.getElementById('premium-drift-start').addEventListener('click', () => startPremiumModeFromPanel('drift'));
     document.getElementById('premium-drift-pause').addEventListener('click', () => {
       if (toggleDriftPause()) triggerPremiumFeedback('pause', { label: 'PAUSE DRIFT' });
     });
@@ -12174,10 +12303,7 @@ function init() {
       if (heist.locked) overlay(ctx, c.width, c.height, 'LOCKDOWN', `${heist.lockdownReason || '安防封锁'} · 战报已保存，点击生成任务重试`);
     }
 
-    document.getElementById('premium-heist-new').addEventListener('click', () => {
-      newHeist();
-      triggerPremiumFeedback('start', { label: 'START HEIST' });
-    });
+    document.getElementById('premium-heist-new').addEventListener('click', () => startPremiumModeFromPanel('heist'));
     newHeist({ shouldFocus: false });
 
     const chain = {
@@ -13041,10 +13167,7 @@ function init() {
       if (premiumActive === 'chain') updatePremiumMetaControls();
     }
 
-    document.getElementById('premium-chain-new').addEventListener('click', () => {
-      newChain();
-      triggerPremiumFeedback('start', { label: 'START CHAIN' });
-    });
+    document.getElementById('premium-chain-new').addEventListener('click', () => startPremiumModeFromPanel('chain'));
     document.getElementById('premium-chain-catalyst').addEventListener('click', triggerChainCatalyst);
     newChain({ shouldFocus: false });
 
@@ -13980,10 +14103,7 @@ function init() {
       if (tactics.lost) overlay(ctx, c.width, c.height, 'MECH DOWN', '点击开始行动重开战术任务');
     }
 
-    document.getElementById('premium-tactics-start').addEventListener('click', () => {
-      newTactics({ shouldFocus: true });
-      triggerPremiumFeedback('start', { label: 'START TACTICS' });
-    });
+    document.getElementById('premium-tactics-start').addEventListener('click', () => startPremiumModeFromPanel('tactics'));
     document.getElementById('premium-tactics-action').addEventListener('click', () => {
       focusStage();
       triggerTacticsAction();
@@ -14788,6 +14908,10 @@ function init() {
     window.addEventListener('blur', () => {
       clearPremiumKeys();
       pauseAllPremiumRealtimeGames('blur');
+    });
+    window.addEventListener('pagehide', () => {
+      clearPremiumKeys();
+      pauseAllPremiumRealtimeGames('pagehide');
     });
   })();
 
@@ -16907,6 +17031,10 @@ function init() {
 
   window.addEventListener('blur', () => {
     pauseRunnerForLifecycle('blur');
+  });
+  window.addEventListener('pagehide', () => {
+    releaseAllRunnerTouchControls();
+    pauseRunnerForLifecycle('pagehide');
   });
 
   function triggerPlayerJump() {

@@ -17,6 +17,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 const publicSiteUrl = (process.env.PUBLIC_SITE_URL || 'https://dadaguai6686.github.io').replace(/\/+$/, '');
+const defaultPageTitle = 'Atherix - 个人博客与数字空间';
+const defaultPageDescription = 'Atherix的个人主页与技术博客。集成精美的Bento Dashboard、数字化工具箱（JSON格式化、图片WebP压缩、Markdown编辑器、番茄钟）以及个人项目展示与留言板。';
+const defaultOgImageUrl = `${publicSiteUrl}/assets/atherix-og-card.png`;
 const trustProxy = process.env.TRUST_PROXY || '';
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .split(',')
@@ -298,6 +301,10 @@ function sendApiError(res, status, message) {
   return res.status(status).json({ error: message });
 }
 
+function isSqliteConstraintError(err) {
+  return err?.code === 'SQLITE_CONSTRAINT' || /SQLITE_CONSTRAINT/i.test(err?.message || '');
+}
+
 function escapeXml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -305,6 +312,48 @@ function escapeXml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
+}
+
+function stripMarkdownText(value) {
+  return String(value ?? '')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/!\[[^\]]*]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^>\s?/gm, '')
+    .replace(/^\s*(?:[-*]|\d+\.)\s+/gm, '')
+    .replace(/[*_`~]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function truncateMetaText(value, max = 180) {
+  const text = stripMarkdownText(value);
+  if (text.length <= max) return text;
+  return `${text.slice(0, Math.max(0, max - 1)).trim()}…`;
+}
+
+function replaceHtmlTagContent(html, tagName, value) {
+  const safeValue = escapeXml(value);
+  return html.replace(new RegExp(`<${tagName}>[\\s\\S]*?<\\/${tagName}>`, 'i'), `<${tagName}>${safeValue}</${tagName}>`);
+}
+
+function replaceMetaContent(html, attrName, attrValue, value) {
+  const safeAttr = escapeXml(value);
+  const pattern = new RegExp(`(<meta\\s+${attrName}="${attrValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\s+content=")[^"]*("\\s*>)`, 'i');
+  return html.replace(pattern, `$1${safeAttr}$2`);
+}
+
+function replaceCanonicalHref(html, value) {
+  return html.replace(/(<link\s+rel="canonical"\s+href=")[^"]*("\s*>)/i, `$1${escapeXml(value)}$2`);
+}
+
+function appendArticleMeta(html, post, url) {
+  const extras = [
+    post?.date ? `<meta property="article:published_time" content="${escapeXml(post.date)}">` : '',
+    post?.tag ? `<meta property="article:tag" content="${escapeXml(post.tag)}">` : ''
+  ].filter(Boolean).join('\n  ');
+  return extras ? html.replace('</head>', `  ${extras}\n</head>`) : html;
 }
 
 function publicArticleUrl(postId = '') {
@@ -381,6 +430,47 @@ function renderSitemapXml(posts) {
 ${articleUrls}
 </urlset>
 `;
+}
+
+function renderIndexHtmlWithArticleMeta(post) {
+  const template = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+  const title = `${truncateMetaText(post?.title || '文章', 90)} - Atherix`;
+  const description = truncateMetaText(post?.excerpt || post?.content || defaultPageDescription, 180);
+  const url = publicArticleUrl(post?.id || '');
+  let html = template;
+  html = replaceHtmlTagContent(html, 'title', title);
+  html = replaceMetaContent(html, 'name', 'description', description);
+  html = replaceMetaContent(html, 'property', 'og:title', title);
+  html = replaceMetaContent(html, 'property', 'og:description', description);
+  html = replaceMetaContent(html, 'property', 'og:type', 'article');
+  html = replaceMetaContent(html, 'property', 'og:url', url);
+  html = replaceMetaContent(html, 'property', 'og:image', defaultOgImageUrl);
+  html = replaceMetaContent(html, 'property', 'og:image:secure_url', defaultOgImageUrl);
+  html = replaceMetaContent(html, 'name', 'twitter:title', title);
+  html = replaceMetaContent(html, 'name', 'twitter:description', description);
+  html = replaceMetaContent(html, 'name', 'twitter:image', defaultOgImageUrl);
+  html = replaceCanonicalHref(html, url);
+  return appendArticleMeta(html, post, url);
+}
+
+function sendArticleIndexHtml(req, res, next) {
+  const postId = String(req.query.post || '').trim();
+  if (!postId) return next();
+  if (!/^[A-Za-z0-9_-]{1,80}$/.test(postId)) return next();
+  db.get('SELECT id, title, excerpt, content, tag, date, readTime, pinned FROM posts WHERE id = ?', [postId], (err, post) => {
+    if (err || !post) {
+      if (err) console.warn('[article-meta]', err.message);
+      return next();
+    }
+    try {
+      res.type('html');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.send(renderIndexHtmlWithArticleMeta(post));
+    } catch (renderErr) {
+      console.warn('[article-meta]', renderErr.message);
+      next();
+    }
+  });
 }
 
 // Enable CORS, baseline hardening & JSON Parsing middleware
@@ -548,6 +638,8 @@ app.get('/sitemap.xml', (req, res) => {
   });
 });
 
+app.get(['/', '/index.html'], sendArticleIndexHtml);
+
 app.use('/uploads', guardStaticUpload, express.static(uploadDir, {
   maxAge: '7d',
   immutable: false,
@@ -670,6 +762,9 @@ app.post('/api/posts', authenticateToken, writeLimiter, (req, res) => {
     [postId, title, excerpt, content, tag, postDate, readTime, postPinned],
     function(err) {
       if (err) {
+        if (isSqliteConstraintError(err)) {
+          return sendApiError(res, 409, 'Post id already exists.');
+        }
         return sendDatabaseError(res, err);
       }
       res.json({ success: true, postId });
@@ -765,6 +860,9 @@ app.post('/api/projects', authenticateToken, writeLimiter, (req, res) => {
     [projId, title, desc, tag, tagsStr, img, pain, solution, github, live],
     function(err) {
       if (err) {
+        if (isSqliteConstraintError(err)) {
+          return sendApiError(res, 409, 'Project id already exists.');
+        }
         return sendDatabaseError(res, err);
       }
       res.json({ success: true, projId });

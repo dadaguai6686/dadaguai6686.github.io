@@ -223,9 +223,11 @@ async function run() {
     assert(serviceWorkerText.includes('/feed.xml') && serviceWorkerText.includes('/sitemap.xml'), 'service worker should precache discovery metadata');
     assert(serviceWorkerText.includes('/assets/atherix-og-card.png') && serviceWorkerText.includes('/assets/atherix-icon-512.png'), 'service worker should precache branded PWA assets');
     assert(serviceWorkerText.includes('/assets/atherix-profile-avatar.png') && serviceWorkerText.includes('/assets/project-bento-dashboard.webp') && serviceWorkerText.includes('/assets/project-arcade-suite.webp'), 'service worker should precache local profile and portfolio visual assets');
-    assert(serviceWorkerText.includes('atherix-static-v62-quality'), 'service worker should use the latest quality cache version');
+    assert(serviceWorkerText.includes('atherix-static-v63-quality'), 'service worker should use the latest quality cache version');
+    assert(serviceWorkerText.includes('APP_SHELL_ASSETS') && serviceWorkerText.includes('OPTIONAL_STATIC_ASSETS') && serviceWorkerText.includes('Promise.allSettled'), 'service worker install should keep optional assets from breaking the critical app shell cache');
+    assert(serviceWorkerText.includes('canRefreshNavigationShell') && serviceWorkerText.includes('!url.search'), 'service worker should avoid caching article deep-link responses as the generic app shell');
     assert(serviceWorkerText.includes('NAVIGATION_FALLBACK_URL') && serviceWorkerText.includes('navigationPreload') && serviceWorkerText.includes('X-Atherix-Offline-Shell'), 'service worker should provide a navigation-preload offline app shell');
-    assert(serviceWorkerText.includes('/style.css?v=20260608-quality-v8') && serviceWorkerText.includes('/app.js?v=20260608-quality-v20'), 'service worker should precache the latest versioned app assets');
+    assert(serviceWorkerText.includes('/style.css?v=20260608-quality-v8') && serviceWorkerText.includes('/app.js?v=20260608-quality-v21'), 'service worker should precache the latest versioned app assets');
     assert(serviceWorkerText.includes('networkFirstCacheFallback') && serviceWorkerText.includes('staleWhileRevalidate') && serviceWorkerText.includes('offlineResponseFor') && serviceWorkerText.includes('cacheResponseQuietly'), 'service worker should use explicit offline-safe caching strategies');
     assert(serviceWorkerText.includes('DISCOVERY_ASSET_PATHS') && serviceWorkerText.includes('/feed.xml') && serviceWorkerText.includes('/sitemap.xml') && serviceWorkerText.includes('/robots.txt'), 'service worker should keep discovery metadata network-first before cache fallback');
     assert(serviceWorkerText.includes('X-Atherix-Offline-Asset') && serviceWorkerText.includes('status: 204'), 'service worker should provide a quiet offline image placeholder');
@@ -235,8 +237,8 @@ async function run() {
     assert(indexText.includes('rel="canonical" href="https://dadaguai6686.github.io/"'), 'index should expose an absolute canonical URL');
     assert(indexText.includes('type="application/rss+xml"'), 'index should link the RSS feed');
     assert(indexText.includes('href="/style.css') && indexText.includes('src="/app.js') && indexText.includes('src="/lucide.min.js"'), 'local app assets should use root-absolute URLs for deep links');
-    assert(indexText.includes('href="/style.css?v=20260608-quality-v8"') && indexText.includes('src="/app.js?v=20260608-quality-v20"'), 'index should reference the latest versioned app assets');
-    assert(indexText.includes('rel="preload" href="/style.css?v=20260608-quality-v8" as="style"') && indexText.includes('rel="preload" href="/app.js?v=20260608-quality-v20" as="script"') && indexText.includes('rel="preload" href="/lucide.min.js" as="script"'), 'index should preload critical local app assets');
+    assert(indexText.includes('href="/style.css?v=20260608-quality-v8"') && indexText.includes('src="/app.js?v=20260608-quality-v21"'), 'index should reference the latest versioned app assets');
+    assert(indexText.includes('rel="preload" href="/style.css?v=20260608-quality-v8" as="style"') && indexText.includes('rel="preload" href="/app.js?v=20260608-quality-v21" as="script"') && indexText.includes('rel="preload" href="/lucide.min.js" as="script"'), 'index should preload critical local app assets');
     assert(indexText.includes('Atherix 高级街机') && indexText.includes('Premium Arcade Suite') && indexText.includes('高级街机生涯实验室'), 'index shell should present the premium arcade suite before runtime hydration');
     assert(indexText.includes('主线跑酷') && indexText.includes('霓虹漂移') && indexText.includes('裂隙战术') && indexText.includes('战术芯片'), 'index shell should advertise the full seven-line arcade career');
     assert(indexText.includes('<strong>29</strong>成就'), 'index shell should expose the current arcade achievement count');
@@ -256,6 +258,21 @@ async function run() {
     const styleSheet = await fetch(`${baseUrl}/style.css?v=20260608-quality-v8`);
     const styleText = await styleSheet.text();
     assert(styleSheet.status === 200 && styleText.includes('@media (prefers-reduced-motion: reduce)') && styleText.includes('animation: none !important') && styleText.includes('scroll-behavior: auto !important'), 'stylesheet should include a global reduced-motion safety net');
+    const appScript = await fetch(`${baseUrl}/app.js?v=20260608-quality-v21`);
+    const appScriptText = await appScript.text();
+    assert(appScript.status === 200 && appScriptText.includes('AbortController') && appScriptText.includes('apiTimeoutFor') && appScriptText.includes('timeoutMs'), 'frontend API helper should enforce request timeouts so fallback paths can run');
+
+    const articleShell = await fetch(`${baseUrl}/?post=post-1`);
+    const articleShellText = await articleShell.text();
+    assert(articleShell.status === 200 && articleShellText.includes('<title>如何构建一个极速的无框架博客？ - Atherix</title>'), 'article deep links should render an article-specific title');
+    assert(articleShellText.includes('rel="canonical" href="https://dadaguai6686.github.io/?post=post-1"'), 'article deep links should render an article canonical URL');
+    assert(articleShellText.includes('property="og:type" content="article"') && articleShellText.includes('property="og:url" content="https://dadaguai6686.github.io/?post=post-1"'), 'article deep links should render article Open Graph metadata');
+    assert(articleShellText.includes('name="twitter:title" content="如何构建一个极速的无框架博客？ - Atherix"'), 'article deep links should render article Twitter metadata');
+    assert(articleShellText.includes('property="article:published_time" content="2026-05-18"') && articleShellText.includes('property="article:tag" content="前端开发"'), 'article deep links should render article publication metadata');
+
+    const invalidArticleShell = await fetch(`${baseUrl}/?post=..%2Fserver`);
+    const invalidArticleShellText = await invalidArticleShell.text();
+    assert(invalidArticleShell.status === 200 && invalidArticleShellText.includes('<title>Atherix - 个人博客与数字空间</title>') && !invalidArticleShellText.includes('property="og:type" content="article"'), 'invalid article deep links should fall back to the default app shell');
 
     const spaRoute = await fetch(`${baseUrl}/blog/deep-link`);
     const spaRouteText = await spaRoute.text();
@@ -455,6 +472,24 @@ async function run() {
     const createdPostBody = await createdPost.json();
     assert(createdPostBody.postId === smokePostId, 'created smoke post id should be returned');
 
+    const duplicatePost = await fetch(`${baseUrl}/api/posts`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${loginBody.token}`
+      },
+      body: JSON.stringify({
+        id: smokePostId,
+        title: 'Duplicate Smoke Test Draft',
+        excerpt: 'duplicate draft',
+        content: '# Duplicate Smoke Test Draft',
+        tag: '测试',
+        readTime: '1 分钟阅读'
+      })
+    });
+    const duplicatePostBody = await duplicatePost.json();
+    assert(duplicatePost.status === 409 && /already exists/i.test(duplicatePostBody.error || ''), 'duplicate admin post ids should return 409 instead of a database 500');
+
     const createdPostList = await fetch(`${baseUrl}/api/posts`);
     const createdPostRows = await createdPostList.json();
     const createdSmokePost = createdPostRows.find(post => post.id === smokePostId);
@@ -594,6 +629,20 @@ async function run() {
       })
     });
     assert(createdProject.status === 200, 'safe local upload project image should be accepted');
+
+    const duplicateProject = await fetch(`${baseUrl}/api/projects`, {
+      method: 'POST',
+      headers: projectHeaders,
+      body: JSON.stringify({
+        id: smokeProjectId,
+        title: 'Duplicate Smoke Test Project',
+        desc: 'duplicate project',
+        img: '/uploads/safe-image.png',
+        tags: ['测试']
+      })
+    });
+    const duplicateProjectBody = await duplicateProject.json();
+    assert(duplicateProject.status === 409 && /already exists/i.test(duplicateProjectBody.error || ''), 'duplicate admin project ids should return 409 instead of a database 500');
 
     const smokeAssetProjectId = `smoke-asset-project-${Date.now()}`;
     const createdAssetProject = await fetch(`${baseUrl}/api/projects`, {

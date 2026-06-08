@@ -1,15 +1,17 @@
-const CACHE_VERSION = 'atherix-static-v62-quality';
+const CACHE_VERSION = 'atherix-static-v63-quality';
 const NAVIGATION_FALLBACK_URL = '/index.html';
 const DISCOVERY_ASSET_PATHS = new Set(['/feed.xml', '/sitemap.xml', '/robots.txt']);
-const STATIC_ASSETS = [
+const APP_SHELL_ASSETS = [
   '/',
   NAVIGATION_FALLBACK_URL,
   '/style.css?v=20260608-quality-v8',
-  '/app.js?v=20260608-quality-v20',
+  '/app.js?v=20260608-quality-v21',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',
-  '/feed.xml',
+  '/feed.xml'
+];
+const OPTIONAL_STATIC_ASSETS = [
   '/assets/atherix-icon.svg',
   '/assets/atherix-icon-192.png',
   '/assets/atherix-icon-512.png',
@@ -20,11 +22,15 @@ const STATIC_ASSETS = [
   '/assets/project-focus-synth.webp',
   '/assets/project-arcade-suite.webp'
 ];
+const STATIC_ASSETS = [...APP_SHELL_ASSETS, ...OPTIONAL_STATIC_ASSETS];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_VERSION)
-      .then(cache => cache.addAll(STATIC_ASSETS))
+      .then(async cache => {
+        await cache.addAll(APP_SHELL_ASSETS);
+        await Promise.allSettled(OPTIONAL_STATIC_ASSETS.map(asset => cache.add(asset)));
+      })
       .then(() => self.skipWaiting())
   );
 });
@@ -55,6 +61,17 @@ async function cacheResponse(cacheKey, response) {
 
 function cacheResponseQuietly(cacheKey, response) {
   return cacheResponse(cacheKey, response).catch(() => undefined);
+}
+
+function canRefreshNavigationShell(request) {
+  try {
+    const url = new URL(request.url);
+    return url.origin === self.location.origin &&
+      (url.pathname === '/' || url.pathname === NAVIGATION_FALLBACK_URL) &&
+      !url.search;
+  } catch {
+    return false;
+  }
 }
 
 function offlineResponseFor(request) {
@@ -103,10 +120,11 @@ async function staleWhileRevalidate(request) {
 }
 
 async function navigationFallback(preloadResponse, request) {
+  const canRefreshShell = canRefreshNavigationShell(request);
   try {
     const preload = await preloadResponse;
     if (preload) {
-      cacheResponseQuietly(NAVIGATION_FALLBACK_URL, preload);
+      if (canRefreshShell) cacheResponseQuietly(NAVIGATION_FALLBACK_URL, preload);
       return preload;
     }
   } catch {
@@ -115,7 +133,7 @@ async function navigationFallback(preloadResponse, request) {
 
   try {
     const response = await fetch(request);
-    cacheResponseQuietly(NAVIGATION_FALLBACK_URL, response);
+    if (canRefreshShell) cacheResponseQuietly(NAVIGATION_FALLBACK_URL, response);
     return response;
   } catch {
     const cached = await caches.match(NAVIGATION_FALLBACK_URL) || await caches.match('/');
