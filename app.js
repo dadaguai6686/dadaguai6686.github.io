@@ -2,6 +2,78 @@
 
 function init() {
   let iconRenderQueued = false;
+  const localStorage = (() => {
+    const memory = new Map();
+    let nativeStorage = null;
+    try {
+      nativeStorage = window.localStorage;
+      const probeKey = '__atherix_storage_probe__';
+      nativeStorage.setItem(probeKey, '1');
+      nativeStorage.removeItem(probeKey);
+    } catch (err) {
+      nativeStorage = null;
+      console.warn('localStorage unavailable, using in-memory fallback:', err.message);
+    }
+
+    const fallbackKeys = () => Array.from(memory.keys());
+    const api = {
+      getItem(key) {
+        try {
+          const value = nativeStorage?.getItem(key);
+          return value ?? (memory.has(key) ? memory.get(key) : null);
+        } catch {
+          return memory.has(key) ? memory.get(key) : null;
+        }
+      },
+      setItem(key, value) {
+        const normalized = String(value);
+        try {
+          if (nativeStorage) {
+            nativeStorage.setItem(key, normalized);
+            memory.delete(key);
+          } else {
+            memory.set(key, normalized);
+          }
+        } catch (err) {
+          memory.set(key, normalized);
+          console.warn(`Could not persist ${key}:`, err.message);
+        }
+      },
+      removeItem(key) {
+        memory.delete(key);
+        try {
+          nativeStorage?.removeItem(key);
+        } catch (err) {
+          console.warn(`Could not remove ${key}:`, err.message);
+        }
+      },
+      key(index) {
+        try {
+          return nativeStorage?.key(index) ?? fallbackKeys()[index] ?? null;
+        } catch {
+          return fallbackKeys()[index] ?? null;
+        }
+      },
+      clear() {
+        memory.clear();
+        try {
+          nativeStorage?.clear();
+        } catch (err) {
+          console.warn('Could not clear localStorage:', err.message);
+        }
+      }
+    };
+    Object.defineProperty(api, 'length', {
+      get() {
+        try {
+          return nativeStorage?.length ?? memory.size;
+        } catch {
+          return memory.size;
+        }
+      }
+    });
+    return api;
+  })();
 
   // Safe helper to create icons without throwing ReferenceError
   function normalizeButtonTypes(scope = document) {
@@ -506,6 +578,10 @@ function init() {
     return articleRoutePath(postId);
   }
 
+  function shouldUseNativeLinkBehavior(event) {
+    return event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
+  }
+
   function syncLocationHash(targetId, postId = '') {
     if (suppressHashSync) return;
     const nextUrl = new URL(window.location.href);
@@ -532,6 +608,7 @@ function init() {
 
   function navigateTo(targetId, options = {}) {
     const version = ++navigationVersion;
+    const previousRoute = currentRoute;
     closeAllProjectModals({ restoreFocus: false });
     currentRoute = targetId;
     if (targetId !== 'blog-reader') currentPostId = '';
@@ -577,6 +654,12 @@ function init() {
         clearRunnerPauseState();
       }
       releaseArcadeButtonFocus();
+    } else if (runnerEngineReady) {
+      if (previousRoute === 'game' && (gameRunning || gamePaused)) {
+        drawGame();
+      } else {
+        prepareRunnerIdleScreen();
+      }
     } else {
       initLevelData();
       drawGame();
@@ -1556,7 +1639,7 @@ function init() {
   async function loadBlogPosts() {
     try {
       const data = await fetchAPI('/api/posts');
-      blogPosts = data;
+      blogPosts = Array.isArray(data) ? data.filter(Boolean) : defaultMockPosts;
     } catch (e) {
       // Fallback
       blogPosts = getLocalArray('fallback_posts', defaultMockPosts);
@@ -2185,6 +2268,13 @@ function init() {
     }
     if (!rawHash) return;
 
+    if (rawHash === 'blog-reader') {
+      showToast('请先选择一篇文章，已返回博客列表', 'info');
+      window.history.replaceState(null, '', '/#blog');
+      navigateTo('blog', { skipHash: true });
+      return;
+    }
+
     if (rawHash.startsWith('post/')) {
       const postId = rawHash.slice(5);
       if (postId) {
@@ -2296,7 +2386,13 @@ function init() {
       card.addEventListener('click', (e) => {
         if (e.target.closest('.card-admin-btn')) return;
         const postLink = e.target.closest('[data-post-link]');
-        if (postLink) e.preventDefault();
+        if (postLink) {
+          if (shouldUseNativeLinkBehavior(e)) return;
+          e.preventDefault();
+          readArticle(post.id);
+          return;
+        }
+        if (shouldUseNativeLinkBehavior(e)) return;
         readArticle(post.id);
       });
 
@@ -2331,6 +2427,7 @@ function init() {
         <span class="pinned-date">${escapeHTML(post.date || '')}</span>
       `;
       div.querySelector('[data-pinned-post-link]')?.addEventListener('click', (event) => {
+        if (shouldUseNativeLinkBehavior(event)) return;
         event.preventDefault();
         readArticle(post.id);
       });
@@ -5252,11 +5349,23 @@ function init() {
       touch: {},
       gamepad: {}
     };
+    const activePremiumTouchPointers = new Map();
+    const neutralPremiumGamepadPrevious = () => ({ up: false, down: false, left: false, right: false, action: false, tool: false, start: false, pause: false });
+    const premiumGamepadPreviousFromSnapshot = (snapshot = {}) => ({
+      up: !!snapshot.up,
+      down: !!snapshot.down,
+      left: !!snapshot.left,
+      right: !!snapshot.right,
+      action: !!snapshot.action,
+      tool: !!snapshot.tool,
+      start: !!snapshot.start,
+      pause: !!snapshot.pause
+    });
     const premiumGamepadState = {
       connected: false,
       active: false,
       name: '',
-      previous: { up: false, down: false, left: false, right: false, action: false, tool: false, start: false, pause: false },
+      previous: neutralPremiumGamepadPrevious(),
       lastSeen: 0
     };
     const premiumFeedbackKey = 'atherix_premium_arcade_feedback_muted';
@@ -5291,6 +5400,7 @@ function init() {
       move: { label: 'MOVE', freq: 280, end: 340, color: '#94A3B8', pattern: [5] }
     };
     let premiumActive = 'survivor';
+    let premiumInputArmed = false;
     const titles = {
       survivor: '星核幸存者 Starcore Survivor',
       boss: '棱镜 Boss Rush',
@@ -7151,7 +7261,26 @@ function init() {
       }
     });
 
+    function setPremiumInputArmed(armed = true) {
+      premiumInputArmed = !!armed;
+      window.__atherixPremiumInputArmed = premiumInputArmed;
+    }
+
+    function isPremiumArcadeInputContext(target = document.activeElement) {
+      if (!isGameSectionActive()) return false;
+      const active = document.activeElement;
+      const selector = '.arcade-library, #premium-game-stage, #premium-survivor-draft';
+      return !!(
+        premiumInputArmed ||
+        active?.closest?.(selector) ||
+        target?.closest?.(selector)
+      );
+    }
+
+    window.__atherixSetPremiumInputArmed = setPremiumInputArmed;
+
     function focusStage() {
+      setPremiumInputArmed(true);
       if (stage) stage.focus({ preventScroll: true });
     }
 
@@ -7171,12 +7300,16 @@ function init() {
       return changed;
     }
 
-    function clearPremiumKeys() {
+    function clearPremiumKeys(options = {}) {
       Object.values(premiumInputSources).forEach(source => {
         premiumControlNames.forEach(control => {
           source[control] = false;
         });
       });
+      activePremiumTouchPointers.clear();
+      if (options.gamepadPrevious !== false) {
+        premiumGamepadState.previous = neutralPremiumGamepadPrevious();
+      }
       syncPremiumKeys();
     }
 
@@ -7398,6 +7531,15 @@ function init() {
     stage?.addEventListener('mousedown', armPremiumFeedbackDevices, { capture: true, passive: true });
     stage?.addEventListener('touchstart', armPremiumFeedbackDevices, { capture: true, passive: true });
     stage?.addEventListener('keydown', armPremiumFeedbackDevices, { capture: true });
+    library.addEventListener('focusin', () => setPremiumInputArmed(true));
+    library.addEventListener('pointerdown', () => setPremiumInputArmed(true), { capture: true, passive: true });
+    document.getElementById('game')?.addEventListener('pointerdown', (event) => {
+      if (event.target?.closest?.('.arcade-library, #premium-survivor-draft')) {
+        setPremiumInputArmed(true);
+      } else {
+        setPremiumInputArmed(false);
+      }
+    }, { capture: true, passive: true });
 
     library.querySelectorAll('[data-premium-game]').forEach(btn => {
       btn.addEventListener('click', () => switchPremiumGame(btn.dataset.premiumGame));
@@ -7444,7 +7586,6 @@ function init() {
       }
     }
 
-    const activePremiumTouchPointers = new Map();
     library.querySelectorAll('[data-premium-control]').forEach(btn => {
       const control = btn.dataset.premiumControl;
       const press = (event) => {
@@ -7501,29 +7642,36 @@ function init() {
       };
     }
 
-    function releasePremiumGamepadSnapshot(snapshot) {
+    function releasePremiumGamepadSnapshot(snapshot, options = {}) {
+      const connected = !!snapshot && snapshot.connected !== false;
       clearPremiumGamepadKeys();
       premiumGamepadState.active = false;
-      premiumGamepadState.connected = !!snapshot?.connected;
+      premiumGamepadState.connected = !!connected;
       premiumGamepadState.name = snapshot?.name || premiumGamepadState.name || '';
-      premiumGamepadState.previous = { up: false, down: false, left: false, right: false, action: false, tool: false, start: false, pause: false };
-      if (premiumGamepadState.connected && isGameSectionActive()) {
-        setPremiumGamepadStatus('PAD 聚焦街机', 'focus');
+      premiumGamepadState.previous = connected && options.preservePrevious
+        ? premiumGamepadPreviousFromSnapshot(snapshot)
+        : neutralPremiumGamepadPrevious();
+      if (premiumGamepadState.connected && isPremiumArcadeInputContext()) {
+        setPremiumGamepadStatus('PAD 街机待命', 'focus');
+      } else if (premiumGamepadState.connected && isGameSectionActive()) {
+        setPremiumGamepadStatus('PAD 主线待命', 'ready');
       } else {
         setPremiumGamepadStatus('PAD 待机', 'idle');
       }
     }
 
     function applyPremiumGamepadSnapshot(snapshot = {}, options = {}) {
-      const connected = snapshot && snapshot.connected !== false;
+      const connected = !!snapshot && snapshot.connected !== false;
       const focused = !!document.activeElement?.closest?.('#premium-game-stage');
-      const canControl = !!options.force || (connected && isGameSectionActive() && focused);
+      const context = isPremiumArcadeInputContext();
+      const canControl = !!options.force || (connected && context);
       if (!connected || !canControl) {
-        releasePremiumGamepadSnapshot(snapshot);
+        releasePremiumGamepadSnapshot(snapshot, { preservePrevious: connected });
         return {
           connected,
           active: false,
           focused,
+          context,
           status: document.getElementById('premium-gamepad-status')?.textContent || ''
         };
       }
@@ -7532,6 +7680,11 @@ function init() {
       premiumGamepadState.active = true;
       premiumGamepadState.name = snapshot.name || 'Gamepad';
       premiumGamepadState.lastSeen = Date.now();
+      const hasInput = premiumControlNames.some(control => !!snapshot[control]) || !!snapshot.start || !!snapshot.pause;
+      if (hasInput) {
+        setPremiumInputArmed(true);
+        if (!survivor.draftOpen) focusStage();
+      }
 
       premiumControlNames.forEach(control => {
         applyPremiumControl(control, !!snapshot[control], 'gamepad', { edgeOnly: true });
@@ -7545,21 +7698,13 @@ function init() {
       }
 
       const held = premiumControlNames.filter(control => !!snapshot[control]);
-      premiumGamepadState.previous = {
-        up: !!snapshot.up,
-        down: !!snapshot.down,
-        left: !!snapshot.left,
-        right: !!snapshot.right,
-        action: !!snapshot.action,
-        tool: !!snapshot.tool,
-        start: !!snapshot.start,
-        pause: !!snapshot.pause
-      };
+      premiumGamepadState.previous = premiumGamepadPreviousFromSnapshot(snapshot);
       setPremiumGamepadStatus(held.length ? `PAD ${held.join('+').toUpperCase()}` : 'PAD 就绪', held.length ? 'active' : 'ready');
       return {
         connected: true,
         active: true,
         focused,
+        context,
         name: premiumGamepadState.name,
         held,
         status: document.getElementById('premium-gamepad-status')?.textContent || ''
@@ -13385,9 +13530,12 @@ function init() {
             active: premiumGamepadState.active,
             name: premiumGamepadState.name,
             keys: { ...premiumKeys },
+            previous: { ...premiumGamepadState.previous },
+            inputArmed: !!premiumInputArmed,
             status: document.getElementById('premium-gamepad-status')?.textContent || ''
           }),
           simulateGamepad: (snapshot = {}) => applyPremiumGamepadSnapshot({ connected: true, name: 'Smoke Pad', ...snapshot }, { force: true }),
+          simulateGamepadUnforced: (snapshot = {}) => applyPremiumGamepadSnapshot({ connected: true, name: 'Smoke Pad', ...snapshot }),
           feedback: () => ({
             muted: premiumFeedback.muted,
             total: premiumFeedback.total,
@@ -13444,7 +13592,8 @@ function init() {
         updateDriftPauseButton();
         paused.push('drift');
       }
-      if (paused.length) clearPremiumKeys();
+      updatePremiumMetaControls();
+      if (paused.length || reason === 'hidden' || reason === 'blur' || reason === 'navigate') clearPremiumKeys();
       return { reason, paused, active: premiumActive };
     }
 
@@ -13454,11 +13603,11 @@ function init() {
     });
 
     window.addEventListener('keydown', (e) => {
-      const premiumFocusRoot = document.activeElement?.closest?.('#premium-game-stage, #premium-survivor-draft');
-      if (!isGameSectionActive() || isEditableTarget(e.target) || !premiumFocusRoot) return;
       const codes = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyQ', 'KeyP', 'Escape', 'Digit1', 'Digit2', 'Digit3'];
       if (!codes.includes(e.code)) return;
+      if (isEditableTarget(e.target) || !isPremiumArcadeInputContext(e.target)) return;
       e.preventDefault();
+      setPremiumInputArmed(true);
       const discreteCodes = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyQ'];
       if (e.repeat && ['heist', 'tactics', 'chain'].includes(premiumActive) && discreteCodes.includes(e.code)) return;
       if (premiumActive === 'survivor' && survivor.draftOpen) {
@@ -13475,6 +13624,7 @@ function init() {
         if (changed) triggerPremiumFeedback('pause', { label: `PAUSE ${premiumTabLabels[premiumActive] || premiumActive}` });
         return;
       }
+      if (!survivor.draftOpen) focusStage();
       if (e.code === 'ArrowUp' || e.code === 'KeyW') applyPremiumControl('up', true, 'keyboard');
       if (e.code === 'ArrowDown' || e.code === 'KeyS') applyPremiumControl('down', true, 'keyboard');
       if (e.code === 'ArrowLeft' || e.code === 'KeyA') applyPremiumControl('left', true, 'keyboard');
@@ -13484,6 +13634,10 @@ function init() {
     });
 
     window.addEventListener('keyup', (e) => {
+      const releaseCodes = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyQ'];
+      const hadKeyboardInput = premiumControlNames.some(control => !!premiumInputSources.keyboard[control]);
+      if (!releaseCodes.includes(e.code) || (isEditableTarget(e.target) && !hadKeyboardInput) || (!isPremiumArcadeInputContext(e.target) && !hadKeyboardInput)) return;
+      e.preventDefault();
       if (e.code === 'ArrowUp' || e.code === 'KeyW') applyPremiumControl('up', false, 'keyboard');
       if (e.code === 'ArrowDown' || e.code === 'KeyS') applyPremiumControl('down', false, 'keyboard');
       if (e.code === 'ArrowLeft' || e.code === 'KeyA') applyPremiumControl('left', false, 'keyboard');
@@ -13814,11 +13968,12 @@ function init() {
 
   function isMiniGameFocus() {
     const active = document.activeElement;
-    return !!(active && active.closest && active.closest('.arcade-library'));
+    return !!window.__atherixPremiumInputArmed || !!(active && active.closest && active.closest('.arcade-library, #premium-survivor-draft'));
   }
 
   document.getElementById('game')?.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('.arcade-library')) return;
+    window.__atherixSetPremiumInputArmed?.(!!e.target.closest('.arcade-library, #premium-survivor-draft'));
+    if (e.target.closest('.arcade-library, #premium-survivor-draft')) return;
     if (isMiniGameFocus()) {
       document.activeElement.blur();
     }
@@ -13863,6 +14018,41 @@ function init() {
     gamePauseOverlay.setAttribute('aria-hidden', visible ? 'false' : 'true');
   }
 
+  function showRunnerStartOverlay() {
+    if (!gameOverlay) return;
+    const title = document.getElementById('game-overlay-title');
+    const subtitle = document.getElementById('game-overlay-subtitle');
+    if (title) {
+      title.textContent = runnerStartTitle;
+      title.style.color = '#fff';
+      title.style.textShadow = '0 0 15px var(--accent)';
+    }
+    if (subtitle) subtitle.textContent = runnerStartSubtitle;
+    gameOverlay.style.display = 'flex';
+  }
+
+  function prepareRunnerIdleScreen() {
+    gameRunning = false;
+    cancelAnimationFrame(gameLoopId);
+    cancelAnimationFrame(deathAnimationId);
+    stopMusic();
+    resetGameKeyState();
+    clearRunnerPauseState();
+    initLevelData();
+    drawGame();
+    showRunnerStartOverlay();
+  }
+
+  function restoreRunnerPauseFocus() {
+    const target = runnerPauseFocusOrigin;
+    runnerPauseFocusOrigin = null;
+    if (target && document.contains(target) && typeof target.focus === 'function') {
+      setTimeout(() => target.focus({ preventScroll: true }), 0);
+    } else {
+      releaseArcadeButtonFocus();
+    }
+  }
+
   function updateRunnerPauseMuteLabel() {
     if (!gamePauseMuteBtn) return;
     const label = gamePauseMuteBtn.querySelector('span');
@@ -13884,12 +14074,14 @@ function init() {
     gamePaused = false;
     gameElapsedBeforePause = 0;
     gamePauseStartedAt = 0;
+    runnerPauseFocusOrigin = null;
     setPauseOverlayVisible(false);
     setRunnerTouchButtonState(btnPauseLed, false);
   };
 
   function pauseRunnerGame() {
     if (!gameRunning || gamePaused) return false;
+    runnerPauseFocusOrigin = document.activeElement;
     gameElapsedBeforePause = getRunnerElapsedMs();
     gamePauseStartedAt = Date.now();
     gamePaused = true;
@@ -13901,7 +14093,7 @@ function init() {
     setGameStatus('PAUSED', '#F59E0B', 0);
     updateRunnerPauseMuteLabel();
     setPauseOverlayVisible(true);
-    releaseArcadeButtonFocus();
+    setTimeout(() => gamePauseResumeBtn?.focus({ preventScroll: true }), 0);
     return true;
   }
 
@@ -13917,7 +14109,7 @@ function init() {
     setRunnerTouchButtonState(btnPauseLed, false);
     setGameStatus(player.dashReady ? 'READY' : 'DASH CD', player.dashReady ? '#8B5CF6' : '#64748B', 0);
     if (musicSelect && musicSelect.value !== 'mute') startMusic();
-    releaseArcadeButtonFocus();
+    restoreRunnerPauseFocus();
     updateGame();
     return true;
   }
@@ -14795,6 +14987,7 @@ function init() {
         connected: runnerGamepadState.connected,
         active: runnerGamepadState.active,
         name: runnerGamepadState.name,
+        previous: { ...runnerGamepadState.previous },
         keys: {
           left: !!gameKeys.GamepadLeft,
           right: !!gameKeys.GamepadRight
@@ -14868,15 +15061,28 @@ function init() {
 
   const gameKeys = {};
   const overlayActionCodes = ['Enter'];
+  const runnerStartTitle = 'CYBER ASTRO-RUNNER';
+  const runnerStartSubtitle = '按 [Enter] 或 点击此处 开始挑战关卡；Space 仅用于跳跃';
+  const neutralRunnerGamepadPrevious = () => ({ left: false, right: false, jump: false, dash: false, start: false, pause: false, bgm: false });
+  const runnerGamepadPreviousFromSnapshot = (snapshot = {}) => ({
+    left: !!snapshot.left,
+    right: !!snapshot.right,
+    jump: !!snapshot.jump,
+    dash: !!snapshot.dash,
+    start: !!snapshot.start,
+    pause: !!snapshot.pause,
+    bgm: !!snapshot.bgm
+  });
   const runnerGamepadState = {
     connected: false,
     active: false,
     name: '',
-    previous: { left: false, right: false, jump: false, dash: false, start: false, pause: false, bgm: false },
+    previous: neutralRunnerGamepadPrevious(),
     lastSeen: 0,
     debugSnapshot: null,
     debugUntil: 0
   };
+  let runnerPauseFocusOrigin = null;
   const runnerTouchMap = {
     left: 'ArrowLeft',
     right: 'ArrowRight'
@@ -14946,17 +15152,20 @@ function init() {
     };
   }
 
-  function releaseRunnerGamepadSnapshot(snapshot = {}) {
+  function releaseRunnerGamepadSnapshot(snapshot = {}, options = {}) {
+    const connected = !!snapshot && snapshot.connected !== false;
     gameKeys.GamepadLeft = false;
     gameKeys.GamepadRight = false;
-    if (snapshot.connected === false) {
+    if (!connected) {
       runnerGamepadState.debugSnapshot = null;
       runnerGamepadState.debugUntil = 0;
     }
     runnerGamepadState.active = false;
-    runnerGamepadState.connected = !!snapshot.connected;
+    runnerGamepadState.connected = connected;
     runnerGamepadState.name = snapshot.name || runnerGamepadState.name || '';
-    runnerGamepadState.previous = { left: false, right: false, jump: false, dash: false, start: false, pause: false, bgm: false };
+    runnerGamepadState.previous = connected && options.preservePrevious
+      ? runnerGamepadPreviousFromSnapshot(snapshot)
+      : neutralRunnerGamepadPrevious();
     if (runnerGamepadState.connected && isGameSectionActive() && isMiniGameFocus()) {
       setRunnerGamepadStatus('PAD 街机占用', 'focus');
     } else if (runnerGamepadState.connected && isGameSectionActive()) {
@@ -14967,14 +15176,14 @@ function init() {
   }
 
   function applyRunnerGamepadSnapshot(snapshot = {}, options = {}) {
-    const connected = snapshot && snapshot.connected !== false;
+    const connected = !!snapshot && snapshot.connected !== false;
     if (options.force && options.holdMs !== 0) {
       runnerGamepadState.debugSnapshot = { ...snapshot };
       runnerGamepadState.debugUntil = Date.now() + Math.max(80, Number(options.holdMs || 650));
     }
     const canControl = !!options.force || (connected && isGameSectionActive() && !isMiniGameFocus());
     if (!connected || !canControl) {
-      releaseRunnerGamepadSnapshot(snapshot);
+      releaseRunnerGamepadSnapshot(snapshot, { preservePrevious: connected });
       return {
         connected,
         active: false,
@@ -14992,8 +15201,8 @@ function init() {
     if (snapshot.start && !runnerGamepadState.previous.start) {
       if (gamePaused) {
         resumeRunnerGame();
-      } else {
-        runOverlayAction();
+      } else if (!runOverlayAction() && !gameRunning) {
+        startLevel();
       }
     }
     if (snapshot.pause && !runnerGamepadState.previous.pause) {
@@ -15010,15 +15219,7 @@ function init() {
     }
 
     const held = ['left', 'right', 'jump', 'dash'].filter(control => !!snapshot[control]);
-    runnerGamepadState.previous = {
-      left: !!snapshot.left,
-      right: !!snapshot.right,
-      jump: !!snapshot.jump,
-      dash: !!snapshot.dash,
-      start: !!snapshot.start,
-      pause: !!snapshot.pause,
-      bgm: !!snapshot.bgm
-    };
+    runnerGamepadState.previous = runnerGamepadPreviousFromSnapshot(snapshot);
     setRunnerGamepadStatus(held.length ? `PAD ${held.join('+').toUpperCase()}` : 'PAD 就绪', held.length ? 'active' : 'ready');
     return {
       connected: true,
@@ -15073,7 +15274,7 @@ function init() {
       if (gameIsActive && !isEditableTarget(e.target) && !miniGameHasFocus) {
         if (overlayActionCodes.includes(e.code)) {
           e.preventDefault();
-          runOverlayAction();
+          if (!runOverlayAction()) startLevel();
         }
       }
       return;
@@ -15127,6 +15328,23 @@ function init() {
     if (['KeyA', 'ArrowLeft', 'KeyD', 'ArrowRight', 'Space', 'KeyW', 'ArrowUp'].includes(e.code)) {
       if (joystickShaft) joystickShaft.style.transform = 'translate(0, 0)';
     }
+  });
+
+  function pauseRunnerForLifecycle(reason = 'auto') {
+    if (gameRunning && !gamePaused) {
+      pauseRunnerGame();
+      setGameStatus(reason === 'hidden' ? 'AUTO PAUSE' : 'PAUSED', '#F59E0B', 0);
+    } else {
+      resetGameKeyState();
+    }
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) pauseRunnerForLifecycle('hidden');
+  });
+
+  window.addEventListener('blur', () => {
+    pauseRunnerForLifecycle('blur');
   });
 
   function triggerPlayerJump() {
@@ -15781,14 +15999,7 @@ function init() {
       
       initLevelData();
       drawGame();
-      
-      if (gameOverlay) {
-        document.getElementById('game-overlay-title').textContent = 'CYBER ASTRO-RUNNER';
-        document.getElementById('game-overlay-title').style.color = '#fff';
-        document.getElementById('game-overlay-title').style.textShadow = '0 0 15px var(--accent)';
-        document.getElementById('game-overlay-subtitle').textContent = '按 [Enter] 或 点击此处 开始挑战关卡；Space 仅用于跳跃';
-        gameOverlay.style.display = 'flex';
-      }
+      showRunnerStartOverlay();
     });
   }
 
@@ -15944,6 +16155,12 @@ function init() {
       toggleRunnerMusic();
     });
   }
+
+  gamePauseOverlay?.addEventListener('keydown', (event) => {
+    if (event.key === 'Tab' && gamePaused) {
+      trapFocusInContainer(gamePauseOverlay, event);
+    }
+  });
 
   if (btnBgmLed) {
     btnBgmLed.addEventListener('click', () => {

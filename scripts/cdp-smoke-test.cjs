@@ -400,7 +400,13 @@ async function run() {
     }
   }
 
-  async function evaluate(expression, timeout) {
+  async function evaluate(expression, timeout, options = {}) {
+    if (timeout && typeof timeout === 'object') {
+      options = timeout;
+      timeout = options.timeout;
+    }
+    const hasSideEffects = /(?:\.click\s*\(|dispatchEvent\s*\(|localStorage\.(?:setItem|removeItem|clear)\s*\()/.test(expression);
+    const retryOnTimeout = options.retryOnTimeout !== false && !hasSideEffects;
     let result;
     try {
       result = await send('Runtime.evaluate', {
@@ -409,7 +415,7 @@ async function run() {
         returnByValue: true
       }, timeout);
     } catch (error) {
-      if (!/timeout/i.test(error.message || '')) throw error;
+      if (!/timeout/i.test(error.message || '') || !retryOnTimeout) throw error;
       await wait(250);
       result = await send('Runtime.evaluate', {
         expression,
@@ -446,7 +452,7 @@ async function run() {
       el.focus?.({ preventScroll: true });
       el.click();
       return true;
-    })()`);
+    })()`, { retryOnTimeout: false });
     if (!clicked) {
       throw new Error(`Click target not found or disabled: ${selector}; diagnostics=${await failureDiagnostics({ kind: 'click', selector })}`);
     }
@@ -878,6 +884,7 @@ async function run() {
       panel: !!document.querySelector('#blog-insight-panel'),
       total: Number(document.querySelector('#blog-total-count')?.textContent || 0),
       filters: document.querySelectorAll('[data-reader-filter]').length,
+      filterRole: document.querySelector('.blog-reader-filters')?.getAttribute('role') || '',
       cards: document.querySelectorAll('.blog-post-card').length,
       cardLinks: document.querySelectorAll('.blog-post-card a[data-post-link]').length,
       firstCardHref: document.querySelector('.blog-post-card a[data-post-link]')?.getAttribute('href') || '',
@@ -1076,6 +1083,45 @@ async function run() {
     };
     return { missing, malformed, badQuery, queryOpen };
   })()`);
+  await click('.nav-item[data-target="blog"]');
+  await waitFor('.blog-post-card');
+  const emptyReaderHashState = await evaluate(`(async () => {
+    history.pushState(null, '', '/#blog-reader');
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    await new Promise(resolve => setTimeout(resolve, 220));
+    return {
+      hash: location.hash,
+      search: location.search,
+      blogActive: document.querySelector('#blog')?.classList.contains('active') || false,
+      readerActive: document.querySelector('#blog-reader')?.classList.contains('active') || false,
+      readerText: document.querySelector('#reader-post-content')?.innerText.trim() || ''
+    };
+  })()`);
+  const nativeArticleLinkState = await evaluate(`(() => {
+    const link = document.querySelector('.blog-post-card a[data-post-link]');
+    if (!link) return { found: false };
+    const ctrlEvent = new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      ctrlKey: true
+    });
+    const ctrlAllowed = link.dispatchEvent(ctrlEvent);
+    const plainEvent = new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      button: 0
+    });
+    const plainAllowed = link.dispatchEvent(plainEvent);
+    return {
+      found: true,
+      href: link.getAttribute('href') || '',
+      ctrlAllowed,
+      ctrlDefaultPrevented: ctrlEvent.defaultPrevented,
+      plainAllowed,
+      plainDefaultPrevented: plainEvent.defaultPrevented
+    };
+  })()`);
 
   await click('.nav-item[data-target="guestbook"]');
   await waitFor('#guestbook-form');
@@ -1241,6 +1287,7 @@ async function run() {
     const pauseVisible = document.querySelector('#game-pause-screen')?.style.display || '';
     const pausedDuringHold = !!window.__atherixDebug?.gamePaused?.();
     const runningAfterPause = !!window.__atherixDebug?.gameRunning?.();
+    const activeAfterPause = document.activeElement?.id || '';
     const timerAtPause = document.querySelector('#game-timer')?.textContent || '';
     const xAtPause = window.__atherixDebug?.player?.x || 0;
     firePointer('#btn-right-led', 'pointerdown');
@@ -1285,6 +1332,7 @@ async function run() {
       xAfterPauseWait,
       pausedDuringHold,
       runningAfterPause,
+      activeAfterPause,
       pausedAfterResume,
       runningAfterResume
     };
@@ -1312,6 +1360,65 @@ async function run() {
       debug: api?.runnerState?.() || {}
     };
   })()`, 3000);
+  const runnerLifecycleState = await evaluate(`(async () => {
+    const api = window.__atherixDebug;
+    const beforeSameNav = {
+      running: !!api?.gameRunning?.(),
+      paused: !!api?.gamePaused?.(),
+      player: api?.player || {},
+      debug: api?.runnerState?.() || {}
+    };
+    document.querySelector('.nav-item[data-target="game"]')?.click();
+    await new Promise(resolve => setTimeout(resolve, 220));
+    const afterSameNav = {
+      running: !!api?.gameRunning?.(),
+      paused: !!api?.gamePaused?.(),
+      player: api?.player || {},
+      debug: api?.runnerState?.() || {},
+      overlay: document.querySelector('#game-overlay-screen')?.style.display || ''
+    };
+    window.dispatchEvent(new Event('blur'));
+    await new Promise(resolve => setTimeout(resolve, 220));
+    const paused = {
+      running: !!api?.gameRunning?.(),
+      paused: !!api?.gamePaused?.(),
+      overlay: document.querySelector('#game-pause-screen')?.style.display || '',
+      activeElement: document.activeElement?.id || '',
+      timer: document.querySelector('#game-timer')?.textContent || '',
+      player: api?.player || {}
+    };
+    await new Promise(resolve => setTimeout(resolve, 320));
+    const frozen = {
+      timer: document.querySelector('#game-timer')?.textContent || '',
+      player: api?.player || {}
+    };
+    document.querySelector('.nav-item[data-target="blog"]')?.click();
+    await new Promise(resolve => setTimeout(resolve, 260));
+    document.querySelector('.nav-item[data-target="game"]')?.click();
+    await new Promise(resolve => setTimeout(resolve, 420));
+    return {
+      beforeSameNav,
+      afterSameNav,
+      paused,
+      frozen,
+      returned: {
+        running: !!api?.gameRunning?.(),
+        paused: !!api?.gamePaused?.(),
+        overlay: document.querySelector('#game-overlay-screen')?.style.display || '',
+        pauseOverlay: document.querySelector('#game-pause-screen')?.style.display || '',
+        gameActive: document.querySelector('#game')?.classList.contains('active') || false
+      }
+    };
+  })()`, 5000);
+  await key('keyDown', 'Enter', 'Enter');
+  await key('keyUp', 'Enter', 'Enter');
+  await wait(260);
+  const runnerReturnEnterState = await evaluate(`(() => ({
+    running: !!window.__atherixDebug?.gameRunning?.(),
+    paused: !!window.__atherixDebug?.gamePaused?.(),
+    overlay: document.querySelector('#game-overlay-screen')?.style.display || '',
+    debug: window.__atherixDebug?.runnerState?.() || {}
+  }))()`);
   await evaluate(`window.__atherixDebug?.premium?.resetFeedback?.(false)`);
   const arcadeInitial = await evaluate(`(() => {
     const rectFor = selector => {
@@ -1513,16 +1620,28 @@ async function run() {
     document.querySelector('[data-premium-game="tactics"]')?.click();
     document.querySelector('#premium-tactics-start')?.click();
     const before = api?.tacticsState?.() || {};
-    const applied = api?.simulateGamepad?.({ left: true }) || {};
+    document.querySelector('#premium-cockpit-play')?.focus({ preventScroll: true });
+    const applied = api?.simulateGamepadUnforced?.({ left: true }) || {};
     const after = api?.tacticsState?.() || {};
     const held = api?.gamepadState?.() || {};
-    const released = api?.simulateGamepad?.({ left: false }) || {};
+    const released = api?.simulateGamepadUnforced?.({ left: false }) || {};
+    window.__atherixSetPremiumInputArmed?.(false);
+    document.activeElement?.blur?.();
+    const suppressedStart = api?.simulateGamepadUnforced?.({ start: true }) || {};
+    const suppressedPad = api?.gamepadState?.() || {};
+    document.querySelector('#premium-game-stage')?.focus({ preventScroll: true });
+    const heldStartAfterFocus = api?.simulateGamepadUnforced?.({ start: true }) || {};
+    const releasedStart = api?.simulateGamepadUnforced?.({ start: false }) || {};
     return {
       before,
       after,
       applied,
       held,
       released,
+      suppressedStart,
+      suppressedPad,
+      heldStartAfterFocus,
+      releasedStart,
       statusText: document.querySelector('#premium-gamepad-status')?.textContent || '',
       statusTone: document.querySelector('#premium-gamepad-status')?.dataset.tone || ''
     };
@@ -1542,8 +1661,12 @@ async function run() {
       after: {
         running: !!window.__atherixDebug?.premium?.bossRunning?.(),
         paused: !!window.__atherixDebug?.premium?.bossPaused?.(),
-        pauseButton: document.querySelector('#premium-boss-pause')?.textContent || ''
-      }
+        pauseButton: document.querySelector('#premium-boss-pause')?.textContent || '',
+        touchPause: document.querySelector('#premium-touch-pause')?.textContent || '',
+        touchPauseDisabled: !!document.querySelector('#premium-touch-pause')?.disabled,
+        touchPauseLabel: document.querySelector('#premium-touch-pause')?.getAttribute('aria-label') || ''
+      },
+      pad: window.__atherixDebug?.premium?.gamepadState?.() || {}
     };
   })()`);
   const contractProgressState = await evaluate(`(() => {
@@ -2396,6 +2519,7 @@ async function run() {
   assert(vaultClearConfirmState.stillStoredAfterCancel === '31' && vaultClearConfirmState.closedAfterCancel && vaultClearConfirmState.openBeforeAccept && vaultClearConfirmState.clearedAfterAccept && vaultClearConfirmState.ariaHiddenAfterAccept === 'true' && /本地状态已清空/.test(vaultClearConfirmState.clearToast), `data vault clear confirmation should cancel safely and only clear after explicit accept: ${JSON.stringify(vaultClearConfirmState)}`);
   assert(legacyVaultHydrationState.survivorBest === 4321 && legacyVaultHydrationState.survivorMedal === 'gold' && legacyVaultHydrationState.totalScore >= 4321 && legacyVaultHydrationState.leaderboardTopGame === 'survivor' && legacyVaultHydrationState.leaderboardTopScore === 4321 && legacyVaultHydrationState.profileTopGame === 'survivor' && legacyVaultHydrationState.profileMedals >= 1 && legacyVaultHydrationState.masterySurvivorScore === 4321 && legacyVaultHydrationState.prizeTotal >= 4321 && legacyVaultHydrationState.prizeProgress > 0 && legacyVaultHydrationState.prizeUnlocked >= 3 && /4321/.test(legacyVaultHydrationState.totalText), `legacy arcade best imports should hydrate the premium career profile and season track: ${JSON.stringify(legacyVaultHydrationState)}`);
   assert(blogHubBefore.panel && blogHubBefore.total >= 1 && blogHubBefore.filters >= 3 && blogHubBefore.cards >= 1, `blog reading hub should render stats and filters: ${JSON.stringify(blogHubBefore)}`);
+  assert(blogHubBefore.filterRole === 'group', `blog reader filters should expose button-group semantics, not tablist semantics: ${JSON.stringify(blogHubBefore)}`);
   assert(blogHubBefore.cardLinks >= blogHubBefore.cards && /^\/\?post=/.test(blogHubBefore.firstCardHref) && blogHubBefore.pinnedLinks >= 1 && blogHubBefore.quickRole === 'link' && blogHubBefore.quickTabIndex === '0', `blog cards and featured entry should expose native article links: ${JSON.stringify(blogHubBefore)}`);
   assert(blogHubBefore.progressCards >= 1 && /42/.test(blogHubBefore.progressText) && !blogHubBefore.horizontalOverflow, `blog reading hub should show resumable progress without overflow: ${JSON.stringify(blogHubBefore)}`);
   assert(blogState.toolbar && blogState.bookmarkPressed, 'blog reader toolbar should render and toggle bookmark state');
@@ -2410,6 +2534,8 @@ async function run() {
   assert(/^\d+%$/.test(blogState.progress), 'blog reader should report reading progress');
   assert(blogHubAfterBookmark.activeFilter && blogHubAfterBookmark.bookmarkCount >= 1 && blogHubAfterBookmark.bookmarkedCards >= 1 && !blogHubAfterBookmark.horizontalOverflow, `blog reading hub should filter bookmarked articles: ${JSON.stringify(blogHubAfterBookmark)}`);
   assert(badPostRouteState.missing.hash === '#blog' && badPostRouteState.missing.blogActive && !badPostRouteState.missing.readerActive && badPostRouteState.malformed.hash === '#blog' && badPostRouteState.malformed.blogActive && !badPostRouteState.malformed.readerActive && badPostRouteState.badQuery.pathname === '/' && badPostRouteState.badQuery.search === '' && badPostRouteState.badQuery.hash === '#blog' && badPostRouteState.badQuery.blogActive && !badPostRouteState.badQuery.readerActive && badPostRouteState.queryOpen.search === '?post=post-1' && badPostRouteState.queryOpen.readerActive && badPostRouteState.queryOpen.title, `bad blog routes should recover and query article routes should open: ${JSON.stringify(badPostRouteState)}`);
+  assert(emptyReaderHashState.blogActive && !emptyReaderHashState.readerActive && emptyReaderHashState.hash === '#blog', `bare #blog-reader route should recover to the blog list instead of an active empty reader: ${JSON.stringify(emptyReaderHashState)}`);
+  assert(nativeArticleLinkState.found && /\\?post=/.test(nativeArticleLinkState.href) && nativeArticleLinkState.ctrlAllowed && !nativeArticleLinkState.ctrlDefaultPrevented && !nativeArticleLinkState.plainAllowed && nativeArticleLinkState.plainDefaultPrevented, `article links should preserve native modified-click behavior while SPA-handling plain clicks: ${JSON.stringify(nativeArticleLinkState)}`);
   assert(guestbookA11yState.avatarButtons >= 10 && guestbookA11yState.avatarButtonTypes === guestbookA11yState.avatarButtons && guestbookA11yState.activeAvatar === guestbookA11yState.hiddenAvatar && guestbookA11yState.activePressed === 'true' && guestbookA11yState.inactivePressed === 'false' && guestbookA11yState.emojiButtons >= 12 && guestbookA11yState.focusedEmoji && guestbookA11yState.triggerExpandedAfterClose === 'false' && guestbookA11yState.contentValue.length > 0 && !guestbookA11yState.horizontalOverflow, `guestbook avatar and emoji controls should be keyboard-accessible buttons: ${JSON.stringify(guestbookA11yState)}`);
   assert(
     blogState.codeBlocks >= 1,
@@ -2469,6 +2595,7 @@ async function run() {
   assert(runnerTouchState.running && runnerTouchState.afterX > runnerTouchState.beforeX, 'runner touch controls should move the player horizontally');
   assert(!runnerTouchState.dashReady && runnerTouchState.dashCooldownUntil > 0, 'runner touch controls should trigger dash cooldown');
   assert(runnerTouchState.pauseVisible === 'flex' && runnerTouchState.pausedDuringHold && !runnerTouchState.runningAfterPause, `runner pause overlay should freeze the game: ${JSON.stringify(runnerTouchState)}`);
+  assert(runnerTouchState.activeAfterPause === 'game-pause-resume', `runner pause overlay should move focus to the resume action: ${JSON.stringify(runnerTouchState)}`);
   assert(runnerTouchState.timerAtPause === runnerTouchState.timerAfterPauseWait && Math.abs(runnerTouchState.xAfterPauseWait - runnerTouchState.xAtPause) < 0.01, `runner should not advance while paused: ${JSON.stringify(runnerTouchState)}`);
   assert(runnerTouchState.runningAfterResume && !runnerTouchState.pausedAfterResume, `runner should resume from pause: ${JSON.stringify(runnerTouchState)}`);
   assert(runnerTouchState.scoreAfterDash > runnerTouchState.scoreBefore && runnerTouchState.debugAfterDash?.score === runnerTouchState.scoreAfterDash, `runner dash should award synced route score: ${JSON.stringify(runnerTouchState)}`);
@@ -2477,6 +2604,9 @@ async function run() {
   assert(runnerTouchState.forceContract?.after?.contract?.completed > runnerTouchState.forceContract?.before?.contract?.completed && runnerTouchState.forceContract?.after?.score > runnerTouchState.forceContract?.before?.score && runnerTouchState.forceContract?.achieved, `runner route contract should complete, score, and unlock achievement: ${JSON.stringify(runnerTouchState)}`);
   assert(Number(runnerTouchState.scoreHud) === runnerTouchState.debug?.score && runnerTouchState.comboHud === runnerTouchState.debug?.comboHud && runnerTouchState.contractHud === runnerTouchState.debug?.contractHud && runnerTouchState.statusHud === runnerTouchState.debug?.statusHud, `runner HUD should remain synchronized after forced contract: ${JSON.stringify(runnerTouchState)}`);
   assert(runnerGamepadState.running && runnerGamepadState.afterX > runnerGamepadState.beforeX && runnerGamepadState.movingPad?.keys?.right && /PAD/.test(runnerGamepadState.statusText), `runner gamepad bridge should move the player and update PAD status: ${JSON.stringify(runnerGamepadState)}`);
+  assert(runnerLifecycleState.beforeSameNav.running && runnerLifecycleState.afterSameNav.running && !runnerLifecycleState.afterSameNav.paused && runnerLifecycleState.afterSameNav.debug?.elapsedMs >= runnerLifecycleState.beforeSameNav.debug?.elapsedMs && runnerLifecycleState.afterSameNav.overlay === 'none', `runner same-page game navigation should not reset an active run: ${JSON.stringify(runnerLifecycleState)}`);
+  assert(runnerLifecycleState.paused.paused && runnerLifecycleState.paused.overlay === 'flex' && runnerLifecycleState.paused.activeElement === 'game-pause-resume' && runnerLifecycleState.frozen.timer === runnerLifecycleState.paused.timer && Math.abs((runnerLifecycleState.frozen.player?.x || 0) - (runnerLifecycleState.paused.player?.x || 0)) < 0.01, `runner should auto-pause and freeze on blur: ${JSON.stringify(runnerLifecycleState)}`);
+  assert(runnerLifecycleState.returned.gameActive && !runnerLifecycleState.returned.running && !runnerLifecycleState.returned.paused && runnerLifecycleState.returned.overlay === 'flex' && runnerReturnEnterState.running && !runnerReturnEnterState.paused && runnerReturnEnterState.overlay === 'none', `runner should restore an Enter-startable idle overlay after leaving and returning to the game page: ${JSON.stringify({ runnerLifecycleState, runnerReturnEnterState })}`);
   assert(runnerMobileState.controls >= 7 && runnerMobileState.visibleAfterScroll && !runnerMobileState.horizontalOverflow, `runner touch controls should remain reachable on mobile after premium-first layout: ${JSON.stringify(runnerMobileState)}`);
   assert(premiumMobileState.cockpit?.visible && premiumMobileState.tabs?.top >= premiumMobileState.cockpit?.bottom - 8 && premiumMobileState.stage?.top >= premiumMobileState.tabs?.bottom - 8 && premiumMobileState.career?.top >= premiumMobileState.stage?.bottom - 8 && !premiumMobileState.horizontalOverflow, `premium arcade cockpit, tabs, and stage should be prioritized before meta panels on mobile: ${JSON.stringify(premiumMobileState)}`);
   assert(premiumMobileState.controls?.visible && premiumMobileState.controlsPosition === 'sticky' && premiumMobileState.controls.bottom <= premiumMobileState.height && premiumMobileState.controlsCount >= 5 && premiumMobileState.minControlWidth >= 44 && premiumMobileState.minControlHeight >= 44 && premiumMobileState.metaControls === 2 && premiumMobileState.metaVisible === 2 && premiumMobileState.minMetaHeight >= 34 && premiumMobileState.metaLabels.includes('开始') && premiumMobileState.actionText && premiumMobileState.toolText, `premium arcade touch controls should stay visible and tappable on mobile with meta controls: ${JSON.stringify(premiumMobileState)}`);
@@ -2613,8 +2743,8 @@ async function run() {
   assert(prizeLaunchState.target && (prizeLaunchState.target === 'runner' || prizeLaunchState.active === prizeLaunchState.target) && /赛季奖励目标/.test(prizeLaunchState.toast) && !prizeLaunchState.horizontalOverflow, `premium arcade season track action should launch the reward target: ${JSON.stringify(prizeLaunchState)}`);
   assert(['runner', 'survivor', 'boss', 'drift', 'heist', 'chain', 'tactics'].includes(directorLaunchState.target) && (directorLaunchState.target === 'runner' || directorLaunchState.active === directorLaunchState.target) && !directorLaunchState.horizontalOverflow, `premium arcade director should launch the recommended target: ${JSON.stringify(directorLaunchState)}`);
   assert(arcadeInitial.touchControls >= 5, 'premium touch controls should be available');
-  assert(/PAD/.test(arcadeInitial.gamepadStatus) && premiumGamepadState.after?.player?.x < premiumGamepadState.before?.player?.x && premiumGamepadState.held?.keys?.left && /PAD/.test(premiumGamepadState.statusText), `premium arcade gamepad bridge should drive tactics movement and status: ${JSON.stringify(premiumGamepadState)}`);
-  assert(premiumPauseHookState.before.running && premiumPauseHookState.result?.paused?.includes('boss') && premiumPauseHookState.after.running && premiumPauseHookState.after.paused && premiumPauseHookState.after.pauseButton === '继续', `premium realtime pause hook should freeze active realtime games: ${JSON.stringify(premiumPauseHookState)}`);
+  assert(/PAD/.test(arcadeInitial.gamepadStatus) && premiumGamepadState.applied?.active && premiumGamepadState.applied?.context && premiumGamepadState.after?.player?.x < premiumGamepadState.before?.player?.x && premiumGamepadState.held?.keys?.left && !premiumGamepadState.released?.held?.length && premiumGamepadState.suppressedStart?.active === false && premiumGamepadState.suppressedPad?.previous?.start === true && premiumGamepadState.heldStartAfterFocus?.active === true && premiumGamepadState.releasedStart?.active === true && !premiumGamepadState.releasedStart?.held?.length && /PAD/.test(premiumGamepadState.statusText), `premium arcade gamepad bridge should accept armed arcade focus, clear releases, and suppress held Start edges: ${JSON.stringify(premiumGamepadState)}`);
+  assert(premiumPauseHookState.before.running && premiumPauseHookState.result?.paused?.includes('boss') && premiumPauseHookState.after.running && premiumPauseHookState.after.paused && premiumPauseHookState.after.pauseButton === '继续' && premiumPauseHookState.after.touchPause === '继续' && !premiumPauseHookState.after.touchPauseDisabled && /继续/.test(premiumPauseHookState.after.touchPauseLabel) && Object.values(premiumPauseHookState.pad?.keys || {}).every(value => value === false), `premium realtime pause hook should freeze active realtime games and refresh sticky controls: ${JSON.stringify(premiumPauseHookState)}`);
   assert(cockpitTargetState.target && (cockpitTargetState.target === 'runner' || cockpitTargetState.active === cockpitTargetState.target) && /驾驶舱推荐/.test(cockpitTargetState.toast) && !cockpitTargetState.horizontalOverflow, `premium cockpit target should launch the recommended mode: ${JSON.stringify(cockpitTargetState)}`);
   assert(cockpitPlayState.active === 'survivor' && cockpitPlayState.running && !cockpitPlayState.paused && /星爆/.test(cockpitPlayState.actionLabel) && cockpitPlayState.toolDisabled && /开局/.test(cockpitPlayState.toast), `premium cockpit play should start the active mode and refresh touch labels: ${JSON.stringify(cockpitPlayState)}`);
   assert(cockpitPlayState.feedback?.tones?.start >= 1 && cockpitPlayState.feedback?.visualTriggers >= 1 && /START|开局/.test(cockpitPlayState.feedback?.status || ''), `premium arcade feedback should respond to cockpit start: ${JSON.stringify(cockpitPlayState)}`);
@@ -2781,6 +2911,8 @@ async function run() {
     readerExportState,
     blogHubAfterBookmark,
     badPostRouteState,
+    emptyReaderHashState,
+    nativeArticleLinkState,
     guestbookA11yState,
     projectViewportState,
     projectState,
@@ -2789,6 +2921,8 @@ async function run() {
     mainSpaceState,
     runnerTouchState,
     runnerGamepadState,
+    runnerLifecycleState,
+    runnerReturnEnterState,
     runnerMobileState,
     premiumMobileState,
     arcadeInitial,
@@ -2857,6 +2991,9 @@ function summarizeSmokeResult(result) {
     hint: 'Set SMOKE_VERBOSE=1 for the full state dump.',
     blog: {
       hubCards: result.blogHubBefore?.cards,
+      filterRole: result.blogHubBefore?.filterRole,
+      emptyReaderRecovers: result.emptyReaderHashState?.blogActive && !result.emptyReaderHashState?.readerActive,
+      modifiedClickNative: result.nativeArticleLinkState?.ctrlAllowed && !result.nativeArticleLinkState?.ctrlDefaultPrevented,
       readerOpened: result.blogState?.visibleArticle,
       articleChars: result.blogState?.articleChars,
       nextOpened: result.readerNextOpenState?.visibleArticle,
@@ -2886,6 +3023,8 @@ function summarizeSmokeResult(result) {
       spaceKeyDoesNotRestart: result.mainSpaceState?.overlayAfter === result.mainSpaceState?.overlayBefore,
       jumpButtonDoesNotRestart: result.jumpButtonIdleState?.overlayAfter === result.jumpButtonIdleState?.overlayBefore,
       runningAfterResume: result.runnerTouchState?.runningAfterResume,
+      blurAutoPaused: result.runnerLifecycleState?.paused?.paused,
+      returnEnterStarts: result.runnerReturnEnterState?.running,
       gamepadStatus: result.runnerGamepadState?.statusText
     },
     games: {
