@@ -735,6 +735,67 @@ async function run() {
     activeTitle: document.querySelector('#premium-active-title')?.textContent || '',
     tacticsActive: document.querySelector('#premium-tactics')?.classList.contains('active') || false
   }))()`);
+  const premiumTabState = await evaluate(`(() => {
+    const selectedGames = () => [...document.querySelectorAll('[data-premium-game][aria-selected="true"]')].map(btn => btn.dataset.premiumGame || '');
+    const activePanels = () => [...document.querySelectorAll('.mini-game-panel.active:not([hidden])')].map(panel => panel.id || '');
+    const snapshot = mode => {
+      const tab = document.querySelector(\`[data-premium-game="\${mode}"]\`);
+      const panel = document.querySelector(\`#premium-\${mode}\`);
+      return {
+        tabRole: tab?.getAttribute('role') || '',
+        selected: tab?.getAttribute('aria-selected') || '',
+        tabIndex: tab?.getAttribute('tabindex') || '',
+        controls: tab?.getAttribute('aria-controls') || '',
+        panelRole: panel?.getAttribute('role') || '',
+        labelledBy: panel?.getAttribute('aria-labelledby') || '',
+        hidden: !!panel?.hidden,
+        hasAriaHidden: panel?.hasAttribute('aria-hidden') || false,
+        active: panel?.classList.contains('active') || false
+      };
+    };
+    const before = {
+      tablistRole: document.querySelector('#premium-game-tabs')?.getAttribute('role') || '',
+      tablistLabel: document.querySelector('#premium-game-tabs')?.getAttribute('aria-label') || '',
+      tabCount: document.querySelectorAll('[data-premium-game][role="tab"]').length,
+      panelCount: document.querySelectorAll('.mini-game-panel[role="tabpanel"]').length,
+      selected: selectedGames(),
+      activePanels: activePanels(),
+      tactics: snapshot('tactics'),
+      survivor: snapshot('survivor')
+    };
+    const tacticsTab = document.querySelector('[data-premium-game="tactics"]');
+    tacticsTab?.focus();
+    tacticsTab?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+    const afterArrow = {
+      selected: selectedGames(),
+      activePanels: activePanels(),
+      focusId: document.activeElement?.id || '',
+      survivor: snapshot('survivor'),
+      tactics: snapshot('tactics')
+    };
+    document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
+    const afterEnd = {
+      selected: selectedGames(),
+      activePanels: activePanels(),
+      focusId: document.activeElement?.id || '',
+      tactics: snapshot('tactics')
+    };
+    document.querySelector('[data-premium-game="survivor"]')?.click();
+    const survivorStart = document.querySelector('#premium-survivor-start');
+    survivorStart?.focus();
+    document.querySelector('[data-premium-game="boss"]')?.click();
+    const survivorPanel = document.querySelector('#premium-survivor');
+    const focusEscape = {
+      selected: selectedGames(),
+      activePanels: activePanels(),
+      survivorHidden: !!survivorPanel?.hidden,
+      activeFocusInsideSurvivor: !!survivorPanel?.contains(document.activeElement),
+      focusId: document.activeElement?.id || '',
+      survivor: snapshot('survivor'),
+      boss: snapshot('boss')
+    };
+    return { before, afterArrow, afterEnd, focusEscape };
+  })()`);
 
   await click('#command-palette-trigger');
   await waitFor('#command-palette.active');
@@ -2173,7 +2234,8 @@ async function run() {
     };
   })()`, 8000);
   const briefingStartState = await evaluate(`(async () => {
-    document.querySelector('[data-premium-game="survivor"]')?.click();
+    window.__atherixDebug?.premium?.resetSurvivorIdle?.();
+    await new Promise(resolve => setTimeout(resolve, 120));
     const btn = document.querySelector('#premium-briefing-start');
     const before = {
       active: window.__atherixDebug?.premium?.active?.() || '',
@@ -2213,8 +2275,10 @@ async function run() {
     const api = window.__atherixDebug?.premium;
     const stage = document.querySelector('#premium-game-stage');
     const modes = ['survivor', 'boss', 'drift', 'heist', 'chain', 'tactics'];
+    const realtimeModes = new Set(['survivor', 'boss', 'drift']);
     const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
-    const feedbackStartTone = () => Number(api?.feedback?.().tones?.start || 0);
+    const feedbackTone = tone => Number(api?.feedback?.().tones?.[tone] || 0);
+    const feedbackStartTone = () => feedbackTone('start');
     const readout = () => ({
       mode: document.querySelector('#premium-input-readout')?.dataset.mode || '',
       state: document.querySelector('#premium-input-readout')?.dataset.state || '',
@@ -2284,8 +2348,17 @@ async function run() {
     };
 
     const results = [];
+    const resetIdle = {
+      survivor: () => api?.resetSurvivorIdle?.(),
+      boss: () => api?.resetBossIdle?.(),
+      drift: () => api?.resetDriftIdle?.()
+    };
     for (const mode of modes) {
-      document.querySelector('[data-premium-game="' + mode + '"]')?.click();
+      if (resetIdle[mode]) {
+        resetIdle[mode]();
+      } else {
+        document.querySelector('[data-premium-game="' + mode + '"]')?.click();
+      }
       await pause(120);
       stage?.focus({ preventScroll: true });
       const beforeStartTone = feedbackStartTone();
@@ -2293,19 +2366,35 @@ async function run() {
       const after = snapshot(mode);
       const afterStartTone = feedbackStartTone();
       const beforeRestartTone = feedbackStartTone();
+      const beforeDangerTone = feedbackTone('danger');
       const restart = await fireStageStartKey('KeyR', 'r');
       const restarted = snapshot(mode);
       const afterRestartTone = feedbackStartTone();
+      const afterDangerTone = feedbackTone('danger');
+      const pendingAfterRestart = api?.restartRequest?.() || {};
+      let confirm = { dispatched: false, prevented: false };
+      let confirmed = restarted;
+      let afterConfirmTone = afterRestartTone;
+      if (realtimeModes.has(mode)) {
+        confirm = await fireStageStartKey('KeyR', 'r');
+        confirmed = snapshot(mode);
+        afterConfirmTone = feedbackStartTone();
+      }
       results.push({
         mode,
         enter,
         restart,
+        confirm,
         after,
         restarted,
+        confirmed,
+        pendingAfterRestart,
         started: started(mode, after),
-        restartedOk: started(mode, restarted),
+        restartGuarded: realtimeModes.has(mode) ? started(mode, restarted) && pendingAfterRestart.pending : true,
+        restartedOk: realtimeModes.has(mode) ? started(mode, confirmed) : started(mode, restarted),
         startToneAdvanced: afterStartTone > beforeStartTone,
-        restartToneAdvanced: afterRestartTone > beforeRestartTone,
+        restartToneAdvanced: realtimeModes.has(mode) ? afterConfirmTone > beforeRestartTone : afterRestartTone > beforeRestartTone,
+        restartDangerAdvanced: realtimeModes.has(mode) ? afterDangerTone > beforeDangerTone : true,
         readoutHasEnter: /Enter/.test(after.readout?.start || '')
       });
     }
@@ -2327,6 +2416,7 @@ async function run() {
       results,
       allStarted: results.every(item => item.started),
       allRestarted: results.every(item => item.restartedOk),
+      allRealtimeRestartGuarded: results.filter(item => realtimeModes.has(item.mode)).every(item => item.restartGuarded && item.restartDangerAdvanced && item.confirm.prevented),
       allReadoutsHaveEnter: results.every(item => item.readoutHasEnter),
       allStrategyReadouts: results.filter(item => ['heist', 'chain', 'tactics'].includes(item.mode)).every(item => item.started && item.restartedOk),
       allStageEventsPrevented: results.every(item => item.enter.prevented && item.restart.prevented),
@@ -2374,7 +2464,7 @@ async function run() {
     };
   })()`);
   const premiumPauseHookState = await evaluate(`(() => {
-    document.querySelector('[data-premium-game="boss"]')?.click();
+    window.__atherixDebug?.premium?.resetBossIdle?.();
     document.querySelector('#premium-boss-start')?.click();
     const before = {
       active: window.__atherixDebug?.premium?.active?.() || '',
@@ -2619,7 +2709,7 @@ async function run() {
     toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || '',
     horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
   }))()`);
-  await click('[data-premium-game="survivor"]');
+  await evaluate(`window.__atherixDebug?.premium?.resetSurvivorIdle?.()`);
   await wait(120);
   await click('#premium-cockpit-play');
   await wait(260);
@@ -2807,7 +2897,7 @@ async function run() {
     };
   })()`);
 
-  await click('[data-premium-game="boss"]');
+  await evaluate(`window.__atherixDebug?.premium?.resetBossIdle?.()`);
   await wait(200);
   await click('#premium-boss-start');
   await wait(900);
@@ -2933,7 +3023,7 @@ async function run() {
     pauseButton: document.querySelector('#premium-boss-pause')?.textContent || ''
   }))()`);
 
-  await click('[data-premium-game="drift"]');
+  await evaluate(`window.__atherixDebug?.premium?.resetDriftIdle?.()`);
   await wait(220);
   await click('#premium-drift-start');
   await wait(250);
@@ -3209,7 +3299,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v64-quality') && swText.includes('/style.css?v=20260608-quality-v9') && swText.includes('/app.js?v=20260608-quality-v22'),
+      swHasQualityVersion: swText.includes('atherix-static-v65-quality') && swText.includes('/style.css?v=20260608-quality-v10') && swText.includes('/app.js?v=20260608-quality-v23'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
@@ -3325,7 +3415,9 @@ async function run() {
     };
   })()`);
   const premiumMobileMetaState = await evaluate(`(async () => {
-    document.querySelector('[data-premium-game="survivor"]')?.click();
+    const api = window.__atherixDebug?.premium;
+    const reset = api?.resetSurvivorRun?.() || {};
+    await new Promise(resolve => setTimeout(resolve, 220));
     document.querySelector('.premium-touch-controls')?.scrollIntoView({ block: 'start' });
     const startBtn = document.querySelector('#premium-touch-start');
     const pauseBtn = document.querySelector('#premium-touch-pause');
@@ -3334,8 +3426,6 @@ async function run() {
       pause: pauseBtn?.textContent.trim() || '',
       pauseDisabled: !!pauseBtn?.disabled
     };
-    startBtn?.click();
-    await new Promise(resolve => setTimeout(resolve, 360));
     const started = window.__atherixDebug?.premium?.survivorState?.() || {};
     const labelStarted = {
       start: startBtn?.textContent.trim() || '',
@@ -3358,6 +3448,16 @@ async function run() {
     await new Promise(resolve => setTimeout(resolve, 360));
     const advanced = window.__atherixDebug?.premium?.survivorState?.() || {};
     startBtn?.click();
+    await new Promise(resolve => setTimeout(resolve, 180));
+    const restartRequested = window.__atherixDebug?.premium?.survivorState?.() || {};
+    const restartRequest = window.__atherixDebug?.premium?.restartRequest?.() || {};
+    const labelRestartRequest = {
+      start: startBtn?.textContent.trim() || '',
+      pause: pauseBtn?.textContent.trim() || '',
+      pauseDisabled: !!pauseBtn?.disabled,
+      readoutStart: document.querySelector('#premium-input-start')?.textContent.trim() || ''
+    };
+    startBtn?.click();
     await new Promise(resolve => setTimeout(resolve, 220));
     const restarted = window.__atherixDebug?.premium?.survivorState?.() || {};
     const labelRestarted = {
@@ -3371,11 +3471,15 @@ async function run() {
       labelStarted,
       labelPaused,
       labelRestarted,
+      reset,
       started,
       paused,
       frozen,
       resumed,
       advanced,
+      restartRequested,
+      restartRequest,
+      labelRestartRequest,
       restarted,
       controlsVisible: !!controls && controls.bottom > 0 && controls.top < window.innerHeight,
       horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
@@ -3474,6 +3578,10 @@ async function run() {
     `command palette should find tactics mode and expose active descendant semantics: ${JSON.stringify(commandBeforeExecute)}`
   );
   assert(commandState.closed && commandState.gameActive && commandState.tacticsActive && /Rift Tactics/.test(commandState.activeTitle), `command palette should execute game navigation: ${JSON.stringify(commandState)}`);
+  assert(premiumTabState.before?.tablistRole === 'tablist' && premiumTabState.before?.tablistLabel && premiumTabState.before?.tabCount === 6 && premiumTabState.before?.panelCount === 6 && premiumTabState.before?.selected?.length === 1 && premiumTabState.before?.selected?.[0] === 'tactics' && premiumTabState.before?.activePanels?.[0] === 'premium-tactics' && premiumTabState.before?.tactics?.panelRole === 'tabpanel' && premiumTabState.before?.tactics?.labelledBy === 'premium-tab-tactics' && premiumTabState.before?.tactics?.selected === 'true' && premiumTabState.before?.survivor?.hidden && !premiumTabState.before?.survivor?.hasAriaHidden, `premium arcade should expose one selected mode tab and one active panel after command navigation: ${JSON.stringify(premiumTabState.before)}`);
+  assert(premiumTabState.afterArrow?.selected?.[0] === 'survivor' && premiumTabState.afterArrow?.activePanels?.[0] === 'premium-survivor' && premiumTabState.afterArrow?.focusId === 'premium-tab-survivor' && premiumTabState.afterArrow?.survivor?.selected === 'true' && !premiumTabState.afterArrow?.survivor?.hidden && premiumTabState.afterArrow?.tactics?.hidden, `premium arcade ArrowRight should wrap focus and selection to the first mode tab: ${JSON.stringify(premiumTabState.afterArrow)}`);
+  assert(premiumTabState.afterEnd?.selected?.[0] === 'tactics' && premiumTabState.afterEnd?.activePanels?.[0] === 'premium-tactics' && premiumTabState.afterEnd?.focusId === 'premium-tab-tactics' && premiumTabState.afterEnd?.tactics?.selected === 'true' && !premiumTabState.afterEnd?.tactics?.hidden, `premium arcade End key should move focus and selection to the final mode tab: ${JSON.stringify(premiumTabState.afterEnd)}`);
+  assert(premiumTabState.focusEscape?.selected?.[0] === 'boss' && premiumTabState.focusEscape?.activePanels?.[0] === 'premium-boss' && premiumTabState.focusEscape?.survivorHidden && !premiumTabState.focusEscape?.activeFocusInsideSurvivor && premiumTabState.focusEscape?.focusId === 'premium-game-stage' && !premiumTabState.focusEscape?.survivor?.hasAriaHidden && !premiumTabState.focusEscape?.boss?.hasAriaHidden, `premium arcade should move focus out of a mode panel before hiding it: ${JSON.stringify(premiumTabState.focusEscape)}`);
   assert(vaultCommandBeforeExecute.open && vaultCommandBeforeExecute.results >= 1 && /数据保险库/.test(vaultCommandBeforeExecute.firstTitle), `command palette should find the data vault: ${JSON.stringify(vaultCommandBeforeExecute)}`);
   assert(vaultCommandState.closed && vaultCommandState.toolboxActive && vaultCommandState.vaultActive && vaultCommandState.navActive && vaultCommandState.tabSelected === 'true' && vaultCommandState.tabIndex === '0' && !vaultCommandState.panelHidden && !vaultCommandState.hasPanelAriaHidden && vaultCommandState.debugReady && !vaultCommandState.horizontalOverflow, `data vault command should open the vault tab panel with synced semantics: ${JSON.stringify(vaultCommandState)}`);
   assert(toolboxTabState.before?.tablistRole === 'tablist' && toolboxTabState.before?.tablistLabel && toolboxTabState.before?.tabCount >= 8 && toolboxTabState.before?.panelCount >= 8 && toolboxTabState.before?.selected?.length === 1 && toolboxTabState.before?.selected?.[0] === 'vault' && toolboxTabState.before?.activePanels?.[0] === 'tool-vault' && toolboxTabState.before?.vault?.panelRole === 'tabpanel' && toolboxTabState.before?.vault?.labelledBy === 'tool-tab-vault' && toolboxTabState.before?.json?.hidden && !toolboxTabState.before?.json?.hasAriaHidden, `toolbox should expose one selected tab and one active panel after command navigation: ${JSON.stringify(toolboxTabState.before)}`);
@@ -3738,13 +3846,19 @@ async function run() {
       && premiumMobileMetaState.frozen.score === premiumMobileMetaState.paused.score
       && !premiumMobileMetaState.resumed.paused
       && premiumMobileMetaState.advanced.elapsed > premiumMobileMetaState.frozen.elapsed
+      && premiumMobileMetaState.restartRequested.running
+      && !premiumMobileMetaState.restartRequested.paused
+      && premiumMobileMetaState.restartRequested.elapsed >= premiumMobileMetaState.advanced.elapsed
+      && premiumMobileMetaState.restartRequest.pending
+      && premiumMobileMetaState.labelRestartRequest.start === '确认重开'
+      && premiumMobileMetaState.labelRestartRequest.readoutStart === 'Enter 确认重开'
       && premiumMobileMetaState.restarted.running
       && !premiumMobileMetaState.restarted.paused
-      && premiumMobileMetaState.restarted.elapsed < premiumMobileMetaState.advanced.elapsed
+      && premiumMobileMetaState.restarted.elapsed < premiumMobileMetaState.restartRequested.elapsed
       && premiumMobileMetaState.labelRestarted.start === '重开'
       && premiumMobileMetaState.labelRestarted.pause === '暂停'
       && !premiumMobileMetaState.horizontalOverflow,
-    `premium mobile meta controls should start, pause, resume, and restart a realtime run: ${JSON.stringify(premiumMobileMetaState)}`
+    `premium mobile meta controls should start, pause, resume, request restart confirmation, and only restart on confirmation: ${JSON.stringify(premiumMobileMetaState)}`
   );
   assert(survivorDraftMobileState.open && survivorDraftMobileState.role === 'dialog' && survivorDraftMobileState.modal === 'true' && survivorDraftMobileState.ariaHidden === 'false' && survivorDraftMobileState.position === 'fixed' && survivorDraftMobileState.rect?.visible && survivorDraftMobileState.optionCards === 3 && survivorDraftMobileState.visibleOptions === 3 && survivorDraftMobileState.focusedUpgrade && !survivorDraftMobileState.horizontalOverflow, `survivor mobile upgrade draft should behave like a reachable bottom sheet: ${JSON.stringify(survivorDraftMobileState)}`);
   assert(survivorDraftMobileState.away?.blogActive && survivorDraftMobileState.away?.draftOpen && !survivorDraftMobileState.away?.active && survivorDraftMobileState.away?.ariaHidden === 'true' && !survivorDraftMobileState.away?.parentIsBody && !survivorDraftMobileState.away?.visible && survivorDraftMobileState.returned?.gameActive && survivorDraftMobileState.returned?.draftOpen && survivorDraftMobileState.returned?.active && survivorDraftMobileState.returned?.ariaHidden === 'false' && survivorDraftMobileState.returned?.parentIsBody && survivorDraftMobileState.returned?.position === 'fixed' && survivorDraftMobileState.returned?.optionCards === 3 && survivorDraftMobileState.returned?.visible, `survivor mobile upgrade draft should hide when navigating away and restore when returning to game: ${JSON.stringify(survivorDraftMobileState)}`);
@@ -3894,6 +4008,7 @@ async function run() {
     premiumKeyboardStartState.stageExists
       && premiumKeyboardStartState.allStarted
       && premiumKeyboardStartState.allRestarted
+      && premiumKeyboardStartState.allRealtimeRestartGuarded
       && premiumKeyboardStartState.allReadoutsHaveEnter
       && premiumKeyboardStartState.allStrategyReadouts
       && premiumKeyboardStartState.allStageEventsPrevented
@@ -3902,7 +4017,7 @@ async function run() {
       && premiumKeyboardStartState.nonStage?.startToneAfter === premiumKeyboardStartState.nonStage?.startToneBefore
       && premiumKeyboardStartState.nonStage?.activeElement === 'premium-cockpit-play'
       && !premiumKeyboardStartState.horizontalOverflow,
-    `premium arcade Enter/R keyboard start should be scoped to the play stage and work across all modes: ${JSON.stringify(premiumKeyboardStartState)}`
+    `premium arcade Enter/R keyboard start should be scoped to the play stage, guard live restarts, and work across all modes: ${JSON.stringify(premiumKeyboardStartState)}`
   );
   assert(arcadeInitial.feedbackPanel && arcadeInitial.feedbackStage && arcadeInitial.feedbackTogglePressed === 'true' && arcadeInitial.feedbackDebug?.muted === false && arcadeInitial.feedbackDebug?.total === 0 && /沉浸反馈/.test(arcadeInitial.feedbackStatus), `premium arcade feedback console should start enabled and observable: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.cockpitPanel && arcadeInitial.cockpitTarget === arcadeInitial.debugCockpit?.targetGame && arcadeInitial.cockpitMode === arcadeInitial.debugCockpit?.activeLabel && arcadeInitial.cockpitDifficulty && arcadeInitial.cockpitLoadout && (arcadeInitial.cockpitSeason === '完成' || /^\d+%$/.test(arcadeInitial.cockpitSeason)) && arcadeInitial.cockpitActionLabel.includes(arcadeInitial.cockpitMode), `premium arcade cockpit should summarize the next playable run: ${JSON.stringify(arcadeInitial)}`);
@@ -3960,7 +4075,7 @@ async function run() {
   assert(survivorDraftFreezeState.open && Math.abs(survivorDraftFreezeState.elapsedAfter - survivorDraftOpenState.beforeElapsed) < 1 && Math.abs(survivorDraftFreezeState.scoreAfter - survivorDraftOpenState.beforeScore) < 1, `survivor roguelite draft should freeze the run clock and score until a choice is made: ${JSON.stringify({ survivorDraftOpenState, survivorDraftFreezeState })}`);
   assert(survivorDraftAutoPauseState.open && survivorDraftAutoPauseState.running && !survivorDraftAutoPauseState.paused && !(survivorDraftAutoPauseState.result?.paused || []).includes('survivor') && survivorDraftAutoPauseState.readoutState === 'draft' && survivorDraftAutoPauseState.readoutStateText === '升级' && survivorDraftAutoPauseState.touchPause === '选择中' && survivorDraftAutoPauseState.touchPauseDisabled, `survivor draft should ignore global auto-pause because the upgrade sheet already freezes play: ${JSON.stringify(survivorDraftAutoPauseState)}`);
   assert(survivorDraftStartGuardState.before?.open && survivorDraftStartGuardState.after?.open && survivorDraftStartGuardState.after?.running && !survivorDraftStartGuardState.after?.paused && survivorDraftStartGuardState.after?.level === survivorDraftStartGuardState.before?.level && survivorDraftStartGuardState.after?.choices?.join('|') === survivorDraftStartGuardState.before?.choices?.join('|') && Math.abs(survivorDraftStartGuardState.after?.elapsed - survivorDraftStartGuardState.before?.elapsed) < 1 && survivorDraftStartGuardState.after?.startDisabled && survivorDraftStartGuardState.after?.startText === '选择' && survivorDraftStartGuardState.after?.readoutStart === '1/2/3 选择' && survivorDraftStartGuardState.after?.feedback?.lastLabel === 'CHOOSE UPGRADE', `survivor draft should block touch/gamepad/panel Start from restarting before an upgrade is chosen: ${JSON.stringify(survivorDraftStartGuardState)}`);
-  assert(!survivorDraftChosenState.open && survivorDraftChosenState.ariaHidden === 'true' && survivorDraftChosenState.optionCards === 0 && survivorDraftChosenState.running && !survivorDraftChosenState.paused && Number(survivorDraftChosenState.level) >= 2 && survivorDraftChosenState.score > survivorDraftOpenState.beforeScore && survivorDraftChosenState.buildText.length > 2 && survivorDraftChosenState.readoutState === 'running' && survivorDraftChosenState.readoutStateText === '运行' && survivorDraftChosenState.readoutAction === '星爆' && survivorDraftChosenState.readoutStart === 'Enter 重开' && survivorDraftChosenState.touchPause === '暂停' && !survivorDraftChosenState.touchPauseDisabled && /暂停/.test(survivorDraftChosenState.touchPauseLabel), `survivor roguelite draft should apply a chosen upgrade and restore running controls: ${JSON.stringify(survivorDraftChosenState)}`);
+  assert(!survivorDraftChosenState.open && survivorDraftChosenState.ariaHidden === 'true' && survivorDraftChosenState.optionCards === 0 && survivorDraftChosenState.running && !survivorDraftChosenState.paused && Number(survivorDraftChosenState.level) >= 2 && survivorDraftChosenState.score > survivorDraftOpenState.beforeScore && survivorDraftChosenState.buildText.length > 2 && survivorDraftChosenState.readoutState === 'running' && survivorDraftChosenState.readoutStateText === '运行' && survivorDraftChosenState.readoutAction === '星爆' && survivorDraftChosenState.readoutStart === 'Enter 请求重开' && survivorDraftChosenState.touchPause === '暂停' && !survivorDraftChosenState.touchPauseDisabled && /暂停/.test(survivorDraftChosenState.touchPauseLabel), `survivor roguelite draft should apply a chosen upgrade and restore running controls: ${JSON.stringify(survivorDraftChosenState)}`);
   assert(survivorOverdriveState.before?.overdrive >= 100 && survivorOverdriveState.before?.hud?.overdrive === 'READY' && survivorOverdriveState.after?.overdrive === 0 && survivorOverdriveState.after?.overdriveFlash > 0 && survivorOverdriveState.after?.score > survivorOverdriveState.before?.score && survivorOverdriveState.after?.slowed >= 1 && survivorOverdriveState.after?.enemies < survivorOverdriveState.before?.enemies && survivorOverdriveState.after?.chain >= survivorOverdriveState.before?.chain, `survivor overdrive should consume a full meter, slow enemies, kill targets, and score: ${JSON.stringify(survivorOverdriveState)}`);
   assert(survivorAnomalyState.started && survivorAnomalyState.nonBlank && survivorAnomalyState.state?.anomaly?.type === 'meteor' && survivorAnomalyState.state?.hazards?.length >= 3 && survivorAnomalyState.state?.hud?.event === 'METEOR' && survivorAnomalyState.eventText === 'METEOR' && survivorAnomalyState.achieved, `survivor anomaly events should create a readable deep-space crisis with hazards and achievement credit: ${JSON.stringify(survivorAnomalyState)}`);
   assert(survivorBountyState.nonBlank && survivorBountyState.after?.bounty?.completed > survivorBountyState.before?.bounty?.completed && survivorBountyState.after?.score > survivorBountyState.before?.score && survivorBountyState.after?.bounty?.last === 'ELITE CLEAR' && survivorBountyState.after?.bounty?.flash > 0 && survivorBountyState.after?.hud?.bounty === survivorBountyState.bountyText && survivorBountyState.achieved, `survivor elite bounty should complete deterministically, reward score, sync HUD, and unlock achievement: ${JSON.stringify(survivorBountyState)}`);
@@ -4182,6 +4297,7 @@ async function run() {
     adminLoginSessionState,
     commandBeforeExecute,
     commandState,
+    premiumTabState,
     vaultCommandBeforeExecute,
     vaultCommandState,
     toolboxTabState,
@@ -4321,6 +4437,7 @@ function summarizeSmokeResult(result) {
     },
     arcade: {
       activeMode: result.arcadeInitial?.cockpitMode,
+      premiumArrowTab: result.premiumTabState?.afterArrow?.selected?.[0],
       profileAchievements: result.arcadeInitial?.profileAchievements,
       profileCompletion: result.arcadeInitial?.profileCompletion,
       mobileOverflow: result.premiumMobileState?.horizontalOverflow,

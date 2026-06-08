@@ -950,7 +950,11 @@ function init() {
     navigateTo('game');
     setTimeout(() => {
       const btn = document.querySelector(`[data-premium-game="${escapeCommandSelectorValue(gameId)}"]`);
-      if (btn) btn.click();
+      if (btn && typeof window.__atherixSwitchPremiumGame === 'function') {
+        window.__atherixSwitchPremiumGame(gameId, { focus: false });
+      } else if (btn) {
+        btn.click();
+      }
     }, 160);
   }
 
@@ -5472,12 +5476,12 @@ function init() {
         </div>
       </div>
       <div class="mini-game-tabs" id="premium-game-tabs" role="tablist" aria-label="精品小游戏选择">
-        <button type="button" class="mini-game-tab active" data-premium-game="survivor">星核幸存者</button>
-        <button type="button" class="mini-game-tab" data-premium-game="boss">棱镜 Boss</button>
-        <button type="button" class="mini-game-tab" data-premium-game="drift">霓虹漂移</button>
-        <button type="button" class="mini-game-tab" data-premium-game="heist">赛博潜入</button>
-        <button type="button" class="mini-game-tab" data-premium-game="chain">连锁炼金</button>
-        <button type="button" class="mini-game-tab" data-premium-game="tactics">裂隙战术</button>
+        <button type="button" class="mini-game-tab active" id="premium-tab-survivor" role="tab" aria-selected="true" aria-controls="premium-survivor" tabindex="0" data-premium-game="survivor">星核幸存者</button>
+        <button type="button" class="mini-game-tab" id="premium-tab-boss" role="tab" aria-selected="false" aria-controls="premium-boss" tabindex="-1" data-premium-game="boss">棱镜 Boss</button>
+        <button type="button" class="mini-game-tab" id="premium-tab-drift" role="tab" aria-selected="false" aria-controls="premium-drift" tabindex="-1" data-premium-game="drift">霓虹漂移</button>
+        <button type="button" class="mini-game-tab" id="premium-tab-heist" role="tab" aria-selected="false" aria-controls="premium-heist" tabindex="-1" data-premium-game="heist">赛博潜入</button>
+        <button type="button" class="mini-game-tab" id="premium-tab-chain" role="tab" aria-selected="false" aria-controls="premium-chain" tabindex="-1" data-premium-game="chain">连锁炼金</button>
+        <button type="button" class="mini-game-tab" id="premium-tab-tactics" role="tab" aria-selected="false" aria-controls="premium-tactics" tabindex="-1" data-premium-game="tactics">裂隙战术</button>
       </div>
       <div class="mini-game-stage" id="premium-game-stage" tabindex="0" aria-label="精品街机操作区">
         <div class="premium-stage-feedback" id="premium-stage-feedback" aria-hidden="true"></div>
@@ -5499,7 +5503,7 @@ function init() {
             <span>开始本模式</span>
           </button>
         </div>
-        <div class="mini-game-panel active" id="premium-survivor">
+        <div class="mini-game-panel active" id="premium-survivor" role="tabpanel" aria-labelledby="premium-tab-survivor" tabindex="0">
           <div class="mini-game-copy">
             <h3>Starcore Survivor</h3>
             <p>WASD / 方向键移动，自动射击，Space 释放星爆。吸收星核升级武器，在 90 秒内顶住精英潮和深空事件。</p>
@@ -5532,7 +5536,7 @@ function init() {
             </div>
           </div>
         </div>
-        <div class="mini-game-panel" id="premium-boss">
+        <div class="mini-game-panel" id="premium-boss" role="tabpanel" aria-labelledby="premium-tab-boss" tabindex="0" hidden>
           <div class="mini-game-copy">
             <h3>Prism Boss Rush</h3>
             <p>WASD / 方向键机动，Space 闪避无敌，自动开火。抓住预警弱点破招，击碎棱镜护盾后进入高伤害窗口。</p>
@@ -5557,7 +5561,7 @@ function init() {
           </div>
           <canvas class="mini-canvas mini-canvas-wide" id="premium-boss-canvas" width="560" height="340"></canvas>
         </div>
-        <div class="mini-game-panel" id="premium-drift">
+        <div class="mini-game-panel" id="premium-drift" role="tabpanel" aria-labelledby="premium-tab-drift" tabindex="0" hidden>
           <div class="mini-game-copy">
             <h3>Neon Drift</h3>
             <p>WASD / 方向键推进，Space 量子加速，Q 相位刹车。穿越连续检查点、完成赞助合约、压住赛道热度并甩开劲敌。</p>
@@ -5584,7 +5588,7 @@ function init() {
           </div>
           <canvas class="mini-canvas mini-canvas-wide" id="premium-drift-canvas" width="560" height="340" aria-label="霓虹漂移赛道"></canvas>
         </div>
-        <div class="mini-game-panel" id="premium-heist">
+        <div class="mini-game-panel" id="premium-heist" role="tabpanel" aria-labelledby="premium-tab-heist" tabindex="0" hidden>
           <div class="mini-game-copy">
             <h3>Cyber Heist</h3>
             <p>潜入数据金库。WASD / 方向键移动，Space 启动短暂隐身，Q 部署诱饵；黑入终端、绕开摄像头与视野锥，偷走 4 枚密钥后撤离。</p>
@@ -5608,7 +5612,7 @@ function init() {
           </div>
           <canvas class="mini-canvas mini-canvas-wide" id="premium-heist-canvas" width="560" height="360"></canvas>
         </div>
-        <div class="mini-game-panel" id="premium-chain">
+        <div class="mini-game-panel" id="premium-chain" role="tabpanel" aria-labelledby="premium-tab-chain" tabindex="0" hidden>
           <div class="mini-game-copy">
             <h3>Alchemy Chain</h3>
             <p>点击相邻同色能量团触发连锁爆破；也可以用方向键或手柄移动光标，Space / ACT 炼成当前格，Q / TOOL 催化超载核心。</p>
@@ -5634,7 +5638,7 @@ function init() {
           </div>
           <div class="memory-board chain-board" id="premium-chain-board" aria-label="连锁消除棋盘"></div>
         </div>
-        <div class="mini-game-panel" id="premium-tactics">
+        <div class="mini-game-panel" id="premium-tactics" role="tabpanel" aria-labelledby="premium-tab-tactics" tabindex="0" hidden>
           <div class="mini-game-copy">
             <h3>Rift Tactics</h3>
             <p>回合制机甲战术。WASD / 方向键移动，Space 释放相位爆破或架盾；夺取 3 个数据核心后撤离，敌人会包抄、射线压制与近战追击。</p>
@@ -5693,6 +5697,8 @@ function init() {
 
     const stage = document.getElementById('premium-game-stage');
     const title = document.getElementById('premium-active-title');
+    const premiumGameTabs = [...library.querySelectorAll('[data-premium-game]')];
+    const premiumGamePanels = [...library.querySelectorAll('.mini-game-panel')];
     const premiumKeys = { up: false, down: false, left: false, right: false, action: false, tool: false };
     const premiumControlNames = Object.keys(premiumKeys);
     const premiumInputSources = {
@@ -5752,6 +5758,8 @@ function init() {
     };
     let premiumActive = 'survivor';
     let premiumInputArmed = false;
+    const premiumRestartConfirmMs = 1800;
+    let premiumRestartRequest = { game: '', until: 0, timer: 0 };
     const titles = {
       survivor: '星核幸存者 Starcore Survivor',
       boss: '棱镜 Boss Rush',
@@ -7934,18 +7942,47 @@ function init() {
       return premiumStrategyState();
     }
 
+    function premiumRestartPending(game = premiumActive) {
+      return premiumRestartRequest.game === game && Date.now() < premiumRestartRequest.until;
+    }
+
+    function clearPremiumRestartRequest() {
+      if (premiumRestartRequest.timer) window.clearTimeout(premiumRestartRequest.timer);
+      premiumRestartRequest = { game: '', until: 0, timer: 0 };
+    }
+
+    function armPremiumRestartRequest(game = premiumActive) {
+      clearPremiumRestartRequest();
+      premiumRestartRequest = {
+        game,
+        until: Date.now() + premiumRestartConfirmMs,
+        timer: window.setTimeout(() => {
+          if (premiumRestartRequest.game === game) {
+            premiumRestartRequest = { game: '', until: 0, timer: 0 };
+            updatePremiumMetaControls();
+          }
+        }, premiumRestartConfirmMs)
+      };
+      updatePremiumMetaControls();
+    }
+
     function updatePremiumMetaControls() {
       const startBtn = document.getElementById('premium-touch-start');
       const pauseBtn = document.getElementById('premium-touch-pause');
       const state = premiumRealtimeState();
       const activeLabel = premiumTabLabels[premiumActive] || titles[premiumActive] || premiumActive;
+      const restartPending = state.realtime && state.running && premiumRestartPending();
       if (startBtn) {
         const startLabel = state.realtime
-          ? state.draft ? '选择' : state.running ? '重开' : '开始'
+          ? state.draft ? '选择' : state.running ? restartPending ? '确认重开' : '重开' : '开始'
           : state.startLabel || '新局';
         startBtn.textContent = startLabel;
+        startBtn.dataset.confirmRestart = restartPending ? 'true' : 'false';
         startBtn.disabled = !!state.draft;
-        startBtn.setAttribute('aria-label', `${state.draft ? '升级选择中，请先选择改造' : startLabel} ${activeLabel}`);
+        const startAria = restartPending
+          ? `再次按下确认重开 ${activeLabel}`
+          : `${state.draft ? '升级选择中，请先选择改造' : startLabel} ${activeLabel}`;
+        startBtn.setAttribute('aria-label', startAria);
       }
       if (pauseBtn) {
         const pauseLabel = state.draft ? '选择中' : state.paused ? '继续' : '暂停';
@@ -7970,6 +8007,7 @@ function init() {
       const stateText = state.realtime
         ? state.draft ? '升级' : state.paused ? '暂停' : state.running ? '运行' : '待机'
         : state.stateText || '待机';
+      const restartPending = state.realtime && state.running && premiumRestartPending();
       readout.dataset.mode = premiumActive;
       readout.dataset.state = state.realtime
         ? state.draft ? 'draft' : state.paused ? 'paused' : state.running ? 'running' : 'idle'
@@ -7981,7 +8019,7 @@ function init() {
         toolEl.textContent = config.tool || '--';
         toolEl.closest('span')?.classList.toggle('is-disabled', !premiumControlAvailable('tool'));
       }
-      if (startEl) startEl.textContent = state.draft ? '1/2/3 选择' : state.realtime ? state.running ? 'Enter 重开' : 'Enter 开始' : state.startText || 'Enter 新局';
+      if (startEl) startEl.textContent = state.draft ? '1/2/3 选择' : state.realtime ? state.running ? restartPending ? 'Enter 确认重开' : 'Enter 请求重开' : 'Enter 开始' : state.startText || 'Enter 新局';
       if (stateEl) stateEl.textContent = stateText;
     }
 
@@ -7991,6 +8029,14 @@ function init() {
         triggerPremiumFeedback('special', { label: 'CHOOSE UPGRADE' });
         return false;
       }
+      const state = premiumRealtimeState();
+      if (state.realtime && state.running && !premiumRestartPending()) {
+        armPremiumRestartRequest(premiumActive);
+        triggerPremiumFeedback('danger', { label: 'CONFIRM RESTART' });
+        showToast(`再次按开始 / Enter 确认重开：${premiumTabLabels[premiumActive] || titles[premiumActive] || premiumActive}`, 'info');
+        return 'pending';
+      }
+      clearPremiumRestartRequest();
       pauseRunnerGame({ focusOverlay: false });
       clearPremiumKeys();
       if (premiumActive === 'survivor') startSurvivor();
@@ -8044,17 +8090,55 @@ function init() {
       updatePremiumInputReadout();
     }
 
-    function switchPremiumGame(name) {
+    function focusPremiumGameTabByOffset(currentBtn, offset) {
+      const currentIndex = premiumGameTabs.indexOf(currentBtn);
+      if (currentIndex < 0 || !premiumGameTabs.length) return false;
+      const next = premiumGameTabs[(currentIndex + offset + premiumGameTabs.length) % premiumGameTabs.length];
+      return switchPremiumGame(next.dataset.premiumGame, { focus: 'tab' });
+    }
+
+    function syncPremiumGameTabs(name) {
+      premiumGameTabs.forEach(btn => {
+        const active = btn.dataset.premiumGame === name;
+        btn.classList.toggle('active', active);
+        btn.setAttribute('role', 'tab');
+        btn.setAttribute('aria-selected', active ? 'true' : 'false');
+        btn.setAttribute('tabindex', active ? '0' : '-1');
+        if (!btn.id) btn.id = `premium-tab-${btn.dataset.premiumGame}`;
+        btn.setAttribute('aria-controls', `premium-${btn.dataset.premiumGame}`);
+      });
+    }
+
+    function syncPremiumGamePanels(name) {
+      premiumGamePanels.forEach(panel => {
+        const mode = panel.id.replace(/^premium-/, '');
+        const active = mode === name;
+        const tab = library.querySelector(`[data-premium-game="${escapeCommandSelectorValue(mode)}"]`);
+        panel.classList.toggle('active', active);
+        panel.hidden = !active;
+        panel.setAttribute('role', 'tabpanel');
+        panel.setAttribute('tabindex', '0');
+        if (tab?.id) panel.setAttribute('aria-labelledby', tab.id);
+        panel.removeAttribute('aria-hidden');
+      });
+    }
+
+    function switchPremiumGame(name, options = {}) {
+      if (!name || !titles[name] || (name !== 'runner' && !library.querySelector(`[data-premium-game="${escapeCommandSelectorValue(name)}"]`))) {
+        return false;
+      }
       const previous = premiumActive;
+      const targetPanel = document.getElementById(`premium-${name}`);
+      const activeElement = document.activeElement;
+      const activeTab = library.querySelector(`[data-premium-game="${escapeCommandSelectorValue(name)}"]`);
+      const focusInsideInactivePanel = activeElement && targetPanel && !targetPanel.contains(activeElement) && premiumGamePanels.some(panel => panel.contains(activeElement));
+      if (previous !== name) clearPremiumRestartRequest();
       premiumActive = name;
       pauseRealtimePremiumGamesExcept(name);
       clearPremiumKeys();
-      library.querySelectorAll('[data-premium-game]').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.premiumGame === name);
-      });
-      library.querySelectorAll('.mini-game-panel').forEach(panel => {
-        panel.classList.toggle('active', panel.id === `premium-${name}`);
-      });
+      syncPremiumGameTabs(name);
+      if (options.focus === 'tab' || focusInsideInactivePanel) activeTab?.focus({ preventScroll: true });
+      syncPremiumGamePanels(name);
       if (title) title.textContent = titles[name];
       if (name === 'tactics') drawTactics();
       if (name === 'drift') drawDrift();
@@ -8063,8 +8147,15 @@ function init() {
       renderPremiumBriefing();
       renderArcadeCockpit();
       if (previous !== name) triggerPremiumFeedback('switch', { label: premiumTabLabels[name] || titles[name] || name });
-      focusStage();
+      if (options.focus === 'panel') {
+        targetPanel?.focus({ preventScroll: true });
+      } else if (options.focus !== false && options.focus !== 'tab') {
+        focusStage();
+      }
+      return true;
     }
+
+    window.__atherixSwitchPremiumGame = switchPremiumGame;
 
     function launchDirectorChallenge() {
       const target = document.getElementById('premium-director-start')?.dataset.targetGame || arcadeDirective().game;
@@ -8118,7 +8209,9 @@ function init() {
     document.getElementById('premium-director-start')?.addEventListener('click', launchDirectorChallenge);
     document.getElementById('premium-cockpit-play')?.addEventListener('click', () => {
       focusStage();
-      if (!startPremiumActiveGame()) {
+      const result = startPremiumActiveGame();
+      if (result === 'pending') return;
+      if (result === false) {
         showToast('升级选择中：请先选择一项改造', 'info');
         return;
       }
@@ -8127,7 +8220,9 @@ function init() {
     });
     document.getElementById('premium-briefing-start')?.addEventListener('click', () => {
       focusStage();
-      if (!startPremiumActiveGame()) {
+      const result = startPremiumActiveGame();
+      if (result === 'pending') return;
+      if (result === false) {
         showToast('升级选择中：请先选择一项改造', 'info');
         return;
       }
@@ -8167,7 +8262,9 @@ function init() {
     document.getElementById('premium-touch-start')?.addEventListener('click', () => {
       const wasRunning = premiumRealtimeState().running;
       focusStage();
-      if (!startPremiumActiveGame()) {
+      const result = startPremiumActiveGame();
+      if (result === 'pending') return;
+      if (result === false) {
         showToast('升级选择中：请先选择一项改造', 'info');
         return;
       }
@@ -8191,8 +8288,34 @@ function init() {
       }
     }, { capture: true, passive: true });
 
-    library.querySelectorAll('[data-premium-game]').forEach(btn => {
-      btn.addEventListener('click', () => switchPremiumGame(btn.dataset.premiumGame));
+    syncPremiumGameTabs(premiumActive);
+    syncPremiumGamePanels(premiumActive);
+
+    premiumGameTabs.forEach((btn, index) => {
+      const mode = btn.dataset.premiumGame;
+      if (mode) {
+        if (!btn.id) btn.id = `premium-tab-${mode}`;
+        btn.setAttribute('role', 'tab');
+        btn.setAttribute('aria-controls', `premium-${mode}`);
+      }
+      btn.addEventListener('click', () => switchPremiumGame(mode));
+      btn.addEventListener('keydown', (event) => {
+        if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+          event.preventDefault();
+          focusPremiumGameTabByOffset(btn, 1);
+        } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          focusPremiumGameTabByOffset(btn, -1);
+        } else if (event.key === 'Home') {
+          event.preventDefault();
+          switchPremiumGame(premiumGameTabs[0]?.dataset.premiumGame, { focus: 'tab' });
+        } else if (event.key === 'End') {
+          event.preventDefault();
+          switchPremiumGame(premiumGameTabs[premiumGameTabs.length - 1]?.dataset.premiumGame, { focus: 'tab' });
+        }
+      });
+      btn.setAttribute('aria-selected', index === 0 ? 'true' : 'false');
+      btn.setAttribute('tabindex', index === 0 ? '0' : '-1');
     });
     updatePremiumFeedbackUi();
 
@@ -14257,6 +14380,28 @@ function init() {
           survivorScore: () => survivor.score,
           survivorDraftOpen: () => survivor.draftOpen,
           survivorDraftChoices: () => survivor.draftChoices.map(choice => ({ id: choice.id, title: choice.title })),
+          resetSurvivorRun: () => {
+            switchPremiumGame('survivor');
+            clearPremiumRestartRequest();
+            startSurvivor();
+            updatePremiumMetaControls();
+            return survivorDebugState();
+          },
+          resetSurvivorIdle: () => {
+            switchPremiumGame('survivor');
+            clearPremiumRestartRequest();
+            if (survivor.raf) cancelAnimationFrame(survivor.raf);
+            survivor.running = false;
+            survivor.paused = false;
+            survivor.draftOpen = false;
+            survivor.draftChoices = [];
+            renderSurvivorDraft();
+            setSurvivorUi();
+            drawSurvivor();
+            overlay(survivor.ctx, survivor.canvas.width, survivor.canvas.height, '部署星核机体', 'WASD 移动 · 自动射击 · 吸收星核升级');
+            updatePremiumMetaControls();
+            return survivorDebugState();
+          },
           openSurvivorDraft: () => {
             if (!survivor.running) startSurvivor();
             if (!survivor.draftOpen) openSurvivorDraft();
@@ -14271,6 +14416,22 @@ function init() {
           forceSurvivorHpZero: () => forceSurvivorHpZero(),
           bossRunning: () => bossMode.running,
           bossPaused: () => bossMode.paused,
+          resetBossIdle: () => {
+            switchPremiumGame('boss');
+            clearPremiumRestartRequest();
+            if (bossMode.raf) cancelAnimationFrame(bossMode.raf);
+            bossMode.running = false;
+            bossMode.paused = false;
+            setBossUi();
+            drawBoss();
+            overlay(bossMode.ctx, bossMode.canvas.width, bossMode.canvas.height, '棱镜核心等待挑战', 'A/D 移动 · Space 冲刺无敌 · 自动射击');
+            updatePremiumMetaControls();
+            return {
+              running: bossMode.running,
+              paused: bossMode.paused,
+              shield: bossShieldState()
+            };
+          },
           bossPhase: () => bossMode.boss.phase,
           bossPattern: () => ({
             queued: bossMode.queuedPattern,
@@ -14414,6 +14575,22 @@ function init() {
           },
           driftRunning: () => drift.running,
           driftPaused: () => drift.paused,
+          resetDriftIdle: () => {
+            switchPremiumGame('drift');
+            clearPremiumRestartRequest();
+            if (drift.raf) cancelAnimationFrame(drift.raf);
+            drift.running = false;
+            drift.paused = false;
+            setDriftUi();
+            drawDrift();
+            overlay(drift.ctx, drift.canvas.width, drift.canvas.height, '霓虹航线待点火', 'WASD 转向推进 · Space 加速 · Q 相位刹车');
+            updatePremiumMetaControls();
+            return {
+              running: drift.running,
+              paused: drift.paused,
+              gates: drift.gateIndex
+            };
+          },
           driftGates: () => drift.gateIndex,
           driftShield: () => drift.player.shield,
           driftLineState: () => ({
@@ -14846,6 +15023,11 @@ function init() {
           }),
           simulateGamepad: (snapshot = {}) => applyPremiumGamepadSnapshot({ connected: true, name: 'Smoke Pad', ...snapshot }, { force: true }),
           simulateGamepadUnforced: (snapshot = {}) => applyPremiumGamepadSnapshot({ connected: true, name: 'Smoke Pad', ...snapshot }),
+          restartRequest: () => ({
+            game: premiumRestartRequest.game,
+            pending: premiumRestartPending(),
+            remainingMs: Math.max(0, premiumRestartRequest.until - Date.now())
+          }),
           feedback: () => ({
             muted: premiumFeedback.muted,
             total: premiumFeedback.total,
