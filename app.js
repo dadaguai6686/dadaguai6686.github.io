@@ -4864,7 +4864,7 @@ function init() {
         <div class="arcade-profile-grid">
           <span>完成度 <strong id="premium-profile-completion">0%</strong></span>
           <span>奖牌 <strong id="premium-profile-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-profile-achievements">0/27</strong></span>
+          <span>成就 <strong id="premium-profile-achievements">0/28</strong></span>
           <span>最近 <strong id="premium-profile-latest">--</strong></span>
         </div>
         <button type="button" class="arcade-profile-action" id="premium-profile-target" data-profile-target-game="survivor">
@@ -4964,7 +4964,7 @@ function init() {
         </div>
         <div class="arcade-director-meters" aria-label="街机完成度">
           <span>奖牌 <strong id="premium-director-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-director-achievements">0/27</strong></span>
+          <span>成就 <strong id="premium-director-achievements">0/28</strong></span>
           <span>完成度 <strong id="premium-director-completion">0%</strong></span>
         </div>
         <button type="button" class="arcade-director-action" id="premium-director-start" data-target-game="survivor">
@@ -5161,6 +5161,8 @@ function init() {
               <span>工具 <strong id="premium-heist-tools">CLOAK 2</strong></span>
               <span>诱饵 <strong id="premium-heist-decoys">2</strong></span>
               <span>战利品 <strong id="premium-heist-loot">0</strong></span>
+              <span>破解 <strong id="premium-heist-hack">IDLE</strong></span>
+              <span>协议 <strong id="premium-heist-protocol">--</strong></span>
             </div>
             <div class="mini-actions">
               <button type="button" class="action-btn action-btn-primary" id="premium-heist-new">生成任务</button>
@@ -5410,6 +5412,7 @@ function init() {
       { id: 'heist_ghost', label: '幽影协议', desc: '成功启动隐身装置' },
       { id: 'heist_clean', label: '无声撤离', desc: '低步数完成潜入' },
       { id: 'heist_cache', label: '金库猎手', desc: '赛博潜入中取得高价值缓存' },
+      { id: 'heist_protocol', label: '零日破解', desc: '赛博潜入中完成一次终端破解协议' },
       { id: 'chain_combo_9', label: '九连炼成', desc: '一次连锁爆破 9 格以上' },
       { id: 'chain_recipe', label: '秘方共振', desc: '连锁炼金完成一张配方契约' },
       { id: 'chain_clear', label: '贤者能场', desc: '完成连锁炼金目标' },
@@ -7368,6 +7371,10 @@ function init() {
         });
       }
       if (pressed && premiumActive === 'heist') {
+        if (heist.hack?.active && ['up', 'down', 'left', 'right'].includes(control)) {
+          inputHeistHack(control);
+          return;
+        }
         if (control === 'up') moveHeist(0, -1);
         if (control === 'down') moveHeist(0, 1);
         if (control === 'left') moveHeist(-1, 0);
@@ -10538,10 +10545,14 @@ function init() {
       routeRisk: 0,
       chain: 0,
       bestChain: 0,
+      hack: null,
+      hacksCompleted: 0,
+      hackFlash: 0,
       heatCells: [],
       routeCells: [],
       won: false
     };
+    const heistHackGlyphs = { up: 'U', down: 'D', left: 'L', right: 'R' };
 
     function setHeistUi() {
       document.getElementById('premium-heist-keys').textContent = heist.collected;
@@ -10569,6 +10580,18 @@ function init() {
       if (chainEl) {
         chainEl.textContent = `${heist.chain}x`;
         chainEl.style.color = heist.chain >= 8 ? '#FDE68A' : heist.chain >= 4 ? '#A7F3D0' : '#fff';
+      }
+      const hackEl = document.getElementById('premium-heist-hack');
+      if (hackEl) {
+        hackEl.textContent = heist.hack?.active
+          ? `${heist.hack.cursor}/${heist.hack.sequence.length}`
+          : (heist.hacksCompleted > 0 ? `DONE ${heist.hacksCompleted}` : 'IDLE');
+        hackEl.style.color = heist.hack?.active ? '#FDE68A' : (heist.hacksCompleted > 0 ? '#34D399' : '#94A3B8');
+      }
+      const protocolEl = document.getElementById('premium-heist-protocol');
+      if (protocolEl) {
+        protocolEl.textContent = heist.hack?.active ? heistProtocolText(heist.hack) : '--';
+        protocolEl.style.color = heist.hack?.active ? '#BAE6FD' : '#94A3B8';
       }
       const alertEl = document.getElementById('premium-heist-alert');
       alertEl.textContent = heist.alert;
@@ -10599,7 +10622,10 @@ function init() {
         { x: 18, y: 5, dir: -1, axis: 'x', cone: Math.max(2, 4 + coneDelta), sweep: 1, disabled: false },
         { x: 5, y: 11, dir: 1, axis: 'x', cone: Math.max(2, 3 + coneDelta), sweep: 2, disabled: false }
       ];
-      heist.terminals = [{ x: 3, y: 5, used: false }, { x: 17, y: 9, used: false }];
+      heist.terminals = [
+        { id: 'alpha', x: 3, y: 5, used: false, protocol: ['right', 'up', 'right'] },
+        { id: 'omega', x: 17, y: 9, used: false, protocol: ['left', 'down', 'right', 'up'] }
+      ];
       heist.doors = [{ x: 9, y: 8, open: false }, { x: 12, y: 4, open: false }];
       heist.caches = [
         { x: 6, y: 6, value: 180, tier: 'S', taken: false },
@@ -10622,6 +10648,9 @@ function init() {
       heist.routeRisk = 0;
       heist.chain = 0;
       heist.bestChain = 0;
+      heist.hack = null;
+      heist.hacksCompleted = 0;
+      heist.hackFlash = 0;
       heist.heatCells = [];
       heist.routeCells = [];
       heist.won = false;
@@ -10650,6 +10679,102 @@ function init() {
       heist.securityPeak = Math.max(heist.securityPeak, heist.security);
       if (amount > 0) heist.alarmFlash = Math.max(heist.alarmFlash, 3);
       if (tactic) heist.lastTactic = tactic;
+    }
+
+    function heistProtocolText(hack = heist.hack) {
+      if (!hack?.active) return '--';
+      return hack.sequence.map((step, index) => {
+        const glyph = heistHackGlyphs[step] || '?';
+        if (index < hack.cursor) return `[${glyph}]`;
+        if (index === hack.cursor) return `>${glyph}<`;
+        return glyph;
+      }).join(' ');
+    }
+
+    function startHeistHack(terminal, risk = 0) {
+      if (!terminal || terminal.used) return false;
+      const sequence = (terminal.protocol || ['up', 'right', 'down']).slice();
+      heist.hack = {
+        active: true,
+        terminal,
+        sequence,
+        cursor: 0,
+        attempts: 2,
+        risk,
+        glitch: 0
+      };
+      heist.alert = 'HACK';
+      heist.lastTactic = 'PROTOCOL OPEN';
+      heist.hackFlash = 6;
+      setHeistUi();
+      drawHeist();
+      triggerPremiumFeedback('tool', { label: 'HACK' });
+      return true;
+    }
+
+    function finishHeistHack() {
+      const hack = heist.hack;
+      if (!hack?.active) return false;
+      const terminal = hack.terminal;
+      terminal.used = true;
+      heist.hacksCompleted++;
+      heist.hack = null;
+      const door = heist.doors.find(d => !d.open);
+      if (door) door.open = true;
+      const camera = heist.cameras.find(item => !item.disabled);
+      if (camera) camera.disabled = true;
+      heist.cloaks = Math.min(4, heist.cloaks + 1);
+      heist.decoys = Math.min(4, heist.decoys + 1);
+      heist.security = Math.max(0, heist.security - 30);
+      heist.loot += 120 + heist.chain * 8 + hack.sequence.length * 22;
+      heist.chain += hack.sequence.length + 2;
+      heist.bestChain = Math.max(heist.bestChain, heist.chain);
+      heist.alert = 'BREACH';
+      heist.lastTactic = camera ? 'PROTOCOL CAM-OFF' : 'PROTOCOL DOOR';
+      heist.hackFlash = 8;
+      unlockAchievement('heist_protocol');
+      setHeistUi();
+      drawHeist();
+      triggerPremiumFeedback('achievement', { label: 'ZERO DAY' });
+      return true;
+    }
+
+    function failHeistHack(control) {
+      const hack = heist.hack;
+      if (!hack?.active) return false;
+      hack.cursor = 0;
+      hack.attempts = Math.max(0, Number(hack.attempts || 0) - 1);
+      hack.glitch = 5;
+      heist.chain = 0;
+      heist.alert = 'TRACE';
+      heistRaiseSecurity(16 + Number(hack.risk || 0) * 2, `TRACE ${String(control || '').toUpperCase()}`);
+      if (hack.attempts <= 0 && heist.security >= 74) {
+        heist.hack = null;
+        heistCaught('LOCK');
+      }
+      setHeistUi();
+      drawHeist();
+      triggerPremiumFeedback('danger', { label: 'TRACE' });
+      return false;
+    }
+
+    function inputHeistHack(control) {
+      const hack = heist.hack;
+      if (!hack?.active || !['up', 'down', 'left', 'right'].includes(control)) return false;
+      const expected = hack.sequence[hack.cursor];
+      if (control !== expected) return failHeistHack(control);
+      hack.cursor++;
+      hack.glitch = 0;
+      heist.chain += 1;
+      heist.bestChain = Math.max(heist.bestChain, heist.chain);
+      heist.security = Math.max(0, heist.security - 2);
+      heist.alert = 'HACK';
+      heist.lastTactic = `HACK ${hack.cursor}/${hack.sequence.length}`;
+      if (hack.cursor >= hack.sequence.length) return finishHeistHack();
+      setHeistUi();
+      drawHeist();
+      triggerPremiumFeedback('move', { label: 'CODE OK' });
+      return true;
     }
 
     function heistCameraVector(camera) {
@@ -10827,6 +10952,28 @@ function init() {
 
     function heistIntel() {
       const heat = heistHeatMap();
+      const cameraIntel = heist.cameras.map(camera => ({
+        x: camera.x,
+        y: camera.y,
+        disabled: !!camera.disabled,
+        sensor: heistCameraSensor(camera)
+      }));
+      const cacheIntel = heist.caches.map(cache => ({ ...cache }));
+      const heatCells = [...heat.entries()].map(([key, value]) => {
+        const [x, y] = key.split(',').map(Number);
+        return { x, y, risk: value };
+      });
+      if (heist.hack?.active) {
+        return {
+          label: `HACK ${heist.hack.cursor}/${heist.hack.sequence.length}`,
+          risk: Number(heist.hack.risk || 0),
+          target: { kind: 'HACK', x: heist.hack.terminal?.x, y: heist.hack.terminal?.y },
+          route: [],
+          cameras: cameraIntel,
+          caches: cacheIntel,
+          heatCells
+        };
+      }
       const candidates = heistObjectiveCandidates()
         .map(target => ({ target, route: heistRouteTo(target, heat) }))
         .filter(item => item.route.length || (item.target.x === heist.player.x && item.target.y === heist.player.y))
@@ -10852,17 +10999,9 @@ function init() {
         risk,
         target: best.target,
         route: best.route.slice(0, 18),
-        cameras: heist.cameras.map(camera => ({
-          x: camera.x,
-          y: camera.y,
-          disabled: !!camera.disabled,
-          sensor: heistCameraSensor(camera)
-        })),
-        caches: heist.caches.map(cache => ({ ...cache })),
-        heatCells: [...heat.entries()].map(([key, value]) => {
-          const [x, y] = key.split(',').map(Number);
-          return { x, y, risk: value };
-        })
+        cameras: cameraIntel,
+        caches: cacheIntel,
+        heatCells
       };
     }
 
@@ -10876,6 +11015,26 @@ function init() {
         heatCells: intel.heatCells,
         cameras: intel.cameras,
         caches: intel.caches,
+        terminals: heist.terminals.map(terminal => ({
+          id: terminal.id,
+          x: terminal.x,
+          y: terminal.y,
+          used: !!terminal.used,
+          protocol: terminal.protocol || []
+        })),
+        hack: heist.hack ? {
+          active: !!heist.hack.active,
+          terminal: heist.hack.terminal?.id || '',
+          cursor: Number(heist.hack.cursor || 0),
+          attempts: Number(heist.hack.attempts || 0),
+          risk: Number(heist.hack.risk || 0),
+          sequence: heist.hack.sequence || [],
+          protocolText: heistProtocolText(heist.hack),
+          glitch: Number(heist.hack.glitch || 0)
+        } : null,
+        hacksCompleted: heist.hacksCompleted,
+        hackHud: document.getElementById('premium-heist-hack')?.textContent || '',
+        protocolHud: document.getElementById('premium-heist-protocol')?.textContent || '',
         chain: heist.chain,
         bestChain: heist.bestChain,
         routeHud: document.getElementById('premium-heist-route')?.textContent || '',
@@ -10952,6 +11111,7 @@ function init() {
       heist.alert = cause;
       heist.chain = 0;
       heist.decoy = null;
+      heist.hack = null;
       heistRaiseSecurity(cause === 'LOCK' ? 26 : 18, cause === 'LOCK' ? 'LOCKDOWN' : 'SPOTTED');
     }
 
@@ -10975,15 +11135,7 @@ function init() {
       });
       heist.terminals.forEach(t => {
         if (t.used || t.x !== heist.player.x || t.y !== heist.player.y) return;
-        t.used = true;
-        const door = heist.doors.find(d => !d.open);
-        if (door) door.open = true;
-        const camera = heist.cameras.find(item => !item.disabled);
-        if (camera) camera.disabled = true;
-        heist.cloaks = Math.min(3, heist.cloaks + 1);
-        heist.decoys = Math.min(3, heist.decoys + 1);
-        heist.security = Math.max(0, heist.security - 22);
-        heist.lastTactic = camera ? 'TERMINAL CAM-OFF' : 'TERMINAL DOOR';
+        startHeistHack(t, risk);
       });
     }
 
@@ -11034,7 +11186,8 @@ function init() {
           bestChain: heist.bestChain,
           route: heist.routeLabel,
           loot: heist.loot,
-          security: Math.round(heist.securityPeak)
+          security: Math.round(heist.securityPeak),
+          hacksCompleted: heist.hacksCompleted
         });
         heist.alert = 'CLEAR';
       }
@@ -11086,8 +11239,17 @@ function init() {
         ctx.fillRect(door.x * tile + 3, door.y * tile + 3, tile - 6, tile - 6);
       });
       heist.terminals.forEach(t => {
-        ctx.fillStyle = t.used ? '#34D399' : '#BAE6FD';
+        const activeHack = heist.hack?.active && heist.hack.terminal === t;
+        ctx.save();
+        ctx.fillStyle = t.used ? '#34D399' : activeHack ? '#FDE68A' : '#BAE6FD';
+        ctx.shadowColor = activeHack ? '#FDE68A' : 'transparent';
+        ctx.shadowBlur = activeHack ? 16 : 0;
         ctx.fillRect(t.x * tile + 6, t.y * tile + 8, tile - 12, tile - 14);
+        ctx.fillStyle = '#020617';
+        ctx.font = '800 7px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(t.used ? 'OK' : (activeHack ? `${heist.hack.cursor}/${heist.hack.sequence.length}` : 'IO'), t.x * tile + tile / 2, t.y * tile + 18);
+        ctx.restore();
       });
       heist.caches.forEach(cache => {
         if (cache.taken) return;
@@ -11161,10 +11323,31 @@ function init() {
       });
       ctx.fillStyle = heist.cloakTurns > 0 ? '#A78BFA' : '#06B6D4';
       ctx.fillRect(heist.player.x * tile + 5, heist.player.y * tile + 5, 18, 18);
+      if (heist.hack?.active) {
+        ctx.save();
+        const hx = heist.player.x * tile + tile / 2;
+        const hy = heist.player.y * tile + tile / 2;
+        ctx.strokeStyle = heist.hack.glitch > 0 ? '#F97316' : '#FDE68A';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.arc(hx, hy, 19 + Math.sin(Date.now() / 95) * 2, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(5, 8, 22, 0.82)';
+        ctx.fillRect(14, 10, 186, 46);
+        ctx.fillStyle = heist.hack.glitch > 0 ? '#FCA5A5' : '#FDE68A';
+        ctx.font = '900 10px JetBrains Mono, monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(`PROTOCOL ${heist.hack.cursor}/${heist.hack.sequence.length}`, 24, 26);
+        ctx.fillStyle = '#BAE6FD';
+        ctx.fillText(heistProtocolText(heist.hack), 24, 44);
+        ctx.restore();
+      }
       ctx.save();
       const hudX = c.width - 252;
       ctx.fillStyle = 'rgba(5, 8, 22, 0.68)';
-      ctx.fillRect(hudX, 10, 238, 65);
+      ctx.fillRect(hudX, 10, 238, 80);
       ctx.fillStyle = heist.routeRisk >= 3 ? '#FCA5A5' : heist.routeRisk > 0 ? '#FDE68A' : '#A7F3D0';
       ctx.font = '800 11px JetBrains Mono, monospace';
       ctx.textAlign = 'left';
@@ -11173,10 +11356,12 @@ function init() {
       ctx.fillText(`CHAIN ${heist.chain}x · BEST ${heist.bestChain}x`, hudX + 10, 42);
       ctx.fillStyle = heist.security >= 82 ? '#FCA5A5' : heist.security >= 48 ? '#FDE68A' : '#A7F3D0';
       ctx.fillText(`SEC ${Math.round(heist.security)}% · LOOT ${heist.loot}`, hudX + 10, 58);
+      ctx.fillStyle = heist.hack?.active ? '#FDE68A' : '#94A3B8';
+      ctx.fillText(`HACK ${heist.hack?.active ? heistProtocolText(heist.hack) : `DONE ${heist.hacksCompleted}`}`, hudX + 10, 74);
       ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
-      ctx.fillRect(hudX + 10, 63, 214, 4);
+      ctx.fillRect(hudX + 10, 78, 214, 4);
       ctx.fillStyle = heist.security >= 82 ? '#EF4444' : heist.security >= 48 ? '#F59E0B' : '#34D399';
-      ctx.fillRect(hudX + 10, 63, 214 * (heist.security / 100), 4);
+      ctx.fillRect(hudX + 10, 78, 214 * (heist.security / 100), 4);
       ctx.restore();
       if (heist.lastTactic && heist.lastTactic !== 'INFILTRATE') {
         ctx.save();
@@ -12950,6 +13135,52 @@ function init() {
               before,
               after: heistDebugState(),
               achieved: (career.achievements || []).includes('heist_cache')
+            };
+          },
+          openHeistHack: () => {
+            switchPremiumGame('heist');
+            newHeist();
+            const target = heist.terminals.find(terminal => !terminal.used) || heist.terminals[0];
+            if (!target) return heistDebugState();
+            const starts = [
+              { x: target.x - 1, y: target.y },
+              { x: target.x + 1, y: target.y },
+              { x: target.x, y: target.y - 1 },
+              { x: target.x, y: target.y + 1 }
+            ];
+            const start = starts.find(pos => !heistTileBlocked(pos.x, pos.y)) || { x: target.x, y: target.y };
+            heist.player = start;
+            heist.hack = null;
+            heist.cloakTurns = 3;
+            moveHeist(target.x - start.x, target.y - start.y);
+            return heistDebugState();
+          },
+          forceHeistHack: () => {
+            switchPremiumGame('heist');
+            if (!heist.grid.length) newHeist();
+            const target = heist.terminals.find(terminal => !terminal.used) || heist.terminals[0];
+            if (!target) return { before: heistDebugState(), opened: heistDebugState(), after: heistDebugState(), achieved: false };
+            const starts = [
+              { x: target.x - 1, y: target.y },
+              { x: target.x + 1, y: target.y },
+              { x: target.x, y: target.y - 1 },
+              { x: target.x, y: target.y + 1 }
+            ];
+            const start = starts.find(pos => !heistTileBlocked(pos.x, pos.y)) || { x: target.x, y: target.y };
+            heist.player = start;
+            heist.hack = null;
+            heist.cloakTurns = Math.max(heist.cloakTurns, 3);
+            const before = heistDebugState();
+            moveHeist(target.x - start.x, target.y - start.y);
+            const opened = heistDebugState();
+            const sequence = heist.hack?.sequence ? [...heist.hack.sequence] : [];
+            sequence.forEach(step => inputHeistHack(step));
+            return {
+              before,
+              opened,
+              sequence,
+              after: heistDebugState(),
+              achieved: (career.achievements || []).includes('heist_protocol')
             };
           },
           chainState: () => chainDebugState(),

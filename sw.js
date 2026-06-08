@@ -1,10 +1,10 @@
-const CACHE_VERSION = 'atherix-static-v35-boss-shield';
+const CACHE_VERSION = 'atherix-static-v38-heist-protocol';
 const NAVIGATION_FALLBACK_URL = '/index.html';
 const STATIC_ASSETS = [
   '/',
   NAVIGATION_FALLBACK_URL,
-  '/style.css?v=20260608-boss-shield-v1',
-  '/app.js?v=20260608-boss-shield-v1',
+  '/style.css?v=20260608-heist-protocol-v3',
+  '/app.js?v=20260608-heist-protocol-v3',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',

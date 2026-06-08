@@ -1990,6 +1990,7 @@ async function run() {
   const heistRouteStepState = await evaluate(`(() => window.__atherixDebug?.premium?.stepHeistRoute?.() || {})()`);
   const heistDecoyState = await evaluate(`(() => window.__atherixDebug?.premium?.forceHeistDecoy?.() || {})()`);
   const heistCacheState = await evaluate(`(() => window.__atherixDebug?.premium?.forceHeistCache?.() || {})()`);
+  const heistHackState = await evaluate(`(() => window.__atherixDebug?.premium?.forceHeistHack?.() || {})()`);
   await wait(260);
   const heistState = await evaluate(`(() => {
     const pixels = window.__atherixSmokeCountCanvasPixels?.('#premium-heist-canvas') || {};
@@ -2004,11 +2005,14 @@ async function run() {
       security: document.querySelector('#premium-heist-security')?.textContent,
       decoys: document.querySelector('#premium-heist-decoys')?.textContent,
       loot: document.querySelector('#premium-heist-loot')?.textContent,
+      hack: document.querySelector('#premium-heist-hack')?.textContent,
+      protocol: document.querySelector('#premium-heist-protocol')?.textContent,
       debug,
       before: ${JSON.stringify(heistIntelBefore)},
       routeStep: ${JSON.stringify(heistRouteStepState)},
       decoyState: ${JSON.stringify(heistDecoyState)},
       cacheState: ${JSON.stringify(heistCacheState)},
+      hackState: ${JSON.stringify(heistHackState)},
       achievementBadges: document.querySelectorAll('#premium-achievement-feed .career-badge').length,
       rating: document.querySelector('#premium-career-rating')?.textContent
     };
@@ -2117,7 +2121,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasBossShieldVersion: swText.includes('atherix-static-v35-boss-shield') && swText.includes('/style.css?v=20260608-boss-shield-v1') && swText.includes('/app.js?v=20260608-boss-shield-v1'),
+      swHasHeistProtocolVersion: swText.includes('atherix-static-v38-heist-protocol') && swText.includes('/style.css?v=20260608-heist-protocol-v3') && swText.includes('/app.js?v=20260608-heist-protocol-v3'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
   })()`, 10000);
@@ -2499,7 +2503,9 @@ async function run() {
   assert(heistState.routeStep.steps >= 2 && heistState.routeStep.chain > heistState.before.chain && Array.isArray(heistState.routeStep.route), `heist route stepping should advance chain and refresh route: ${JSON.stringify(heistState.routeStep)}`);
   assert(heistState.decoyState.after?.decoy?.timer > 0 && heistState.decoyState.after?.decoys < heistState.decoyState.before?.decoys && heistState.decoyState.after?.guards?.some(guard => Number(guard.distracted || 0) > 0) && /DECOY/.test(heistState.decoyState.after?.lastTactic || ''), `heist decoy should distract guards and consume a tool: ${JSON.stringify(heistState.decoyState)}`);
   assert(heistState.cacheState.after?.loot > heistState.cacheState.before?.loot && heistState.cacheState.after?.securityPeak >= heistState.cacheState.before?.securityPeak && heistState.cacheState.after?.caches?.some(cache => cache.taken) && heistState.cacheState.achieved, `heist cache should add loot, raise security pressure, and unlock achievement: ${JSON.stringify(heistState.cacheState)}`);
-  assert(/^\d+x$/.test(heistState.chain) && /^\d+%$/.test(heistState.security) && /^\d+$/.test(heistState.loot) && heistState.debug.chainHud === heistState.chain && heistState.debug.routeHud === heistState.route && heistState.debug.securityHud === heistState.security && heistState.debug.lootHud === heistState.loot, `heist HUD should stay in sync with debug state: ${JSON.stringify(heistState)}`);
+  assert(heistState.hackState.opened?.hack?.active && /^HACK\s+\d+\/\d+$/.test(heistState.hackState.opened?.label || '') && Array.isArray(heistState.hackState.sequence) && heistState.hackState.sequence.length >= 3, `heist terminal should open a readable protocol hack sequence: ${JSON.stringify(heistState.hackState)}`);
+  assert(heistState.hackState.after?.hacksCompleted > heistState.hackState.before?.hacksCompleted && heistState.hackState.after?.hack === null && heistState.hackState.after?.terminals?.some(terminal => terminal.used) && heistState.hackState.after?.cameras?.some(camera => camera.disabled) && heistState.hackState.after?.loot > heistState.hackState.before?.loot && heistState.hackState.after?.chain > heistState.hackState.before?.chain && heistState.hackState.after?.hackHud === heistState.hack && heistState.hackState.after?.protocolHud === heistState.protocol && heistState.hackState.achieved, `heist protocol hack should complete, change security systems, reward loot/chain, sync HUD, and unlock achievement: ${JSON.stringify(heistState.hackState)}`);
+  assert(/^\d+x$/.test(heistState.chain) && /^\d+%$/.test(heistState.security) && /^\d+$/.test(heistState.loot) && /^DONE\s+\d+$/.test(heistState.hack) && heistState.protocol === '--' && heistState.debug.chainHud === heistState.chain && heistState.debug.routeHud === heistState.route && heistState.debug.securityHud === heistState.security && heistState.debug.lootHud === heistState.loot && heistState.debug.hackHud === heistState.hack && heistState.debug.protocolHud === heistState.protocol, `heist HUD should stay in sync with debug state: ${JSON.stringify(heistState)}`);
   assert(careerDialogState.open && careerDialogState.ariaHidden === 'false', `career dialog should open: ${JSON.stringify(careerDialogState)}`);
   assert(careerDialogState.medalCards >= 7 && careerDialogState.achievements >= 16 && careerDialogState.unlocked >= 1, `career dialog should show medals and achievements: ${JSON.stringify(careerDialogState)}`);
   assert(/RANK/.test(careerDialogState.summary) && careerDialogState.daily.length > 10 && careerDialogState.visibleInViewport && !careerDialogState.horizontalOverflow, `career dialog should show readable summary and daily challenge: ${JSON.stringify(careerDialogState)}`);
@@ -2525,7 +2531,7 @@ async function run() {
   assert(tacticsForecastAfterAction.dangerCount > 0 && tacticsForecastAfterAction.coverHud && tacticsForecastAfterAction.momentumHud !== undefined && tacticsForecastAfterAction.routeHud && tacticsJammedIntent, `tactics mode should expose post-action JAM, cover, momentum, and route forecast: ${JSON.stringify(tacticsForecastAfterAction)}`);
   assert(tacticsState.nonBlank && Number(tacticsState.ap) >= 0 && tacticsState.action && tacticsState.cover && tacticsState.momentum !== undefined && tacticsState.route && tacticsState.debug?.route?.length > 0, `tactics mode should render and accept enhanced actions: ${JSON.stringify(tacticsState)}`);
   assert(Number(tacticsState.danger) > 0 && tacticsState.intel && tacticsState.debug?.hud?.route === tacticsState.route && tacticsState.debug?.hud?.cover === tacticsState.cover && tacticsState.debug?.hud?.momentum === tacticsState.momentum, `tactics HUD should stay in sync with enhanced debug state: ${JSON.stringify(tacticsState)}`);
-  assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /boss-shield/.test(key)) && pwaState.swHasBossShieldVersion, `service worker should register and cache the latest app shell: ${JSON.stringify(pwaState)}`);
+  assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /heist-protocol/.test(key)) && pwaState.swHasHeistProtocolVersion, `service worker should register and cache the latest app shell: ${JSON.stringify(pwaState)}`);
   assert(pwaState.swHasLocalProjectAssets, `service worker should precache local portfolio assets: ${JSON.stringify(pwaState)}`);
   assert(pwaState.swHasNavigationPreload && pwaState.swHasOfflineShellHeader && pwaState.swHasFallbackUrl, `service worker should include robust offline navigation fallback: ${JSON.stringify(pwaState)}`);
   const diagnosticText = JSON.stringify(diagnostics);
