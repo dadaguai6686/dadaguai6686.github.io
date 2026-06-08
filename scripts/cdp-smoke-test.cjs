@@ -2769,9 +2769,11 @@ async function run() {
       leaderboardTotal: document.querySelector('#premium-leaderboard-total')?.textContent || '',
       leaderboardLatest: document.querySelector('#premium-leaderboard-latest')?.textContent || '',
       rival: window.__atherixDebug?.premium?.rival?.() || {},
+      rivalChallenge: window.__atherixDebug?.premium?.rivalChallenge?.() || null,
       rivalTitle: document.querySelector('#premium-rival-title')?.textContent || '',
       rivalTarget: document.querySelector('#premium-rival-target')?.textContent || '',
       rivalGap: document.querySelector('#premium-rival-gap')?.textContent || '',
+      rivalLocked: document.querySelector('#premium-rival-panel')?.dataset.locked || '',
       rivalActionTarget: document.querySelector('#premium-rival-start')?.dataset.rivalTargetGame || '',
       masteryAfter: window.__atherixDebug?.premium?.mastery?.().find(item => item.game === 'survivor') || {},
       masteryCardText: document.querySelector('[data-mastery-game="survivor"]')?.textContent || '',
@@ -2917,9 +2919,14 @@ async function run() {
     target: document.querySelector('#premium-rival-start')?.dataset.rivalTargetGame || '',
     active: window.__atherixDebug?.premium?.active?.() || '',
     activeTitle: document.querySelector('#premium-active-title')?.textContent || '',
+    rival: window.__atherixDebug?.premium?.rival?.() || {},
+    challenge: window.__atherixDebug?.premium?.rivalChallenge?.() || null,
+    locked: document.querySelector('#premium-rival-panel')?.dataset.locked || '',
+    summary: document.querySelector('#premium-rival-summary')?.textContent || '',
     toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || '',
     horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
   }))()`);
+  const rivalDefeatState = await evaluate(`(() => window.__atherixDebug?.premium?.forceRivalDefeat?.() || {})()`);
   await click('#premium-director-start');
   await wait(220);
   const directorLaunchState = await evaluate(`(() => ({
@@ -3665,7 +3672,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v77-quality') && swText.includes('/style.css?v=20260608-quality-v13') && swText.includes('/app.js?v=20260608-quality-v34'),
+      swHasQualityVersion: swText.includes('atherix-static-v78-quality') && swText.includes('/style.css?v=20260608-quality-v13') && swText.includes('/app.js?v=20260608-quality-v35'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp'),
       swHasLocalFonts: swText.includes('/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2') && swText.includes('/assets/fonts/outfit-latin-wght-normal.woff2') && swText.includes('/assets/fonts/jetbrains-mono-latin-wght-normal.woff2')
@@ -4462,7 +4469,8 @@ async function run() {
   assert(difficultyProgressState.totalDelta >= 1180 && difficultyProgressState.bossBest >= 1180 && /难度 精英/.test(difficultyProgressState.totalText), `premium arcade difficulty should affect scoring and career summary: ${JSON.stringify(difficultyProgressState)}`);
   assert(difficultyProgressState.leaderboardCards >= 2 && difficultyProgressState.leaderboard?.entries?.some(entry => entry.game === 'boss' && entry.score >= 1180) && difficultyProgressState.leaderboard?.latestBest?.game === 'boss' && difficultyProgressState.leaderboard?.latestBest?.score >= difficultyProgressState.bossBest && Number(difficultyProgressState.leaderboardTotal) >= difficultyProgressState.bossBest, `premium arcade hall of fame should include elite boss record after scoring: ${JSON.stringify(difficultyProgressState)}`);
   assert(difficultyProgressState.rival?.game === 'boss' && difficultyProgressState.rivalActionTarget === 'boss' && Number(difficultyProgressState.rivalTarget) === Number(difficultyProgressState.rival.target) && /PRISM-0/.test(difficultyProgressState.rivalTitle), `premium arcade rival intel should follow the latest elite boss result: ${JSON.stringify(difficultyProgressState)}`);
-  assert(rivalLaunchState.target === 'boss' && rivalLaunchState.active === 'boss' && /Boss/.test(rivalLaunchState.activeTitle) && /宿敌挑战/.test(rivalLaunchState.toast) && !rivalLaunchState.horizontalOverflow, `premium arcade rival action should launch the current rival mode: ${JSON.stringify(rivalLaunchState)}`);
+  assert(rivalLaunchState.target === 'boss' && rivalLaunchState.active === 'boss' && /Boss/.test(rivalLaunchState.activeTitle) && rivalLaunchState.challenge?.game === 'boss' && rivalLaunchState.challenge?.target === rivalLaunchState.rival?.target && rivalLaunchState.locked === 'true' && /已锁定/.test(rivalLaunchState.summary) && /宿敌挑战已锁定/.test(rivalLaunchState.toast) && !rivalLaunchState.horizontalOverflow, `premium arcade rival action should lock and launch the current rival mode: ${JSON.stringify(rivalLaunchState)}`);
+  assert(rivalDefeatState.locked?.game && rivalDefeatState.result?.recorded && rivalDefeatState.after?.challenge === null && Number(rivalDefeatState.after?.total || 0) > Number(rivalDefeatState.before?.total || 0) && rivalDefeatState.after?.latestRun?.highlights?.some(item => /宿敌压制/.test(item)) && rivalDefeatState.after?.runTags?.some(item => /宿敌压制/.test(item)) && rivalDefeatState.achieved && rivalDefeatState.after?.profileAchievements?.endsWith('/34') && rivalDefeatState.after?.feedback?.lastLabel === 'RIVAL DOWN', `premium arcade rival defeat should reward a locked target with score, run highlights, feedback, and achievement: ${JSON.stringify(rivalDefeatState)}`);
   assert(profileLaunchState.target && (profileLaunchState.target === 'runner' || profileLaunchState.active === profileLaunchState.target) && /档案目标/.test(profileLaunchState.toast) && !profileLaunchState.horizontalOverflow, `premium arcade command profile action should launch the profiled target: ${JSON.stringify(profileLaunchState)}`);
   assert(prizeLaunchState.target && (prizeLaunchState.target === 'runner' || prizeLaunchState.active === prizeLaunchState.target) && /赛季奖励目标/.test(prizeLaunchState.toast) && !prizeLaunchState.horizontalOverflow, `premium arcade season track action should launch the reward target: ${JSON.stringify(prizeLaunchState)}`);
   assert(['runner', 'survivor', 'boss', 'drift', 'heist', 'chain', 'tactics'].includes(directorLaunchState.target) && (directorLaunchState.target === 'runner' || directorLaunchState.active === directorLaunchState.target) && !directorLaunchState.horizontalOverflow, `premium arcade director should launch the recommended target: ${JSON.stringify(directorLaunchState)}`);
@@ -4886,6 +4894,7 @@ async function run() {
     loadoutProgressState,
     difficultyProgressState,
     rivalLaunchState,
+    rivalDefeatState,
     profileLaunchState,
     prizeLaunchState,
     directorLaunchState,
@@ -4996,6 +5005,11 @@ function summarizeSmokeResult(result) {
         target: result.arcadeVariantState?.target,
         activeModes: result.arcadeVariantState?.activeModes,
         metric: result.arcadeVariantState?.appliedMetric
+      },
+      rival: {
+        locked: result.rivalLaunchState?.locked,
+        defeated: result.rivalDefeatState?.achieved,
+        reward: result.rivalDefeatState?.result?.rival?.reward
       },
       survivorDraftMobile: {
         position: result.survivorDraftMobileState?.position,

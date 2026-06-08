@@ -5324,7 +5324,7 @@ function init() {
         <div class="arcade-profile-grid">
           <span>完成度 <strong id="premium-profile-completion">0%</strong></span>
           <span>奖牌 <strong id="premium-profile-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-profile-achievements">0/33</strong></span>
+          <span>成就 <strong id="premium-profile-achievements">0/34</strong></span>
           <span>最近 <strong id="premium-profile-latest">--</strong></span>
         </div>
         <button type="button" class="arcade-profile-action" id="premium-profile-target" data-profile-target-game="survivor">
@@ -5424,7 +5424,7 @@ function init() {
         </div>
         <div class="arcade-director-meters" aria-label="街机完成度">
           <span>奖牌 <strong id="premium-director-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-director-achievements">0/33</strong></span>
+          <span>成就 <strong id="premium-director-achievements">0/34</strong></span>
           <span>完成度 <strong id="premium-director-completion">0%</strong></span>
         </div>
         <button type="button" class="arcade-director-action" id="premium-director-start" data-target-game="survivor">
@@ -5953,6 +5953,7 @@ function init() {
       { id: 'tactics_clean', label: '无损机甲', desc: '高装甲完成裂隙战术' },
       { id: 'tactics_surge', label: '相位超载', desc: '裂隙战术中触发一次战术脉冲返还' },
       { id: 'tactics_counter', label: '预判反制', desc: '裂隙战术中完美规避危险格并反击' },
+      { id: 'rival_defeat', label: '宿敌压制', desc: '锁定并击败一位街机宿敌目标' },
       { id: 'runner_contract', label: '航线承包', desc: '主线远征完成一张航线合约' },
       { id: 'runner_final', label: '星门远征', desc: '通关主线最终关' },
       { id: 'contract_clear', label: '契约猎手', desc: '完成任意街机契约' },
@@ -6108,6 +6109,7 @@ function init() {
       chain: { name: 'SAGE-X', title: '炼金解算器', tone: 'mind', tactic: '优先配方颜色和 9 连，催化剂等超载团再出手。' },
       tactics: { name: 'RIFT-MK', title: '裂隙指挥官', tone: 'strategy', tactic: '沿推荐路线拿掩体动量，爆破锁定单位后再推进核心。' }
     };
+    let activeRivalChallenge = null;
 
     function todayKey() {
       const d = new Date();
@@ -7116,17 +7118,49 @@ function init() {
       return rivalProfiles[game] || rivalProfiles.survivor;
     }
 
+    function rivalRewardForTarget(target = 0) {
+      return Math.round(Math.max(320, Math.min(900, 260 + Number(target || 0) * 0.06)));
+    }
+
+    function activeRivalChallengeSnapshot() {
+      if (!activeRivalChallenge) return null;
+      return {
+        ...activeRivalChallenge,
+        target: Number(activeRivalChallenge.target || 0),
+        reward: Number(activeRivalChallenge.reward || 0)
+      };
+    }
+
+    function createRivalChallenge(intel = arcadeRivalIntel()) {
+      if (!intel?.game || !careerGameSet.has(intel.game)) return null;
+      const target = Math.max(1, clampCareerInt(intel.target, careerModeScoreCap));
+      return {
+        game: intel.game,
+        label: cleanCareerText(intel.label || premiumTabLabels[intel.game] || titles[intel.game] || intel.game, 36),
+        profile: cleanCareerText(intel.profile || rivalProfileForGame(intel.game).name, 24),
+        title: cleanCareerText(intel.title || rivalProfileForGame(intel.game).title, 32),
+        tone: cleanCareerText(intel.tone || rivalProfileForGame(intel.game).tone, 16),
+        source: cleanCareerText(intel.source || '宿敌挑战', 24),
+        target,
+        reward: rivalRewardForTarget(target),
+        startedAt: new Date().toISOString()
+      };
+    }
+
     function arcadeRivalIntel() {
       const runs = Array.isArray(career.runs) ? career.runs : [];
       const latest = runs[0] || null;
       const league = leagueSnapshot();
       const focus = masteryFocusTarget();
-      const game = latest?.game || league.activeStage?.game || focus?.game || 'survivor';
-      const source = latest?.game ? '赛后复仇' : league.activeStage ? '联赛宿敌' : '奖牌猎手';
+      const locked = activeRivalChallengeSnapshot();
+      const game = locked?.game || latest?.game || league.activeStage?.game || focus?.game || 'survivor';
+      const source = locked ? '已锁定挑战' : latest?.game ? '赛后复仇' : league.activeStage ? '联赛宿敌' : '奖牌猎手';
       const best = Number(career.best?.[game] || 0);
       const next = nextMedalTarget(game, best);
       let target = 0;
-      if (latest?.game) {
+      if (locked) {
+        target = Number(locked.target || 0);
+      } else if (latest?.game) {
         target = next?.threshold || Math.max(best + 150, Math.ceil(best * 1.08));
       } else if (league.activeStage?.game === game) {
         target = Number(league.activeStage.target || 0);
@@ -7142,12 +7176,14 @@ function init() {
       return {
         game,
         label: premiumTabLabels[game] || titles[game] || game,
-        profile: profile.name,
-        title: profile.title,
-        tone: profile.tone,
+        profile: locked?.profile || profile.name,
+        title: locked?.title || profile.title,
+        tone: locked?.tone || profile.tone,
         source,
         best,
         target,
+        reward: locked?.reward || rivalRewardForTarget(target),
+        locked: !!locked,
         gap,
         pressure,
         complete: gap <= 0,
@@ -7169,17 +7205,42 @@ function init() {
       const actionBtn = document.getElementById('premium-rival-start');
       panel.dataset.tone = intel.tone;
       panel.dataset.complete = intel.complete ? 'true' : 'false';
+      panel.dataset.locked = intel.locked ? 'true' : 'false';
       panel.style.setProperty('--rival-progress', `${intel.progress}%`);
       if (titleEl) titleEl.textContent = `${intel.profile} · ${intel.label}`;
-      if (summaryEl) summaryEl.textContent = `${intel.title} 正在 ${intel.source} 中压线，目标 ${intel.target}+。`;
+      if (summaryEl) {
+        summaryEl.textContent = intel.locked
+          ? `${intel.title} 已锁定本轮，达成 ${intel.target}+ 可压制宿敌并获得 +${intel.reward} 声望。`
+          : `${intel.title} 正在 ${intel.source} 中压线，目标 ${intel.target}+。`;
+      }
       if (targetEl) targetEl.textContent = String(intel.target);
       if (gapEl) gapEl.textContent = intel.gap ? String(intel.gap) : '已压制';
       if (pressureEl) pressureEl.textContent = intel.complete ? 'OVR' : `${intel.pressure}%`;
-      if (briefEl) briefEl.textContent = `${intel.tactic} 当前最佳 ${intel.best}，完成后会刷新宿敌目标。`;
+      if (briefEl) {
+        briefEl.textContent = intel.locked
+          ? `${intel.tactic} 当前最佳 ${intel.best}，失败也会保留追击窗口，下一次同模式达标即可结算。`
+          : `${intel.tactic} 当前最佳 ${intel.best}，完成后会刷新宿敌目标。`;
+      }
       if (actionBtn) {
         actionBtn.dataset.rivalTargetGame = intel.game;
-        actionBtn.querySelector('span').textContent = intel.complete ? '刷新宿敌' : `挑战 ${intel.label}`;
+        actionBtn.querySelector('span').textContent = intel.locked ? `追击 ${intel.profile}` : intel.complete ? '刷新宿敌' : `挑战 ${intel.label}`;
       }
+    }
+
+    function resolveRivalChallenge(game, score) {
+      const challenge = activeRivalChallengeSnapshot();
+      if (!challenge || challenge.game !== game) return { active: !!challenge, completed: false, challenge };
+      const safeScore = clampCareerInt(score, careerModeScoreCap);
+      if (safeScore < Number(challenge.target || 0)) {
+        activeRivalChallenge = { ...challenge, lastScore: safeScore, lastAttemptAt: new Date().toISOString() };
+        return { active: true, completed: false, challenge: activeRivalChallenge };
+      }
+      activeRivalChallenge = null;
+      const reward = Number(challenge.reward || 0);
+      career.totalScore = clampCareerInt(Number(career.totalScore || 0) + reward, careerScoreCap);
+      unlockAchievement('rival_defeat');
+      showToast(`宿敌压制：${challenge.profile} +${reward}`, 'success');
+      return { active: true, completed: true, reward, challenge };
     }
 
     function renderArcadeRunLog() {
@@ -7982,7 +8043,15 @@ function init() {
       const previousMedal = medalClass(career.medals[game] || medalFor(game, previousBest));
       career.best[game] = Math.max(Number(career.best[game] || 0), value);
       const medal = medalFor(game, value);
+      const rivalResult = resolveRivalChallenge(game, value);
+      if (rivalResult.completed) {
+        detailMap.rivalDefeated = rivalResult.challenge?.profile || 'RIVAL';
+        detailMap.rivalReward = rivalResult.reward;
+      }
       const highlights = summarizeRunDetails(game, detailMap).map(item => cleanCareerText(item, 28)).filter(Boolean);
+      if (rivalResult.completed) {
+        highlights.unshift(`宿敌压制 ${rivalResult.challenge?.profile || ''}`.trim());
+      }
       if (!highlights.length) {
         highlights.push(`基础分 ${rawValue}`, `${medalLabels[medal] || medalLabels.none}牌`);
       }
@@ -8021,7 +8090,10 @@ function init() {
       saveCareer();
       updateCareerPanel();
       triggerPremiumFeedback('result', { label: `${premiumTabLabels[game] || game} +${value}` });
-      return { recorded: true, game, rawScore: rawValue, score: value };
+      if (rivalResult.completed) {
+        triggerPremiumFeedback('special', { label: 'RIVAL DOWN', throttleMs: 120 });
+      }
+      return { recorded: true, game, rawScore: rawValue, score: value, rival: rivalResult.completed ? { reward: rivalResult.reward, profile: rivalResult.challenge?.profile || '' } : null };
     }
 
     window.atherixArcadeCareer = {
@@ -8048,6 +8120,7 @@ function init() {
       mastery: () => careerGameOrder.map(masteryStatusForGame),
       leaderboard: () => careerLeaderboard(),
       rival: () => arcadeRivalIntel(),
+      rivalChallenge: () => activeRivalChallengeSnapshot(),
       runs: () => (Array.isArray(career.runs) ? career.runs : []).map(run => ({ ...run })),
       coach: () => latestRunCoach(),
       profile: () => arcadeProfileSnapshot(),
@@ -8062,6 +8135,7 @@ function init() {
       }))
     };
     document.addEventListener('atherix:vault-imported', () => {
+      activeRivalChallenge = null;
       career = loadCareer();
       ensureContractsForToday();
       ensureLeagueForToday();
@@ -8465,8 +8539,10 @@ function init() {
 
     function launchRivalChallenge() {
       const intel = arcadeRivalIntel();
+      activeRivalChallenge = createRivalChallenge(intel);
+      renderArcadeRival();
       launchMasteryTarget(intel.game);
-      showToast(`宿敌挑战：${intel.profile} · ${intel.label} ${intel.target}+`, 'info');
+      showToast(`宿敌挑战已锁定：${activeRivalChallenge?.profile || intel.profile} · ${intel.label} ${intel.target}+`, 'info');
     }
 
     function applyCoachPlanAndLaunch() {
@@ -16882,6 +16958,44 @@ function init() {
               feedback: premiumFeedback.lastTone
             };
           },
+          forceRivalDefeat: () => {
+            const before = {
+              rival: arcadeRivalIntel(),
+              challenge: activeRivalChallengeSnapshot(),
+              total: Number(career.totalScore || 0),
+              achievements: career.achievements.slice()
+            };
+            activeRivalChallenge = createRivalChallenge(before.rival);
+            renderArcadeRival();
+            const locked = activeRivalChallengeSnapshot();
+            const result = locked
+              ? recordPremiumResult(locked.game, locked.target, { smokeRival: true })
+              : { recorded: false, reason: 'no-rival' };
+            const latestRun = Array.isArray(career.runs) ? career.runs[0] : null;
+            return {
+              before,
+              locked,
+              result,
+              after: {
+                rival: arcadeRivalIntel(),
+                challenge: activeRivalChallengeSnapshot(),
+                total: Number(career.totalScore || 0),
+                achievements: career.achievements.slice(),
+                latestRun,
+                runTags: [...document.querySelectorAll('.arcade-run-log-item .arcade-run-tags b')].map(el => el.textContent.trim()),
+                rivalSummary: document.querySelector('#premium-rival-summary')?.textContent || '',
+                rivalGap: document.querySelector('#premium-rival-gap')?.textContent || '',
+                profileAchievements: document.querySelector('#premium-profile-achievements')?.textContent || '',
+                feedback: {
+                  lastTone: premiumFeedback.lastTone,
+                  lastLabel: premiumFeedback.lastLabel,
+                  tones: { ...premiumFeedback.tones },
+                  visualTriggers: premiumFeedback.visualTriggers
+                }
+              },
+              achieved: (career.achievements || []).includes('rival_defeat')
+            };
+          },
           chainState: () => chainDebugState(),
           seedChainComboBoard: () => seedChainComboBoard(),
           forceChainCombo: () => forceChainCombo(),
@@ -17147,6 +17261,7 @@ function init() {
           league: () => window.atherixArcadeCareer?.league?.() || {},
           leaderboard: () => window.atherixArcadeCareer?.leaderboard?.() || {},
           rival: () => window.atherixArcadeCareer?.rival?.() || {},
+          rivalChallenge: () => window.atherixArcadeCareer?.rivalChallenge?.() || null,
           loadout: () => window.atherixArcadeCareer?.loadout?.() || {},
           difficulty: () => window.atherixArcadeCareer?.difficulty?.() || {},
           mastery: () => window.atherixArcadeCareer?.mastery?.() || []

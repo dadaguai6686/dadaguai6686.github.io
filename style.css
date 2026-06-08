@@ -5751,6 +5751,17 @@ body.command-open {
   border-color: rgba(52, 211, 153, 0.34);
 }
 
+.arcade-rival-panel[data-locked="true"] {
+  border-color: rgba(251, 191, 36, 0.42);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 24px rgba(251, 191, 36, 0.14);
+}
+
+.arcade-rival-panel[data-locked="true"]::after {
+  background:
+    linear-gradient(90deg, #fbbf24, #f472b6, #22d3ee) 0 / var(--rival-progress) 100% no-repeat,
+    rgba(148, 163, 184, 0.16);
+}
+
 .arcade-rival-heading {
   min-width: 0;
   display: flex;
