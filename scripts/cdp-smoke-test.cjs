@@ -757,9 +757,75 @@ async function run() {
     toolboxActive: document.querySelector('#toolbox')?.classList.contains('active') || false,
     vaultActive: document.querySelector('#tool-vault')?.classList.contains('active') || false,
     navActive: document.querySelector('.tool-nav-btn[data-tool="vault"]')?.classList.contains('active') || false,
+    tabSelected: document.querySelector('.tool-nav-btn[data-tool="vault"]')?.getAttribute('aria-selected') || '',
+    tabIndex: document.querySelector('.tool-nav-btn[data-tool="vault"]')?.getAttribute('tabindex') || '',
+    panelHidden: !!document.querySelector('#tool-vault')?.hidden,
+    hasPanelAriaHidden: document.querySelector('#tool-vault')?.hasAttribute('aria-hidden') || false,
     debugReady: !!window.__atherixDebug?.vault,
     horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
   }))()`);
+  const toolboxTabState = await evaluate(`(() => {
+    const selectedTools = () => [...document.querySelectorAll('.tool-nav-btn[aria-selected="true"]')].map(btn => btn.dataset.tool || '');
+    const activePanels = () => [...document.querySelectorAll('.tool-panel.active:not([hidden])')].map(panel => panel.id || '');
+    const jsonBtn = document.querySelector('.tool-nav-btn[data-tool="json"]');
+    const vaultBtn = document.querySelector('.tool-nav-btn[data-tool="vault"]');
+    const snapshot = tool => {
+      const tab = document.querySelector(\`.tool-nav-btn[data-tool="\${tool}"]\`);
+      const panel = document.querySelector(\`#tool-\${tool}\`);
+      return {
+        tabRole: tab?.getAttribute('role') || '',
+        selected: tab?.getAttribute('aria-selected') || '',
+        tabIndex: tab?.getAttribute('tabindex') || '',
+        controls: tab?.getAttribute('aria-controls') || '',
+        panelRole: panel?.getAttribute('role') || '',
+        labelledBy: panel?.getAttribute('aria-labelledby') || '',
+        hidden: !!panel?.hidden,
+        hasAriaHidden: panel?.hasAttribute('aria-hidden') || false,
+        active: panel?.classList.contains('active') || false
+      };
+    };
+    const before = {
+      tablistRole: document.querySelector('.toolbox-sidebar')?.getAttribute('role') || '',
+      tablistLabel: document.querySelector('.toolbox-sidebar')?.getAttribute('aria-label') || '',
+      tabCount: document.querySelectorAll('.tool-nav-btn[role="tab"]').length,
+      panelCount: document.querySelectorAll('.tool-panel[role="tabpanel"]').length,
+      selected: selectedTools(),
+      activePanels: activePanels(),
+      vault: snapshot('vault'),
+      json: snapshot('json')
+    };
+    jsonBtn?.focus();
+    jsonBtn?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+    const afterArrow = {
+      selected: selectedTools(),
+      activePanels: activePanels(),
+      focusId: document.activeElement?.id || '',
+      markdown: snapshot('markdown'),
+      json: snapshot('json')
+    };
+    document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
+    const afterEnd = {
+      selected: selectedTools(),
+      activePanels: activePanels(),
+      focusId: document.activeElement?.id || '',
+      vault: snapshot('vault')
+    };
+    document.querySelector('.tool-nav-btn[data-tool="json"]')?.click();
+    const jsonInput = document.querySelector('#json-input');
+    jsonInput?.focus();
+    document.querySelector('.tool-nav-btn[data-tool="markdown"]')?.click();
+    const jsonPanel = document.querySelector('#tool-json');
+    const focusEscape = {
+      selected: selectedTools(),
+      activePanels: activePanels(),
+      jsonPanelHidden: !!jsonPanel?.hidden,
+      activeFocusInsideJson: !!jsonPanel?.contains(document.activeElement),
+      focusId: document.activeElement?.id || '',
+      json: snapshot('json'),
+      markdown: snapshot('markdown')
+    };
+    return { before, afterArrow, afterEnd, focusEscape };
+  })()`);
 
   await evaluate(`document.querySelector('.tool-nav-btn[data-tool="json"]')?.click()`);
   await wait(180);
@@ -3143,7 +3209,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v63-quality') && swText.includes('/style.css?v=20260608-quality-v8') && swText.includes('/app.js?v=20260608-quality-v21'),
+      swHasQualityVersion: swText.includes('atherix-static-v64-quality') && swText.includes('/style.css?v=20260608-quality-v9') && swText.includes('/app.js?v=20260608-quality-v22'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
@@ -3409,7 +3475,11 @@ async function run() {
   );
   assert(commandState.closed && commandState.gameActive && commandState.tacticsActive && /Rift Tactics/.test(commandState.activeTitle), `command palette should execute game navigation: ${JSON.stringify(commandState)}`);
   assert(vaultCommandBeforeExecute.open && vaultCommandBeforeExecute.results >= 1 && /数据保险库/.test(vaultCommandBeforeExecute.firstTitle), `command palette should find the data vault: ${JSON.stringify(vaultCommandBeforeExecute)}`);
-  assert(vaultCommandState.closed && vaultCommandState.toolboxActive && vaultCommandState.vaultActive && vaultCommandState.navActive && vaultCommandState.debugReady && !vaultCommandState.horizontalOverflow, `data vault command should open the vault panel: ${JSON.stringify(vaultCommandState)}`);
+  assert(vaultCommandState.closed && vaultCommandState.toolboxActive && vaultCommandState.vaultActive && vaultCommandState.navActive && vaultCommandState.tabSelected === 'true' && vaultCommandState.tabIndex === '0' && !vaultCommandState.panelHidden && !vaultCommandState.hasPanelAriaHidden && vaultCommandState.debugReady && !vaultCommandState.horizontalOverflow, `data vault command should open the vault tab panel with synced semantics: ${JSON.stringify(vaultCommandState)}`);
+  assert(toolboxTabState.before?.tablistRole === 'tablist' && toolboxTabState.before?.tablistLabel && toolboxTabState.before?.tabCount >= 8 && toolboxTabState.before?.panelCount >= 8 && toolboxTabState.before?.selected?.length === 1 && toolboxTabState.before?.selected?.[0] === 'vault' && toolboxTabState.before?.activePanels?.[0] === 'tool-vault' && toolboxTabState.before?.vault?.panelRole === 'tabpanel' && toolboxTabState.before?.vault?.labelledBy === 'tool-tab-vault' && toolboxTabState.before?.json?.hidden && !toolboxTabState.before?.json?.hasAriaHidden, `toolbox should expose one selected tab and one active panel after command navigation: ${JSON.stringify(toolboxTabState.before)}`);
+  assert(toolboxTabState.afterArrow?.selected?.[0] === 'markdown' && toolboxTabState.afterArrow?.activePanels?.[0] === 'tool-markdown' && toolboxTabState.afterArrow?.focusId === 'tool-tab-markdown' && toolboxTabState.afterArrow?.markdown?.selected === 'true' && toolboxTabState.afterArrow?.markdown?.hidden === false && toolboxTabState.afterArrow?.json?.hidden === true, `toolbox ArrowRight should move focus and selection to the next tab: ${JSON.stringify(toolboxTabState.afterArrow)}`);
+  assert(toolboxTabState.afterEnd?.selected?.[0] === 'vault' && toolboxTabState.afterEnd?.activePanels?.[0] === 'tool-vault' && toolboxTabState.afterEnd?.focusId === 'tool-tab-vault' && toolboxTabState.afterEnd?.vault?.selected === 'true' && toolboxTabState.afterEnd?.vault?.hidden === false, `toolbox End key should move focus and selection to the last tab: ${JSON.stringify(toolboxTabState.afterEnd)}`);
+  assert(toolboxTabState.focusEscape?.selected?.[0] === 'markdown' && toolboxTabState.focusEscape?.activePanels?.[0] === 'tool-markdown' && toolboxTabState.focusEscape?.jsonPanelHidden && !toolboxTabState.focusEscape?.activeFocusInsideJson && toolboxTabState.focusEscape?.focusId === 'tool-tab-markdown' && !toolboxTabState.focusEscape?.json?.hasAriaHidden && !toolboxTabState.focusEscape?.markdown?.hasAriaHidden, `toolbox should move focus out of a panel before hiding it: ${JSON.stringify(toolboxTabState.focusEscape)}`);
   assert(
     jsonTreeA11yState.toggleExists &&
       jsonTreeA11yState.role === 'button' &&
@@ -4114,6 +4184,7 @@ async function run() {
     commandState,
     vaultCommandBeforeExecute,
     vaultCommandState,
+    toolboxTabState,
     jsonTreeA11yState,
     compressorLimitState,
     vaultExportState,
@@ -4244,6 +4315,7 @@ function summarizeSmokeResult(result) {
     },
     tools: {
       commandActiveDescendant: result.commandBeforeExecute?.activeDescendant,
+      toolboxArrowTab: result.toolboxTabState?.afterArrow?.selected?.[0],
       jsonKeyboardToggle: result.jsonTreeA11yState?.afterSpace?.expanded === 'false' && result.jsonTreeA11yState?.afterEnterExpanded === 'true',
       compressorLimit: result.compressorLimitState?.controlsDisplay === 'none' && /超过 10 MB 上限/.test(result.compressorLimitState?.compressedDetail || '')
     },

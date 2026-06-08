@@ -938,7 +938,11 @@ function init() {
     navigateTo('toolbox');
     setTimeout(() => {
       const btn = document.querySelector(`.tool-nav-btn[data-tool="${escapeCommandSelectorValue(toolId)}"]`);
-      if (btn) btn.click();
+      if (btn && typeof window.__atherixActivateToolByButton === 'function') {
+        window.__atherixActivateToolByButton(btn, { focus: false });
+      } else if (btn) {
+        btn.click();
+      }
     }, 120);
   }
 
@@ -3277,22 +3281,83 @@ function init() {
   const toolNavBtns = document.querySelectorAll('.tool-nav-btn');
   const toolPanels = document.querySelectorAll('.tool-panel');
 
-  toolNavBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const toolId = btn.getAttribute('data-tool');
-      
-      toolNavBtns.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
+  function activateToolByButton(btn, { focus = false } = {}) {
+    if (!btn) return false;
+    const toolId = btn.getAttribute('data-tool');
+    if (!toolId) return false;
+    const targetPanel = document.getElementById(`tool-${toolId}`);
+    const activeElement = document.activeElement;
+    const focusInsideInactivePanel = activeElement && targetPanel && !targetPanel.contains(activeElement) && [...toolPanels].some(panel => panel.contains(activeElement));
 
-      toolPanels.forEach(panel => {
-        if (panel.id === `tool-${toolId}`) {
-          panel.classList.add('active');
-        } else {
-          panel.classList.remove('active');
-        }
-      });
-      if (toolId === 'vault') refreshVaultSummary();
+    toolNavBtns.forEach(item => {
+      const active = item === btn;
+      item.classList.toggle('active', active);
+      item.setAttribute('aria-selected', active ? 'true' : 'false');
+      item.setAttribute('tabindex', active ? '0' : '-1');
     });
+
+    if (focus || focusInsideInactivePanel) btn.focus({ preventScroll: true });
+
+    toolPanels.forEach(panel => {
+      const active = panel.id === `tool-${toolId}`;
+      panel.classList.toggle('active', active);
+      panel.hidden = !active;
+      panel.removeAttribute('aria-hidden');
+    });
+
+    if (toolId === 'vault') refreshVaultSummary();
+    return true;
+  }
+
+  function focusToolByOffset(currentBtn, offset) {
+    const buttons = [...toolNavBtns];
+    const currentIndex = buttons.indexOf(currentBtn);
+    if (currentIndex < 0 || !buttons.length) return;
+    const next = buttons[(currentIndex + offset + buttons.length) % buttons.length];
+    activateToolByButton(next, { focus: true });
+  }
+
+  window.__atherixActivateToolByButton = activateToolByButton;
+
+  toolNavBtns.forEach((btn, index) => {
+    const toolId = btn.getAttribute('data-tool');
+    if (toolId) {
+      btn.setAttribute('role', 'tab');
+      btn.setAttribute('aria-controls', `tool-${toolId}`);
+      if (!btn.id) btn.id = `tool-tab-${toolId}`;
+    }
+
+    btn.addEventListener('click', () => activateToolByButton(btn));
+    btn.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+        event.preventDefault();
+        focusToolByOffset(btn, 1);
+      } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        focusToolByOffset(btn, -1);
+      } else if (event.key === 'Home') {
+        event.preventDefault();
+        activateToolByButton(toolNavBtns[0], { focus: true });
+      } else if (event.key === 'End') {
+        event.preventDefault();
+        activateToolByButton(toolNavBtns[toolNavBtns.length - 1], { focus: true });
+      }
+    });
+
+    const active = btn.classList.contains('active') || index === 0;
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+    btn.setAttribute('tabindex', active ? '0' : '-1');
+  });
+
+  toolPanels.forEach(panel => {
+    const toolId = panel.id.replace(/^tool-/, '');
+    const tab = document.querySelector(`.tool-nav-btn[data-tool="${escapeCommandSelectorValue(toolId)}"]`);
+    panel.setAttribute('role', 'tabpanel');
+    panel.setAttribute('tabindex', '0');
+    if (tab?.id) panel.setAttribute('aria-labelledby', tab.id);
+    const active = panel.classList.contains('active');
+    panel.hidden = !active;
+    panel.removeAttribute('aria-hidden');
   });
 
   // TOOL 0: Local Data Vault (export/import trusted client-side state)

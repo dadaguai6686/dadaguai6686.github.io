@@ -870,11 +870,17 @@ main {
   background: var(--glass-bg-hover);
 }
 
-.tool-nav-btn.active {
+.tool-nav-btn.active,
+.tool-nav-btn[aria-selected="true"] {
   background: var(--accent-gradient);
   color: white;
   border-color: transparent;
   box-shadow: 0 4px 15px -3px rgba(139, 92, 246, 0.4);
+}
+
+.tool-nav-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 
 .toast-stack {
@@ -938,6 +944,10 @@ main {
   display: none;
   flex-direction: column;
   height: 100%;
+}
+
+.tool-panel[hidden] {
+  display: none !important;
 }
 
 .tool-panel.active {

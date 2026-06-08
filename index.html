@@ -32,11 +32,11 @@
   <link rel="alternate" type="application/rss+xml" title="Atherix Digital Space Feed" href="https://dadaguai6686.github.io/feed.xml">
   <link rel="icon" href="/assets/atherix-icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/assets/atherix-icon-192.png">
-  <link rel="preload" href="/style.css?v=20260608-quality-v8" as="style">
+  <link rel="preload" href="/style.css?v=20260608-quality-v9" as="style">
   <link rel="preload" href="/lucide.min.js" as="script">
-  <link rel="preload" href="/app.js?v=20260608-quality-v21" as="script">
+  <link rel="preload" href="/app.js?v=20260608-quality-v22" as="script">
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="/style.css?v=20260608-quality-v8">
+  <link rel="stylesheet" href="/style.css?v=20260608-quality-v9">
   <link rel="manifest" href="/manifest.webmanifest">
   <!-- Lucide Icons Local -->
   <script src="/lucide.min.js"></script>
@@ -446,36 +446,36 @@
       <div class="toolbox-layout">
         
         <!-- Toolbox Left Sidebar Nav -->
-        <aside class="toolbox-sidebar">
-          <button class="tool-nav-btn active" data-tool="json">
+        <aside class="toolbox-sidebar" role="tablist" aria-label="工具箱工具">
+          <button type="button" class="tool-nav-btn active" id="tool-tab-json" data-tool="json" role="tab" aria-selected="true" aria-controls="tool-json" tabindex="0">
             <i data-lucide="file-json"></i>
             <span>JSON 格式化树</span>
           </button>
-          <button class="tool-nav-btn" data-tool="markdown">
+          <button type="button" class="tool-nav-btn" id="tool-tab-markdown" data-tool="markdown" role="tab" aria-selected="false" aria-controls="tool-markdown" tabindex="-1">
             <i data-lucide="edit-3"></i>
             <span>Markdown 预览</span>
           </button>
-          <button class="tool-nav-btn" data-tool="image">
+          <button type="button" class="tool-nav-btn" id="tool-tab-image" data-tool="image" role="tab" aria-selected="false" aria-controls="tool-image" tabindex="-1">
             <i data-lucide="image"></i>
             <span>图片转换压缩</span>
           </button>
-          <button class="tool-nav-btn" data-tool="pomodoro">
+          <button type="button" class="tool-nav-btn" id="tool-tab-pomodoro" data-tool="pomodoro" role="tab" aria-selected="false" aria-controls="tool-pomodoro" tabindex="-1">
             <i data-lucide="timer"></i>
             <span>番茄工作钟</span>
           </button>
-          <button class="tool-nav-btn" data-tool="codec">
+          <button type="button" class="tool-nav-btn" id="tool-tab-codec" data-tool="codec" role="tab" aria-selected="false" aria-controls="tool-codec" tabindex="-1">
             <i data-lucide="hash"></i>
             <span>哈希与编解码</span>
           </button>
-          <button class="tool-nav-btn" data-tool="devkit">
+          <button type="button" class="tool-nav-btn" id="tool-tab-devkit" data-tool="devkit" role="tab" aria-selected="false" aria-controls="tool-devkit" tabindex="-1">
             <i data-lucide="square-terminal"></i>
             <span>开发速查工具</span>
           </button>
-          <button class="tool-nav-btn" data-tool="piano">
+          <button type="button" class="tool-nav-btn" id="tool-tab-piano" data-tool="piano" role="tab" aria-selected="false" aria-controls="tool-piano" tabindex="-1">
             <i data-lucide="music-4"></i>
             <span>极客合成器琴</span>
           </button>
-          <button class="tool-nav-btn" data-tool="vault">
+          <button type="button" class="tool-nav-btn" id="tool-tab-vault" data-tool="vault" role="tab" aria-selected="false" aria-controls="tool-vault" tabindex="-1">
             <i data-lucide="database-backup"></i>
             <span>数据保险库</span>
           </button>
@@ -485,7 +485,7 @@
         <div class="glass-card tool-content-wrapper">
           
           <!-- Tool 1: JSON Formatter -->
-          <div class="tool-panel active" id="tool-json">
+          <div class="tool-panel active" id="tool-json" role="tabpanel" aria-labelledby="tool-tab-json" tabindex="0">
             <div class="tool-header">
               <h2>JSON 格式化与层级语法树</h2>
               <p>在客户端校验、格式化、折叠和美化 JSON 数据，安全无后门。</p>
@@ -515,7 +515,7 @@
           </div>
 
           <!-- Tool 2: Markdown Editor -->
-          <div class="tool-panel" id="tool-markdown">
+          <div class="tool-panel" id="tool-markdown" role="tabpanel" aria-labelledby="tool-tab-markdown" tabindex="0" hidden>
             <div class="tool-header">
               <h2>Markdown 实时编辑器</h2>
               <p>双栏同步渲染，支持字数统计，一键复制网页 HTML 与导出文件。</p>
@@ -540,7 +540,7 @@
           </div>
 
           <!-- Tool 3: Image WebP Compressor -->
-          <div class="tool-panel" id="tool-image">
+          <div class="tool-panel" id="tool-image" role="tabpanel" aria-labelledby="tool-tab-image" tabindex="0" hidden>
             <div class="tool-header">
               <h2>图片大小压缩与格式转换</h2>
               <p>纯浏览器端处理，保证隐私。支持自定义图片分辨率以及导出格式（WebP / JPEG / PNG）。</p>
@@ -595,7 +595,7 @@
           </div>
 
           <!-- Tool 4: Pomodoro Clock -->
-          <div class="tool-panel" id="tool-pomodoro">
+          <div class="tool-panel" id="tool-pomodoro" role="tabpanel" aria-labelledby="tool-tab-pomodoro" tabindex="0" hidden>
             <div class="tool-header">
               <h2>番茄工作钟与自定义计时器</h2>
               <p>采用番茄工作法帮助您专注，内置优美雨声、森林白噪音、炉火白噪音等。</p>
@@ -646,7 +646,7 @@
           </div>
 
           <!-- Tool 5: Codec & Hash Generator -->
-          <div class="tool-panel" id="tool-codec">
+          <div class="tool-panel" id="tool-codec" role="tabpanel" aria-labelledby="tool-tab-codec" tabindex="0" hidden>
             <div class="tool-header">
               <h2>编码、解码与哈希校验工具</h2>
               <p>在本地直接进行 Base64、URL 编解码以及 MD5, SHA-256 哈希值计算，安全隐私无遗漏。</p>
@@ -671,7 +671,7 @@
           </div>
 
           <!-- Tool 6: Developer Quick Kit -->
-          <div class="tool-panel" id="tool-devkit">
+          <div class="tool-panel" id="tool-devkit" role="tabpanel" aria-labelledby="tool-tab-devkit" tabindex="0" hidden>
             <div class="tool-header">
               <h2>开发速查工具</h2>
               <p>常用时间戳、UUID 与 JWT 解析集中处理，全部在浏览器本地完成。</p>
@@ -723,7 +723,7 @@
           </div>
 
           <!-- Tool 7: Synthesizer Keyboard -->
-          <div class="tool-panel" id="tool-piano">
+          <div class="tool-panel" id="tool-piano" role="tabpanel" aria-labelledby="tool-tab-piano" tabindex="0" hidden>
             <div class="tool-header">
               <h2>极客合成器钢琴 (Web Audio API)</h2>
               <p>利用自定义正弦/方波振荡器实时合成，支持 ADSR 音量包络衰减与空间混响延时特效。</p>
@@ -797,7 +797,7 @@
           </div>
 
           <!-- Tool 8: Local Data Vault -->
-          <div class="tool-panel" id="tool-vault">
+          <div class="tool-panel" id="tool-vault" role="tabpanel" aria-labelledby="tool-tab-vault" tabindex="0" hidden>
             <div class="tool-header">
               <h2>Atherix 数据保险库</h2>
               <p>导出、导入与清点本地站点状态。阅读进度、收藏、工具草稿、待办和街机档案都留在你的浏览器里。</p>
@@ -1402,6 +1402,6 @@
   <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <!-- Main JavaScript File -->
-  <script src="/app.js?v=20260608-quality-v21"></script>
+  <script src="/app.js?v=20260608-quality-v22"></script>
 </body>
 </html>
