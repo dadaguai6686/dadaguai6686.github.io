@@ -4728,15 +4728,33 @@ body.command-open {
 }
 
 .arcade-run-log-item {
-  min-height: 92px;
+  width: 100%;
+  min-height: 116px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "grade copy score"
+    "grade insight insight"
+    "tags tags tags";
   gap: 0.5rem;
   align-items: start;
   padding: 0.62rem;
   border: 1px solid rgba(148, 163, 184, 0.15);
   border-radius: 8px;
   background: rgba(15, 23, 42, 0.46);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
+}
+
+.arcade-run-log-item:hover,
+.arcade-run-log-item:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(34, 211, 238, 0.42);
+  background: rgba(15, 23, 42, 0.62);
+  outline: none;
 }
 
 .arcade-run-log-item[data-medal="bronze"] {
@@ -4751,8 +4769,56 @@ body.command-open {
   border-color: rgba(251, 191, 36, 0.32);
 }
 
-.arcade-run-log-item div {
+.arcade-run-log-item[data-grade="gold"] .arcade-run-grade {
+  border-color: rgba(251, 191, 36, 0.44);
+  color: #fde68a;
+  background: rgba(251, 191, 36, 0.14);
+}
+
+.arcade-run-log-item[data-grade="silver"] .arcade-run-grade {
+  border-color: rgba(226, 232, 240, 0.34);
+  color: #e2e8f0;
+  background: rgba(226, 232, 240, 0.12);
+}
+
+.arcade-run-log-item[data-grade="bronze"] .arcade-run-grade {
+  border-color: rgba(251, 146, 60, 0.36);
+  color: #fdba74;
+  background: rgba(251, 146, 60, 0.12);
+}
+
+.arcade-run-log-item[data-grade="near"] .arcade-run-grade {
+  border-color: rgba(34, 211, 238, 0.36);
+  color: #67e8f9;
+  background: rgba(34, 211, 238, 0.12);
+}
+
+.arcade-run-log-item[data-grade="bronze"] {
+  border-color: rgba(251, 146, 60, 0.28);
+}
+
+.arcade-run-log-item[data-grade="near"] {
+  border-color: rgba(34, 211, 238, 0.26);
+}
+
+.arcade-run-log-copy {
+  grid-area: copy;
   min-width: 0;
+}
+
+.arcade-run-grade {
+  grid-area: grade;
+  width: 34px;
+  min-height: 34px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(34, 211, 238, 0.28);
+  border-radius: 8px;
+  color: #a5f3fc;
+  background: rgba(34, 211, 238, 0.1);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.86rem;
+  font-weight: 900;
 }
 
 .arcade-run-log-item strong {
@@ -4766,7 +4832,8 @@ body.command-open {
   white-space: nowrap;
 }
 
-.arcade-run-log-item small {
+.arcade-run-log-copy small,
+.arcade-run-log-copy em {
   display: block;
   margin-top: 0.28rem;
   color: var(--text-secondary);
@@ -4774,11 +4841,65 @@ body.command-open {
   line-height: 1.35;
 }
 
-.arcade-run-log-item span {
+.arcade-run-log-copy em {
+  color: #a5f3fc;
+  font-style: normal;
+}
+
+.arcade-run-score {
+  grid-area: score;
   color: #dffaff;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.86rem;
   font-weight: 900;
+}
+
+.arcade-run-insight {
+  grid-area: insight;
+  min-width: 0;
+  display: grid;
+  gap: 0.28rem;
+  align-self: end;
+}
+
+.arcade-run-insight span {
+  color: #bae6fd;
+  font-size: 0.62rem;
+  font-weight: 900;
+}
+
+.arcade-run-insight i {
+  width: 100%;
+  height: 4px;
+  display: block;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #22d3ee, #facc15);
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.24);
+}
+
+.arcade-run-tags {
+  grid-area: tags;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.28rem;
+  min-width: 0;
+}
+
+.arcade-run-tags b {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  max-width: 100%;
+  padding: 0.18rem 0.38rem;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 999px;
+  color: #cbd5e1;
+  background: rgba(15, 23, 42, 0.55);
+  font-size: 0.58rem;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .arcade-run-empty {
@@ -7833,6 +7954,17 @@ body.command-open {
   .arcade-leaderboard-heading,
   .arcade-leaderboard-list {
     grid-template-columns: 1fr;
+  }
+  .arcade-run-log-item {
+    min-height: auto;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "grade copy"
+      "score insight"
+      "tags tags";
+  }
+  .arcade-run-score {
+    justify-self: start;
   }
   .arcade-profile-panel,
   .arcade-profile-grid,

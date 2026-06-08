@@ -6354,6 +6354,82 @@ function init() {
       return loadoutDefs.find(def => def.id === id)?.label || '脉冲校准';
     }
 
+    function runGradeFor(run = {}) {
+      const medal = medalClass(run.medal || medalFor(run.game, Number(run.score || 0)));
+      if (medal === 'gold') return { label: 'S', tone: 'gold' };
+      if (medal === 'silver') return { label: 'A', tone: 'silver' };
+      if (medal === 'bronze') return { label: 'B', tone: 'bronze' };
+      const bronze = (medalRules[run.game] || []).find(rule => rule.name === 'bronze')?.threshold || 1;
+      const ratio = Number(run.score || 0) / Math.max(1, bronze);
+      if (ratio >= 0.85) return { label: 'C+', tone: 'near' };
+      if (ratio >= 0.55) return { label: 'C', tone: 'none' };
+      return { label: 'D', tone: 'none' };
+    }
+
+    function runInsightFor(run = {}) {
+      const score = Number(run.score || 0);
+      const next = nextMedalTarget(run.game, score);
+      if (next) {
+        const progress = Math.min(100, Math.max(0, Math.round(score / Math.max(1, next.threshold) * 100)));
+        return {
+          label: `${medalLabels[next.name] || next.name}牌差 ${Math.max(0, next.threshold - score)}`,
+          progress,
+          complete: false
+        };
+      }
+      const previous = Number(run.previousBest || 0);
+      const delta = Math.max(0, score - previous);
+      return {
+        label: delta > 0 ? `新纪录 +${delta}` : '金牌完成',
+        progress: 100,
+        complete: true
+      };
+    }
+
+    function normalizeRunDetailValue(value) {
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '');
+      }
+      if (typeof value === 'string') return value.trim().slice(0, 28);
+      return '';
+    }
+
+    function runDetailHighlights(game, details = {}) {
+      const spec = {
+        runner: [['level', '关卡'], ['finishTime', '用时', 's'], ['bestCombo', '连段', 'x'], ['contractsCompleted', '合约']],
+        survivor: [['level', '等级'], ['bestChain', '连锁', 'x'], ['overdrive', '超载'], ['anomalies', '异常'], ['bounties', '赏金']],
+        boss: [['phase', '阶段'], ['graze', '擦弹'], ['bestGrazeStreak', '连擦'], ['focusSurges', '专注'], ['shieldShatters', '碎盾']],
+        drift: [['gates', '弯道'], ['bestCombo', '连段', 'x'], ['overtakes', '超车'], ['heatPeak', '热度', '%'], ['phaseUses', '相位']],
+        heist: [['steps', '步数'], ['bestChain', '潜行链'], ['loot', '缓存'], ['security', '警戒', '%'], ['hacksCompleted', '破解']],
+        chain: [['movesLeft', '余步'], ['combo', '连锁'], ['mult', '倍率', 'x'], ['phase', '阶段'], ['recipes', '配方']],
+        tactics: [['turns', '回合'], ['hp', '装甲'], ['kills', '击破'], ['combo', '连段', 'x'], ['surges', '脉冲']]
+      }[game] || [];
+      return spec
+        .map(([key, label, suffix = '']) => {
+          const value = normalizeRunDetailValue(details[key]);
+          if (!value || value === '0') return null;
+          return `${label} ${value}${suffix}`;
+        })
+        .filter(Boolean)
+        .slice(0, 4);
+    }
+
+    function summarizeRunDetails(game, details = {}) {
+      return runDetailHighlights(game, details);
+    }
+
+    function launchRunLogRun(game, { announce = true } = {}) {
+      if (!game) return;
+      if (game === 'runner') {
+        document.querySelector('.arcade-cabinet-bezel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (announce) showToast('战报复战：已定位到主线远征', 'info');
+        return;
+      }
+      switchPremiumGame(game);
+      stage?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (announce) showToast(`战报复战：${titles[game] || premiumTabLabels[game] || game}`, 'success');
+    }
+
     function careerRunStats() {
       const runs = Array.isArray(career.runs) ? career.runs : [];
       if (!runs.length) return { runs: [], average: 0, bestMode: '', last: null };
@@ -6545,16 +6621,36 @@ function init() {
       if (bestEl) bestEl.textContent = stats.bestMode ? (premiumTabLabels[stats.bestMode] || titles[stats.bestMode] || stats.bestMode) : '--';
       if (avgEl) avgEl.textContent = stats.average ? String(stats.average) : '--';
       list.innerHTML = stats.runs.length
-        ? stats.runs.slice(0, 4).map(run => `
-          <article class="arcade-run-log-item" data-medal="${escapeHTML(run.medal || 'none')}">
-            <div>
+        ? stats.runs.slice(0, 4).map(run => {
+          const grade = runGradeFor(run);
+          const insight = runInsightFor(run);
+          const highlights = Array.isArray(run.highlights) && run.highlights.length
+            ? run.highlights
+            : runDetailHighlights(run.game, run.details || {});
+          const variant = run.variant || '自由训练';
+          return `
+          <button type="button" class="arcade-run-log-item" data-run-log-game="${escapeHTML(run.game)}" data-medal="${escapeHTML(run.medal || 'none')}" data-grade="${escapeHTML(grade.tone)}">
+            <span class="arcade-run-grade">${escapeHTML(grade.label)}</span>
+            <div class="arcade-run-log-copy">
               <strong>${escapeHTML(premiumTabLabels[run.game] || titles[run.game] || run.game)}</strong>
               <small>${escapeHTML(formatRunTime(run.at))} · ${escapeHTML(runDifficultyLabel(run.difficulty))} · ${escapeHTML(runLoadoutLabel(run.loadout))}</small>
+              <em>${escapeHTML(variant)}</em>
             </div>
-            <span>${escapeHTML(String(run.score || 0))}</span>
-          </article>
-        `).join('')
+            <span class="arcade-run-score">${escapeHTML(String(run.score || 0))}</span>
+            <div class="arcade-run-insight" aria-label="${escapeHTML(insight.label)}">
+              <span>${escapeHTML(insight.label)}</span>
+              <i style="width: ${insight.progress}%"></i>
+            </div>
+            <div class="arcade-run-tags">
+              ${(highlights.length ? highlights : ['等待高光']).map(item => `<b>${escapeHTML(item)}</b>`).join('')}
+            </div>
+          </button>
+        `;
+        }).join('')
         : '<div class="arcade-run-empty">暂无战报。完成一局高级街机后会自动生成复盘记录。</div>';
+      list.querySelectorAll('[data-run-log-game]').forEach(btn => {
+        btn.addEventListener('click', () => launchRunLogRun(btn.dataset.runLogGame));
+      });
     }
 
     function preferredCoachLoadout(game) {
@@ -7286,6 +7382,10 @@ function init() {
       const previousMedal = medalClass(career.medals[game] || medalFor(game, previousBest));
       career.best[game] = Math.max(Number(career.best[game] || 0), value);
       const medal = medalFor(game, value);
+      const highlights = summarizeRunDetails(game, details);
+      if (!highlights.length) {
+        highlights.push(`基础分 ${rawValue}`, `${medalLabels[medal] || medalLabels.none}牌`);
+      }
       if ((medalRank[medal] || 0) > (medalRank[career.medals[game] || 'none'] || 0)) {
         career.medals[game] = medal;
       }
@@ -7301,7 +7401,8 @@ function init() {
           previousMedal,
           difficulty: difficulty.id,
           loadout: loadout.id,
-          variant: variant.active ? variant.short : ''
+          variant: variant.active ? variant.short : '',
+          highlights
         },
         ...(Array.isArray(career.runs) ? career.runs : [])
       ].slice(0, 12);

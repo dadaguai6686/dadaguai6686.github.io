@@ -1813,10 +1813,17 @@ async function run() {
       completed: after.filter(contract => contract.claimed).length,
       cards: document.querySelectorAll('.arcade-contract-card').length,
       runCards: document.querySelectorAll('.arcade-run-log-item').length,
+      runReplayButtons: document.querySelectorAll('button.arcade-run-log-item[data-run-log-game]').length,
+      runReplayTarget: document.querySelector('.arcade-run-log-item')?.dataset.runLogGame || '',
+      runGrade: document.querySelector('.arcade-run-log-item .arcade-run-grade')?.textContent.trim() || '',
+      runInsight: document.querySelector('.arcade-run-log-item .arcade-run-insight span')?.textContent.trim() || '',
+      runTags: [...document.querySelectorAll('.arcade-run-log-item .arcade-run-tags b')].map(el => el.textContent.trim()),
+      runVariant: document.querySelector('.arcade-run-log-item .arcade-run-log-copy em')?.textContent.trim() || '',
       debugRuns: window.__atherixDebug?.premium?.runs?.().length || 0,
       latestRunGame: window.__atherixDebug?.premium?.runs?.()[0]?.game || '',
       latestRunScore: Number(window.__atherixDebug?.premium?.runs?.()[0]?.score || 0),
       latestRunDifficulty: window.__atherixDebug?.premium?.runs?.()[0]?.difficulty || '',
+      latestRunHighlights: window.__atherixDebug?.premium?.runs?.()[0]?.highlights || [],
       runTitle: document.querySelector('#premium-run-log-title')?.textContent || '',
       runLastScore: document.querySelector('#premium-run-last-score')?.textContent || '',
       runAverage: document.querySelector('#premium-run-average')?.textContent || '',
@@ -1862,6 +1869,19 @@ async function run() {
       total: document.querySelector('#premium-career-total')?.textContent || ''
     };
   })()`);
+  const runLogReplayState = await evaluate(`(async () => {
+    const before = window.__atherixDebug?.premium?.active?.() || '';
+    document.querySelector('.arcade-run-log-item[data-run-log-game="survivor"]')?.click();
+    await new Promise(resolve => setTimeout(resolve, 220));
+    return {
+      before,
+      active: window.__atherixDebug?.premium?.active?.() || '',
+      activeTitle: document.querySelector('#premium-active-title')?.textContent || '',
+      briefingMode: document.querySelector('#premium-mission-briefing')?.dataset.mode || '',
+      toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || '',
+      horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+    };
+  })()`, { retryOnTimeout: false });
   await click('#premium-coach-launch');
   await wait(220);
   const coachLaunchState = await evaluate(`(() => ({
@@ -2893,7 +2913,9 @@ async function run() {
   assert(arcadeInitial.difficultyPanel && arcadeInitial.difficultyCards === 4 && arcadeInitial.activeDifficulty === 'standard', `premium arcade difficulty matrix should render with standard default: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.loadoutPanel && arcadeInitial.loadoutCards === 4 && arcadeInitial.activeLoadout === 'pulse' && arcadeInitial.loadoutUnlocked >= 1, `premium arcade loadout chips should render with a default build: ${JSON.stringify(arcadeInitial)}`);
   assert(contractProgressState.afterContracts === 3 && contractProgressState.cards === 3 && contractProgressState.afterFirst > contractProgressState.beforeFirst && /总声望/.test(contractProgressState.total), `premium arcade contracts should advance after a scored run: ${JSON.stringify(contractProgressState)}`);
-  assert(contractProgressState.runCards >= 1 && contractProgressState.debugRuns === 1 && contractProgressState.latestRunGame === 'survivor' && contractProgressState.latestRunScore >= 900 && contractProgressState.latestRunDifficulty === 'standard', `premium arcade should record a replayable run log after scoring: ${JSON.stringify(contractProgressState)}`);
+  assert(contractProgressState.runCards >= 1 && contractProgressState.runReplayButtons >= 1 && contractProgressState.debugRuns === 1 && contractProgressState.latestRunGame === 'survivor' && contractProgressState.latestRunScore >= 900 && contractProgressState.latestRunDifficulty === 'standard', `premium arcade should record a replayable run log after scoring: ${JSON.stringify(contractProgressState)}`);
+  assert(contractProgressState.runReplayTarget === 'survivor' && /^[A-DS][+]?$/i.test(contractProgressState.runGrade) && /牌差|金牌完成|新纪录/.test(contractProgressState.runInsight) && contractProgressState.runTags.length >= 1 && contractProgressState.latestRunHighlights.length >= 1 && contractProgressState.runVariant, `premium arcade run log should expose grade, next target, variant, and performance tags: ${JSON.stringify(contractProgressState)}`);
+  assert(runLogReplayState.active === 'survivor' && runLogReplayState.briefingMode === 'survivor' && /幸存者/.test(runLogReplayState.activeTitle) && /战报复战/.test(runLogReplayState.toast) && !runLogReplayState.horizontalOverflow, `premium arcade run log card should relaunch the recorded mode without overflow: ${JSON.stringify(runLogReplayState)}`);
   assert(contractProgressState.leaderboardCards >= 1 && contractProgressState.leaderboard?.entries?.[0]?.game === 'survivor' && contractProgressState.leaderboardTopGame === 'survivor' && /幸存者/.test(contractProgressState.leaderboardTitle) && Number(contractProgressState.leaderboardTotal) >= contractProgressState.latestRunScore && /幸存者/.test(contractProgressState.leaderboardLatest), `premium arcade hall of fame should rank and summarize the first personal best: ${JSON.stringify(contractProgressState)}`);
   assert(contractProgressState.rival?.game === 'survivor' && contractProgressState.rivalActionTarget === 'survivor' && Number(contractProgressState.rivalTarget) === Number(contractProgressState.rival.target) && Number(contractProgressState.rival.gap) > 0 && /NOVA-9/.test(contractProgressState.rivalTitle), `premium arcade rival intel should pivot to the latest scored mode: ${JSON.stringify(contractProgressState)}`);
   assert(contractProgressState.coach?.game === 'survivor' && /星核幸存者/.test(contractProgressState.coachTitle) && /铜牌/.test(contractProgressState.coachMedal) && /^\+/.test(contractProgressState.coachDelta) && /银牌/.test(contractProgressState.coachTarget) && contractProgressState.coachLaunchTarget === 'survivor' && contractProgressState.coachDifficulty === 'elite' && contractProgressState.coachLoadout === 'overdrive', `premium arcade coach should provide actionable post-run guidance: ${JSON.stringify(contractProgressState)}`);
@@ -3108,6 +3130,7 @@ async function run() {
     premiumGamepadState,
     premiumPauseHookState,
     contractProgressState,
+    runLogReplayState,
     coachLaunchState,
     leagueProgressState,
     loadoutProgressState,
