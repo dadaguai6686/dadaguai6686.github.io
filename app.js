@@ -5324,7 +5324,7 @@ function init() {
         <div class="arcade-profile-grid">
           <span>完成度 <strong id="premium-profile-completion">0%</strong></span>
           <span>奖牌 <strong id="premium-profile-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-profile-achievements">0/31</strong></span>
+          <span>成就 <strong id="premium-profile-achievements">0/32</strong></span>
           <span>最近 <strong id="premium-profile-latest">--</strong></span>
         </div>
         <button type="button" class="arcade-profile-action" id="premium-profile-target" data-profile-target-game="survivor">
@@ -5424,7 +5424,7 @@ function init() {
         </div>
         <div class="arcade-director-meters" aria-label="街机完成度">
           <span>奖牌 <strong id="premium-director-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-director-achievements">0/31</strong></span>
+          <span>成就 <strong id="premium-director-achievements">0/32</strong></span>
           <span>完成度 <strong id="premium-director-completion">0%</strong></span>
         </div>
         <button type="button" class="arcade-director-action" id="premium-director-start" data-target-game="survivor">
@@ -5806,7 +5806,7 @@ function init() {
       survivor: { move: '方向', action: '星爆', tool: '--', actionLabel: '释放星爆', toolLabel: '' },
       boss: { move: '方向', action: '闪避', tool: '--', actionLabel: '闪避冲刺', toolLabel: '' },
       drift: { move: '转向', action: '加速', tool: '相位', actionLabel: '量子加速', toolLabel: '相位刹车' },
-      heist: { move: '潜行', action: '隐身', tool: '诱饵', actionLabel: '启动隐身', toolLabel: '部署诱饵' },
+      heist: { move: '潜行', action: '制服', tool: '诱饵', actionLabel: '幽影制服或启动隐身', toolLabel: '部署诱饵' },
       chain: { move: '光标', action: '炼成', tool: '催化', actionLabel: '炼成当前选中的能量团', toolLabel: '触发催化' },
       tactics: { move: '推进', action: '爆破', tool: '--', actionLabel: '相位爆破或架盾', toolLabel: '' }
     };
@@ -5854,9 +5854,9 @@ function init() {
       },
       heist: {
         title: '赛博潜入路线简报',
-        objective: '扫描密钥、终端和缓存，利用隐身与诱饵拆开守卫视野。',
-        action: 'Space 隐身 / Q 诱饵',
-        tactic: '先缓存 · 再撤离',
+        objective: '扫描密钥、终端和缓存，利用隐身、诱饵与盲区制服拆开守卫视野。',
+        action: 'Space 制服/隐身 · Q 诱饵',
+        tactic: '盲区制服 · 再撤离',
         start: '生成潜入任务'
       },
       chain: {
@@ -5942,6 +5942,7 @@ function init() {
       { id: 'heist_clean', label: '无声撤离', desc: '低步数完成潜入' },
       { id: 'heist_cache', label: '金库猎手', desc: '赛博潜入中取得高价值缓存' },
       { id: 'heist_protocol', label: '零日破解', desc: '赛博潜入中完成一次终端破解协议' },
+      { id: 'heist_takedown', label: '幽影制服', desc: '赛博潜入中从盲区无声制服守卫' },
       { id: 'chain_combo_9', label: '九连炼成', desc: '一次连锁爆破 9 格以上' },
       { id: 'chain_recipe', label: '秘方共振', desc: '连锁炼金完成一张配方契约' },
       { id: 'chain_clear', label: '贤者能场', desc: '完成连锁炼金目标' },
@@ -6973,7 +6974,7 @@ function init() {
         survivor: [['level', '等级'], ['bestChain', '连锁', 'x'], ['overdrive', '超载'], ['drones', '无人机'], ['bounties', '赏金']],
         boss: [['phase', '阶段'], ['graze', '擦弹'], ['perfectDodges', '精准闪避'], ['focusSurges', '专注'], ['shieldShatters', '碎盾']],
         drift: [['gates', '弯道'], ['bestCombo', '连段', 'x'], ['overtakes', '超车'], ['nearMisses', '擦车'], ['phaseUses', '相位']],
-        heist: [['steps', '步数'], ['bestChain', '潜行链'], ['loot', '缓存'], ['security', '警戒', '%'], ['hacksCompleted', '破解']],
+        heist: [['steps', '步数'], ['bestChain', '潜行链'], ['takedowns', '制服'], ['loot', '缓存'], ['security', '警戒', '%'], ['hacksCompleted', '破解']],
         chain: [['movesLeft', '余步'], ['combo', '连锁'], ['mult', '倍率', 'x'], ['phase', '阶段'], ['recipes', '配方']],
         tactics: [['turns', '回合'], ['hp', '装甲'], ['kills', '击破'], ['combo', '连段', 'x'], ['counters', '反制'], ['surges', '脉冲']]
       }[game] || [];
@@ -8627,7 +8628,9 @@ function init() {
         if (control === 'down') moveHeist(0, 1);
         if (control === 'left') moveHeist(-1, 0);
         if (control === 'right') moveHeist(1, 0);
-        if (control === 'action') triggerHeistCloak();
+        if (control === 'action') {
+          if (!triggerHeistTakedown()) triggerHeistCloak();
+        }
         if (control === 'tool') triggerHeistDecoy();
       }
       if (pressed && premiumActive === 'tactics') {
@@ -12592,6 +12595,10 @@ function init() {
       cloakTurns: 0,
       decoys: 2,
       decoy: null,
+      takedowns: 0,
+      takedownFlash: 0,
+      takedownPoint: null,
+      takedownLabel: '',
       alert: 'LOW',
       lastTactic: 'INFILTRATE',
       alarmFlash: 0,
@@ -12706,6 +12713,10 @@ function init() {
       heist.cloakTurns = 0;
       heist.decoys = Math.max(1, 2 + (activeDifficultyDef().id === 'training' ? 1 : 0));
       heist.decoy = null;
+      heist.takedowns = 0;
+      heist.takedownFlash = 0;
+      heist.takedownPoint = null;
+      heist.takedownLabel = '';
       heist.alert = 'LOW';
       heist.lastTactic = variant.active ? variant.short : 'INFILTRATE';
       heist.variant = variant;
@@ -12910,9 +12921,14 @@ function init() {
 
     function heistSensorSeesPlayer(sensor) {
       if (heist.cloakTurns > 0 || sensor.disabled) return false;
+      return heistSensorSeesPosition(sensor, heist.player);
+    }
+
+    function heistSensorSeesPosition(sensor, position) {
+      if (!sensor || sensor.disabled || !position) return false;
       const s = sensor.sweep !== undefined ? heistCameraSensor(sensor) : sensor;
-      const dx = heist.player.x - s.x;
-      const dy = heist.player.y - s.y;
+      const dx = position.x - s.x;
+      const dy = position.y - s.y;
       if (s.axis === 'x') {
         const forwardDistance = dx * s.dir;
         if (forwardDistance <= 0 || forwardDistance > s.cone || Math.abs(dy) > 1) return false;
@@ -12925,6 +12941,24 @@ function init() {
 
     function guardSeesPlayer(g) {
       return heistSensorSeesPlayer(g);
+    }
+
+    function heistTakedownTarget() {
+      if (heist.locked || heist.won || heist.hack?.active) return null;
+      const position = heist.player;
+      const lowTrace = heist.security < 86;
+      const options = heist.guards
+        .map((guard, index) => {
+          const distance = heistDistance(guard, position);
+          const blindSide = !heistSensorSeesPosition(guard, position);
+          const assisted = heist.cloakTurns > 0 || Number(guard.distracted || 0) > 0 || heist.chain >= 5;
+          const eligible = distance <= 1 && lowTrace && (blindSide || assisted);
+          const priority = (blindSide ? 5 : 0) + (heist.cloakTurns > 0 ? 4 : 0) + (Number(guard.distracted || 0) > 0 ? 3 : 0) + Math.min(4, Math.floor(heist.chain / 2)) - distance;
+          return { guard, index, distance, blindSide, assisted, eligible, priority };
+        })
+        .filter(item => item.eligible)
+        .sort((a, b) => b.priority - a.priority || a.distance - b.distance);
+      return options[0] || null;
     }
 
     function heistGuardOccupied(x, y, self) {
@@ -12976,6 +13010,7 @@ function init() {
       }
       heist.alarmFlash = Math.max(0, heist.alarmFlash - 1);
       heist.blockedFlash = Math.max(0, Number(heist.blockedFlash || 0) - 1);
+      heist.takedownFlash = Math.max(0, Number(heist.takedownFlash || 0) - 1);
     }
 
     function heistHeatMap() {
@@ -13158,6 +13193,22 @@ function init() {
         protocolHud: document.getElementById('premium-heist-protocol')?.textContent || '',
         chain: heist.chain,
         bestChain: heist.bestChain,
+        takedowns: Number(heist.takedowns || 0),
+        takedown: {
+          flash: Number(heist.takedownFlash || 0),
+          label: heist.takedownLabel || '',
+          point: heist.takedownPoint ? { ...heist.takedownPoint } : null,
+          available: (() => {
+            const target = heistTakedownTarget();
+            return target ? {
+              x: target.guard.x,
+              y: target.guard.y,
+              blindSide: target.blindSide,
+              assisted: target.assisted,
+              distance: target.distance
+            } : null;
+          })()
+        },
         routeHud: document.getElementById('premium-heist-route')?.textContent || '',
         chainHud: document.getElementById('premium-heist-chain')?.textContent || '',
         securityHud: document.getElementById('premium-heist-security')?.textContent || '',
@@ -13216,6 +13267,43 @@ function init() {
       drawHeist();
       triggerPremiumFeedback('special', { label: 'CLOAK' });
       return true;
+    }
+
+    function triggerHeistTakedown() {
+      if (premiumActive !== 'heist' || heist.won || heist.locked || heist.hack?.active) return false;
+      const target = heistTakedownTarget();
+      if (!target) return false;
+      const guard = target.guard;
+      const before = heistDebugState();
+      heist.guards = heist.guards.filter(item => item !== guard);
+      heist.takedowns = Number(heist.takedowns || 0) + 1;
+      heist.chain += 4 + (target.blindSide ? 1 : 0) + (heist.cloakTurns > 0 ? 1 : 0);
+      heist.bestChain = Math.max(heist.bestChain, heist.chain);
+      heist.loot += 70 + heist.chain * 5 + (target.blindSide ? 35 : 0);
+      heist.security = Math.max(0, heist.security - (target.blindSide ? 14 : 9));
+      heist.alert = heist.cloakTurns > 0 ? 'GHOST' : 'SILENT';
+      heist.lastTactic = target.blindSide ? 'SILENT TAKEDOWN' : 'GHOST TAKEDOWN';
+      heist.takedownLabel = heist.lastTactic;
+      heist.takedownFlash = 8;
+      heist.takedownPoint = { x: guard.x, y: guard.y };
+      heist.alarmFlash = Math.max(heist.alarmFlash || 0, 3);
+      unlockAchievement('heist_takedown');
+      setHeistUi();
+      drawHeist();
+      triggerPremiumFeedback('special', { label: 'SILENT TAKEDOWN', throttleMs: 120 });
+      return {
+        applied: true,
+        before,
+        after: heistDebugState(),
+        target: {
+          x: guard.x,
+          y: guard.y,
+          axis: guard.axis,
+          dir: guard.dir,
+          blindSide: target.blindSide,
+          assisted: target.assisted
+        }
+      };
     }
 
     function triggerHeistDecoy() {
@@ -13280,6 +13368,7 @@ function init() {
         loot: heist.loot,
         security: Math.round(heist.securityPeak),
         hacksCompleted: heist.hacksCompleted,
+        takedowns: Number(heist.takedowns || 0),
         keys: heist.collected,
         runVariant: heist.variant
       });
@@ -13367,6 +13456,7 @@ function init() {
           loot: heist.loot,
           security: Math.round(heist.securityPeak),
           hacksCompleted: heist.hacksCompleted,
+          takedowns: Number(heist.takedowns || 0),
           runVariant: heist.variant
         });
         heist.alert = 'CLEAR';
@@ -13502,6 +13592,33 @@ function init() {
         ctx.stroke();
         ctx.restore();
       }
+      if (Number(heist.takedownFlash || 0) > 0 && heist.takedownPoint) {
+        const alpha = clamp(Number(heist.takedownFlash || 0) / 8, 0, 1);
+        const tx = heist.takedownPoint.x * tile + tile / 2;
+        const ty = heist.takedownPoint.y * tile + tile / 2;
+        const px = heist.player.x * tile + tile / 2;
+        const py = heist.player.y * tile + tile / 2;
+        ctx.save();
+        ctx.globalAlpha = 0.28 + alpha * 0.68;
+        ctx.strokeStyle = '#A7F3D0';
+        ctx.fillStyle = '#A7F3D0';
+        ctx.lineWidth = 2 + alpha * 3;
+        ctx.shadowColor = '#34D399';
+        ctx.shadowBlur = 14;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(tx, ty);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.arc(tx, ty, 12 + (1 - alpha) * 16, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.font = '900 8px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('TAKEDOWN', tx, Math.max(10, ty - 18));
+        ctx.restore();
+      }
       heist.guards.forEach(g => {
         const reach = heistVisionReach(g);
         ctx.fillStyle = g.distracted > 0 ? 'rgba(167, 139, 250, 0.18)' : 'rgba(239, 68, 68, 0.14)';
@@ -13555,7 +13672,7 @@ function init() {
       ctx.textAlign = 'left';
       ctx.fillText(`ROUTE ${heist.routeLabel}`, hudX + 10, 26);
       ctx.fillStyle = heist.chain >= 8 ? '#FDE68A' : heist.chain >= 4 ? '#A7F3D0' : '#BAE6FD';
-      ctx.fillText(`CHAIN ${heist.chain}x · BEST ${heist.bestChain}x`, hudX + 10, 42);
+      ctx.fillText(`CHAIN ${heist.chain}x · BEST ${heist.bestChain}x · TD ${Number(heist.takedowns || 0)}`, hudX + 10, 42);
       ctx.fillStyle = heist.security >= 82 ? '#FCA5A5' : heist.security >= 48 ? '#FDE68A' : '#A7F3D0';
       ctx.fillText(`SEC ${Math.round(heist.security)}% · LOOT ${heist.loot}`, hudX + 10, 58);
       ctx.fillStyle = heist.hack?.active ? '#FDE68A' : '#94A3B8';
@@ -16425,6 +16542,45 @@ function init() {
             return {
               before,
               after: heistDebugState()
+            };
+          },
+          forceHeistTakedown: () => {
+            switchPremiumGame('heist');
+            newHeist();
+            heist.player = { x: 6, y: 8 };
+            heist.security = 34;
+            heist.securityPeak = 34;
+            heist.cloakTurns = 0;
+            heist.chain = 5;
+            heist.bestChain = 5;
+            heist.loot = 90;
+            heist.takedowns = 0;
+            heist.takedownFlash = 0;
+            heist.takedownPoint = null;
+            heist.takedownLabel = '';
+            heist.guards = [
+              { x: 7, y: 8, dir: 1, axis: 'x', min: 5, max: 11, cone: 3, patrolAxis: 'x', distracted: 0 },
+              { x: 16, y: 7, dir: -1, axis: 'y', min: 3, max: 10, cone: 4, patrolAxis: 'y', distracted: 0 }
+            ];
+            heist.alert = 'LOW';
+            heist.lastTactic = '调试：幽影制服窗口';
+            setHeistUi();
+            drawHeist();
+            const before = heistDebugState();
+            const result = triggerHeistTakedown();
+            return {
+              before,
+              result,
+              after: heistDebugState(),
+              feedback: {
+                lastTone: premiumFeedback.lastTone,
+                lastLabel: premiumFeedback.lastLabel,
+                tones: { ...premiumFeedback.tones },
+                visualTriggers: premiumFeedback.visualTriggers
+              },
+              stageTone: document.getElementById('premium-game-stage')?.dataset.feedbackTone || '',
+              stageLabel: document.getElementById('premium-game-stage')?.dataset.feedback || '',
+              achieved: (career.achievements || []).includes('heist_takedown')
             };
           },
           forceHeistCache: () => {
