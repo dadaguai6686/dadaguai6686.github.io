@@ -7891,8 +7891,18 @@ body.command-open {
     max-width: 100%;
   }
   .survivor-upgrade-draft {
-    position: relative;
-    margin-top: 0.75rem;
+    position: fixed;
+    inset: auto max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    max-height: min(72vh, 620px);
+    overflow: auto;
+    align-content: start;
+    padding: 0.85rem;
+    border-radius: 18px;
+    z-index: 80;
+    box-shadow: 0 -24px 70px rgba(0, 0, 0, 0.58), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+  .survivor-upgrade-draft.active {
+    display: grid;
   }
   .survivor-upgrade-grid {
     grid-template-columns: 1fr;

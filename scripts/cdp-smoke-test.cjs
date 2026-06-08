@@ -2125,7 +2125,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasTacticsSurgeVersion: swText.includes('atherix-static-v39-tactics-surge') && swText.includes('/style.css?v=20260608-tactics-surge-v1') && swText.includes('/app.js?v=20260608-tactics-surge-v1'),
+      swHasMobileDraftVersion: swText.includes('atherix-static-v40-mobile-draft') && swText.includes('/style.css?v=20260608-mobile-draft-v1') && swText.includes('/app.js?v=20260608-mobile-draft-v1'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
   })()`, 10000);
@@ -2176,6 +2176,43 @@ async function run() {
       horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
     };
   })()`);
+  const survivorDraftMobileState = await evaluate(`(async () => {
+    document.querySelector('[data-premium-game="survivor"]')?.click();
+    document.querySelector('#premium-game-stage')?.scrollIntoView({ block: 'start' });
+    const choices = window.__atherixDebug?.premium?.openSurvivorDraft?.() || [];
+    await new Promise(resolve => setTimeout(resolve, 140));
+    const draft = document.querySelector('#premium-survivor-draft');
+    const rect = draft?.getBoundingClientRect();
+    const optionRects = [...document.querySelectorAll('.survivor-upgrade-option')].map(option => {
+      const item = option.getBoundingClientRect();
+      return {
+        top: Math.round(item.top),
+        bottom: Math.round(item.bottom),
+        width: Math.round(item.width),
+        visible: item.bottom > 0 && item.top < window.innerHeight
+      };
+    });
+    const style = draft ? getComputedStyle(draft) : null;
+    return {
+      choices,
+      open: !!window.__atherixDebug?.premium?.survivorDraftOpen?.(),
+      role: draft?.getAttribute('role') || '',
+      modal: draft?.getAttribute('aria-modal') || '',
+      ariaHidden: draft?.getAttribute('aria-hidden') || '',
+      position: style?.position || '',
+      maxHeight: style?.maxHeight || '',
+      focusedUpgrade: !!document.activeElement?.closest?.('.survivor-upgrade-option'),
+      optionCards: document.querySelectorAll('.survivor-upgrade-option').length,
+      visibleOptions: optionRects.filter(item => item.visible).length,
+      rect: rect ? {
+        top: Math.round(rect.top),
+        bottom: Math.round(rect.bottom),
+        width: Math.round(rect.width),
+        visible: rect.bottom > 0 && rect.top < window.innerHeight && rect.left >= 0 && rect.right <= window.innerWidth + 1
+      } : null,
+      horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+    };
+  })()`, 6000);
   const runnerMobileState = await evaluate(`(() => {
     const pad = document.querySelector('#runner-touch-controls');
     pad?.scrollIntoView({ block: 'center' });
@@ -2300,6 +2337,7 @@ async function run() {
   assert(runnerMobileState.controls >= 7 && runnerMobileState.visibleAfterScroll && !runnerMobileState.horizontalOverflow, `runner touch controls should remain reachable on mobile after premium-first layout: ${JSON.stringify(runnerMobileState)}`);
   assert(premiumMobileState.cockpit?.visible && premiumMobileState.tabs?.top >= premiumMobileState.cockpit?.bottom - 8 && premiumMobileState.stage?.top >= premiumMobileState.tabs?.bottom - 8 && premiumMobileState.career?.top >= premiumMobileState.stage?.bottom - 8 && !premiumMobileState.horizontalOverflow, `premium arcade cockpit, tabs, and stage should be prioritized before meta panels on mobile: ${JSON.stringify(premiumMobileState)}`);
   assert(premiumMobileState.controls?.visible && premiumMobileState.controlsPosition === 'sticky' && premiumMobileState.controls.bottom <= premiumMobileState.height && premiumMobileState.controlsCount >= 5 && premiumMobileState.minControlWidth >= 44 && premiumMobileState.minControlHeight >= 44 && premiumMobileState.actionText && premiumMobileState.toolText, `premium arcade touch controls should stay visible and tappable on mobile: ${JSON.stringify(premiumMobileState)}`);
+  assert(survivorDraftMobileState.open && survivorDraftMobileState.role === 'dialog' && survivorDraftMobileState.modal === 'true' && survivorDraftMobileState.ariaHidden === 'false' && survivorDraftMobileState.position === 'fixed' && survivorDraftMobileState.rect?.visible && survivorDraftMobileState.optionCards === 3 && survivorDraftMobileState.visibleOptions === 3 && survivorDraftMobileState.focusedUpgrade && !survivorDraftMobileState.horizontalOverflow, `survivor mobile upgrade draft should behave like a reachable bottom sheet: ${JSON.stringify(survivorDraftMobileState)}`);
   assert(arcadeInitial.premium && arcadeInitial.careerPanel, 'premium arcade career panel should render');
   assert(arcadeInitial.oldPrototypeCount === 0, 'old prototype mini-games should be replaced');
   assert(arcadeInitial.premiumTabs >= 6 && arcadeInitial.driftPanel && arcadeInitial.tacticsPanel, 'premium arcade should include drift and tactics modes');
@@ -2536,7 +2574,7 @@ async function run() {
   assert(tacticsForecastAfterAction.dangerCount > 0 && tacticsForecastAfterAction.coverHud && tacticsForecastAfterAction.momentumHud !== undefined && tacticsForecastAfterAction.comboHud && tacticsForecastAfterAction.surgeHud && tacticsForecastAfterAction.routeHud && tacticsJammedIntent, `tactics mode should expose post-action JAM, cover, momentum, combo, surge, and route forecast: ${JSON.stringify(tacticsForecastAfterAction)}`);
   assert(tacticsState.nonBlank && Number(tacticsState.ap) >= 0 && tacticsState.action && tacticsState.cover && tacticsState.momentum !== undefined && tacticsState.combo && tacticsState.surge && tacticsState.route && tacticsState.debug?.route?.length > 0, `tactics mode should render and accept enhanced actions: ${JSON.stringify(tacticsState)}`);
   assert(Number(tacticsState.danger) > 0 && tacticsState.intel && tacticsState.debug?.hud?.route === tacticsState.route && tacticsState.debug?.hud?.cover === tacticsState.cover && tacticsState.debug?.hud?.momentum === tacticsState.momentum && tacticsState.debug?.hud?.combo === tacticsState.combo && tacticsState.debug?.hud?.surge === tacticsState.surge && tacticsState.debug?.hud?.shield === tacticsState.shield, `tactics HUD should stay in sync with enhanced debug state: ${JSON.stringify(tacticsState)}`);
-  assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /tactics-surge/.test(key)) && pwaState.swHasTacticsSurgeVersion, `service worker should register and cache the latest app shell: ${JSON.stringify(pwaState)}`);
+  assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /mobile-draft/.test(key)) && pwaState.swHasMobileDraftVersion, `service worker should register and cache the latest app shell: ${JSON.stringify(pwaState)}`);
   assert(pwaState.swHasLocalProjectAssets, `service worker should precache local portfolio assets: ${JSON.stringify(pwaState)}`);
   assert(pwaState.swHasNavigationPreload && pwaState.swHasOfflineShellHeader && pwaState.swHasFallbackUrl, `service worker should include robust offline navigation fallback: ${JSON.stringify(pwaState)}`);
   const diagnosticText = JSON.stringify(diagnostics);
@@ -2635,6 +2673,7 @@ async function run() {
     tacticsForecastAfterAction,
     tacticsState,
     pwaState,
+    survivorDraftMobileState,
     diagnostics: diagnosticsSummary()
   };
 }
@@ -2661,7 +2700,13 @@ function summarizeSmokeResult(result) {
       profileCompletion: result.arcadeInitial?.profileCompletion,
       mobileOverflow: result.premiumMobileState?.horizontalOverflow,
       touchControls: result.premiumMobileState?.controlsCount,
-      runnerMobileOverflow: result.runnerMobileState?.horizontalOverflow
+      runnerMobileOverflow: result.runnerMobileState?.horizontalOverflow,
+      survivorDraftMobile: {
+        position: result.survivorDraftMobileState?.position,
+        visible: result.survivorDraftMobileState?.rect?.visible,
+        focused: result.survivorDraftMobileState?.focusedUpgrade,
+        options: result.survivorDraftMobileState?.visibleOptions
+      }
     },
     runner: {
       spaceKeyDoesNotRestart: result.mainSpaceState?.overlayAfter === result.mainSpaceState?.overlayBefore,
@@ -2710,7 +2755,7 @@ function summarizeSmokeResult(result) {
       registered: result.pwaState?.registered,
       shellCached: result.pwaState?.shellCached,
       cacheKeys: result.pwaState?.cacheKeys,
-      latestVersion: result.pwaState?.swHasTacticsSurgeVersion
+      latestVersion: result.pwaState?.swHasMobileDraftVersion
     },
     diagnostics: result.diagnostics
   };

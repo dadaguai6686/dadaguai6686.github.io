@@ -5084,7 +5084,7 @@ function init() {
           </div>
           <div class="mini-playfield-stack">
             <canvas class="mini-canvas mini-canvas-wide" id="premium-survivor-canvas" width="560" height="360"></canvas>
-            <div class="survivor-upgrade-draft" id="premium-survivor-draft" aria-hidden="true">
+            <div class="survivor-upgrade-draft" id="premium-survivor-draft" role="dialog" aria-modal="true" aria-labelledby="premium-survivor-draft-title" aria-hidden="true">
               <div class="survivor-draft-heading">
                 <span>LEVEL UP</span>
                 <strong id="premium-survivor-draft-title">选择星核改造</strong>
@@ -8286,8 +8286,20 @@ function init() {
         moveFocusBeforeHiding(draft, stage);
         draft.classList.remove('active');
         draft.setAttribute('aria-hidden', 'true');
+        placeSurvivorDraft(draft);
       }
       if (options) options.innerHTML = '';
+    }
+
+    function placeSurvivorDraft(draft = document.getElementById('premium-survivor-draft')) {
+      if (!draft) return;
+      const home = document.querySelector('#premium-survivor .mini-playfield-stack');
+      const mobile = window.matchMedia?.('(max-width: 768px)').matches;
+      if (survivor.draftOpen && mobile) {
+        if (draft.parentElement !== document.body) document.body.appendChild(draft);
+      } else if (home && draft.parentElement !== home) {
+        home.appendChild(draft);
+      }
     }
 
     function renderSurvivorDraft() {
@@ -8296,6 +8308,7 @@ function init() {
       const title = document.getElementById('premium-survivor-draft-title');
       if (!draft || !options || !survivor.player) return;
       if (!survivor.draftOpen) moveFocusBeforeHiding(draft, stage);
+      placeSurvivorDraft(draft);
       draft.classList.toggle('active', survivor.draftOpen);
       draft.setAttribute('aria-hidden', survivor.draftOpen ? 'false' : 'true');
       if (title) title.textContent = `选择第 ${survivor.player.level} 级改造`;
@@ -8310,6 +8323,11 @@ function init() {
       options.querySelectorAll('[data-survivor-upgrade]').forEach(btn => {
         btn.addEventListener('click', () => selectSurvivorUpgrade(btn.dataset.survivorUpgrade));
       });
+      if (survivor.draftOpen) {
+        requestAnimationFrame(() => {
+          options.querySelector('[data-survivor-upgrade]')?.focus({ preventScroll: true });
+        });
+      }
     }
 
     function openSurvivorDraft() {
@@ -13387,7 +13405,8 @@ function init() {
     });
 
     window.addEventListener('keydown', (e) => {
-      if (!isGameSectionActive() || isEditableTarget(e.target) || !document.activeElement?.closest?.('#premium-game-stage')) return;
+      const premiumFocusRoot = document.activeElement?.closest?.('#premium-game-stage, #premium-survivor-draft');
+      if (!isGameSectionActive() || isEditableTarget(e.target) || !premiumFocusRoot) return;
       const codes = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyQ', 'KeyP', 'Escape', 'Digit1', 'Digit2', 'Digit3'];
       if (!codes.includes(e.code)) return;
       e.preventDefault();
