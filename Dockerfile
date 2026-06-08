@@ -13,8 +13,8 @@ RUN npm ci --omit=dev
 # Copy codebase
 COPY --chown=node:node . .
 
-# Create uploads folder in case it is not mounted
-RUN mkdir -p uploads && chown -R node:node uploads
+# Create persistent folders in case they are not mounted
+RUN mkdir -p data uploads && chown -R node:node data uploads
 
 # Expose server port
 EXPOSE 3000

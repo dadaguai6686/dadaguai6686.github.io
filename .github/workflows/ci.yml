@@ -17,9 +17,38 @@ jobs:
       - run: npm audit --audit-level=moderate
       - run: npm run check
       - run: npm run smoke:api
+      - run: npm run smoke:games
 
   docker-build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: docker build -t atherix-digital-space:ci .
+      - name: Run production container smoke test
+        run: |
+          docker run -d --name atherix-ci -p 3800:3000 \
+            -e NODE_ENV=production \
+            -e PORT=3000 \
+            -e DB_PATH=/usr/src/app/data/blog.db \
+            -e ADMIN_USERNAME=admin \
+            -e ADMIN_PASSWORD='DockerSmoke#20260608!' \
+            -e JWT_SECRET='DockerSmokeJwtSecret_20260608_9dbe9a5ce540' \
+            -e ALLOWED_ORIGINS='https://example.test' \
+            atherix-digital-space:ci
+          for attempt in {1..45}; do
+            if curl -fsS http://127.0.0.1:3800/api/health > /tmp/atherix-health.json; then
+              cat /tmp/atherix-health.json
+              break
+            fi
+            if [ "$attempt" = "45" ]; then
+              docker logs atherix-ci
+              exit 1
+            fi
+            sleep 1
+          done
+          curl -fsS -X POST http://127.0.0.1:3800/api/comments \
+            -H 'Content-Type: application/json' \
+            --data '{"nickname":"CI Docker","content":"Docker writable database smoke test."}'
+      - name: Stop production container
+        if: always()
+        run: docker rm -f atherix-ci || true

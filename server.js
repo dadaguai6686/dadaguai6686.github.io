@@ -298,6 +298,8 @@ function sendDatabaseError(res, err, fallback = 'Database operation failed.') {
 }
 
 function sendApiError(res, status, message) {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
   return res.status(status).json({ error: message });
 }
 
@@ -505,6 +507,9 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use((err, req, res, next) => {
+  if (err?.type === 'entity.too.large' || err?.status === 413 || err?.statusCode === 413) {
+    return sendApiError(res, 413, 'Request body too large. Keep JSON payloads under 1 MB.');
+  }
   if (err instanceof SyntaxError && 'body' in err) {
     return sendApiError(res, 400, 'Malformed JSON request body.');
   }
@@ -648,6 +653,12 @@ app.use('/uploads', guardStaticUpload, express.static(uploadDir, {
     res.setHeader('Cache-Control', 'public, max-age=604800');
   }
 }));
+
+function hasVersionedAssetQuery(res) {
+  const version = res.req?.query?.v;
+  return typeof version === 'string' && /^[A-Za-z0-9._-]{4,96}$/.test(version);
+}
+
 app.use(express.static(__dirname, {
   etag: true,
   maxAge: '1h',
@@ -658,7 +669,10 @@ app.use(express.static(__dirname, {
       return;
     }
     if (/\.(?:js|css)$/i.test(filePath)) {
-      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader(
+        'Cache-Control',
+        hasVersionedAssetQuery(res) ? 'public, max-age=31536000, immutable' : 'no-cache'
+      );
     } else if (/\.(?:png|jpg|jpeg|gif|webp|svg|ico|woff2?)$/i.test(filePath)) {
       res.setHeader('Cache-Control', 'public, max-age=604800');
     }

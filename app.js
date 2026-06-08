@@ -8942,6 +8942,7 @@ function init() {
       running: false,
       paused: false,
       raf: null,
+      frames: 0,
       last: 0,
       elapsed: 0,
       spawn: 0,
@@ -8971,6 +8972,27 @@ function init() {
       bountyFlash: 0,
       lastBounty: ''
     };
+
+    function stopSurvivorLoop() {
+      if (survivor.raf) cancelAnimationFrame(survivor.raf);
+      survivor.raf = null;
+    }
+
+    function requestSurvivorLoop() {
+      stopSurvivorLoop();
+      survivor.raf = requestAnimationFrame(runSurvivor);
+    }
+
+    function drawSurvivorPauseOverlay() {
+      drawSurvivor();
+      overlay(survivor.ctx, survivor.canvas.width, survivor.canvas.height, 'PAUSED', '点击继续或按按钮恢复');
+    }
+
+    function resumeSurvivorLoop() {
+      if (!survivor.running || survivor.paused || survivor.draftOpen) return;
+      survivor.last = performance.now();
+      requestSurvivorLoop();
+    }
 
     const survivorAnomalyDefs = {
       meteor: { label: '裂隙陨雨', short: 'METEOR', color: '#F97316', duration: 5600 },
@@ -9190,6 +9212,7 @@ function init() {
       survivor.running = true;
       survivor.paused = false;
       survivor.last = performance.now();
+      survivor.frames = 0;
       survivor.elapsed = 0;
       survivor.spawn = 0;
       survivor.shot = 0;
@@ -9241,9 +9264,8 @@ function init() {
       survivor.particles = [];
       document.getElementById('premium-survivor-pause').textContent = '暂停';
       setSurvivorUi();
-      cancelAnimationFrame(survivor.raf);
       focusStage();
-      survivor.raf = requestAnimationFrame(runSurvivor);
+      requestSurvivorLoop();
     }
 
     function spawnSurvivorEnemy() {
@@ -9574,6 +9596,8 @@ function init() {
       setSurvivorUi();
       updatePremiumMetaControls();
       updatePremiumTouchLabels();
+      stopSurvivorLoop();
+      drawSurvivor();
     }
 
     function selectSurvivorUpgrade(id) {
@@ -9595,6 +9619,7 @@ function init() {
       updatePremiumTouchLabels();
       drawSurvivor();
       focusStage();
+      resumeSurvivorLoop();
       return true;
     }
 
@@ -9670,7 +9695,7 @@ function init() {
       survivor.draftOpen = false;
       survivor.draftChoices = [];
       hideSurvivorDraft();
-      cancelAnimationFrame(survivor.raf);
+      stopSurvivorLoop();
       const finalScore = Math.floor(survivor.score + survivor.elapsed / 120 + survivor.bestChain * 42 + survivor.overdrive * 3 + survivor.anomalyCount * 95 + survivor.bountiesCompleted * 150);
       localStorage.setItem(survivor.bestKey, String(Math.max(Number(localStorage.getItem(survivor.bestKey) || 0), finalScore)));
       if (survivor.elapsed >= 90000) unlockAchievement('survivor_90');
@@ -9682,17 +9707,16 @@ function init() {
 
     function runSurvivor(now) {
       if (!survivor.running) return;
+      survivor.raf = null;
+      survivor.frames = (survivor.frames || 0) + 1;
       const dt = Math.min(34, now - survivor.last);
       survivor.last = now;
       if (survivor.draftOpen) {
         drawSurvivor();
-        survivor.raf = requestAnimationFrame(runSurvivor);
         return;
       }
       if (survivor.paused) {
-        drawSurvivor();
-        overlay(survivor.ctx, survivor.canvas.width, survivor.canvas.height, 'PAUSED', '点击继续或按按钮恢复');
-        survivor.raf = requestAnimationFrame(runSurvivor);
+        drawSurvivorPauseOverlay();
         return;
       }
       const p = survivor.player;
@@ -9797,7 +9821,7 @@ function init() {
       drawSurvivor();
       if (p.hp <= 0) return finishSurvivor('CORE LOST');
       if (survivor.elapsed >= 90000) return finishSurvivor('90s SURVIVED');
-      survivor.raf = requestAnimationFrame(runSurvivor);
+      if (!survivor.paused && !survivor.draftOpen) requestSurvivorLoop();
     }
 
     function drawSurvivor() {
@@ -9942,6 +9966,12 @@ function init() {
       clearPremiumKeys();
       updateSurvivorPauseButton();
       updatePremiumMetaControls();
+      if (survivor.paused) {
+        stopSurvivorLoop();
+        drawSurvivorPauseOverlay();
+      } else {
+        resumeSurvivorLoop();
+      }
       focusStage();
       return true;
     }
@@ -9952,6 +9982,7 @@ function init() {
         running: survivor.running,
         paused: survivor.paused,
         draftOpen: survivor.draftOpen,
+        frames: survivor.frames || 0,
         elapsed: Math.round(survivor.elapsed),
         score: Math.floor(survivor.score),
         chain: survivor.chain,
@@ -10119,6 +10150,7 @@ function init() {
       running: false,
       paused: false,
       raf: null,
+      frames: 0,
       last: 0,
       t: 0,
       score: 0,
@@ -10146,6 +10178,27 @@ function init() {
       lastBreak: '',
       bonuses: {}
     };
+
+    function stopBossLoop() {
+      if (bossMode.raf) cancelAnimationFrame(bossMode.raf);
+      bossMode.raf = null;
+    }
+
+    function requestBossLoop() {
+      stopBossLoop();
+      bossMode.raf = requestAnimationFrame(runBoss);
+    }
+
+    function drawBossPauseOverlay() {
+      drawBoss();
+      overlay(bossMode.ctx, bossMode.canvas.width, bossMode.canvas.height, 'PAUSED', 'P / Esc 或按钮继续 Boss 战');
+    }
+
+    function resumeBossLoop() {
+      if (!bossMode.running || bossMode.paused) return;
+      bossMode.last = performance.now();
+      requestBossLoop();
+    }
 
     const bossPatternDefs = {
       ring: { label: '棱镜环爆', color: '#06B6D4' },
@@ -10285,6 +10338,7 @@ function init() {
       bossMode.running = true;
       bossMode.paused = false;
       bossMode.last = performance.now();
+      bossMode.frames = 0;
       bossMode.t = 0;
       bossMode.score = 0;
       bossMode.player = { x: 280, y: 300, r: 12, lives: 3 + Number(bonuses.bossLives || 0), invuln: 1000, dash: 0, dashCooldown: 0, graze: 0, grazeStreak: 0, bestGrazeStreak: 0, focus: 0, focusSurge: 0 };
@@ -10314,15 +10368,14 @@ function init() {
       bossMode.bonuses = bonuses;
       setBossUi();
       updateBossPauseButton();
-      cancelAnimationFrame(bossMode.raf);
       focusStage();
-      bossMode.raf = requestAnimationFrame(runBoss);
+      requestBossLoop();
     }
 
     function finishBoss(text) {
       bossMode.running = false;
       bossMode.paused = false;
-      cancelAnimationFrame(bossMode.raf);
+      stopBossLoop();
       localStorage.setItem(bossMode.bestKey, String(Math.max(Number(localStorage.getItem(bossMode.bestKey) || 0), Math.floor(bossMode.score))));
       if (text === 'PRISM BROKEN') unlockAchievement('boss_clear');
       recordPremiumResult('boss', bossMode.score, { phase: bossMode.boss.phase, graze: bossMode.player.graze, bestGrazeStreak: bossMode.player.bestGrazeStreak, focusSurges: bossMode.focusSurges, breakChain: bossMode.breakChain, shieldShatters: Number(bossMode.shield?.shatters || 0), runVariant: bossMode.variant });
@@ -10340,10 +10393,15 @@ function init() {
     function toggleBossPause(force) {
       if (!bossMode.running) return false;
       bossMode.paused = typeof force === 'boolean' ? force : !bossMode.paused;
-      bossMode.last = performance.now();
       clearPremiumKeys();
       updateBossPauseButton();
       updatePremiumMetaControls();
+      if (bossMode.paused) {
+        stopBossLoop();
+        drawBossPauseOverlay();
+      } else {
+        resumeBossLoop();
+      }
       focusStage();
       return true;
     }
@@ -10577,12 +10635,12 @@ function init() {
 
     function runBoss(now) {
       if (!bossMode.running) return;
+      bossMode.raf = null;
+      bossMode.frames = (bossMode.frames || 0) + 1;
       const dt = Math.min(34, now - bossMode.last);
       bossMode.last = now;
       if (bossMode.paused) {
-        drawBoss();
-        overlay(bossMode.ctx, bossMode.canvas.width, bossMode.canvas.height, 'PAUSED', 'P / Esc 或按钮继续 Boss 战');
-        bossMode.raf = requestAnimationFrame(runBoss);
+        drawBossPauseOverlay();
         return;
       }
       const p = bossMode.player;
@@ -10687,7 +10745,7 @@ function init() {
       }
       setBossUi();
       drawBoss();
-      bossMode.raf = requestAnimationFrame(runBoss);
+      if (!bossMode.paused) requestBossLoop();
     }
 
     function drawBossTelegraph(ctx, c) {
@@ -10988,6 +11046,7 @@ function init() {
       running: false,
       paused: false,
       raf: null,
+      frames: 0,
       last: 0,
       elapsed: 0,
       score: 0,
@@ -11038,6 +11097,28 @@ function init() {
       drones: [],
       particles: []
     };
+
+    function stopDriftLoop() {
+      if (drift.raf) cancelAnimationFrame(drift.raf);
+      drift.raf = null;
+    }
+
+    function requestDriftLoop() {
+      stopDriftLoop();
+      drift.raf = requestAnimationFrame(runDrift);
+    }
+
+    function drawDriftPauseOverlay() {
+      drawDrift();
+      overlay(drift.ctx, drift.canvas.width, drift.canvas.height, 'PAUSED', 'P / Esc 或按钮继续漂移');
+    }
+
+    function resumeDriftLoop() {
+      if (!drift.running || drift.paused) return;
+      drift.last = performance.now();
+      requestDriftLoop();
+    }
+
     const driftSponsorDefs = [
       { id: 'apex', label: 'APEX', target: 3, reward: 620, heatDrop: 8, charge: 24, check: ({ grade }) => grade.quality >= 70 },
       { id: 'rival', label: 'RIVAL', target: 2, reward: 760, heatDrop: 10, charge: 30, check: ({ overtakeBonus }) => overtakeBonus > 0 },
@@ -11173,6 +11254,7 @@ function init() {
       drift.running = true;
       drift.paused = false;
       drift.last = performance.now();
+      drift.frames = 0;
       drift.elapsed = 0;
       drift.score = 0;
       drift.gateIndex = 0;
@@ -11217,9 +11299,8 @@ function init() {
       resetDriftState();
       setDriftUi();
       updateDriftPauseButton();
-      cancelAnimationFrame(drift.raf);
       focusStage();
-      drift.raf = requestAnimationFrame(runDrift);
+      requestDriftLoop();
     }
 
     function updateDriftPauseButton() {
@@ -11230,10 +11311,15 @@ function init() {
     function toggleDriftPause(force) {
       if (!drift.running) return false;
       drift.paused = typeof force === 'boolean' ? force : !drift.paused;
-      drift.last = performance.now();
       clearPremiumKeys();
       updateDriftPauseButton();
       updatePremiumMetaControls();
+      if (drift.paused) {
+        stopDriftLoop();
+        drawDriftPauseOverlay();
+      } else {
+        resumeDriftLoop();
+      }
       focusStage();
       return true;
     }
@@ -11433,7 +11519,7 @@ function init() {
       if (!drift.running) return;
       drift.running = false;
       drift.paused = false;
-      cancelAnimationFrame(drift.raf);
+      stopDriftLoop();
       const complete = drift.gateIndex >= drift.gates.length;
       const timeBonus = complete ? Math.max(0, 76000 - drift.elapsed) / 42 : 0;
       const finalScore = Math.floor(drift.score + drift.gateIndex * 120 + drift.player.shield * 7 + timeBonus + drift.bestCombo * 75 + drift.lineBank + drift.overtakes * 180 + drift.draftBank);
@@ -11462,12 +11548,12 @@ function init() {
 
     function runDrift(now) {
       if (!drift.running) return;
+      drift.raf = null;
+      drift.frames = (drift.frames || 0) + 1;
       const dt = Math.min(34, now - drift.last);
       drift.last = now;
       if (drift.paused) {
-        drawDrift();
-        overlay(drift.ctx, drift.canvas.width, drift.canvas.height, 'PAUSED', 'P / Esc 或按钮继续漂移');
-        drift.raf = requestAnimationFrame(runDrift);
+        drawDriftPauseOverlay();
         return;
       }
 
@@ -11585,7 +11671,7 @@ function init() {
       drawDrift();
       if (p.shield <= 0) return finishDrift('DRIVE BROKEN');
       if (drift.elapsed >= 76000) return finishDrift('TIME OUT');
-      drift.raf = requestAnimationFrame(runDrift);
+      if (!drift.paused) requestDriftLoop();
     }
 
     function drawDrift() {
@@ -14637,7 +14723,7 @@ function init() {
           resetSurvivorIdle: () => {
             switchPremiumGame('survivor');
             clearPremiumRestartRequest();
-            if (survivor.raf) cancelAnimationFrame(survivor.raf);
+            stopSurvivorLoop();
             survivor.running = false;
             survivor.paused = false;
             survivor.draftOpen = false;
@@ -14666,7 +14752,7 @@ function init() {
           resetBossIdle: () => {
             switchPremiumGame('boss');
             clearPremiumRestartRequest();
-            if (bossMode.raf) cancelAnimationFrame(bossMode.raf);
+            stopBossLoop();
             bossMode.running = false;
             bossMode.paused = false;
             setBossUi();
@@ -14699,6 +14785,7 @@ function init() {
             shield: bossShieldState(),
             variant: bossMode.variant || activeArcadeRunVariant('boss'),
             runPressure: Number((bossMode.runPressure || arcadeRunPressure('boss', bossMode.variant)).toFixed(3)),
+            frames: bossMode.frames || 0,
             breakCount: bossMode.breakCount,
             hud: document.getElementById('premium-boss-pattern')?.textContent || '',
             weakHud: document.getElementById('premium-boss-weak')?.textContent || '',
@@ -14825,7 +14912,7 @@ function init() {
           resetDriftIdle: () => {
             switchPremiumGame('drift');
             clearPremiumRestartRequest();
-            if (drift.raf) cancelAnimationFrame(drift.raf);
+            stopDriftLoop();
             drift.running = false;
             drift.paused = false;
             setDriftUi();
@@ -14843,6 +14930,7 @@ function init() {
           driftLineState: () => ({
             running: drift.running,
             paused: drift.paused,
+            frames: drift.frames || 0,
             gates: drift.gateIndex,
             label: drift.lineLabel,
             tone: drift.lineTone,
@@ -15318,18 +15406,24 @@ function init() {
         survivor.paused = true;
         survivor.last = performance.now();
         updateSurvivorPauseButton();
+        stopSurvivorLoop();
+        drawSurvivorPauseOverlay();
         paused.push('survivor');
       }
       if (bossMode.running && !bossMode.paused) {
         bossMode.paused = true;
         bossMode.last = performance.now();
         updateBossPauseButton();
+        stopBossLoop();
+        drawBossPauseOverlay();
         paused.push('boss');
       }
       if (drift.running && !drift.paused) {
         drift.paused = true;
         drift.last = performance.now();
         updateDriftPauseButton();
+        stopDriftLoop();
+        drawDriftPauseOverlay();
         paused.push('drift');
       }
       updatePremiumMetaControls();

@@ -1,11 +1,13 @@
 const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
+const net = require('net');
 const os = require('os');
 const path = require('path');
 
-const port = Number(process.env.API_SMOKE_PORT || (3400 + Math.floor(Math.random() * 800)));
-const baseUrl = `http://127.0.0.1:${port}`;
+const requestedPort = Number(process.env.API_SMOKE_PORT || 0);
+let port = Number.isFinite(requestedPort) && requestedPort > 0 ? requestedPort : 0;
+let baseUrl = '';
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'atherix-api-smoke-'));
 const dbPath = path.join(tempDir, 'blog.db');
 const allowedOrigin = 'https://example.test';
@@ -21,12 +23,46 @@ function trace(label) {
   if (traceEnabled) console.error(`[api-smoke] ${label}`);
 }
 
+function getFreePort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.unref();
+    server.on('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      const freePort = typeof address === 'object' && address ? address.port : 0;
+      server.close(() => resolve(freePort));
+    });
+  });
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 2500) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function collectChildOutput(child) {
+  let output = '';
+  const append = (chunk) => {
+    output += chunk.toString();
+    if (output.length > 4000) output = output.slice(-4000);
+  };
+  child.stdout?.on('data', append);
+  child.stderr?.on('data', append);
+  return () => output.trim();
+}
+
 async function waitForServer() {
   const deadline = Date.now() + 15000;
   let lastError;
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(`${baseUrl}/api/health`);
+      const response = await fetchWithTimeout(`${baseUrl}/api/health`);
       if (response.ok) return;
     } catch (error) {
       lastError = error;
@@ -69,7 +105,7 @@ async function stopChild(child) {
 }
 
 async function expectProductionStartupFailure(envOverrides, message) {
-  const failPort = port + 1;
+  const failPort = await getFreePort();
   const failDir = fs.mkdtempSync(path.join(os.tmpdir(), 'atherix-api-secret-'));
   const child = spawn(process.execPath, ['server.js'], {
     cwd: path.resolve(__dirname, '..'),
@@ -110,7 +146,7 @@ async function assertProductionSecretRequired() {
 }
 
 async function assertUnhealthyDatabaseReports503() {
-  const failPort = port + 2;
+  const failPort = await getFreePort();
   const failDir = fs.mkdtempSync(path.join(os.tmpdir(), 'atherix-api-bad-db-'));
   const child = spawn(process.execPath, ['server.js'], {
     cwd: path.resolve(__dirname, '..'),
@@ -124,26 +160,36 @@ async function assertUnhealthyDatabaseReports503() {
       JWT_SECRET: smokeJwtSecret
     },
     windowsHide: true,
-    stdio: 'ignore'
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+  const getOutput = collectChildOutput(child);
+  let childExit = null;
+  child.on('exit', (code, signal) => {
+    childExit = { code, signal };
   });
 
   try {
-    const deadline = Date.now() + 12000;
+    const deadline = Date.now() + 20000;
     let lastBody = null;
+    let lastError = null;
     while (Date.now() < deadline) {
+      if (childExit) {
+        throw new Error(`unhealthy database server exited before healthcheck: ${JSON.stringify(childExit)}; output=${getOutput()}`);
+      }
       try {
-        const response = await fetch(`http://127.0.0.1:${failPort}/api/health`);
+        const response = await fetchWithTimeout(`http://127.0.0.1:${failPort}/api/health`);
         lastBody = await response.json().catch(() => null);
         if (response.status === 503) {
           assert(lastBody?.ok === false && lastBody?.database?.ready === false, `unhealthy database health body should expose not-ready status: ${JSON.stringify(lastBody)}`);
           return;
         }
-      } catch {
+      } catch (error) {
+        lastError = error;
         // Server may still be booting.
       }
       await wait(300);
     }
-    throw new Error(`unhealthy database healthcheck did not return 503: ${JSON.stringify(lastBody)}`);
+    throw new Error(`unhealthy database healthcheck did not return 503: ${JSON.stringify(lastBody)}; lastError=${lastError?.message || ''}; output=${getOutput()}`);
   } finally {
     await stopChild(child);
     fs.rmSync(failDir, { recursive: true, force: true });
@@ -151,6 +197,8 @@ async function assertUnhealthyDatabaseReports503() {
 }
 
 async function run() {
+  if (!port) port = await getFreePort();
+  baseUrl = `http://127.0.0.1:${port}`;
   trace('secret checks');
   await assertProductionSecretRequired();
   trace('bad database healthcheck');
@@ -259,15 +307,21 @@ async function run() {
     assert(indexText.includes('data-target="home" aria-label="打开首页" title="首页" aria-current="page"'), 'home navigation should expose aria-current on the static shell');
 
     const styleSheet = await fetch(`${baseUrl}/style.css?v=20260608-quality-v11`);
+    const styleCacheControl = styleSheet.headers.get('cache-control') || '';
+    assert(styleCacheControl.includes('max-age=31536000') && styleCacheControl.includes('immutable'), 'versioned stylesheet should use long-lived immutable caching');
     const styleText = await styleSheet.text();
     assert(styleSheet.status === 200 && styleText.includes('@media (prefers-reduced-motion: reduce)') && styleText.includes('animation: none !important') && styleText.includes('scroll-behavior: auto !important'), 'stylesheet should include a global reduced-motion safety net');
     assert(styleText.includes('.tool-nav-btn[aria-selected="true"]') && styleText.includes('.tool-panel[hidden]') && styleText.includes('.tool-nav-btn:focus-visible'), 'stylesheet should style toolbox semantic tab states and keyboard focus');
     assert(styleText.includes('.mini-game-tab[aria-selected="true"]') && styleText.includes('.mini-game-panel[hidden]') && styleText.includes('.mini-game-tab:focus-visible'), 'stylesheet should style premium arcade semantic tab states and keyboard focus');
     assert(styleText.includes("@font-face") && styleText.includes('/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2') && styleText.includes('/assets/fonts/outfit-latin-wght-normal.woff2') && styleText.includes('/assets/fonts/jetbrains-mono-latin-wght-normal.woff2') && !styleText.includes('fonts.googleapis.com') && !styleText.includes('fonts.gstatic.com'), 'stylesheet should self-host fonts without remote imports');
+    const unversionedStyleSheet = await fetch(`${baseUrl}/style.css`);
+    assert(unversionedStyleSheet.headers.get('cache-control') === 'no-cache', 'unversioned stylesheet should remain revalidatable');
     const bundledFont = await fetch(`${baseUrl}/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2`);
     const bundledFontBytes = await bundledFont.arrayBuffer();
     assert(bundledFont.status === 200 && bundledFontBytes.byteLength > 10000, 'bundled local web font should be publicly served');
     const appScript = await fetch(`${baseUrl}/app.js?v=20260608-quality-v24`);
+    const appScriptCacheControl = appScript.headers.get('cache-control') || '';
+    assert(appScriptCacheControl.includes('max-age=31536000') && appScriptCacheControl.includes('immutable'), 'versioned app script should use long-lived immutable caching');
     const appScriptText = await appScript.text();
     assert(appScript.status === 200 && appScriptText.includes('AbortController') && appScriptText.includes('apiTimeoutFor') && appScriptText.includes('timeoutMs'), 'frontend API helper should enforce request timeouts so fallback paths can run');
     assert(appScriptText.includes('id="premium-tab-survivor" role="tab"') && appScriptText.includes('role="tabpanel" aria-labelledby="premium-tab-tactics"') && appScriptText.includes('window.__atherixSwitchPremiumGame') && appScriptText.includes('focusPremiumGameTabByOffset'), 'premium arcade tabs should expose semantic tabpanel markup and roving keyboard activation');
@@ -304,6 +358,16 @@ async function run() {
     });
     const malformedJsonBody = await malformedJson.json();
     assert(malformedJson.status === 400 && /Malformed JSON/.test(malformedJsonBody.error), 'malformed JSON should return a JSON 400');
+    assert(malformedJson.headers.get('cache-control') === 'no-store', 'malformed JSON errors should not be cached');
+
+    const oversizedJson = await fetch(`${baseUrl}/api/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nickname: 'Payload Tester', content: 'x'.repeat(1024 * 1024 + 32) })
+    });
+    const oversizedJsonBody = await oversizedJson.json().catch(() => null);
+    assert(oversizedJson.status === 413 && /too large/i.test(oversizedJsonBody?.error || ''), 'oversized JSON should return a JSON 413');
+    assert(oversizedJson.headers.get('cache-control') === 'no-store', 'oversized JSON errors should not be cached');
 
     const manifest = await fetch(`${baseUrl}/manifest.webmanifest`);
     const manifestBody = await manifest.json();
@@ -728,6 +792,9 @@ async function run() {
       discoveryDeletedFromFeed: !discoveryDeletedFeedText.includes(smokePostId),
       unknownApiStatus: unknownApi.status,
       malformedJsonStatus: malformedJson.status,
+      oversizedJsonStatus: oversizedJson.status,
+      versionedAppCacheControl: appScript.headers.get('cache-control'),
+      versionedStyleCacheControl: styleSheet.headers.get('cache-control'),
       longUsernameLoginStatus: longUsernameLogin.status,
       longPasswordLoginStatus: longPasswordLogin.status,
       seededProjectCount: projectRows.length,

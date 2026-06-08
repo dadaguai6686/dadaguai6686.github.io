@@ -9,7 +9,6 @@ const appUrl = requestedAppUrl || `http://127.0.0.1:${managedAppPort}`;
 const usesExternalCdp = Boolean(process.env.CDP_PORT);
 const cdpPort = Number(process.env.CDP_PORT || (9400 + Math.floor(Math.random() * 900)));
 const smokeVerbose = /^(1|true|yes|full)$/i.test(process.env.SMOKE_VERBOSE || '');
-const edgePath = process.env.EDGE_PATH || 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 let activeAppServer = null;
 let activeAppTempDir = '';
 let activeBrowserProcess = null;
@@ -21,6 +20,60 @@ function wait(ms) {
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
+}
+
+function resolveExecutable(candidate) {
+  if (!candidate) return '';
+  const normalized = candidate.trim();
+  if (!normalized) return '';
+  const hasPathSeparator = normalized.includes(path.sep) || normalized.includes('/') || normalized.includes('\\');
+  if (path.isAbsolute(normalized) || hasPathSeparator) {
+    return fs.existsSync(normalized) ? normalized : '';
+  }
+  const pathDirs = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
+  const extensions = process.platform === 'win32'
+    ? (process.env.PATHEXT || '.EXE;.CMD;.BAT;.COM').split(';')
+    : [''];
+  for (const dir of pathDirs) {
+    for (const ext of extensions) {
+      const executable = normalized.toLowerCase().endsWith(ext.toLowerCase()) ? normalized : `${normalized}${ext}`;
+      const fullPath = path.join(dir, executable);
+      if (fs.existsSync(fullPath)) return fullPath;
+    }
+  }
+  return '';
+}
+
+function findHeadlessBrowserPath() {
+  const candidates = [
+    process.env.SMOKE_BROWSER_PATH,
+    process.env.BROWSER_PATH,
+    process.env.CHROME_PATH,
+    process.env.CHROMIUM_PATH,
+    process.env.EDGE_PATH,
+    process.platform === 'win32' ? 'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe' : '',
+    process.platform === 'win32' ? 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe' : '',
+    process.platform === 'win32' ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' : '',
+    process.platform === 'win32' ? 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe' : '',
+    process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : '',
+    process.platform === 'darwin' ? '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge' : '',
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/snap/bin/chromium',
+    'google-chrome',
+    'google-chrome-stable',
+    'chromium',
+    'chromium-browser',
+    'microsoft-edge',
+    'msedge'
+  ];
+  for (const candidate of candidates) {
+    const resolved = resolveExecutable(candidate);
+    if (resolved) return resolved;
+  }
+  throw new Error('No Chromium-compatible browser found for smoke:games. Set SMOKE_BROWSER_PATH, CHROME_PATH, CHROMIUM_PATH, or EDGE_PATH.');
 }
 
 async function cdpJson(pathname, options) {
@@ -46,19 +99,19 @@ async function waitForCdp() {
   throw lastError || new Error('CDP did not become ready');
 }
 
-function startHeadlessEdge() {
-  if (!fs.existsSync(edgePath)) {
-    throw new Error(`Edge not found at ${edgePath}`);
-  }
+function startHeadlessBrowser() {
+  const browserPath = findHeadlessBrowserPath();
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), `codex-blog-cdp-${cdpPort}-`));
   activeBrowserTempDir = profile;
   fs.mkdirSync(profile, { recursive: true });
-  const child = spawn(edgePath, [
+  const child = spawn(browserPath, [
     '--headless=new',
     `--remote-debugging-port=${cdpPort}`,
     '--remote-allow-origins=*',
     `--user-data-dir=${profile}`,
     '--disable-gpu',
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
     '--disable-dev-shm-usage',
     '--disable-background-networking',
     '--disable-component-update',
@@ -197,14 +250,14 @@ async function run() {
 
   let ws = null;
   if (!usesExternalCdp) {
-    startHeadlessEdge();
+    startHeadlessBrowser();
     launched = true;
     await waitForCdp();
   } else {
     try {
       await waitForCdp();
     } catch {
-      startHeadlessEdge();
+      startHeadlessBrowser();
       launched = true;
       await waitForCdp();
     }
@@ -3178,7 +3231,8 @@ async function run() {
     hpBefore: document.querySelector('#premium-boss-hp')?.textContent || '',
     phaseBefore: document.querySelector('#premium-boss-phase')?.textContent || '',
     scoreBefore: document.querySelector('#premium-boss-score')?.textContent || '',
-    dashBefore: document.querySelector('#premium-boss-dash')?.textContent || ''
+    dashBefore: document.querySelector('#premium-boss-dash')?.textContent || '',
+    framesBefore: Number(window.__atherixDebug?.premium?.bossPattern?.().frames || 0)
   }))()`);
   await key('keyDown', 'ArrowUp', 'ArrowUp');
   await key('keyDown', ' ', 'Space');
@@ -3191,7 +3245,8 @@ async function run() {
     hpAfter: document.querySelector('#premium-boss-hp')?.textContent || '',
     phaseAfter: document.querySelector('#premium-boss-phase')?.textContent || '',
     scoreAfter: document.querySelector('#premium-boss-score')?.textContent || '',
-    dashAfter: document.querySelector('#premium-boss-dash')?.textContent || ''
+    dashAfter: document.querySelector('#premium-boss-dash')?.textContent || '',
+    framesAfter: Number(window.__atherixDebug?.premium?.bossPattern?.().frames || 0)
   }))()`);
   await key('keyDown', 'Escape', 'Escape');
   await key('keyUp', 'Escape', 'Escape');
@@ -3263,7 +3318,8 @@ async function run() {
     scoreBefore: document.querySelector('#premium-drift-score')?.textContent || '',
     gatesBefore: document.querySelector('#premium-drift-gates')?.textContent || '',
     shieldBefore: document.querySelector('#premium-drift-shield')?.textContent || '',
-    boostBefore: document.querySelector('#premium-drift-boost')?.textContent || ''
+    boostBefore: document.querySelector('#premium-drift-boost')?.textContent || '',
+    framesBefore: Number(window.__atherixDebug?.premium?.driftLineState?.().frames || 0)
   }))()`);
   await key('keyDown', 'ArrowUp', 'ArrowUp');
   await key('keyDown', ' ', 'Space');
@@ -3276,7 +3332,8 @@ async function run() {
     scoreAfter: document.querySelector('#premium-drift-score')?.textContent || '',
     gatesAfter: document.querySelector('#premium-drift-gates')?.textContent || '',
     shieldAfter: document.querySelector('#premium-drift-shield')?.textContent || '',
-    boostAfter: document.querySelector('#premium-drift-boost')?.textContent || ''
+    boostAfter: document.querySelector('#premium-drift-boost')?.textContent || '',
+    framesAfter: Number(window.__atherixDebug?.premium?.driftLineState?.().frames || 0)
   }))()`);
   await key('keyDown', 'Escape', 'Escape');
   await key('keyUp', 'Escape', 'Escape');
@@ -4037,8 +4094,10 @@ async function run() {
       && premiumMobileMetaState.labelPaused.pause === '继续'
       && premiumMobileMetaState.frozen.elapsed === premiumMobileMetaState.paused.elapsed
       && premiumMobileMetaState.frozen.score === premiumMobileMetaState.paused.score
+      && premiumMobileMetaState.frozen.frames === premiumMobileMetaState.paused.frames
       && !premiumMobileMetaState.resumed.paused
       && premiumMobileMetaState.advanced.elapsed > premiumMobileMetaState.frozen.elapsed
+      && premiumMobileMetaState.advanced.frames > premiumMobileMetaState.resumed.frames
       && premiumMobileMetaState.restartRequested.running
       && !premiumMobileMetaState.restartRequested.paused
       && premiumMobileMetaState.restartRequested.elapsed >= premiumMobileMetaState.advanced.elapsed
@@ -4332,7 +4391,8 @@ async function run() {
     bossPauseFreezeState.hpAfter === bossPauseState.hpBefore &&
     bossPauseFreezeState.phaseAfter === bossPauseState.phaseBefore &&
     bossPauseFreezeState.scoreAfter === bossPauseState.scoreBefore &&
-    bossPauseFreezeState.dashAfter === bossPauseState.dashBefore,
+    bossPauseFreezeState.dashAfter === bossPauseState.dashBefore &&
+    bossPauseFreezeState.framesAfter === bossPauseState.framesBefore,
     `boss mode should freeze while paused: ${JSON.stringify({ bossPauseState, bossPauseFreezeState })}`
   );
   assert(bossResumeState.running && !bossResumeState.paused && bossResumeState.pauseButton === '暂停', `boss mode should resume from keyboard pause: ${JSON.stringify(bossResumeState)}`);
@@ -4346,7 +4406,8 @@ async function run() {
     driftPauseFreezeState.scoreAfter === driftPauseState.scoreBefore &&
     driftPauseFreezeState.gatesAfter === driftPauseState.gatesBefore &&
     driftPauseFreezeState.shieldAfter === driftPauseState.shieldBefore &&
-    driftPauseFreezeState.boostAfter === driftPauseState.boostBefore,
+    driftPauseFreezeState.boostAfter === driftPauseState.boostBefore &&
+    driftPauseFreezeState.framesAfter === driftPauseState.framesBefore,
     `drift mode should freeze while paused: ${JSON.stringify({ driftPauseState, driftPauseFreezeState })}`
   );
   assert(driftResumeState.running && !driftResumeState.paused && driftResumeState.pauseButton === '暂停', `drift mode should resume from keyboard pause: ${JSON.stringify(driftResumeState)}`);
@@ -4682,7 +4743,7 @@ function summarizeSmokeResult(result) {
       boss: {
         rendered: result.bossState?.nonBlank,
         weakpointHud: result.bossTelegraphState?.weakHud,
-        pauseFreezes: result.bossPauseFreezeState?.timerAfter === result.bossPauseFreezeState?.timerBefore
+        pauseFreezes: result.bossPauseFreezeState?.framesAfter === result.bossPauseState?.framesBefore
       },
       drift: {
         rendered: result.driftState?.nonBlank,
