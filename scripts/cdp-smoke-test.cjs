@@ -2977,6 +2977,16 @@ async function run() {
       feedbackLabel: document.querySelector('#premium-game-stage')?.dataset.feedback || ''
     };
   })()`);
+  const survivorHitState = await evaluate(`(() => {
+    const result = window.__atherixDebug?.premium?.forceSurvivorHit?.('METEOR', 19) || {};
+    const pixels = window.__atherixSmokeCountCanvasPixels?.('#premium-survivor-canvas') || {};
+    return {
+      ...result,
+      nonBlank: !!pixels.nonBlank,
+      feedbackTone: document.querySelector('#premium-game-stage')?.dataset.feedbackTone || '',
+      feedbackLabel: document.querySelector('#premium-game-stage')?.dataset.feedback || ''
+    };
+  })()`);
   const survivorHpZeroState = await evaluate(`(() => window.__atherixDebug?.premium?.forceSurvivorHpZero?.() || {})()`);
   await click('#premium-survivor-start');
   await wait(260);
@@ -3573,7 +3583,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v68-quality') && swText.includes('/style.css?v=20260608-quality-v12') && swText.includes('/app.js?v=20260608-quality-v25'),
+      swHasQualityVersion: swText.includes('atherix-static-v69-quality') && swText.includes('/style.css?v=20260608-quality-v12') && swText.includes('/app.js?v=20260608-quality-v26'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp'),
       swHasLocalFonts: swText.includes('/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2') && swText.includes('/assets/fonts/outfit-latin-wght-normal.woff2') && swText.includes('/assets/fonts/jetbrains-mono-latin-wght-normal.woff2')
@@ -4358,6 +4368,7 @@ async function run() {
   assert(cockpitPlayState.active === 'survivor' && cockpitPlayState.running && !cockpitPlayState.paused && /星爆/.test(cockpitPlayState.actionLabel) && cockpitPlayState.toolDisabled && /开局/.test(cockpitPlayState.toast), `premium cockpit play should start the active mode and refresh touch labels: ${JSON.stringify(cockpitPlayState)}`);
   assert(cockpitPlayState.feedback?.tones?.start >= 1 && cockpitPlayState.feedback?.visualTriggers >= 1 && /START|开局/.test(cockpitPlayState.feedback?.status || ''), `premium arcade feedback should respond to cockpit start: ${JSON.stringify(cockpitPlayState)}`);
   assert(survivorState.nonBlank && survivorState.threat && /\dx$/.test(survivorState.chain) && survivorState.overdrive && survivorState.bounty && survivorState.debug?.hud?.chain === survivorState.chain && survivorState.debug?.hud?.bounty === survivorState.bounty, `survivor canvas should render active state with chain, overdrive, and bounty HUD: ${JSON.stringify(survivorState)}`);
+  assert(survivorHitState.nonBlank && survivorHitState.before?.player?.hp > survivorHitState.after?.player?.hp && survivorHitState.result?.label === 'METEOR' && survivorHitState.after?.hurtFlash > 0 && survivorHitState.after?.lastHitLabel === 'METEOR' && survivorHitState.feedback?.lastTone === 'danger' && survivorHitState.feedbackTone === 'danger' && /METEOR/.test(survivorHitState.feedbackLabel || ''), `survivor damage should produce readable hit feedback, label, and danger tone: ${JSON.stringify(survivorHitState)}`);
   assert(survivorHpZeroState.player?.hp === 0 && survivorHpZeroState.hud?.hp === '0', `survivor HUD should show 0 HP instead of falling back to 100: ${JSON.stringify(survivorHpZeroState)}`);
   assert(survivorState.feedback?.tones?.action >= 1 && survivorState.feedback?.visualTriggers >= 1 && survivorState.feedbackTone === 'action' && /ACTION|NOVA/.test(survivorState.feedbackLabel), `premium arcade feedback should treat Space as an action signal, not restart: ${JSON.stringify(survivorState)}`);
   assert(feedbackMuteState.muted?.muted === true && feedbackMuteState.muted?.togglePressed === 'false' && feedbackMuteState.afterSuppressed?.suppressed > feedbackMuteState.muted?.suppressed && feedbackMuteState.afterSuppressed?.total === feedbackMuteState.muted?.total && feedbackMuteState.unmuted?.muted === false && feedbackMuteState.unmuted?.togglePressed === 'true' && feedbackMuteState.panelMuted === 'false', `premium arcade feedback mute should suppress events and restore cleanly: ${JSON.stringify(feedbackMuteState)}`);
@@ -4655,6 +4666,7 @@ async function run() {
     cockpitTargetState,
     cockpitPlayState,
     survivorState,
+    survivorHitState,
     survivorHpZeroState,
     survivorDraftOpenState,
     survivorDraftFreezeState,
@@ -4777,6 +4789,7 @@ function summarizeSmokeResult(result) {
     games: {
       survivor: {
         rendered: result.survivorState?.nonBlank,
+        hitFeedback: result.survivorHitState?.after?.lastHitLabel,
         overdriveScoreGain: Number(result.survivorOverdriveState?.after?.score || 0) - Number(result.survivorOverdriveState?.before?.score || 0),
         draftReroll: result.survivorDraftRerollState?.after?.choices?.join('|') !== result.survivorDraftRerollState?.before?.choices?.join('|'),
         anomaly: result.survivorAnomalyState?.state?.anomaly?.type

@@ -8987,7 +8987,11 @@ function init() {
       bountyProgress: 0,
       bountiesCompleted: 0,
       bountyFlash: 0,
-      lastBounty: ''
+      lastBounty: '',
+      hurtFlash: 0,
+      hurtFeedbackCooldown: 0,
+      lastHitLabel: '',
+      lastHitSource: ''
     };
 
     function stopSurvivorLoop() {
@@ -9240,6 +9244,10 @@ function init() {
       survivor.overdrive = 0;
       survivor.overdriveFlash = 0;
       survivor.overdriveText = 'SYNC';
+      survivor.hurtFlash = 0;
+      survivor.hurtFeedbackCooldown = 0;
+      survivor.lastHitLabel = '';
+      survivor.lastHitSource = '';
       survivor.anomaly = null;
       survivor.anomalyCooldown = Math.round(9200 / Math.sqrt(runPressure));
       survivor.anomalyCount = 0;
@@ -9325,6 +9333,48 @@ function init() {
       for (let i = 0; i < count; i++) {
         survivor.particles.push({ x, y, vx: (Math.random() - 0.5) * 190, vy: (Math.random() - 0.5) * 190, life: 420, color, r: Math.random() * 2.8 + 1 });
       }
+    }
+
+    function survivorDamageLabel(source = 'hit') {
+      const label = String(source || 'hit').trim().toUpperCase();
+      if (label.includes('METEOR')) return 'METEOR';
+      if (label.includes('ELITE')) return 'ELITE HIT';
+      if (label.includes('ANOMALY')) return 'ANOMALY HIT';
+      return label || 'HIT';
+    }
+
+    function damageSurvivor(amount = 0, source = 'hit', options = {}) {
+      const p = survivor.player;
+      const damage = Math.max(0, Number(amount) || 0);
+      if (!p || damage <= 0) {
+        return { applied: 0, hp: Math.ceil(p?.hp || 0), label: '' };
+      }
+      const before = Number(p.hp || 0);
+      p.hp = Math.max(0, before - damage);
+      const applied = Math.max(0, before - p.hp);
+      if (applied <= 0) {
+        return { applied: 0, hp: Math.ceil(p.hp || 0), label: survivor.lastHitLabel || '' };
+      }
+      const label = options.label || survivorDamageLabel(source);
+      survivor.hurtFlash = Math.max(Number(survivor.hurtFlash || 0), Number(options.flashMs || 520));
+      survivor.lastHitLabel = label;
+      survivor.lastHitSource = String(source || 'hit');
+      if (options.resetChain) {
+        survivor.chain = 0;
+        survivor.chainTimer = 0;
+      }
+      const ready = options.forceFeedback || Number(survivor.hurtFeedbackCooldown || 0) <= 0;
+      if (ready) {
+        survivor.hurtFeedbackCooldown = Number(options.cooldownMs || 420);
+        survivorBurst(p.x, p.y, options.color || '#FCA5A5', Number(options.burstCount || 18));
+        triggerPremiumFeedback('danger', { label, throttleMs: options.forceFeedback ? 0 : 120 });
+      }
+      return {
+        applied: Number(applied.toFixed(2)),
+        hp: Math.ceil(p.hp),
+        before: Math.ceil(before),
+        label
+      };
     }
 
     function addSurvivorOverdrive(amount = 0, reason = 'SYNC') {
@@ -9437,9 +9487,7 @@ function init() {
       hazard.life = 460;
       survivorBurst(hazard.x, hazard.y, '#F97316', 46);
       if (p && Math.hypot(p.x - hazard.x, p.y - hazard.y) < hazard.r + p.r) {
-        p.hp -= hazard.damage;
-        survivor.chain = 0;
-        survivor.chainTimer = 0;
+        damageSurvivor(hazard.damage, 'meteor', { forceFeedback: true, resetChain: true, flashMs: 620, cooldownMs: 520, color: '#F97316', burstCount: 24 });
       }
       survivor.enemies.forEach(enemy => {
         if (Math.hypot(enemy.x - hazard.x, enemy.y - hazard.y) < hazard.r + enemy.r) {
@@ -9788,6 +9836,8 @@ function init() {
       if (survivor.chainTimer <= 0) survivor.chain = 0;
       survivor.overdriveFlash = Math.max(0, survivor.overdriveFlash - dt);
       survivor.bountyFlash = Math.max(0, survivor.bountyFlash - dt);
+      survivor.hurtFlash = Math.max(0, Number(survivor.hurtFlash || 0) - dt);
+      survivor.hurtFeedbackCooldown = Math.max(0, Number(survivor.hurtFeedbackCooldown || 0) - dt);
       updateSurvivorAnomaly(dt);
       if (premiumKeys.action) triggerSurvivorNova();
       let mx = (premiumKeys.right ? 1 : 0) - (premiumKeys.left ? 1 : 0);
@@ -9813,7 +9863,9 @@ function init() {
         const strafe = enemy.type === 'charger' ? Math.sin(enemy.pulse) * 0.85 : enemy.type === 'warden' ? Math.sin(enemy.pulse) * 0.35 : 0;
         enemy.x += (Math.cos(a) * enemy.speed + Math.cos(a + Math.PI / 2) * enemy.speed * strafe) * slowFactor * dt / 1000;
         enemy.y += (Math.sin(a) * enemy.speed + Math.sin(a + Math.PI / 2) * enemy.speed * strafe) * slowFactor * dt / 1000;
-        if (Math.hypot(enemy.x - p.x, enemy.y - p.y) < enemy.r + p.r) p.hp -= (enemy.elite ? 28 : 18) * dt / 1000;
+        if (Math.hypot(enemy.x - p.x, enemy.y - p.y) < enemy.r + p.r) {
+          damageSurvivor((enemy.elite ? 28 : 18) * dt / 1000, enemy.elite ? 'elite hit' : 'hit');
+        }
       });
       for (let i = survivor.enemies.length - 1; i >= 0; i--) {
         const enemy = survivor.enemies[i];
@@ -9985,6 +10037,31 @@ function init() {
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.r + 5, 0, Math.PI * 2 * clamp(p.hp / (p.maxHp || 100), 0, 1));
       ctx.stroke();
+      const hurtAlpha = clamp(Number(survivor.hurtFlash || 0) / 620, 0, 1);
+      if (hurtAlpha > 0) {
+        ctx.save();
+        const edgeAlpha = Math.min(0.74, 0.24 + hurtAlpha * 0.42);
+        ctx.strokeStyle = `rgba(239, 68, 68, ${edgeAlpha})`;
+        ctx.lineWidth = 5 + hurtAlpha * 8;
+        ctx.strokeRect(6, 6, Math.max(0, c.width - 12), Math.max(0, c.height - 12));
+        const glow = ctx.createRadialGradient(p.x, p.y, p.r + 4, p.x, p.y, p.r + 74);
+        glow.addColorStop(0, `rgba(248, 113, 113, ${0.26 * hurtAlpha})`);
+        glow.addColorStop(1, 'rgba(248, 113, 113, 0)');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r + 74, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = `rgba(252, 165, 165, ${0.42 + hurtAlpha * 0.44})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r + 14 + (1 - hurtAlpha) * 16, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#FCA5A5';
+        ctx.font = '900 10px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(survivor.lastHitLabel || 'HIT', p.x, Math.max(18, p.y - p.r - 22));
+        ctx.restore();
+      }
       ctx.fillStyle = '#fff';
       ctx.font = '700 12px JetBrains Mono, monospace';
       ctx.fillText(`${Math.max(0, 90 - survivor.elapsed / 1000).toFixed(0)}s`, 14, 22);
@@ -10050,6 +10127,10 @@ function init() {
         bestChain: survivor.bestChain,
         overdrive: Math.floor(survivor.overdrive),
         overdriveFlash: Math.ceil(survivor.overdriveFlash),
+        hurtFlash: Math.ceil(survivor.hurtFlash || 0),
+        hurtFeedbackCooldown: Math.ceil(survivor.hurtFeedbackCooldown || 0),
+        lastHitLabel: survivor.lastHitLabel || '',
+        lastHitSource: survivor.lastHitSource || '',
         anomaly: survivor.anomaly ? {
           type: survivor.anomaly.type,
           label: survivor.anomaly.label,
@@ -10183,6 +10264,29 @@ function init() {
         before,
         after: survivorDebugState(),
         achieved: (career.achievements || []).includes('survivor_bounty')
+      };
+    }
+
+    function forceSurvivorHit(source = 'HIT', amount = 22) {
+      switchPremiumGame('survivor');
+      startSurvivor();
+      survivor.paused = false;
+      survivor.draftOpen = false;
+      hideSurvivorDraft();
+      const before = survivorDebugState();
+      const result = damageSurvivor(amount, source, { forceFeedback: true, flashMs: 620, cooldownMs: 520 });
+      setSurvivorUi();
+      drawSurvivor();
+      return {
+        before,
+        result,
+        after: survivorDebugState(),
+        feedback: {
+          lastTone: premiumFeedback.lastTone,
+          lastLabel: premiumFeedback.lastLabel,
+          tones: { ...premiumFeedback.tones },
+          visualTriggers: premiumFeedback.visualTriggers
+        }
       };
     }
 
@@ -14808,6 +14912,7 @@ function init() {
           forceSurvivorAnomaly: (type = 'meteor') => forceSurvivorAnomaly(type),
           forceSurvivorOverdrive: () => forceSurvivorOverdrive(),
           forceSurvivorBounty: () => forceSurvivorBounty(),
+          forceSurvivorHit: (source = 'HIT', amount = 22) => forceSurvivorHit(source, amount),
           forceSurvivorHpZero: () => forceSurvivorHpZero(),
           bossRunning: () => bossMode.running,
           bossPaused: () => bossMode.paused,
