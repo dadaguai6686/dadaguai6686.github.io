@@ -5324,7 +5324,7 @@ function init() {
         <div class="arcade-profile-grid">
           <span>完成度 <strong id="premium-profile-completion">0%</strong></span>
           <span>奖牌 <strong id="premium-profile-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-profile-achievements">0/32</strong></span>
+          <span>成就 <strong id="premium-profile-achievements">0/33</strong></span>
           <span>最近 <strong id="premium-profile-latest">--</strong></span>
         </div>
         <button type="button" class="arcade-profile-action" id="premium-profile-target" data-profile-target-game="survivor">
@@ -5424,7 +5424,7 @@ function init() {
         </div>
         <div class="arcade-director-meters" aria-label="街机完成度">
           <span>奖牌 <strong id="premium-director-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-director-achievements">0/32</strong></span>
+          <span>成就 <strong id="premium-director-achievements">0/33</strong></span>
           <span>完成度 <strong id="premium-director-completion">0%</strong></span>
         </div>
         <button type="button" class="arcade-director-action" id="premium-director-start" data-target-game="survivor">
@@ -5652,6 +5652,7 @@ function init() {
               <span>光标 <strong id="premium-chain-cursor">1-1</strong></span>
               <span>精华 <strong id="premium-chain-essence">C0 V0 P0 G0 N0</strong></span>
               <span>配方 <strong id="premium-chain-recipe">极光 0%</strong></span>
+              <span>共振 <strong id="premium-chain-resonance">READY</strong></span>
               <span>超载 <strong id="premium-chain-overcharge">0%</strong></span>
               <span>目标 <strong id="premium-chain-target">9000</strong></span>
             </div>
@@ -5945,6 +5946,7 @@ function init() {
       { id: 'heist_takedown', label: '幽影制服', desc: '赛博潜入中从盲区无声制服守卫' },
       { id: 'chain_combo_9', label: '九连炼成', desc: '一次连锁爆破 9 格以上' },
       { id: 'chain_recipe', label: '秘方共振', desc: '连锁炼金完成一张配方契约' },
+      { id: 'chain_resonance', label: '谱线共鸣', desc: '连锁炼金一次行动补足 4 点以上当前配方材料' },
       { id: 'chain_clear', label: '贤者能场', desc: '完成连锁炼金目标' },
       { id: 'tactics_clear', label: '裂隙撤离', desc: '完成裂隙战术撤离' },
       { id: 'tactics_sweep', label: '战术清场', desc: '裂隙战术中击破全部敌人' },
@@ -13721,6 +13723,10 @@ function init() {
       recipesCompleted: 0,
       overcharge: 0,
       catalystUsed: 0,
+      resonance: 0,
+      bestResonance: 0,
+      resonanceCount: 0,
+      lastResonance: null,
       warningLabel: '',
       warningTone: '',
       warningCell: null,
@@ -13757,6 +13763,13 @@ function init() {
       chain.catalystUsed = 0;
     }
 
+    function resetChainResonance() {
+      chain.resonance = 0;
+      chain.bestResonance = 0;
+      chain.resonanceCount = 0;
+      chain.lastResonance = null;
+    }
+
     function currentChainRecipe() {
       return chainRecipeDefs[chain.recipeIndex % chainRecipeDefs.length];
     }
@@ -13790,6 +13803,79 @@ function init() {
         return `${label}${Math.min(Number(chain.recipeProgress[key] || 0), value)}/${value}`;
       });
       return `${recipe.label} ${parts.join(' ')}`;
+    }
+
+    function chainRecipeDeficits(recipe = currentChainRecipe()) {
+      const deficits = {};
+      Object.entries(recipe?.req || {}).forEach(([key, value]) => {
+        deficits[key] = Math.max(0, Number(value || 0) - Number(chain.recipeProgress[key] || 0));
+      });
+      return deficits;
+    }
+
+    function chainResonancePotential(ledger, result = {}) {
+      const deficits = chainRecipeDeficits();
+      const hits = {};
+      let neededTotal = 0;
+      let axes = 0;
+      Object.keys(deficits).forEach(key => {
+        const hit = Math.min(Number(ledger?.[key] || 0), Number(deficits[key] || 0));
+        hits[key] = hit;
+        if (hit > 0) {
+          neededTotal += hit;
+          axes++;
+        }
+      });
+      const sourceColor = chain.colors.includes(result.value) ? result.value : '';
+      const plannedSource = !!sourceColor && Number(deficits[sourceColor] || 0) > 0;
+      const specialPlan = Number(deficits.special || 0) > 0 && (
+        Number(ledger?.special || 0) > 0 ||
+        Number(result.specialsTriggered || 0) > 0 ||
+        !!result.specialCreated
+      );
+      const triggered = neededTotal >= 4 && (axes >= 2 || plannedSource || specialPlan);
+      if (!triggered) {
+        return {
+          triggered: false,
+          tier: '',
+          hits,
+          axes,
+          neededTotal,
+          reward: 0,
+          charge: 0,
+          multBoost: 0,
+          label: 'READY'
+        };
+      }
+      const tier = neededTotal >= 8 || axes >= 3 ? 'PRIME' : 'LINK';
+      const reward = Math.round(180 + neededTotal * 74 + axes * 92 + (specialPlan ? 180 : 0) + Math.min(360, Number(result.cleared || 0) * 14));
+      const charge = clamp(8 + neededTotal * 2.2 + axes * 1.5 + (specialPlan ? 5 : 0), 10, 34);
+      const multBoost = tier === 'PRIME' ? 0.26 : 0.16;
+      const colors = Object.entries(hits)
+        .filter(([, value]) => Number(value || 0) > 0)
+        .map(([key, value]) => `${chainColorNames[key] || (key === 'special' ? '核' : key)}+${value}`);
+      return {
+        triggered: true,
+        tier,
+        hits,
+        axes,
+        neededTotal,
+        reward,
+        charge: Math.round(charge),
+        multBoost,
+        label: `${tier} ${neededTotal}`,
+        detail: colors.join(' ')
+      };
+    }
+
+    function formatChainResonance() {
+      if (chain.lastResonance?.triggered) {
+        return `${chain.lastResonance.tier} +${chain.lastResonance.reward}`;
+      }
+      if (chain.bestMove?.resonance?.triggered) {
+        return `${chain.bestMove.resonance.tier} ${chain.bestMove.resonance.neededTotal}`;
+      }
+      return chain.resonanceCount ? `${chain.resonanceCount}x` : 'READY';
     }
 
     function collectChainLedger(cells) {
@@ -13966,6 +14052,7 @@ function init() {
       chain.variant = variant;
       chain.runPressure = runPressure;
       resetChainLedger();
+      resetChainResonance();
       chain.reshuffles = 0;
       chain.lastReshuffle = '';
       chain.finished = false;
@@ -14071,7 +14158,7 @@ function init() {
       const cleared = cascade.cells.length;
       const specialCreated = special ? '' : chainCreatedSpecial(cleared);
       const base = cleared * cleared * (special ? 20 : 12) + cascade.specialsTriggered * 160 + (specialCreated ? 220 : 0);
-      return {
+      const move = {
         valid: cleared > 0,
         r,
         c,
@@ -14083,6 +14170,8 @@ function init() {
         specialCreated,
         specialsTriggered: cascade.specialsTriggered
       };
+      move.resonance = chainResonancePotential(collectChainLedger(move.cells), move);
+      return move;
     }
 
     function evaluateChainCatalyst() {
@@ -14105,7 +14194,7 @@ function init() {
       const cleared = cascade.cells.length;
       const specialCreated = cleared >= 18 ? 'prism' : cleared >= 12 ? 'bomb' : '';
       const base = cleared * cleared * 18 + cascade.specialsTriggered * 240 + 900 + (specialCreated ? 320 : 0);
-      return {
+      const move = {
         valid: cleared > 0,
         r: best.r,
         c: best.c,
@@ -14118,15 +14207,27 @@ function init() {
         specialsTriggered: cascade.specialsTriggered,
         catalyst: true
       };
+      move.resonance = chainResonancePotential(collectChainLedger(move.cells), move);
+      return move;
     }
 
     function applyChainResult(result, { catalyst = false } = {}) {
       clearChainWarning();
       const ledger = collectChainLedger(result.cells);
+      const resonance = result.resonance || chainResonancePotential(ledger, result);
       chain.combo = result.cleared;
       chain.streak += catalyst ? 2 : 1;
       chain.mult = clamp(1 + chain.streak * 0.18 + Math.max(0, result.cleared - 6) * 0.025 + (catalyst ? 0.25 : 0), 1, 4.2);
-      chain.lastGain = result.gain;
+      if (resonance.triggered) {
+        chain.mult = clamp(chain.mult + resonance.multBoost, 1, 4.8);
+        chain.resonance = resonance.reward;
+        chain.bestResonance = Math.max(Number(chain.bestResonance || 0), resonance.reward);
+        chain.resonanceCount++;
+        chain.lastResonance = resonance;
+      } else {
+        chain.resonance = 0;
+        chain.lastResonance = null;
+      }
       chain.lastClear = result.cleared;
       chain.lastSpecial = result.specialCreated || '';
       chain.specialsTriggered = result.specialsTriggered;
@@ -14134,9 +14235,15 @@ function init() {
       if (!catalyst) {
         chain.overcharge = clamp(chain.overcharge + Math.min(36, result.cleared * 1.6 + result.specialsTriggered * 8 + (result.specialCreated ? 6 : 0)), 0, 100);
       }
+      if (resonance.triggered) {
+        chain.overcharge = clamp(chain.overcharge + resonance.charge, 0, 100);
+        unlockAchievement('chain_resonance');
+        triggerPremiumFeedback('special', { label: `RESONANCE ${resonance.tier}`, throttleMs: 180 });
+      }
       const recipeResult = resolveChainRecipes();
       if (result.cleared >= 9) unlockAchievement('chain_combo_9');
-      chain.score += result.gain + recipeResult.reward;
+      chain.lastGain = result.gain + resonance.reward + recipeResult.reward;
+      chain.score += chain.lastGain;
       result.cells.forEach(item => {
         const [row, col] = item.split(',').map(Number);
         chain.grid[row][col] = null;
@@ -14148,17 +14255,24 @@ function init() {
       const phase = chainPhaseDef();
       if (phase?.check(result)) {
         chain.score += phase.reward;
-        chain.feedback = `${phase.goal} 完成 +${phase.reward}`;
+        chain.lastGain += phase.reward;
+        chain.feedback = resonance.triggered
+          ? `${phase.goal} 完成 +${phase.reward} · 共振 ${resonance.tier} +${resonance.reward}`
+          : `${phase.goal} 完成 +${phase.reward}`;
         chain.phaseIndex++;
       } else if (recipeResult.completed.length) {
-        chain.feedback = `${recipeResult.completed.join('/')} 配方完成 +${recipeResult.reward}`;
+        chain.feedback = resonance.triggered
+          ? `${recipeResult.completed.join('/')} 配方完成 +${recipeResult.reward} · 共振 ${resonance.tier} +${resonance.reward}`
+          : `${recipeResult.completed.join('/')} 配方完成 +${recipeResult.reward}`;
+      } else if (resonance.triggered) {
+        chain.feedback = `共振 ${resonance.tier} ${resonance.detail} · +${resonance.reward}`;
       } else if (catalyst) {
         chain.feedback = `超载催化 ${result.cleared} 格 · +${result.gain}`;
       } else {
         const label = isChainSpecial(result.value) ? chainSpecialLabels[result.value] : result.value.toUpperCase();
         chain.feedback = `${label} 清除 ${result.cleared} · +${result.gain}`;
       }
-      return { ledger, recipeResult };
+      return { ledger, recipeResult, resonance };
     }
 
     function bestChainMove() {
@@ -14168,6 +14282,8 @@ function init() {
         if (move.valid) moves.push(move);
       }));
       moves.sort((a, b) =>
+        Number(b.resonance?.triggered) - Number(a.resonance?.triggered) ||
+        Number(b.resonance?.reward || 0) - Number(a.resonance?.reward || 0) ||
         b.gain - a.gain ||
         b.cleared - a.cleared ||
         Number(isChainSpecial(b.value)) - Number(isChainSpecial(a.value))
@@ -14346,10 +14462,15 @@ function init() {
         recipesCompleted: chain.recipesCompleted,
         overcharge: Math.floor(chain.overcharge),
         catalystUsed: chain.catalystUsed,
+        resonance: Number(chain.resonance || 0),
+        bestResonance: Number(chain.bestResonance || 0),
+        resonanceCount: Number(chain.resonanceCount || 0),
+        lastResonance: chain.lastResonance ? { ...chain.lastResonance, hits: { ...(chain.lastResonance.hits || {}) } } : null,
         reshuffles: Number(chain.reshuffles || 0),
         lastReshuffle: chain.lastReshuffle || '',
         hasBestMove: !!best,
         achieved: (career.achievements || []).includes('chain_recipe'),
+        achievedResonance: (career.achievements || []).includes('chain_resonance'),
         finished: chain.finished,
         cursor: {
           r: cursor.r,
@@ -14372,6 +14493,7 @@ function init() {
           gain: best.gain,
           specialCreated: best.specialCreated,
           specialsTriggered: best.specialsTriggered,
+          resonance: best.resonance ? { ...best.resonance, hits: { ...(best.resonance.hits || {}) } } : null,
           cells: best.cells.slice(0, 24)
         } : null,
         specials: {
@@ -14388,6 +14510,7 @@ function init() {
           cursor: document.getElementById('premium-chain-cursor')?.textContent || '',
           essence: document.getElementById('premium-chain-essence')?.textContent || '',
           recipe: document.getElementById('premium-chain-recipe')?.textContent || '',
+          resonance: document.getElementById('premium-chain-resonance')?.textContent || '',
           overcharge: document.getElementById('premium-chain-overcharge')?.textContent || ''
         },
         highlighted: chain.board?.querySelectorAll('.chain-hint,.chain-preview').length || 0
@@ -14408,6 +14531,7 @@ function init() {
       chain.lastSpecial = '';
       chain.specialsTriggered = 0;
       resetChainLedger();
+      resetChainResonance();
       chain.finished = false;
       chain.recorded = false;
       chain.grid = [
@@ -14444,6 +14568,7 @@ function init() {
       chain.lastSpecial = '';
       chain.specialsTriggered = 0;
       resetChainLedger();
+      resetChainResonance();
       chain.finished = false;
       chain.recorded = false;
       chain.grid = [
@@ -14464,6 +14589,53 @@ function init() {
       const before = seedChainRecipeBoard();
       popChain(1, 1);
       return { before, after: chainDebugState() };
+    }
+
+    function seedChainResonanceBoard() {
+      chain.score = 0;
+      chain.moves = Math.max(22, chain.moves || 30);
+      chain.combo = 0;
+      chain.streak = 0;
+      chain.mult = 1;
+      chain.phaseIndex = 0;
+      chain.feedback = '共振矩阵已装载';
+      clearChainWarning();
+      chain.lastGain = 0;
+      chain.lastClear = 0;
+      chain.lastSpecial = '';
+      chain.specialsTriggered = 0;
+      resetChainLedger();
+      resetChainResonance();
+      chain.finished = false;
+      chain.recorded = false;
+      chain.grid = [
+        ['cyan', 'cyan', 'cyan', 'violet', 'gold', 'green', 'pink'],
+        ['cyan', 'bomb', 'cyan', 'violet', 'gold', 'green', 'pink'],
+        ['green', 'violet', 'gold', 'pink', 'pink', 'gold', 'green'],
+        ['violet', 'pink', 'gold', 'green', 'cyan', 'violet', 'pink'],
+        ['gold', 'green', 'cyan', 'violet', 'pink', 'gold', 'green'],
+        ['pink', 'gold', 'green', 'cyan', 'violet', 'pink', 'gold'],
+        ['green', 'pink', 'gold', 'green', 'cyan', 'violet', 'pink']
+      ];
+      chain.cursor = { r: 1, c: 1 };
+      chain.bestMove = evaluateChainMove(1, 1);
+      renderChain();
+      return chainDebugState();
+    }
+
+    function forceChainResonance() {
+      const before = seedChainResonanceBoard();
+      popChain(1, 1);
+      return {
+        before,
+        after: chainDebugState(),
+        feedback: {
+          lastTone: premiumFeedback.lastTone,
+          lastLabel: premiumFeedback.lastLabel,
+          tones: { ...premiumFeedback.tones },
+          visualTriggers: premiumFeedback.visualTriggers
+        }
+      };
     }
 
     function forceChainCatalyst() {
@@ -14542,6 +14714,7 @@ function init() {
       chain.reshuffles = 0;
       chain.lastReshuffle = '';
       resetChainLedger();
+      resetChainResonance();
       chain.finished = false;
       chain.recorded = false;
       chain.grid = [
@@ -14591,6 +14764,7 @@ function init() {
       chain.bestMove = bestChainMove();
       const cursor = normalizeChainCursor();
       const preview = new Set(chain.bestMove?.cells || []);
+      const previewResonance = !!chain.bestMove?.resonance?.triggered;
       const phase = chainPhaseDef();
       chain.board.setAttribute('role', 'grid');
       chain.board.setAttribute('tabindex', '0');
@@ -14606,7 +14780,7 @@ function init() {
         const isCursor = cursor.r === r && cursor.c === c;
         const isWarning = chain.warningCell?.r === r && chain.warningCell?.c === c;
         btn.id = `premium-chain-cell-${r}-${c}`;
-        btn.className = `chain-cell chain-${color}${isHint ? ' chain-hint' : ''}${preview.has(key) && !isHint ? ' chain-preview' : ''}${isCursor ? ' chain-cursor' : ''}${isWarning ? ' chain-warning-cell' : ''}`;
+        btn.className = `chain-cell chain-${color}${isHint ? ' chain-hint' : ''}${preview.has(key) && !isHint ? ' chain-preview' : ''}${previewResonance && preview.has(key) ? ' chain-resonance-plan' : ''}${isCursor ? ' chain-cursor' : ''}${isWarning ? ' chain-warning-cell' : ''}`;
         btn.dataset.chainRow = String(r);
         btn.dataset.chainCol = String(c);
         btn.dataset.chainValue = color;
@@ -14632,6 +14806,7 @@ function init() {
       document.getElementById('premium-chain-cursor').textContent = chainCursorLabel(cursor);
       document.getElementById('premium-chain-essence').textContent = formatChainEssence();
       document.getElementById('premium-chain-recipe').textContent = formatChainRecipe();
+      document.getElementById('premium-chain-resonance').textContent = formatChainResonance();
       document.getElementById('premium-chain-overcharge').textContent = chain.overcharge >= 100 ? 'READY' : `${Math.floor(chain.overcharge)}%`;
       document.getElementById('premium-chain-target').textContent = chain.score >= chain.target ? 'CLEAR' : chain.target;
       const catalystBtn = document.getElementById('premium-chain-catalyst');
@@ -14642,10 +14817,12 @@ function init() {
       }
       chain.board.classList.toggle('chain-cleared', chain.finished && chain.score >= chain.target);
       chain.board.classList.toggle('chain-overcharged', chain.overcharge >= 100 && !chain.finished);
+      chain.board.classList.toggle('chain-resonance', !!chain.lastResonance?.triggered);
       chain.board.classList.toggle('chain-warning', !!chain.warningLabel && chain.warningTone === 'danger');
       chain.board.classList.toggle('chain-tool-warning', !!chain.warningLabel && chain.warningTone === 'tool');
       chain.board.dataset.feedback = chain.feedback;
       chain.board.dataset.recipe = chainRecipeDetail();
+      chain.board.dataset.resonance = formatChainResonance();
       chain.board.dataset.warningTone = chain.warningTone || '';
       if (premiumActive === 'chain') updatePremiumMetaControls();
     }
@@ -16709,6 +16886,7 @@ function init() {
           seedChainComboBoard: () => seedChainComboBoard(),
           forceChainCombo: () => forceChainCombo(),
           forceChainRecipe: () => forceChainRecipe(),
+          forceChainResonance: () => forceChainResonance(),
           forceChainCatalyst: () => forceChainCatalyst(),
           forceChainInvalid: () => forceChainInvalid(),
           forceChainCatalystLow: () => forceChainCatalystLow(),

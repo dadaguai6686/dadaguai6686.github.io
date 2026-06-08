@@ -3580,6 +3580,7 @@ async function run() {
     };
     const forced = window.__atherixDebug?.premium?.forceChainCombo?.() || {};
     const recipeForced = window.__atherixDebug?.premium?.forceChainRecipe?.() || {};
+    const resonanceForced = window.__atherixDebug?.premium?.forceChainResonance?.() || {};
     const catalystForced = window.__atherixDebug?.premium?.forceChainCatalyst?.() || {};
     const invalidForced = window.__atherixDebug?.premium?.forceChainInvalid?.() || {};
     const catalystLowForced = window.__atherixDebug?.premium?.forceChainCatalystLow?.() || {};
@@ -3594,13 +3595,17 @@ async function run() {
       hint: document.querySelector('#premium-chain-hint')?.textContent,
       essence: document.querySelector('#premium-chain-essence')?.textContent,
       recipe: document.querySelector('#premium-chain-recipe')?.textContent,
+      resonance: document.querySelector('#premium-chain-resonance')?.textContent,
       overcharge: document.querySelector('#premium-chain-overcharge')?.textContent,
       catalystReady: document.querySelector('#premium-chain-catalyst')?.dataset.ready || '',
       recipeDetail: document.querySelector('#premium-chain-board')?.dataset.recipe || '',
+      resonanceDetail: document.querySelector('#premium-chain-board')?.dataset.resonance || '',
+      resonanceClass: document.querySelector('#premium-chain-board')?.classList.contains('chain-resonance') || false,
       feedback: document.querySelector('#premium-chain-board')?.dataset.feedback || '',
       debugBefore,
       forced,
       recipeForced,
+      resonanceForced,
       catalystForced,
       invalidForced,
       catalystLowForced,
@@ -3660,7 +3665,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v76-quality') && swText.includes('/style.css?v=20260608-quality-v13') && swText.includes('/app.js?v=20260608-quality-v33'),
+      swHasQualityVersion: swText.includes('atherix-static-v77-quality') && swText.includes('/style.css?v=20260608-quality-v13') && swText.includes('/app.js?v=20260608-quality-v34'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp'),
       swHasLocalFonts: swText.includes('/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2') && swText.includes('/assets/fonts/outfit-latin-wght-normal.woff2') && swText.includes('/assets/fonts/jetbrains-mono-latin-wght-normal.woff2')
@@ -4722,12 +4727,13 @@ async function run() {
   assert(chainState.forced.before.bestMove?.cleared >= 12 && chainState.forced.after.combo >= 12 && chainState.forced.after.score > chainState.forced.before.score, `chain debug combo should clear a large deterministic cluster: ${JSON.stringify(chainState.forced)}`);
   assert(chainState.forced.after.phaseIndex >= 1 && chainState.forced.after.lastSpecial && chainState.forced.after.mult > 1, `chain combo should advance phase, create a core, and raise multiplier: ${JSON.stringify(chainState.forced.after)}`);
   assert(chainState.recipeForced.after?.recipesCompleted > chainState.recipeForced.before?.recipesCompleted && chainState.recipeForced.after?.score > chainState.recipeForced.before?.score && chainState.recipeForced.after?.overcharge > chainState.recipeForced.before?.overcharge && chainState.recipeForced.after?.achieved, `chain recipe contract should complete, score, charge overdrive, and unlock achievement: ${JSON.stringify(chainState.recipeForced)}`);
+  assert(chainState.resonanceForced.before?.bestMove?.resonance?.triggered && chainState.resonanceForced.after?.resonanceCount > chainState.resonanceForced.before?.resonanceCount && chainState.resonanceForced.after?.lastResonance?.triggered && chainState.resonanceForced.after?.score > chainState.resonanceForced.before?.score && chainState.resonanceForced.after?.overcharge > chainState.resonanceForced.before?.overcharge && chainState.resonanceForced.after?.mult > chainState.resonanceForced.before?.mult && chainState.resonanceForced.after?.achievedResonance && /共振/.test(chainState.resonanceForced.after?.feedback || '') && chainState.resonanceForced.feedback?.lastLabel?.includes('RESONANCE'), `chain resonance should reward planned recipe materials with score, charge, multiplier, feedback, and achievement: ${JSON.stringify(chainState.resonanceForced)}`);
   assert(chainState.catalystForced.before?.overcharge === 100 && chainState.catalystForced.before?.hud?.overcharge === 'READY' && chainState.catalystForced.after?.catalystUsed > chainState.catalystForced.before?.catalystUsed && chainState.catalystForced.after?.combo >= 12 && chainState.catalystForced.after?.score > chainState.catalystForced.before?.score && chainState.catalystForced.after?.overcharge < 100, `chain catalyst should consume READY overcharge and perform a major clear: ${JSON.stringify(chainState.catalystForced)}`);
   assert(chainState.invalidForced.before?.moves === chainState.invalidForced.after?.moves && chainState.invalidForced.before?.score === chainState.invalidForced.after?.score && chainState.invalidForced.after?.warning?.tone === 'danger' && /需要 3\+/.test(chainState.invalidForced.after?.warning?.label || '') && /chain-warning/.test(chainState.invalidForced.after?.warning?.boardClass || '') && chainState.invalidForced.after?.warning?.cell?.r === chainState.invalidForced.cell?.r && chainState.invalidForced.feedback?.lastTone === 'danger' && chainState.invalidForced.feedback?.lastLabel === 'INVALID CHAIN', `chain invalid activation should keep score/moves and surface danger feedback on the selected cell: ${JSON.stringify(chainState.invalidForced)}`);
   assert(chainState.catalystLowForced.before?.overcharge === 42 && chainState.catalystLowForced.before?.moves === chainState.catalystLowForced.after?.moves && chainState.catalystLowForced.before?.score === chainState.catalystLowForced.after?.score && chainState.catalystLowForced.after?.warning?.tone === 'tool' && /超载未满/.test(chainState.catalystLowForced.after?.warning?.label || '') && /chain-tool-warning/.test(chainState.catalystLowForced.after?.warning?.boardClass || '') && chainState.catalystLowForced.feedback?.lastTone === 'tool' && chainState.catalystLowForced.feedback?.lastLabel === 'OVERCHARGE LOW', `chain low catalyst should keep state and expose tool feedback instead of failing silently: ${JSON.stringify(chainState.catalystLowForced)}`);
   assert(chainState.noMoveForced.before?.bestMove === null && chainState.noMoveForced.before?.hud?.hint === 'RESHUFFLE' && chainState.noMoveForced.after?.bestMove?.cleared >= 3 && chainState.noMoveForced.after?.moves === chainState.noMoveForced.before?.moves && chainState.noMoveForced.after?.reshuffles > chainState.noMoveForced.before?.reshuffles && /重洗|恢复/.test(chainState.noMoveForced.after?.feedback || '') && chainState.noMoveForced.after?.hud?.hint !== 'RESHUFFLE', `chain should automatically reshuffle no-move boards without spending a move: ${JSON.stringify(chainState.noMoveForced)}`);
-  assert(/^x\d+(\.\d)?$/.test(chainState.mult) && /^C\d+ V\d+ P\d+ G\d+ N\d+$/.test(chainState.essence) && /%$/.test(chainState.recipe) && (/^\d+%$/.test(chainState.overcharge) || chainState.overcharge === 'READY') && chainState.debugAfter.hud.mult === chainState.mult && chainState.debugAfter.hud.phase === chainState.phase && chainState.debugAfter.hud.hint === chainState.hint && chainState.debugAfter.hud.essence === chainState.essence && chainState.debugAfter.hud.recipe === chainState.recipe && chainState.debugAfter.hud.overcharge === chainState.overcharge, `chain HUD should stay in sync with debug state, recipe, essence, and overcharge: ${JSON.stringify(chainState)}`);
-  assert(chainState.recipeDetail && chainState.debugAfter.recipe?.detail === chainState.recipeDetail && chainState.catalystReady === 'false', `chain recipe detail and catalyst readiness should be exposed to the DOM: ${JSON.stringify(chainState)}`);
+  assert(/^x\d+(\.\d)?$/.test(chainState.mult) && /^C\d+ V\d+ P\d+ G\d+ N\d+$/.test(chainState.essence) && /%$/.test(chainState.recipe) && (/READY|^\d+x$|^(LINK|PRIME) \+?\d+/.test(chainState.resonance || '')) && (/^\d+%$/.test(chainState.overcharge) || chainState.overcharge === 'READY') && chainState.debugAfter.hud.mult === chainState.mult && chainState.debugAfter.hud.phase === chainState.phase && chainState.debugAfter.hud.hint === chainState.hint && chainState.debugAfter.hud.essence === chainState.essence && chainState.debugAfter.hud.recipe === chainState.recipe && chainState.debugAfter.hud.resonance === chainState.resonance && chainState.debugAfter.hud.overcharge === chainState.overcharge, `chain HUD should stay in sync with debug state, recipe, essence, resonance, and overcharge: ${JSON.stringify(chainState)}`);
+  assert(chainState.recipeDetail && chainState.debugAfter.recipe?.detail === chainState.recipeDetail && chainState.resonanceDetail === chainState.resonance && chainState.resonanceClass === !!chainState.debugAfter.lastResonance?.triggered && chainState.catalystReady === 'false', `chain recipe/resonance detail and catalyst readiness should be exposed to the DOM: ${JSON.stringify(chainState)}`);
   assert(chainFinishState.after?.finished && chainFinishState.after?.score >= chainFinishState.after?.target && chainFinishState.readoutState === 'won' && chainFinishState.readoutStateText === '达标' && /Enter 再来/.test(chainFinishState.readoutStart || '') && chainFinishState.touchStart === '再来', `chain completion should expose a clear replay state in the premium controls: ${JSON.stringify(chainFinishState)}`);
   const tacticsRouteNext = tacticsRouteState.before?.route?.next;
   const tacticsRoutePreview = tacticsRouteState.before?.preview || {};
@@ -5054,6 +5060,7 @@ function summarizeSmokeResult(result) {
         keyboardCursor: result.chainKeyboardState?.after?.state?.cursor?.hud,
         keyboardScoreGain: Number(result.chainKeyboardState?.after?.state?.score || 0) - Number(result.chainKeyboardState?.before?.score || 0),
         comboAfterForce: result.chainState?.forced?.after?.combo,
+        resonance: result.chainState?.resonanceForced?.after?.lastResonance?.label,
         invalidFeedback: result.chainState?.invalidForced?.after?.warning?.label,
         catalystLow: result.chainState?.catalystLowForced?.after?.warning?.label,
         catalystReady: result.chainState?.catalystReady
