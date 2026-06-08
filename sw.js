@@ -1,11 +1,11 @@
-const CACHE_VERSION = 'atherix-static-v43-quality';
+const CACHE_VERSION = 'atherix-static-v44-quality';
 const NAVIGATION_FALLBACK_URL = '/index.html';
 const DISCOVERY_ASSET_PATHS = new Set(['/feed.xml', '/sitemap.xml', '/robots.txt']);
 const STATIC_ASSETS = [
   '/',
   NAVIGATION_FALLBACK_URL,
-  '/style.css?v=20260608-quality-v2',
-  '/app.js?v=20260608-quality-v2',
+  '/style.css?v=20260608-quality-v3',
+  '/app.js?v=20260608-quality-v3',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',

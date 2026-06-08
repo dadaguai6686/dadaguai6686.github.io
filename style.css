@@ -7640,6 +7640,7 @@ body.command-open {
 }
 
 .chain-cell {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -7685,6 +7686,19 @@ body.command-open {
 .chain-preview {
   border-color: rgba(186, 230, 253, 0.48);
   box-shadow: inset 0 0 0 2px rgba(34, 211, 238, 0.2);
+}
+.chain-cursor {
+  outline: 3px solid rgba(255, 255, 255, 0.86);
+  outline-offset: 2px;
+  filter: brightness(1.2) saturate(1.12);
+}
+.chain-cursor::after {
+  content: '';
+  position: absolute;
+  inset: 0.22rem;
+  border-radius: 7px;
+  border: 1px solid rgba(15, 23, 42, 0.42);
+  pointer-events: none;
 }
 .chain-overcharged {
   border-color: rgba(253, 230, 138, 0.48);

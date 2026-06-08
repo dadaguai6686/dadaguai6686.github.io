@@ -2580,6 +2580,41 @@ async function run() {
 
   await click('[data-premium-game="chain"]');
   await wait(250);
+  const chainKeyboardBefore = await evaluate(`(() => {
+    const api = window.__atherixDebug?.premium;
+    api?.seedChainComboBoard?.();
+    document.querySelector('#premium-game-stage')?.focus({ preventScroll: true });
+    return {
+      state: api?.chainState?.() || {},
+      focusId: document.activeElement?.id || ''
+    };
+  })()`);
+  await key('keyDown', 'ArrowRight', 'ArrowRight');
+  await key('keyUp', 'ArrowRight', 'ArrowRight');
+  await wait(100);
+  const chainKeyboardMoved = await evaluate(`(() => ({
+    state: window.__atherixDebug?.premium?.chainState?.() || {},
+    cursorCells: document.querySelectorAll('#premium-chain-board .chain-cursor').length,
+    selectedCells: document.querySelectorAll('#premium-chain-board [aria-selected="true"]').length,
+    cursorHud: document.querySelector('#premium-chain-cursor')?.textContent || '',
+    activeDescendant: document.querySelector('#premium-chain-board')?.getAttribute('aria-activedescendant') || ''
+  }))()`);
+  await key('keyDown', ' ', 'Space');
+  await key('keyUp', ' ', 'Space');
+  await wait(140);
+  const chainKeyboardAfter = await evaluate(`(() => ({
+    state: window.__atherixDebug?.premium?.chainState?.() || {},
+    cursorCells: document.querySelectorAll('#premium-chain-board .chain-cursor').length,
+    selectedCells: document.querySelectorAll('#premium-chain-board [aria-selected="true"]').length,
+    cursorHud: document.querySelector('#premium-chain-cursor')?.textContent || '',
+    activeDescendant: document.querySelector('#premium-chain-board')?.getAttribute('aria-activedescendant') || ''
+  }))()`);
+  const chainKeyboardState = {
+    before: chainKeyboardBefore.state,
+    focusId: chainKeyboardBefore.focusId,
+    moved: chainKeyboardMoved,
+    after: chainKeyboardAfter
+  };
   const chainState = await evaluate(`(() => {
     const debugBefore = window.__atherixDebug?.premium?.chainState?.() || {};
     const initialDom = {
@@ -2587,7 +2622,9 @@ async function run() {
       specials: document.querySelectorAll('#premium-chain-board .chain-bomb,#premium-chain-board .chain-prism,#premium-chain-board .chain-wild').length,
       wilds: document.querySelectorAll('#premium-chain-board .chain-wild').length,
       hinted: document.querySelectorAll('#premium-chain-board .chain-hint').length,
-      previewed: document.querySelectorAll('#premium-chain-board .chain-preview').length
+      previewed: document.querySelectorAll('#premium-chain-board .chain-preview').length,
+      cursor: document.querySelectorAll('#premium-chain-board .chain-cursor').length,
+      selected: document.querySelectorAll('#premium-chain-board [aria-selected="true"]').length
     };
     const forced = window.__atherixDebug?.premium?.forceChainCombo?.() || {};
     const recipeForced = window.__atherixDebug?.premium?.forceChainRecipe?.() || {};
@@ -2659,7 +2696,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v43-quality') && swText.includes('/style.css?v=20260608-quality-v2') && swText.includes('/app.js?v=20260608-quality-v2'),
+      swHasQualityVersion: swText.includes('atherix-static-v44-quality') && swText.includes('/style.css?v=20260608-quality-v3') && swText.includes('/app.js?v=20260608-quality-v3'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
@@ -3331,8 +3368,31 @@ async function run() {
   assert(careerDialogState.medalCards >= 7 && careerDialogState.achievements >= 16 && careerDialogState.unlocked >= 1, `career dialog should show medals and achievements: ${JSON.stringify(careerDialogState)}`);
   assert(/RANK/.test(careerDialogState.summary) && careerDialogState.daily.length > 10 && careerDialogState.visibleInViewport && !careerDialogState.horizontalOverflow, `career dialog should show readable summary and daily challenge: ${JSON.stringify(careerDialogState)}`);
   assert(!careerDialogClosed.open && careerDialogClosed.ariaHidden === 'true', `career dialog should close cleanly: ${JSON.stringify(careerDialogClosed)}`);
+  const chainCursorBefore = chainKeyboardState.before?.cursor || {};
+  const chainCursorMoved = chainKeyboardState.moved?.state?.cursor || {};
+  const chainCursorAfter = chainKeyboardState.after?.state?.cursor || {};
+  assert(
+    chainKeyboardState.focusId === 'premium-game-stage' &&
+      chainCursorBefore.valid &&
+      chainCursorMoved.c === Math.min(6, Number(chainCursorBefore.c || 0) + 1) &&
+      chainKeyboardState.moved.cursorCells === 1 &&
+      chainKeyboardState.moved.selectedCells === 1 &&
+      chainKeyboardState.moved.activeDescendant === chainCursorMoved.activeId &&
+      chainKeyboardState.moved.cursorHud === chainCursorMoved.hud,
+    `chain keyboard cursor should move with ArrowRight and expose a single active gridcell: ${JSON.stringify(chainKeyboardState)}`
+  );
+  assert(
+    chainKeyboardState.after?.state?.score > chainKeyboardState.before?.score &&
+      chainKeyboardState.after?.state?.combo >= 3 &&
+      chainCursorAfter.selected === 'true' &&
+      chainKeyboardState.after.cursorCells === 1 &&
+      chainKeyboardState.after.selectedCells === 1 &&
+      chainKeyboardState.after.activeDescendant === chainCursorAfter.activeId &&
+      chainKeyboardState.after.cursorHud === chainCursorAfter.hud,
+    `chain Space/ACT should activate the selected cursor cell and keep HUD/a11y state synced: ${JSON.stringify(chainKeyboardState)}`
+  );
   assert(chainState.cells === 49 && Number(chainState.specials) >= 1 && Number(chainState.wilds) >= 1, `chain board should render enhanced special cells: ${JSON.stringify(chainState)}`);
-  assert(chainState.debugBefore.bestMove?.cleared >= 3 && chainState.hinted === 1 && chainState.previewed >= 2, `chain should expose a highlighted best move and preview: ${JSON.stringify(chainState)}`);
+  assert(chainState.debugBefore.bestMove?.cleared >= 3 && chainState.hinted === 1 && chainState.previewed >= 2 && chainState.cursor === 1 && chainState.selected === 1, `chain should expose a highlighted best move, preview, and keyboard cursor: ${JSON.stringify(chainState)}`);
   assert(chainState.forced.before.bestMove?.cleared >= 12 && chainState.forced.after.combo >= 12 && chainState.forced.after.score > chainState.forced.before.score, `chain debug combo should clear a large deterministic cluster: ${JSON.stringify(chainState.forced)}`);
   assert(chainState.forced.after.phaseIndex >= 1 && chainState.forced.after.lastSpecial && chainState.forced.after.mult > 1, `chain combo should advance phase, create a core, and raise multiplier: ${JSON.stringify(chainState.forced.after)}`);
   assert(chainState.recipeForced.after?.recipesCompleted > chainState.recipeForced.before?.recipesCompleted && chainState.recipeForced.after?.score > chainState.recipeForced.before?.score && chainState.recipeForced.after?.overcharge > chainState.recipeForced.before?.overcharge && chainState.recipeForced.after?.achieved, `chain recipe contract should complete, score, charge overdrive, and unlock achievement: ${JSON.stringify(chainState.recipeForced)}`);
@@ -3461,6 +3521,7 @@ async function run() {
     heistState,
     careerDialogState,
     careerDialogClosed,
+    chainKeyboardState,
     chainState,
     tacticsForecastStart,
     tacticsRouteState,
@@ -3561,6 +3622,8 @@ function summarizeSmokeResult(result) {
       },
       chain: {
         cells: result.chainState?.cells,
+        keyboardCursor: result.chainKeyboardState?.after?.state?.cursor?.hud,
+        keyboardScoreGain: Number(result.chainKeyboardState?.after?.state?.score || 0) - Number(result.chainKeyboardState?.before?.score || 0),
         comboAfterForce: result.chainState?.forced?.after?.combo,
         catalystReady: result.chainState?.catalystReady
       },

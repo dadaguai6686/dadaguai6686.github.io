@@ -5407,7 +5407,7 @@ function init() {
         <div class="mini-game-panel" id="premium-chain">
           <div class="mini-game-copy">
             <h3>Alchemy Chain</h3>
-            <p>点击相邻同色能量团触发连锁爆破。完成阶段炼成、制造特殊核心并维持倍率，在限定步数内冲破目标分数。</p>
+            <p>点击相邻同色能量团触发连锁爆破；也可以用方向键或手柄移动光标，Space / ACT 炼成当前格，Q / TOOL 催化超载核心。</p>
             <div class="mini-stats">
               <span>步数 <strong id="premium-chain-moves">30</strong></span>
               <span>分数 <strong id="premium-chain-score">0</strong></span>
@@ -5417,6 +5417,7 @@ function init() {
               <span>阶段 <strong id="premium-chain-phase">I</strong></span>
               <span>炼成 <strong id="premium-chain-goal">连锁 7+</strong></span>
               <span>提示 <strong id="premium-chain-hint">SCAN</strong></span>
+              <span>光标 <strong id="premium-chain-cursor">1-1</strong></span>
               <span>精华 <strong id="premium-chain-essence">C0 V0 P0 G0 N0</strong></span>
               <span>配方 <strong id="premium-chain-recipe">极光 0%</strong></span>
               <span>超载 <strong id="premium-chain-overcharge">0%</strong></span>
@@ -7696,7 +7697,7 @@ function init() {
         boss: { action: '闪避', tool: '', actionLabel: '闪避冲刺', toolLabel: '' },
         drift: { action: '加速', tool: '相位', actionLabel: '量子加速', toolLabel: '相位刹车' },
         heist: { action: '隐身', tool: '诱饵', actionLabel: '启动隐身', toolLabel: '部署诱饵' },
-        chain: { action: '', tool: '催化', actionLabel: '', toolLabel: '触发催化' },
+        chain: { action: '炼成', tool: '催化', actionLabel: '炼成当前选中的能量团', toolLabel: '触发催化' },
         tactics: { action: '爆破', tool: '', actionLabel: '相位爆破或架盾', toolLabel: '' }
       };
       const config = labels[premiumActive] || labels.survivor;
@@ -7889,11 +7890,16 @@ function init() {
         if (control === 'right') moveTactics(1, 0);
         if (control === 'action') triggerTacticsAction();
       }
+      if (pressed && premiumActive === 'chain') {
+        if (control === 'up') moveChainCursor(-1, 0);
+        if (control === 'down') moveChainCursor(1, 0);
+        if (control === 'left') moveChainCursor(0, -1);
+        if (control === 'right') moveChainCursor(0, 1);
+        if (control === 'action') activateChainCursor();
+        if (control === 'tool') triggerChainCatalyst();
+      }
       if (pressed && premiumActive === 'drift' && control === 'tool') {
         triggerDriftPhaseBrake();
-      }
-      if (pressed && premiumActive === 'chain' && control === 'tool') {
-        triggerChainCatalyst();
       }
     }
 
@@ -11943,6 +11949,7 @@ function init() {
       target: 9000,
       phaseIndex: 0,
       bestMove: null,
+      cursor: { r: 0, c: 0 },
       feedback: '寻找 3+ 同色能量团',
       lastGain: 0,
       lastClear: 0,
@@ -12085,6 +12092,56 @@ function init() {
       return r >= 0 && c >= 0 && r < 7 && c < 7;
     }
 
+    function normalizeChainCursor() {
+      const fallback = chain.bestMove || bestChainMove() || { r: 0, c: 0 };
+      const cursor = chain.cursor && typeof chain.cursor === 'object' ? chain.cursor : fallback;
+      const r = clamp(Number(cursor.r ?? fallback.r ?? 0), 0, 6);
+      const c = clamp(Number(cursor.c ?? fallback.c ?? 0), 0, 6);
+      chain.cursor = {
+        r: Math.floor(r),
+        c: Math.floor(c)
+      };
+      return chain.cursor;
+    }
+
+    function setChainCursorToBest() {
+      const best = chain.bestMove || bestChainMove();
+      if (best) {
+        chain.cursor = { r: best.r, c: best.c };
+      } else {
+        normalizeChainCursor();
+      }
+      return chain.cursor;
+    }
+
+    function chainCursorLabel(cursor = normalizeChainCursor()) {
+      const value = chain.grid[cursor.r]?.[cursor.c] || '';
+      const label = chainSpecialLabels[value] || chainColorNames[value] || String(value || '空');
+      return `${cursor.r + 1}-${cursor.c + 1} ${label}`;
+    }
+
+    function moveChainCursor(dr = 0, dc = 0) {
+      if (chain.finished) return false;
+      const cursor = normalizeChainCursor();
+      chain.cursor = {
+        r: Math.floor(clamp(cursor.r + dr, 0, 6)),
+        c: Math.floor(clamp(cursor.c + dc, 0, 6))
+      };
+      const selected = evaluateChainMove(chain.cursor.r, chain.cursor.c);
+      chain.feedback = selected.valid
+        ? `光标 ${chainCursorLabel(chain.cursor)} · ${selected.cleared} 格 +${selected.gain}`
+        : `光标 ${chainCursorLabel(chain.cursor)} · 需要 3+ 相邻能量`;
+      renderChain();
+      return true;
+    }
+
+    function activateChainCursor() {
+      if (chain.finished) return false;
+      const cursor = normalizeChainCursor();
+      popChain(cursor.r, cursor.c);
+      return true;
+    }
+
     function chainPhaseDef() {
       return chainPhaseDefs[chain.phaseIndex] || null;
     }
@@ -12132,6 +12189,7 @@ function init() {
       chain.grid[4] = ['violet', 'wild', 'pink', 'gold', 'green', 'cyan', 'violet'];
       chain.grid[5][1] = 'gold';
       chain.grid[6][1] = 'pink';
+      setChainCursorToBest();
       focusStage();
       renderChain();
     }
@@ -12346,6 +12404,7 @@ function init() {
 
     function popChain(r, c) {
       if (chain.moves <= 0 || chain.finished) return;
+      chain.cursor = { r: Math.floor(clamp(Number(r || 0), 0, 6)), c: Math.floor(clamp(Number(c || 0), 0, 6)) };
       const result = evaluateChainMove(r, c);
       if (!result.valid) {
         chain.combo = 0;
@@ -12392,6 +12451,9 @@ function init() {
       const best = bestChainMove();
       const phase = chainPhaseDef();
       const specials = chain.grid.flat().filter(isChainSpecial);
+      const cursor = normalizeChainCursor();
+      const cursorMove = evaluateChainMove(cursor.r, cursor.c);
+      const cursorCell = chain.board?.querySelector('.chain-cursor');
       return {
         score: chain.score,
         moves: chain.moves,
@@ -12422,6 +12484,19 @@ function init() {
         catalystUsed: chain.catalystUsed,
         achieved: (career.achievements || []).includes('chain_recipe'),
         finished: chain.finished,
+        cursor: {
+          r: cursor.r,
+          c: cursor.c,
+          label: chainCursorLabel(cursor),
+          value: chain.grid[cursor.r]?.[cursor.c] || '',
+          valid: !!cursorMove.valid,
+          cleared: Number(cursorMove.cleared || 0),
+          gain: Number(cursorMove.gain || 0),
+          activeId: chain.board?.getAttribute('aria-activedescendant') || '',
+          selected: cursorCell?.getAttribute('aria-selected') || '',
+          className: cursorCell?.className || '',
+          hud: document.getElementById('premium-chain-cursor')?.textContent || ''
+        },
         bestMove: best ? {
           r: best.r,
           c: best.c,
@@ -12443,6 +12518,7 @@ function init() {
           phase: document.getElementById('premium-chain-phase')?.textContent || '',
           goal: document.getElementById('premium-chain-goal')?.textContent || '',
           hint: document.getElementById('premium-chain-hint')?.textContent || '',
+          cursor: document.getElementById('premium-chain-cursor')?.textContent || '',
           essence: document.getElementById('premium-chain-essence')?.textContent || '',
           recipe: document.getElementById('premium-chain-recipe')?.textContent || '',
           overcharge: document.getElementById('premium-chain-overcharge')?.textContent || ''
@@ -12475,6 +12551,7 @@ function init() {
         ['gold', 'pink', 'violet', 'violet', 'violet', 'cyan', 'cyan'],
         ['gold', 'gold', 'pink', 'green', 'cyan', 'cyan', 'cyan']
       ];
+      setChainCursorToBest();
       renderChain();
       return chainDebugState();
     }
@@ -12509,6 +12586,7 @@ function init() {
         ['gold', 'pink', 'violet', 'violet', 'green', 'cyan', 'cyan'],
         ['gold', 'green', 'pink', 'green', 'cyan', 'pink', 'gold']
       ];
+      setChainCursorToBest();
       renderChain();
       return chainDebugState();
     }
@@ -12531,21 +12609,34 @@ function init() {
 
     function renderChain() {
       chain.bestMove = bestChainMove();
+      const cursor = normalizeChainCursor();
       const preview = new Set(chain.bestMove?.cells || []);
       const phase = chainPhaseDef();
+      chain.board.setAttribute('role', 'grid');
+      chain.board.setAttribute('tabindex', '0');
+      chain.board.setAttribute('aria-rowcount', '7');
+      chain.board.setAttribute('aria-colcount', '7');
+      chain.board.setAttribute('aria-activedescendant', `premium-chain-cell-${cursor.r}-${cursor.c}`);
       chain.board.innerHTML = '';
       chain.grid.forEach((row, r) => row.forEach((color, c) => {
         const btn = document.createElement('button');
         btn.type = 'button';
         const key = chainKey(r, c);
         const isHint = chain.bestMove?.r === r && chain.bestMove?.c === c;
-        btn.className = `chain-cell chain-${color}${isHint ? ' chain-hint' : ''}${preview.has(key) && !isHint ? ' chain-preview' : ''}`;
+        const isCursor = cursor.r === r && cursor.c === c;
+        btn.id = `premium-chain-cell-${r}-${c}`;
+        btn.className = `chain-cell chain-${color}${isHint ? ' chain-hint' : ''}${preview.has(key) && !isHint ? ' chain-preview' : ''}${isCursor ? ' chain-cursor' : ''}`;
         btn.dataset.chainRow = String(r);
         btn.dataset.chainCol = String(c);
         btn.dataset.chainValue = color;
+        btn.dataset.chainCursor = isCursor ? 'true' : 'false';
         if (isHint) btn.dataset.chainGain = String(chain.bestMove?.gain || 0);
         btn.textContent = chainSpecialLabels[color] ? chainSpecialLabels[color][0] : '';
-        btn.setAttribute('aria-label', color === 'bomb' ? '爆裂核心' : color === 'prism' ? '棱镜核心' : color === 'wild' ? '通量核心' : `${color} 能量`);
+        btn.setAttribute('role', 'gridcell');
+        btn.setAttribute('aria-rowindex', String(r + 1));
+        btn.setAttribute('aria-colindex', String(c + 1));
+        btn.setAttribute('aria-selected', isCursor ? 'true' : 'false');
+        btn.setAttribute('aria-label', `${isCursor ? '当前光标，' : ''}${color === 'bomb' ? '爆裂核心' : color === 'prism' ? '棱镜核心' : color === 'wild' ? '通量核心' : `${color} 能量`}`);
         btn.addEventListener('click', () => popChain(r, c));
         chain.board.appendChild(btn);
       }));
@@ -12557,6 +12648,7 @@ function init() {
       document.getElementById('premium-chain-phase').textContent = phase?.label || 'MASTER';
       document.getElementById('premium-chain-goal').textContent = phase?.goal || '冲刺目标';
       document.getElementById('premium-chain-hint').textContent = chain.bestMove ? `${chain.bestMove.cleared}格 +${chain.bestMove.gain}` : 'RESHUFFLE';
+      document.getElementById('premium-chain-cursor').textContent = chainCursorLabel(cursor);
       document.getElementById('premium-chain-essence').textContent = formatChainEssence();
       document.getElementById('premium-chain-recipe').textContent = formatChainRecipe();
       document.getElementById('premium-chain-overcharge').textContent = chain.overcharge >= 100 ? 'READY' : `${Math.floor(chain.overcharge)}%`;
@@ -13812,6 +13904,7 @@ function init() {
             };
           },
           chainState: () => chainDebugState(),
+          seedChainComboBoard: () => seedChainComboBoard(),
           forceChainCombo: () => forceChainCombo(),
           forceChainRecipe: () => forceChainRecipe(),
           forceChainCatalyst: () => forceChainCatalyst(),
