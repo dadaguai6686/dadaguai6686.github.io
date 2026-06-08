@@ -26,7 +26,7 @@ const contentSecurityPolicy = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "img-src 'self' https: data: blob:",
+  "img-src 'self' data: blob:",
   "font-src 'self' https://fonts.gstatic.com data:",
   "connect-src 'self'",
   "media-src 'self' blob:",
@@ -138,7 +138,7 @@ function readTextField(res, label, value, { required = false, max = 1000, fallba
   return text || fallback;
 }
 
-function readUrlField(res, label, value, { max = 2048, allowLocalUploads = false, allowLocalAssets = false } = {}) {
+function readUrlField(res, label, value, { max = 2048, allowLocalUploads = false, allowLocalAssets = false, allowRemote = true } = {}) {
   const raw = readTextField(res, label, value, { max });
   if (raw === undefined) return undefined;
   if (!raw) return '';
@@ -152,13 +152,22 @@ function readUrlField(res, label, value, { max = 2048, allowLocalUploads = false
     res.status(400).json({ error: `${label} must be a safe local asset image URL.` });
     return undefined;
   }
-  try {
-    const parsed = new URL(raw);
-    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return parsed.href;
-  } catch (err) {
-    // Fall through to validation error below.
+  if (allowRemote) {
+    try {
+      const parsed = new URL(raw);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return parsed.href;
+    } catch (err) {
+      // Fall through to validation error below.
+    }
   }
-  res.status(400).json({ error: `${label} must be a valid http(s) URL.` });
+  const localTargets = [
+    allowLocalAssets ? '/assets/...' : '',
+    allowLocalUploads ? '/uploads/...' : ''
+  ].filter(Boolean);
+  const allowedCopy = localTargets.length && !allowRemote
+    ? localTargets.join(' or ')
+    : 'a valid http(s) URL';
+  res.status(400).json({ error: `${label} must be ${allowedCopy}.` });
   return undefined;
 }
 
@@ -696,7 +705,7 @@ app.post('/api/projects', authenticateToken, writeLimiter, (req, res) => {
   const tag = readTextField(res, 'Tag', req.body.tag, { max: 80, fallback: '前端开发' });
   const pain = readTextField(res, 'Pain point', req.body.pain, { max: 1200 });
   const solution = readTextField(res, 'Solution', req.body.solution, { max: 1200 });
-  const img = readUrlField(res, 'Image URL', req.body.img, { allowLocalUploads: true, allowLocalAssets: true });
+  const img = readUrlField(res, 'Image URL', req.body.img, { allowLocalUploads: true, allowLocalAssets: true, allowRemote: false });
   const github = readUrlField(res, 'GitHub URL', req.body.github);
   const live = readUrlField(res, 'Live URL', req.body.live);
   const rawId = readTextField(res, 'Project id', req.body.id, { max: 80 });
@@ -725,7 +734,7 @@ app.put('/api/projects/:id', authenticateToken, writeLimiter, (req, res) => {
   const tag = readTextField(res, 'Tag', req.body.tag, { max: 80, fallback: '前端开发' });
   const pain = readTextField(res, 'Pain point', req.body.pain, { max: 1200 });
   const solution = readTextField(res, 'Solution', req.body.solution, { max: 1200 });
-  const img = readUrlField(res, 'Image URL', req.body.img, { allowLocalUploads: true, allowLocalAssets: true });
+  const img = readUrlField(res, 'Image URL', req.body.img, { allowLocalUploads: true, allowLocalAssets: true, allowRemote: false });
   const github = readUrlField(res, 'GitHub URL', req.body.github);
   const live = readUrlField(res, 'Live URL', req.body.live);
   if ([title, desc, tag, pain, solution, img, github, live].some(value => value === undefined)) return;

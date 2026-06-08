@@ -406,6 +406,10 @@ function init() {
     }
   }
 
+  function normalizeProjectImageUrl(value) {
+    return normalizeMarkdownImageUrl(value) || defaultProjectImage;
+  }
+
   function setOptionalExternalLink(anchor, url, fallbackLabel) {
     if (!anchor) return;
     const normalized = normalizeUrl(url);
@@ -2692,7 +2696,7 @@ function init() {
       const title = escapeHTML(proj.title || '未命名项目');
       const tag = escapeHTML(proj.tag || '未分类');
       const desc = escapeHTML(proj.desc || '暂无项目简介。');
-      const imgUrl = escapeHTML(normalizeUrl(proj.img, { allowRelativeUpload: true, allowRelativeAsset: true }) || defaultProjectImage);
+      const imgUrl = escapeHTML(normalizeProjectImageUrl(proj.img));
       const liveUrl = normalizeUrl(proj.live);
       const liveAction = liveUrl
         ? `<a href="${escapeHTML(liveUrl)}" class="project-btn project-btn-primary" target="_blank" rel="noopener noreferrer"><i data-lucide="external-link"></i> Live Demo</a>`
@@ -2759,7 +2763,7 @@ function init() {
 
     document.getElementById('modal-project-tag').textContent = proj.tag || '未分类';
     document.getElementById('modal-project-title').textContent = proj.title || '未命名项目';
-    document.getElementById('modal-project-img').src = normalizeUrl(proj.img, { allowRelativeUpload: true, allowRelativeAsset: true }) || defaultProjectImage;
+    document.getElementById('modal-project-img').src = normalizeProjectImageUrl(proj.img);
     document.getElementById('modal-project-desc').textContent = proj.desc || '暂无项目简介。';
     document.getElementById('modal-project-pain').textContent = proj.pain || '暂无详细描述。';
     document.getElementById('modal-project-solution').textContent = proj.solution || '暂无详细描述。';

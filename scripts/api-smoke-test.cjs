@@ -130,9 +130,12 @@ async function run() {
     const permissionsPolicy = health.headers.get('permissions-policy') || '';
     assert(permissionsPolicy.includes('camera=()') && permissionsPolicy.includes('microphone=()') && permissionsPolicy.includes('geolocation=()'), 'Permissions-Policy should block sensitive sensors');
     assert(permissionsPolicy.includes('payment=()') && permissionsPolicy.includes('usb=()') && permissionsPolicy.includes('fullscreen=(self)') && permissionsPolicy.includes('web-share=(self)'), 'Permissions-Policy should define high-risk browser features');
-    assert(health.headers.get('content-security-policy')?.includes("object-src 'none'"), 'CSP object-src guard missing');
-    assert(health.headers.get('content-security-policy')?.includes('https://fonts.googleapis.com'), 'CSP should allow configured web font stylesheet');
-    assert(health.headers.get('content-security-policy')?.includes('https://fonts.gstatic.com'), 'CSP should allow configured web font files');
+    const cspHeader = health.headers.get('content-security-policy') || '';
+    assert(cspHeader.includes("object-src 'none'"), 'CSP object-src guard missing');
+    assert(cspHeader.includes("img-src 'self' data: blob:"), 'CSP should keep images local except data/blob previews');
+    assert(!/img-src[^;]*https:/i.test(cspHeader), 'CSP should not allow arbitrary remote image tracking pixels');
+    assert(cspHeader.includes('https://fonts.googleapis.com'), 'CSP should allow configured web font stylesheet');
+    assert(cspHeader.includes('https://fonts.gstatic.com'), 'CSP should allow configured web font files');
     assert(health.headers.get('strict-transport-security')?.includes('max-age=31536000'), 'HSTS header missing in production');
     assert(health.headers.get('access-control-allow-origin') === allowedOrigin, 'allowed CORS origin not echoed');
     assert(health.headers.get('cache-control') === 'no-store', 'API responses should not be cached');
@@ -151,9 +154,9 @@ async function run() {
     assert(serviceWorkerText.includes('/feed.xml') && serviceWorkerText.includes('/sitemap.xml'), 'service worker should precache discovery metadata');
     assert(serviceWorkerText.includes('/assets/atherix-og-card.png') && serviceWorkerText.includes('/assets/atherix-icon-512.png'), 'service worker should precache branded PWA assets');
     assert(serviceWorkerText.includes('/assets/atherix-profile-avatar.png') && serviceWorkerText.includes('/assets/project-bento-dashboard.webp') && serviceWorkerText.includes('/assets/project-arcade-suite.webp'), 'service worker should precache local profile and portfolio visual assets');
-    assert(serviceWorkerText.includes('atherix-static-v47-quality'), 'service worker should use the latest quality cache version');
+    assert(serviceWorkerText.includes('atherix-static-v48-quality'), 'service worker should use the latest quality cache version');
     assert(serviceWorkerText.includes('NAVIGATION_FALLBACK_URL') && serviceWorkerText.includes('navigationPreload') && serviceWorkerText.includes('X-Atherix-Offline-Shell'), 'service worker should provide a navigation-preload offline app shell');
-    assert(serviceWorkerText.includes('/style.css?v=20260608-quality-v6') && serviceWorkerText.includes('/app.js?v=20260608-quality-v6'), 'service worker should precache the latest versioned app assets');
+    assert(serviceWorkerText.includes('/style.css?v=20260608-quality-v6') && serviceWorkerText.includes('/app.js?v=20260608-quality-v7'), 'service worker should precache the latest versioned app assets');
     assert(serviceWorkerText.includes('networkFirstCacheFallback') && serviceWorkerText.includes('staleWhileRevalidate') && serviceWorkerText.includes('offlineResponseFor') && serviceWorkerText.includes('cacheResponseQuietly'), 'service worker should use explicit offline-safe caching strategies');
     assert(serviceWorkerText.includes('DISCOVERY_ASSET_PATHS') && serviceWorkerText.includes('/feed.xml') && serviceWorkerText.includes('/sitemap.xml') && serviceWorkerText.includes('/robots.txt'), 'service worker should keep discovery metadata network-first before cache fallback');
     assert(serviceWorkerText.includes('X-Atherix-Offline-Asset') && serviceWorkerText.includes('status: 204'), 'service worker should provide a quiet offline image placeholder');
@@ -163,8 +166,8 @@ async function run() {
     assert(indexText.includes('rel="canonical" href="https://dadaguai6686.github.io/"'), 'index should expose an absolute canonical URL');
     assert(indexText.includes('type="application/rss+xml"'), 'index should link the RSS feed');
     assert(indexText.includes('href="/style.css') && indexText.includes('src="/app.js') && indexText.includes('src="/lucide.min.js"'), 'local app assets should use root-absolute URLs for deep links');
-    assert(indexText.includes('href="/style.css?v=20260608-quality-v6"') && indexText.includes('src="/app.js?v=20260608-quality-v6"'), 'index should reference the latest versioned app assets');
-    assert(indexText.includes('rel="preload" href="/style.css?v=20260608-quality-v6" as="style"') && indexText.includes('rel="preload" href="/app.js?v=20260608-quality-v6" as="script"') && indexText.includes('rel="preload" href="/lucide.min.js" as="script"'), 'index should preload critical local app assets');
+    assert(indexText.includes('href="/style.css?v=20260608-quality-v6"') && indexText.includes('src="/app.js?v=20260608-quality-v7"'), 'index should reference the latest versioned app assets');
+    assert(indexText.includes('rel="preload" href="/style.css?v=20260608-quality-v6" as="style"') && indexText.includes('rel="preload" href="/app.js?v=20260608-quality-v7" as="script"') && indexText.includes('rel="preload" href="/lucide.min.js" as="script"'), 'index should preload critical local app assets');
     assert(indexText.includes('Atherix 高级街机') && indexText.includes('Premium Arcade Suite') && indexText.includes('高级街机生涯实验室'), 'index shell should present the premium arcade suite before runtime hydration');
     assert(indexText.includes('主线跑酷') && indexText.includes('霓虹漂移') && indexText.includes('裂隙战术') && indexText.includes('战术芯片'), 'index shell should advertise the full seven-line arcade career');
     assert(indexText.includes('<strong>29</strong>成就'), 'index shell should expose the current arcade achievement count');
@@ -433,6 +436,17 @@ async function run() {
     });
     assert(unsafeProjectEncodedAssetPath.status === 400, 'project images should reject encoded asset path traversal');
 
+    const remoteProjectImage = await fetch(`${baseUrl}/api/projects`, {
+      method: 'POST',
+      headers: projectHeaders,
+      body: JSON.stringify({
+        id: `smoke-remote-img-${Date.now()}`,
+        title: 'Remote Tracking Image',
+        img: 'https://example.com/project-tracker.png'
+      })
+    });
+    assert(remoteProjectImage.status === 400, 'project images should reject remote image URLs');
+
     const smokeProjectId = `smoke-project-${Date.now()}`;
     const createdProject = await fetch(`${baseUrl}/api/projects`, {
       method: 'POST',
@@ -519,6 +533,7 @@ async function run() {
       malformedJsonStatus: malformedJson.status,
       seededProjectCount: projectRows.length,
       apiCacheControl: health.headers.get('cache-control'),
+      cspImagesLocalOnly: cspHeader.includes("img-src 'self' data: blob:") && !/img-src[^;]*https:/i.test(cspHeader),
       sensitiveResults,
       sanitizedAvatar: sanitizedBody.comment.avatar,
       spamTrapStatus: spamTrap.status,
@@ -529,6 +544,7 @@ async function run() {
       unsafeEncodedUploadPathStatus: unsafeProjectEncodedPath.status,
       unsafeAssetPathStatus: unsafeProjectAssetPath.status,
       unsafeEncodedAssetPathStatus: unsafeProjectEncodedAssetPath.status,
+      remoteProjectImageStatus: remoteProjectImage.status,
       safeUploadPathProjectStatus: createdProject.status,
       safeAssetPathProjectStatus: createdAssetProject.status,
       staticValidUploadStatus: staticValidUpload.status,

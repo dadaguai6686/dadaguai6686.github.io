@@ -2733,7 +2733,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v47-quality') && swText.includes('/style.css?v=20260608-quality-v6') && swText.includes('/app.js?v=20260608-quality-v6'),
+      swHasQualityVersion: swText.includes('atherix-static-v48-quality') && swText.includes('/style.css?v=20260608-quality-v6') && swText.includes('/app.js?v=20260608-quality-v7'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
