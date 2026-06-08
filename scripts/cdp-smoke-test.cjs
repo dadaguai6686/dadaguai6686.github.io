@@ -3617,6 +3617,7 @@ async function run() {
   const tacticsBlockedState = await evaluate(`(() => window.__atherixDebug?.premium?.forceTacticsBlocked?.() || {})()`);
   const tacticsBlastState = await evaluate(`(() => window.__atherixDebug?.premium?.forceTacticsBlast?.() || {})()`);
   const tacticsForecastAfterAction = await evaluate(`(() => window.__atherixDebug?.premium?.tacticsForecast?.() || {})()`);
+  const tacticsCounterState = await evaluate(`(() => window.__atherixDebug?.premium?.forceTacticsCounter?.() || {})()`);
   const tacticsDangerState = await evaluate(`(() => window.__atherixDebug?.premium?.forceTacticsDangerStep?.() || {})()`);
   const tacticsState = await evaluate(`(() => {
     const pixels = window.__atherixSmokeCountCanvasPixels?.('#premium-tactics-canvas') || {};
@@ -3657,7 +3658,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v74-quality') && swText.includes('/style.css?v=20260608-quality-v13') && swText.includes('/app.js?v=20260608-quality-v31'),
+      swHasQualityVersion: swText.includes('atherix-static-v75-quality') && swText.includes('/style.css?v=20260608-quality-v13') && swText.includes('/app.js?v=20260608-quality-v32'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp'),
       swHasLocalFonts: swText.includes('/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2') && swText.includes('/assets/fonts/outfit-latin-wght-normal.woff2') && swText.includes('/assets/fonts/jetbrains-mono-latin-wght-normal.woff2')
@@ -4716,10 +4717,34 @@ async function run() {
     || tacticsBlastAfterEnemies.length < (tacticsBlastState.before?.enemies || []).length;
   const tacticsSurgedDuringBlast = Number(tacticsBlastState.after?.surges || 0) > Number(tacticsBlastState.before?.surges || 0);
   const tacticsJammedIntent = (tacticsForecastAfterAction.intents || []).some(intent => intent.label === 'JAM' || intent.mode === 'disrupted');
+  const tacticsCounterTargetBefore = tacticsCounterState.before?.enemies?.find(enemy => enemy.id === 'turret-a') || {};
+  const tacticsCounterTargetAfter = tacticsCounterState.after?.enemies?.find(enemy => enemy.id === 'turret-a') || {};
   assert(tacticsForecastStart.dangerCount > 0 && tacticsForecastStart.intents?.length >= 4 && tacticsForecastStart.blastTargets?.length >= 1 && /目标/.test(tacticsForecastStart.action) && tacticsForecastStart.route?.route?.length > 0 && tacticsForecastStart.preview?.next && tacticsForecastStart.routeHud?.includes(tacticsForecastStart.route?.label || '') && tacticsForecastStart.routeHud?.includes(tacticsForecastStart.preview?.label || '') && /NEXT/.test(tacticsForecastStart.preview?.label || '') && tacticsForecastStart.coverHud && tacticsForecastStart.momentumHud !== undefined && /^\d+%/.test(tacticsForecastStart.surgeHud || ''), `tactics mode should forecast enemy intent, blast windows, cover, momentum, surge, route intel, and next-step preview: ${JSON.stringify(tacticsForecastStart)}`);
   assert(tacticsRouteNext && tacticsRoutePreview.next?.x === tacticsRouteNext.x && tacticsRoutePreview.next?.y === tacticsRouteNext.y && /NEXT/.test(tacticsRoutePreview.label || '') && Number(tacticsRoutePreview.momentumGain || 0) >= 1 && tacticsRouteState.before?.hud?.route?.includes(tacticsRoutePreview.label || '') && tacticsRouteState.after?.player?.x === tacticsRouteNext.x && tacticsRouteState.after?.player?.y === tacticsRouteNext.y && Number(tacticsRouteState.after?.momentum || 0) >= Number(tacticsRouteState.before?.momentum || 0) + Number(tacticsRoutePreview.momentumGain || 0) && Number(tacticsRouteState.after?.surge || 0) > Number(tacticsRouteState.before?.surge || 0) && tacticsRouteState.after?.route?.label && tacticsRouteState.after?.hud?.route?.includes(tacticsRouteState.after?.route?.label || ''), `tactics route debug should preview the next step, move along it, and reward momentum/surge: ${JSON.stringify(tacticsRouteState)}`);
   assert(tacticsBlockedState.result?.blocked && tacticsBlockedState.after?.player?.x === tacticsBlockedState.before?.player?.x && tacticsBlockedState.after?.player?.y === tacticsBlockedState.before?.player?.y && tacticsBlockedState.after?.player?.ap === tacticsBlockedState.before?.player?.ap && tacticsBlockedState.after?.turn === tacticsBlockedState.before?.turn && tacticsBlockedState.after?.blocked?.flash > 0 && /BLOCKED/.test(tacticsBlockedState.after?.blocked?.label || '') && /无法通行/.test(tacticsBlockedState.after?.message || '') && tacticsBlockedState.feedback?.lastTone === 'danger' && tacticsBlockedState.stageTone === 'danger' && /BLOCKED/.test(tacticsBlockedState.stageLabel || ''), `tactics blocked movement should keep turn state and surface readable danger feedback: ${JSON.stringify(tacticsBlockedState)}`);
   assert(tacticsBlastBeforeTargets.length >= 2 && Number(tacticsBlastState.after?.player?.ap || 0) >= Number(tacticsBlastState.before?.player?.ap || 0) && Number(tacticsBlastState.after?.momentum || 0) > Number(tacticsBlastState.before?.momentum || 0) && Number(tacticsBlastState.after?.combo || 0) >= 1 && tacticsSurgedDuringBlast && /^\d+%\/\d+$/.test(tacticsBlastState.after?.hud?.surge || '') && tacticsJammedAfterBlast && tacticsKilledDuringBlast, `tactics phase blast should pierce targets, refund AP, trigger surge, build combo/momentum, kill, and jam survivors: ${JSON.stringify(tacticsBlastState)}`);
+  assert(
+    tacticsCounterState.before?.preview?.counterReady &&
+      /NEXT COUNTER/.test(tacticsCounterState.before?.preview?.label || '') &&
+      tacticsCounterState.before?.hud?.route?.includes('NEXT COUNTER') &&
+      Number(tacticsCounterState.after?.counters || 0) === Number(tacticsCounterState.before?.counters || 0) + 1 &&
+      Number(tacticsCounterState.after?.player?.hp || 0) >= Number(tacticsCounterState.before?.player?.hp || 0) &&
+      Number(tacticsCounterState.after?.player?.shield || 0) > Number(tacticsCounterState.before?.player?.shield || 0) &&
+      Number(tacticsCounterState.after?.momentum || 0) >= Number(tacticsCounterState.before?.momentum || 0) &&
+      Number(tacticsCounterState.after?.surge || 0) > Number(tacticsCounterState.before?.surge || 0) &&
+      Number(tacticsCounterState.after?.combo || 0) >= 1 &&
+      tacticsCounterState.after?.lastHazard?.evaded &&
+      tacticsCounterState.after?.lastHazard?.counter?.triggered &&
+      Number(tacticsCounterState.after?.counter?.flash || 0) > 0 &&
+      /COUNTER|PERFECT/.test(tacticsCounterState.after?.counter?.label || '') &&
+      (Number(tacticsCounterTargetAfter.hp || 0) < Number(tacticsCounterTargetBefore.hp || 0) || Number(tacticsCounterTargetAfter.disrupted || 0) > Number(tacticsCounterTargetBefore.disrupted || 0)) &&
+      tacticsCounterState.feedback?.lastTone === 'special' &&
+      /COUNTER EVADE|PERFECT EVADE/.test(tacticsCounterState.feedback?.lastLabel || '') &&
+      tacticsCounterState.stageTone === 'special' &&
+      /COUNTER EVADE|PERFECT EVADE/.test(tacticsCounterState.stageLabel || '') &&
+      tacticsCounterState.achieved,
+    `tactics counter evade should reward reading danger previews with shield, momentum, surge, enemy disruption, feedback, and achievement credit: ${JSON.stringify(tacticsCounterState)}`
+  );
   assert(tacticsDangerState.before?.forecast?.dangerCount > 0 && tacticsDangerState.after?.dangerSteps > tacticsDangerState.before?.dangerSteps && tacticsDangerState.after?.suppression > tacticsDangerState.before?.suppression && tacticsDangerState.after?.player?.hp < tacticsDangerState.before?.player?.hp && tacticsDangerState.after?.lastHazard?.pressure > 0 && tacticsDangerState.after?.hud?.suppression === tacticsDangerState.after?.suppression + '%', `tactics dangerous movement should convert forecasted zones into readable suppression pressure: ${JSON.stringify(tacticsDangerState)}`);
   assert(tacticsForecastAfterAction.dangerCount > 0 && tacticsForecastAfterAction.coverHud && tacticsForecastAfterAction.momentumHud !== undefined && tacticsForecastAfterAction.comboHud && tacticsForecastAfterAction.surgeHud && tacticsForecastAfterAction.suppressionHud && tacticsForecastAfterAction.routeHud?.includes(tacticsForecastAfterAction.preview?.label || '') && tacticsJammedIntent, `tactics mode should expose post-action JAM, cover, momentum, combo, surge, suppression, and route preview forecast: ${JSON.stringify(tacticsForecastAfterAction)}`);
   assert(tacticsState.nonBlank && Number(tacticsState.ap) >= 0 && tacticsState.action && tacticsState.cover && tacticsState.momentum !== undefined && tacticsState.combo && tacticsState.surge && tacticsState.suppression && tacticsState.route && tacticsState.debug?.route?.length > 0, `tactics mode should render and accept enhanced actions: ${JSON.stringify(tacticsState)}`);
@@ -4886,6 +4911,7 @@ async function run() {
     tacticsRouteState,
     tacticsBlockedState,
     tacticsBlastState,
+    tacticsCounterState,
     tacticsDangerState,
     tacticsForecastAfterAction,
     tacticsState,
@@ -5017,6 +5043,7 @@ function summarizeSmokeResult(result) {
         route: result.tacticsState?.route,
         preview: result.tacticsRouteState?.before?.preview?.label,
         blocked: result.tacticsBlockedState?.after?.blocked?.label,
+        counters: result.tacticsCounterState?.after?.counters,
         surgeTriggered: Number(result.tacticsBlastState?.after?.surges || 0) > Number(result.tacticsBlastState?.before?.surges || 0),
         routeSurgeGain: Number(result.tacticsRouteState?.after?.surge || 0) - Number(result.tacticsRouteState?.before?.surge || 0),
         defeatRecorded: result.tacticsLossState?.latestRun?.game === 'tactics'

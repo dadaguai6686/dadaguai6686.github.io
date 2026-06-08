@@ -5324,7 +5324,7 @@ function init() {
         <div class="arcade-profile-grid">
           <span>完成度 <strong id="premium-profile-completion">0%</strong></span>
           <span>奖牌 <strong id="premium-profile-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-profile-achievements">0/30</strong></span>
+          <span>成就 <strong id="premium-profile-achievements">0/31</strong></span>
           <span>最近 <strong id="premium-profile-latest">--</strong></span>
         </div>
         <button type="button" class="arcade-profile-action" id="premium-profile-target" data-profile-target-game="survivor">
@@ -5424,7 +5424,7 @@ function init() {
         </div>
         <div class="arcade-director-meters" aria-label="街机完成度">
           <span>奖牌 <strong id="premium-director-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-director-achievements">0/30</strong></span>
+          <span>成就 <strong id="premium-director-achievements">0/31</strong></span>
           <span>完成度 <strong id="premium-director-completion">0%</strong></span>
         </div>
         <button type="button" class="arcade-director-action" id="premium-director-start" data-target-game="survivor">
@@ -5949,6 +5949,7 @@ function init() {
       { id: 'tactics_sweep', label: '战术清场', desc: '裂隙战术中击破全部敌人' },
       { id: 'tactics_clean', label: '无损机甲', desc: '高装甲完成裂隙战术' },
       { id: 'tactics_surge', label: '相位超载', desc: '裂隙战术中触发一次战术脉冲返还' },
+      { id: 'tactics_counter', label: '预判反制', desc: '裂隙战术中完美规避危险格并反击' },
       { id: 'runner_contract', label: '航线承包', desc: '主线远征完成一张航线合约' },
       { id: 'runner_final', label: '星门远征', desc: '通关主线最终关' },
       { id: 'contract_clear', label: '契约猎手', desc: '完成任意街机契约' },
@@ -6974,7 +6975,7 @@ function init() {
         drift: [['gates', '弯道'], ['bestCombo', '连段', 'x'], ['overtakes', '超车'], ['nearMisses', '擦车'], ['phaseUses', '相位']],
         heist: [['steps', '步数'], ['bestChain', '潜行链'], ['loot', '缓存'], ['security', '警戒', '%'], ['hacksCompleted', '破解']],
         chain: [['movesLeft', '余步'], ['combo', '连锁'], ['mult', '倍率', 'x'], ['phase', '阶段'], ['recipes', '配方']],
-        tactics: [['turns', '回合'], ['hp', '装甲'], ['kills', '击破'], ['combo', '连段', 'x'], ['surges', '脉冲']]
+        tactics: [['turns', '回合'], ['hp', '装甲'], ['kills', '击破'], ['combo', '连段', 'x'], ['counters', '反制'], ['surges', '脉冲']]
       }[game] || [];
       return spec
         .map(([key, label, suffix = '']) => {
@@ -14557,6 +14558,10 @@ function init() {
       combo: 0,
       surge: 0,
       surges: 0,
+      counters: 0,
+      counterFlash: 0,
+      counterLine: null,
+      lastCounter: '',
       suppression: 0,
       dangerSteps: 0,
       evades: 0,
@@ -14622,6 +14627,10 @@ function init() {
       tactics.combo = 0;
       tactics.surge = 0;
       tactics.surges = 0;
+      tactics.counters = 0;
+      tactics.counterFlash = 0;
+      tactics.counterLine = null;
+      tactics.lastCounter = '';
       tactics.suppression = 0;
       tactics.dangerSteps = 0;
       tactics.evades = 0;
@@ -14774,6 +14783,27 @@ function init() {
       return plans[0] || { target: null, route: [], risk: 0, score: 0, next: null, label: 'NO ROUTE' };
     }
 
+    function tacticsCounterTargets(x = tactics.player.x, y = tactics.player.y, dangerCell = null) {
+      return livingTacticsEnemies()
+        .filter(enemy => enemy.disrupted <= 0)
+        .map(enemy => {
+          const dist = Math.abs(enemy.x - x) + Math.abs(enemy.y - y);
+          const aligned = (enemy.x === x || enemy.y === y) && tacticsLineClear(enemy.x, enemy.y, x, y);
+          let priority = 0;
+          if (aligned) priority += enemy.type === 'turret' ? 7 : 4;
+          if (dist <= 1) priority += enemy.type === 'warden' ? 6 : 5;
+          else if (enemy.type !== 'turret' && dist <= 3) priority += 4 - dist;
+          if (dangerCell?.tone === 'impact') priority += 5;
+          if (dangerCell?.tone === 'lane' && aligned) priority += 3;
+          if (enemy.type === 'warden') priority += 1;
+          return { enemy, dist, priority };
+        })
+        .filter(item => item.priority > 0)
+        .sort((a, b) => b.priority - a.priority || a.dist - b.dist)
+        .slice(0, 2)
+        .map(item => item.enemy);
+    }
+
     function tacticsStepPreview(route = tacticsRoutePlan(), dangerCells = []) {
       const next = route?.next || null;
       if (!next) {
@@ -14812,17 +14842,21 @@ function init() {
         : Math.max(0, momentumGain) * 8;
       const core = tactics.cores.find(item => !item.taken && item.x === next.x && item.y === next.y);
       const exitReady = tactics.player.cores >= 3 && next.x === tactics.exit.x && next.y === tactics.exit.y;
-      const reward = exitReady ? '撤离点' : core ? '数据核心' : cover.level > 0 ? `${cover.label} 掩体` : risk <= 1 ? '低风险推进' : '压制区推进';
-      const tone = hpLoss > 0 ? 'danger' : pressure > 0 ? 'warn' : core || exitReady ? 'objective' : cover.level > 0 ? 'safe' : 'route';
+      const counterTargets = evaded && dangerCell ? tacticsCounterTargets(next.x, next.y, dangerCell) : [];
+      const counterReady = counterTargets.length > 0;
+      const reward = counterReady ? `反制窗口 ${counterTargets.length}` : exitReady ? '撤离点' : core ? '数据核心' : cover.level > 0 ? `${cover.label} 掩体` : risk <= 1 ? '低风险推进' : '压制区推进';
+      const tone = counterReady ? 'counter' : hpLoss > 0 ? 'danger' : pressure > 0 ? 'warn' : core || exitReady ? 'objective' : cover.level > 0 ? 'safe' : 'route';
       const label = hpLoss > 0
         ? `NEXT -${hpLoss}HP`
         : pressure > 0
           ? `NEXT SUP +${Math.min(100, pressure * 12)}%`
-          : core
-            ? 'NEXT CORE'
-            : exitReady
-              ? 'NEXT EXIT'
-              : `NEXT ΔM+${momentumGain}`;
+          : counterReady
+            ? 'NEXT COUNTER'
+            : core
+              ? 'NEXT CORE'
+              : exitReady
+                ? 'NEXT EXIT'
+                : `NEXT ΔM+${momentumGain}`;
       return {
         next: { x: next.x, y: next.y },
         label,
@@ -14835,6 +14869,8 @@ function init() {
         hpLoss,
         momentumGain,
         surgeGain,
+        counterReady,
+        counterTargets: counterTargets.map(enemy => enemy.id),
         evaded,
         reward
       };
@@ -14985,6 +15021,10 @@ function init() {
         label = '火力锁定';
         tone = 'danger';
         suggestion = tactics.player.charge > 0 ? '爆破或撤离' : '撤离或架盾';
+      } else if (preview?.counterReady) {
+        label = '反制窗口';
+        tone = 'attack';
+        suggestion = '踩预判线规避反击';
       } else if (blastTargets.length > 0 && tactics.player.charge > 0) {
         label = `可爆破 ${Math.min(2, blastTargets.length)}`;
         tone = 'attack';
@@ -15081,7 +15121,7 @@ function init() {
       if (routeEl) {
         const preview = forecast.preview || tacticsStepPreview(route, forecast.dangerCells);
         routeEl.textContent = `${route.label} · ${preview.label}`;
-        routeEl.style.color = preview.tone === 'danger' ? '#EF4444' : preview.tone === 'warn' ? '#FBBF24' : preview.tone === 'objective' ? '#DDD6FE' : '#A7F3D0';
+        routeEl.style.color = preview.tone === 'danger' ? '#EF4444' : preview.tone === 'warn' ? '#FBBF24' : preview.tone === 'objective' ? '#DDD6FE' : preview.tone === 'counter' ? '#FDE68A' : '#A7F3D0';
         routeEl.title = `${preview.reward} · ${preview.cover?.label || 'OPEN'} · 风险 ${preview.risk}`;
       }
       const actionBtn = document.getElementById('premium-tactics-action');
@@ -15123,6 +15163,57 @@ function init() {
       return { raw: amount, pressured: pressuredAmount, mitigated, absorbed, cover };
     }
 
+    function triggerTacticsCounter(dangerCell, hazard = {}, options = {}) {
+      if (!dangerCell || tactics.won || tactics.lost) return null;
+      const x = Number.isFinite(options.x) ? options.x : tactics.player.x;
+      const y = Number.isFinite(options.y) ? options.y : tactics.player.y;
+      const followedRoute = !!options.followedRoute;
+      const cover = tacticsCoverProfile(x, y);
+      const targets = tacticsCounterTargets(x, y, dangerCell);
+      const before = targets.map(enemy => ({ id: enemy.id, hp: enemy.hp, disrupted: enemy.disrupted || 0 }));
+      const baseDamage = 16 + Number(cover.level || 0) * 5 + Math.min(12, Number(tactics.momentum || 0) * 2) + (followedRoute ? 6 : 0) + (dangerCell.tone === 'impact' ? 6 : 0);
+      let killed = 0;
+      targets.forEach(enemy => {
+        const result = damageTacticsEnemy(enemy, baseDamage);
+        if (result.killed) killed++;
+        else enemy.disrupted = Math.max(enemy.disrupted || 0, 2);
+      });
+      tactics.counters = Number(tactics.counters || 0) + 1;
+      tactics.combo = Math.max(1, Number(tactics.combo || 0) + (targets.length ? 1 : 0));
+      tactics.momentum = clamp(Number(tactics.momentum || 0) + 1 + targets.length + (followedRoute ? 1 : 0), 0, 9);
+      tactics.player.shield = Math.min(42, Number(tactics.player.shield || 0) + 5 + Number(cover.level || 0) * 3 + (targets.length ? 2 : 0));
+      awardTacticsSurge(14 + targets.length * 7 + Number(cover.level || 0) * 4 + (followedRoute ? 4 : 0), 'counter');
+      tactics.lastAction = 'counter';
+      tactics.lastCounter = targets.length ? `COUNTER ${targets.length}T` : 'PERFECT EVADE';
+      tactics.counterFlash = 14;
+      const playerPoint = tacticsCellCenter(x, y);
+      const targetPoint = targets[0] ? tacticsCellCenter(targets[0].x, targets[0].y) : playerPoint;
+      tactics.counterLine = {
+        from: playerPoint,
+        to: targetPoint,
+        cell: { x, y },
+        targetIds: targets.map(enemy => enemy.id)
+      };
+      tactics.message = targets.length
+        ? `完美规避反击：瘫痪 ${targets.length} 目标${killed ? ` · 击破 ${killed}` : ''}`
+        : '完美规避：压制火力转化为护盾';
+      unlockAchievement('tactics_counter');
+      triggerPremiumFeedback('special', { label: targets.length ? 'COUNTER EVADE' : 'PERFECT EVADE', throttleMs: 120 });
+      return {
+        triggered: true,
+        label: tactics.lastCounter,
+        targets: targets.map(enemy => enemy.id),
+        before,
+        after: targets.map(enemy => ({ id: enemy.id, hp: enemy.hp, disrupted: enemy.disrupted || 0 })),
+        damage: baseDamage,
+        killed,
+        cover: cover.label,
+        followedRoute,
+        hazardTone: dangerCell.tone,
+        pressure: Number(hazard.pressure || 0)
+      };
+    }
+
     function resolveTacticsHazardStep(dangerCell, risk = 0, cover = tacticsCoverProfile(), followedRoute = false) {
       const severityMap = { lane: 1, adjacent: 2, move: 3, impact: 5 };
       const severity = dangerCell ? (severityMap[dangerCell.tone] || 2) : 0;
@@ -15138,7 +15229,9 @@ function init() {
         tactics.evades = Math.min(9, Number(tactics.evades || 0) + 1);
         tactics.suppression = Math.max(0, Number(tactics.suppression || 0) - 14);
         awardTacticsSurge(6 + Number(cover.level || 0) * 4 + (followedRoute ? 4 : 0), 'evasion');
-        tactics.lastHazard = { tone: dangerCell?.tone || 'risk', risk, pressure: 0, shieldLoss: 0, hpLoss: 0, evaded: true };
+        const hazard = { tone: dangerCell?.tone || 'risk', risk, pressure: 0, shieldLoss: 0, hpLoss: 0, evaded: true };
+        const counter = triggerTacticsCounter(dangerCell, hazard, { x: tactics.player.x, y: tactics.player.y, followedRoute });
+        tactics.lastHazard = { ...hazard, counter };
         return tactics.lastHazard;
       }
       tactics.dangerSteps = Number(tactics.dangerSteps || 0) + 1;
@@ -15185,12 +15278,12 @@ function init() {
       if (tactics.won || tactics.recorded) return;
       tactics.won = true;
       tactics.recorded = true;
-      const score = Math.max(250, 800 + tactics.player.hp * 8 + tactics.kills * 180 + tactics.player.cores * 260 + tactics.momentum * 45 + tactics.combo * 80 + tactics.surges * 120 + Math.floor(tactics.surge) - tactics.turn * 22);
+      const score = Math.max(250, 800 + tactics.player.hp * 8 + tactics.kills * 180 + tactics.player.cores * 260 + tactics.momentum * 45 + tactics.combo * 80 + tactics.surges * 120 + Number(tactics.counters || 0) * 95 + Math.floor(tactics.surge) - tactics.turn * 22);
       localStorage.setItem(tactics.bestKey, String(Math.max(Number(localStorage.getItem(tactics.bestKey) || 0), Math.floor(score))));
       unlockAchievement('tactics_clear');
       if (tactics.player.hp >= 80) unlockAchievement('tactics_clean');
       if (livingTacticsEnemies().length === 0) unlockAchievement('tactics_sweep');
-      recordPremiumResult('tactics', score, { turns: tactics.turn, hp: tactics.player.hp, kills: tactics.kills, combo: tactics.combo, surges: tactics.surges, runVariant: tactics.variant });
+      recordPremiumResult('tactics', score, { turns: tactics.turn, hp: tactics.player.hp, kills: tactics.kills, combo: tactics.combo, counters: Number(tactics.counters || 0), surges: tactics.surges, runVariant: tactics.variant });
       tactics.message = `撤离成功 · 评分 ${Math.floor(score)}`;
     }
 
@@ -15198,7 +15291,7 @@ function init() {
       if (tactics.won || tactics.recorded) return;
       tactics.lost = true;
       tactics.recorded = true;
-      const score = Math.max(80, 160 + tactics.player.cores * 160 + tactics.kills * 95 + tactics.momentum * 24 + tactics.combo * 36 + tactics.surges * 80 - tactics.turn * 18);
+      const score = Math.max(80, 160 + tactics.player.cores * 160 + tactics.kills * 95 + tactics.momentum * 24 + tactics.combo * 36 + tactics.surges * 80 + Number(tactics.counters || 0) * 50 - tactics.turn * 18);
       localStorage.setItem(tactics.bestKey, String(Math.max(Number(localStorage.getItem(tactics.bestKey) || 0), Math.floor(score))));
       recordPremiumResult('tactics', score, {
         outcome: 'down',
@@ -15208,6 +15301,7 @@ function init() {
         cores: tactics.player.cores,
         kills: tactics.kills,
         combo: tactics.combo,
+        counters: Number(tactics.counters || 0),
         surges: tactics.surges,
         momentum: tactics.momentum,
         runVariant: tactics.variant
@@ -15470,6 +15564,7 @@ function init() {
           danger: '#EF4444',
           warn: '#FBBF24',
           objective: '#A78BFA',
+          counter: '#FDE68A',
           safe: '#34D399',
           route: '#BAE6FD',
           idle: '#94A3B8'
@@ -15510,6 +15605,30 @@ function init() {
         ctx.fillText(tactics.blockedLabel || 'BLOCKED', bx + 6, Math.max(12, by - 4), tactics.tile + 24);
         ctx.restore();
         tactics.blockedFlash = Math.max(0, Number(tactics.blockedFlash || 0) - 1);
+      }
+      if (Number(tactics.counterFlash || 0) > 0 && tactics.counterLine) {
+        const alpha = clamp(Number(tactics.counterFlash || 0) / 14, 0, 1);
+        const line = tactics.counterLine;
+        ctx.save();
+        ctx.globalAlpha = 0.28 + alpha * 0.62;
+        ctx.strokeStyle = '#FDE68A';
+        ctx.fillStyle = '#FDE68A';
+        ctx.lineWidth = 2 + alpha * 3;
+        ctx.shadowColor = '#FDE68A';
+        ctx.shadowBlur = 14;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(line.from.x, line.from.y);
+        ctx.lineTo(line.to.x, line.to.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.arc(line.from.x, line.from.y, 16 + (1 - alpha) * 18, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.font = '900 9px JetBrains Mono, monospace';
+        ctx.fillText(tactics.lastCounter || 'COUNTER', Math.min(c.width - 120, line.from.x + 12), Math.max(16, line.from.y - 14));
+        ctx.restore();
+        tactics.counterFlash = Math.max(0, Number(tactics.counterFlash || 0) - 1);
       }
       const intentMap = new Map(forecast.intents.map(intent => [intent.id, intent]));
 
@@ -15602,7 +15721,7 @@ function init() {
 
       ctx.fillStyle = '#fff';
       ctx.font = '800 12px JetBrains Mono, monospace';
-      ctx.fillText(`SHIELD ${Math.round(p.shield)} · CHARGE ${p.charge} · MOM ${tactics.momentum} · COMBO ${tactics.combo}x · SUP ${Math.floor(Number(tactics.suppression || 0))}%`, 18, 24);
+      ctx.fillText(`SHIELD ${Math.round(p.shield)} · CHARGE ${p.charge} · MOM ${tactics.momentum} · COMBO ${tactics.combo}x · CNT ${Number(tactics.counters || 0)} · SUP ${Math.floor(Number(tactics.suppression || 0))}%`, 18, 24);
       ctx.fillStyle = forecast.tone === 'danger' ? '#FCA5A5' : forecast.tone === 'warn' ? '#FDE68A' : forecast.tone === 'attack' ? '#DDD6FE' : '#A7F3D0';
       ctx.font = '800 11px JetBrains Mono, monospace';
       ctx.fillText(`INTEL ${forecast.label} · ${forecast.dangerCells.length} ZONES · ${routePlan.label}`, 18, 42);
@@ -15641,6 +15760,12 @@ function init() {
         combo: tactics.combo,
         surge: Math.floor(Number(tactics.surge || 0)),
         surges: tactics.surges,
+        counters: Number(tactics.counters || 0),
+        counter: {
+          flash: Number(tactics.counterFlash || 0),
+          label: tactics.lastCounter || '',
+          line: tactics.counterLine ? { ...tactics.counterLine } : null
+        },
         suppression: Math.floor(Number(tactics.suppression || 0)),
         dangerSteps: Number(tactics.dangerSteps || 0),
         evades: Number(tactics.evades || 0),
@@ -16525,6 +16650,53 @@ function init() {
             return {
               before,
               after: tacticsDebugState()
+            };
+          },
+          forceTacticsCounter: () => {
+            switchPremiumGame('tactics');
+            newTactics({ shouldFocus: true });
+            tactics.player = { ...tactics.player, x: 6, y: 1, hp: 100, shield: 4, ap: 3, baseAp: 3, charge: 1, cores: 1 };
+            tactics.cover.add(tacticsKey(7, 1));
+            tactics.cores = [
+              { x: 7, y: 1, taken: false },
+              { x: 1, y: 1, taken: true },
+              { x: 8, y: 6, taken: true }
+            ];
+            tactics.enemies = [
+              { id: 'turret-a', type: 'turret', x: 8, y: 1, hp: 54, maxHp: 90, disrupted: 0 },
+              { id: 'hunter-a', type: 'hunter', x: 2, y: 6, hp: 70, maxHp: 70, disrupted: 0 }
+            ];
+            tactics.momentum = 6;
+            tactics.combo = 0;
+            tactics.surge = 0;
+            tactics.surges = 0;
+            tactics.counters = 0;
+            tactics.counterFlash = 0;
+            tactics.counterLine = null;
+            tactics.lastCounter = '';
+            tactics.suppression = 28;
+            tactics.evades = 0;
+            tactics.dangerSteps = 0;
+            tactics.lastHazard = null;
+            tactics.message = '调试：预判反制窗口';
+            setTacticsUi();
+            drawTactics();
+            const before = tacticsDebugState();
+            moveTactics(1, 0);
+            setTacticsUi();
+            drawTactics();
+            return {
+              before,
+              after: tacticsDebugState(),
+              feedback: {
+                lastTone: premiumFeedback.lastTone,
+                lastLabel: premiumFeedback.lastLabel,
+                tones: { ...premiumFeedback.tones },
+                visualTriggers: premiumFeedback.visualTriggers
+              },
+              stageTone: document.getElementById('premium-game-stage')?.dataset.feedbackTone || '',
+              stageLabel: document.getElementById('premium-game-stage')?.dataset.feedback || '',
+              achieved: (career.achievements || []).includes('tactics_counter')
             };
           },
           forceTacticsDangerStep: () => {
