@@ -34,7 +34,7 @@
   <link rel="apple-touch-icon" href="/assets/atherix-icon-192.png">
   <link rel="preload" href="/style.css?v=20260608-quality-v7" as="style">
   <link rel="preload" href="/lucide.min.js" as="script">
-  <link rel="preload" href="/app.js?v=20260608-quality-v15" as="script">
+  <link rel="preload" href="/app.js?v=20260608-quality-v18" as="script">
   <!-- Stylesheets -->
   <link rel="stylesheet" href="/style.css?v=20260608-quality-v7">
   <link rel="manifest" href="/manifest.webmanifest">
@@ -67,27 +67,27 @@
         <span>Atherix</span>
       </div>
       <div class="nav-links">
-        <button type="button" class="nav-item active" data-target="home">
+        <button type="button" class="nav-item active" data-target="home" aria-label="打开首页" title="首页">
           <i data-lucide="layout-grid">🏠</i>
           <span>首页</span>
         </button>
-        <button type="button" class="nav-item" data-target="blog">
+        <button type="button" class="nav-item" data-target="blog" aria-label="打开博客" title="博客">
           <i data-lucide="book-open">📚</i>
           <span>博客</span>
         </button>
-        <button type="button" class="nav-item" data-target="toolbox">
+        <button type="button" class="nav-item" data-target="toolbox" aria-label="打开工具箱" title="工具箱">
           <i data-lucide="wrench">🛠️</i>
           <span>工具箱</span>
         </button>
-        <button type="button" class="nav-item" data-target="game">
+        <button type="button" class="nav-item" data-target="game" aria-label="打开街机游戏" title="街机游戏">
           <i data-lucide="gamepad-2">🎮</i>
           <span>街机游戏</span>
         </button>
-        <button type="button" class="nav-item" data-target="projects">
+        <button type="button" class="nav-item" data-target="projects" aria-label="打开项目" title="项目">
           <i data-lucide="folder-git-2">💻</i>
           <span>项目</span>
         </button>
-        <button type="button" class="nav-item" data-target="guestbook">
+        <button type="button" class="nav-item" data-target="guestbook" aria-label="打开留言" title="留言">
           <i data-lucide="message-square">💬</i>
           <span>留言</span>
         </button>
@@ -333,7 +333,7 @@
         <div class="blog-main">
           <div class="blog-search-bar">
             <i data-lucide="search" style="color: var(--text-muted);"></i>
-            <input type="text" class="blog-search-input" id="blog-search" placeholder="搜索文章标题、简介或内容...">
+            <input type="search" class="blog-search-input" id="blog-search" placeholder="搜索文章标题、简介或内容..." aria-label="搜索文章标题、简介或内容" autocomplete="off">
           </div>
 
           <div class="blog-insight-panel" id="blog-insight-panel" aria-label="阅读中心">
@@ -1402,6 +1402,6 @@
   <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <!-- Main JavaScript File -->
-  <script src="/app.js?v=20260608-quality-v15"></script>
+  <script src="/app.js?v=20260608-quality-v18"></script>
 </body>
 </html>

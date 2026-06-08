@@ -562,11 +562,19 @@ app.use('/api', (req, res, next) => {
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({
-    ok: true,
-    name: 'atherix-digital-space',
-    env: isProduction ? 'production' : 'development',
-    time: new Date().toISOString()
+  db.healthCheck((err, database) => {
+    const ok = !err && !!database?.ready;
+    res.status(ok ? 200 : 503).json({
+      ok,
+      name: 'atherix-digital-space',
+      env: isProduction ? 'production' : 'development',
+      time: new Date().toISOString(),
+      database: {
+        connected: !!database?.connected,
+        ready: !!database?.ready,
+        lastCheckedAt: database?.lastCheckedAt || null
+      }
+    });
   });
 });
 
@@ -899,10 +907,33 @@ app.get('*', (req, res) => {
 });
 
 // Start Server Listen
-app.listen(PORT, () => {
+const serverSockets = new Set();
+const server = app.listen(PORT, () => {
   console.log(`===================================================`);
   console.log(`  Atherix Digital Space Server is running!`);
   console.log(`  Local Address: http://localhost:${PORT}`);
   console.log(`  Proxy safe relative paths are active.`);
   console.log(`===================================================`);
 });
+
+server.on('connection', (socket) => {
+  serverSockets.add(socket);
+  socket.on('close', () => serverSockets.delete(socket));
+});
+
+function shutdown(signal) {
+  console.log(`[server] ${signal} received, closing HTTP server and SQLite connection...`);
+  server.close(() => {
+    db.closeGracefully((err) => {
+      if (err) console.error('[server] SQLite close error:', err.message);
+      process.exit(err ? 1 : 0);
+    });
+  });
+  setTimeout(() => {
+    serverSockets.forEach(socket => socket.destroy());
+  }, 750);
+  setTimeout(() => process.exit(1), 8000);
+}
+
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));

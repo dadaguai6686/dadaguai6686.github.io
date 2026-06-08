@@ -7,6 +7,12 @@ const bcrypt = require('bcryptjs');
 const dbPath = path.resolve(process.env.DB_PATH || path.join(__dirname, 'blog.db'));
 const dbDir = path.dirname(dbPath);
 const isProduction = process.env.NODE_ENV === 'production';
+const dbStatus = {
+  connected: false,
+  ready: false,
+  error: null,
+  lastCheckedAt: null
+};
 
 function passwordComplexityScore(password) {
   return [
@@ -45,16 +51,87 @@ if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
 }
 
+function rememberDbError(err) {
+  if (!err) return;
+  dbStatus.ready = false;
+  dbStatus.error = err.message || String(err);
+}
+
+function markDbReady() {
+  dbStatus.connected = true;
+  dbStatus.ready = true;
+  dbStatus.error = null;
+}
+
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
+    rememberDbError(err);
     console.error('Error connecting to SQLite database:', err.message);
   } else {
+    dbStatus.connected = true;
     console.log('Connected to the SQLite database blog.db');
   }
 });
 
+try {
+  db.configure('busyTimeout', 5000);
+} catch (err) {
+  rememberDbError(err);
+}
+
+function dbHealthSnapshot() {
+  return {
+    connected: dbStatus.connected,
+    ready: dbStatus.ready,
+    lastCheckedAt: dbStatus.lastCheckedAt,
+    error: dbStatus.error
+  };
+}
+
+function healthCheck(callback) {
+  dbStatus.lastCheckedAt = new Date().toISOString();
+  let settled = false;
+  const finish = (err, snapshot) => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    callback(err, snapshot);
+  };
+  const timer = setTimeout(() => {
+    const err = new Error('SQLite health query timed out.');
+    rememberDbError(err);
+    finish(err, dbHealthSnapshot());
+  }, 1500);
+  db.get('SELECT 1 AS ok', (err, row) => {
+    if (err || row?.ok !== 1) {
+      rememberDbError(err || new Error('SQLite health query failed.'));
+      finish(err || new Error('SQLite health query failed.'), dbHealthSnapshot());
+      return;
+    }
+    markDbReady();
+    finish(null, dbHealthSnapshot());
+  });
+}
+
+function closeGracefully(callback = () => {}) {
+  db.close((err) => {
+    if (err) {
+      rememberDbError(err);
+      callback(err);
+      return;
+    }
+    dbStatus.connected = false;
+    dbStatus.ready = false;
+    callback(null);
+  });
+}
+
 // Run database migrations/initialization sequentially
 db.serialize(() => {
+  db.run('PRAGMA busy_timeout = 5000', rememberDbError);
+  db.run('PRAGMA journal_mode = WAL', rememberDbError);
+  db.run('PRAGMA foreign_keys = ON', rememberDbError);
+
   // 1. Users Table
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
@@ -318,6 +395,15 @@ db.serialize(() => {
       console.log('Successfully seeded initial comments.');
     }
   });
+
+  db.get('SELECT 1 AS ok', (err, row) => {
+    if (err || row?.ok !== 1) rememberDbError(err || new Error('SQLite startup health query failed.'));
+    else markDbReady();
+  });
 });
+
+db.healthCheck = healthCheck;
+db.healthSnapshot = dbHealthSnapshot;
+db.closeGracefully = closeGracefully;
 
 module.exports = db;

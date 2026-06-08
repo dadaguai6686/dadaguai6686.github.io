@@ -1,4 +1,4 @@
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -10,9 +10,14 @@ const dbPath = path.join(tempDir, 'blog.db');
 const allowedOrigin = 'https://example.test';
 const smokeAdminPassword = 'ApiSmoke#20260608!';
 const smokeJwtSecret = 'ApiSmokeJwtSecret_20260608_7c2f9d8b41a6e5c0';
+const traceEnabled = process.env.SMOKE_TRACE === '1';
 
 function wait(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function trace(label) {
+  if (traceEnabled) console.error(`[api-smoke] ${label}`);
 }
 
 async function waitForServer() {
@@ -48,6 +53,20 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+async function stopChild(child) {
+  if (!child || child.exitCode !== null || child.signalCode) return;
+  const exited = new Promise(resolve => child.once('exit', () => resolve(true)));
+  child.kill();
+  const graceful = await Promise.race([exited, wait(2500).then(() => false)]);
+  if (graceful) return;
+  if (process.platform === 'win32') {
+    spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+  } else {
+    child.kill('SIGKILL');
+  }
+  await Promise.race([exited, wait(1500)]);
+}
+
 async function expectProductionStartupFailure(envOverrides, message) {
   const failPort = port + 1;
   const failDir = fs.mkdtempSync(path.join(os.tmpdir(), 'atherix-api-secret-'));
@@ -78,7 +97,7 @@ async function expectProductionStartupFailure(envOverrides, message) {
     assert(exitCode !== null, `${message} should exit`);
     assert(exitCode !== 0, `${message} should fail`);
   } finally {
-    if (!child.killed) child.kill();
+    await stopChild(child);
     fs.rmSync(failDir, { recursive: true, force: true });
   }
 }
@@ -89,10 +108,55 @@ async function assertProductionSecretRequired() {
   await expectProductionStartupFailure({ ADMIN_PASSWORD: 'replace-with-a-strong-password' }, 'production server with placeholder ADMIN_PASSWORD');
 }
 
+async function assertUnhealthyDatabaseReports503() {
+  const failPort = port + 2;
+  const failDir = fs.mkdtempSync(path.join(os.tmpdir(), 'atherix-api-bad-db-'));
+  const child = spawn(process.execPath, ['server.js'], {
+    cwd: path.resolve(__dirname, '..'),
+    env: {
+      ...process.env,
+      NODE_ENV: 'production',
+      PORT: String(failPort),
+      DB_PATH: failDir,
+      ADMIN_USERNAME: 'admin',
+      ADMIN_PASSWORD: smokeAdminPassword,
+      JWT_SECRET: smokeJwtSecret
+    },
+    windowsHide: true,
+    stdio: 'ignore'
+  });
+
+  try {
+    const deadline = Date.now() + 12000;
+    let lastBody = null;
+    while (Date.now() < deadline) {
+      try {
+        const response = await fetch(`http://127.0.0.1:${failPort}/api/health`);
+        lastBody = await response.json().catch(() => null);
+        if (response.status === 503) {
+          assert(lastBody?.ok === false && lastBody?.database?.ready === false, `unhealthy database health body should expose not-ready status: ${JSON.stringify(lastBody)}`);
+          return;
+        }
+      } catch {
+        // Server may still be booting.
+      }
+      await wait(300);
+    }
+    throw new Error(`unhealthy database healthcheck did not return 503: ${JSON.stringify(lastBody)}`);
+  } finally {
+    await stopChild(child);
+    fs.rmSync(failDir, { recursive: true, force: true });
+  }
+}
+
 async function run() {
+  trace('secret checks');
   await assertProductionSecretRequired();
+  trace('bad database healthcheck');
+  await assertUnhealthyDatabaseReports503();
   const staticUploadTestFiles = [];
 
+  trace('spawn main server');
   const child = spawn(process.execPath, ['server.js'], {
     cwd: path.resolve(__dirname, '..'),
     env: {
@@ -110,14 +174,17 @@ async function run() {
   });
 
   try {
+    trace('wait for main server');
     await waitForServer();
 
+    trace('health and headers');
     const health = await fetch(`${baseUrl}/api/health`, {
       headers: { Origin: allowedOrigin }
     });
     assert(health.status === 200, 'health endpoint should return 200');
     const healthBody = await health.json();
     assert(healthBody.ok === true, 'health body should report ok=true');
+    assert(healthBody.database?.connected === true && healthBody.database?.ready === true && healthBody.database?.lastCheckedAt, `health body should expose live SQLite readiness: ${JSON.stringify(healthBody)}`);
     assert(health.headers.get('x-content-type-options') === 'nosniff', 'nosniff header missing');
     assert(health.headers.get('x-frame-options') === 'SAMEORIGIN', 'x-frame-options header missing');
     assert(health.headers.get('cross-origin-opener-policy') === 'same-origin', 'COOP header missing');
@@ -140,6 +207,7 @@ async function run() {
     assert(health.headers.get('access-control-allow-origin') === allowedOrigin, 'allowed CORS origin not echoed');
     assert(health.headers.get('cache-control') === 'no-store', 'API responses should not be cached');
 
+    trace('static shell and discovery');
     const blockedCors = await fetch(`${baseUrl}/api/health`, {
       headers: { Origin: 'https://evil.example' }
     });
@@ -154,9 +222,9 @@ async function run() {
     assert(serviceWorkerText.includes('/feed.xml') && serviceWorkerText.includes('/sitemap.xml'), 'service worker should precache discovery metadata');
     assert(serviceWorkerText.includes('/assets/atherix-og-card.png') && serviceWorkerText.includes('/assets/atherix-icon-512.png'), 'service worker should precache branded PWA assets');
     assert(serviceWorkerText.includes('/assets/atherix-profile-avatar.png') && serviceWorkerText.includes('/assets/project-bento-dashboard.webp') && serviceWorkerText.includes('/assets/project-arcade-suite.webp'), 'service worker should precache local profile and portfolio visual assets');
-    assert(serviceWorkerText.includes('atherix-static-v56-quality'), 'service worker should use the latest quality cache version');
+    assert(serviceWorkerText.includes('atherix-static-v59-quality'), 'service worker should use the latest quality cache version');
     assert(serviceWorkerText.includes('NAVIGATION_FALLBACK_URL') && serviceWorkerText.includes('navigationPreload') && serviceWorkerText.includes('X-Atherix-Offline-Shell'), 'service worker should provide a navigation-preload offline app shell');
-    assert(serviceWorkerText.includes('/style.css?v=20260608-quality-v7') && serviceWorkerText.includes('/app.js?v=20260608-quality-v15'), 'service worker should precache the latest versioned app assets');
+    assert(serviceWorkerText.includes('/style.css?v=20260608-quality-v7') && serviceWorkerText.includes('/app.js?v=20260608-quality-v18'), 'service worker should precache the latest versioned app assets');
     assert(serviceWorkerText.includes('networkFirstCacheFallback') && serviceWorkerText.includes('staleWhileRevalidate') && serviceWorkerText.includes('offlineResponseFor') && serviceWorkerText.includes('cacheResponseQuietly'), 'service worker should use explicit offline-safe caching strategies');
     assert(serviceWorkerText.includes('DISCOVERY_ASSET_PATHS') && serviceWorkerText.includes('/feed.xml') && serviceWorkerText.includes('/sitemap.xml') && serviceWorkerText.includes('/robots.txt'), 'service worker should keep discovery metadata network-first before cache fallback');
     assert(serviceWorkerText.includes('X-Atherix-Offline-Asset') && serviceWorkerText.includes('status: 204'), 'service worker should provide a quiet offline image placeholder');
@@ -166,12 +234,14 @@ async function run() {
     assert(indexText.includes('rel="canonical" href="https://dadaguai6686.github.io/"'), 'index should expose an absolute canonical URL');
     assert(indexText.includes('type="application/rss+xml"'), 'index should link the RSS feed');
     assert(indexText.includes('href="/style.css') && indexText.includes('src="/app.js') && indexText.includes('src="/lucide.min.js"'), 'local app assets should use root-absolute URLs for deep links');
-    assert(indexText.includes('href="/style.css?v=20260608-quality-v7"') && indexText.includes('src="/app.js?v=20260608-quality-v15"'), 'index should reference the latest versioned app assets');
-    assert(indexText.includes('rel="preload" href="/style.css?v=20260608-quality-v7" as="style"') && indexText.includes('rel="preload" href="/app.js?v=20260608-quality-v15" as="script"') && indexText.includes('rel="preload" href="/lucide.min.js" as="script"'), 'index should preload critical local app assets');
+    assert(indexText.includes('href="/style.css?v=20260608-quality-v7"') && indexText.includes('src="/app.js?v=20260608-quality-v18"'), 'index should reference the latest versioned app assets');
+    assert(indexText.includes('rel="preload" href="/style.css?v=20260608-quality-v7" as="style"') && indexText.includes('rel="preload" href="/app.js?v=20260608-quality-v18" as="script"') && indexText.includes('rel="preload" href="/lucide.min.js" as="script"'), 'index should preload critical local app assets');
     assert(indexText.includes('Atherix 高级街机') && indexText.includes('Premium Arcade Suite') && indexText.includes('高级街机生涯实验室'), 'index shell should present the premium arcade suite before runtime hydration');
     assert(indexText.includes('主线跑酷') && indexText.includes('霓虹漂移') && indexText.includes('裂隙战术') && indexText.includes('战术芯片'), 'index shell should advertise the full seven-line arcade career');
     assert(indexText.includes('<strong>29</strong>成就'), 'index shell should expose the current arcade achievement count');
     assert(indexText.includes('arcade-shell-mode-card') && indexText.includes('Cyber Astro-Runner') && indexText.includes('Rift Tactics'), 'index shell should include premium arcade mode cards');
+    assert(indexText.includes('class="nav-item active" data-target="home" aria-label="打开首页"') && indexText.includes('data-target="game" aria-label="打开街机游戏"') && indexText.includes('data-target="guestbook" aria-label="打开留言"'), 'mobile nav buttons should keep explicit accessible labels when text is hidden');
+    assert(indexText.includes('type="search" class="blog-search-input" id="blog-search"') && indexText.includes('aria-label="搜索文章标题、简介或内容"') && indexText.includes('autocomplete="off"'), 'blog search should be a labelled search input, not placeholder-only text');
     assert(!indexText.includes('四个完整街机模式') && !indexText.includes('像素复古街机') && !indexText.includes('经典横版马里奥式'), 'index shell should not regress to the stale prototype arcade copy');
     assert(!indexText.includes('data-mini-game=') && !indexText.includes('id="snake-canvas"') && !indexText.includes('id="breakout-canvas"') && !indexText.includes('id="tile-board"') && !indexText.includes('id="memory-board"'), 'index shell should not ship the old four-mode prototype DOM');
     assert(!indexText.includes('images.unsplash.com'), 'index shell should not depend on Unsplash for default visual assets');
@@ -269,6 +339,7 @@ async function run() {
     const missingToken = await fetch(`${baseUrl}/api/auth/verify`);
     assert(missingToken.status === 401, 'auth verify without token should return 401');
 
+    trace('validation guards');
     const longUsernameLogin = await fetch(`${baseUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -298,6 +369,7 @@ async function run() {
     });
     assert(badWebsite.status === 400, 'javascript: website should be rejected');
 
+    trace('comments and public writes');
     const spamTrap = await fetch(`${baseUrl}/api/comments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -322,6 +394,7 @@ async function run() {
     assert(sanitizedBody.comment.avatar === '👤', 'unsupported avatar should be normalized');
     assert(sanitizedBody.comment.website === 'https://example.com/profile', 'https website should be preserved');
 
+    trace('auth and admin writes');
     const login = await fetch(`${baseUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -502,6 +575,7 @@ async function run() {
     assert(deletedAssetProject.status === 200, 'admin local asset project deletion should succeed');
 
     const uploadDir = path.resolve(__dirname, '..', 'uploads');
+    trace('projects and uploads');
     const beforeUploads = new Set(fs.readdirSync(uploadDir));
     const staticValidUploadName = `smoke-static-${Date.now()}.png`;
     const staticForgedUploadName = `smoke-static-${Date.now()}-forged.png`;
@@ -529,6 +603,7 @@ async function run() {
     const afterUploads = fs.readdirSync(uploadDir).filter(name => !beforeUploads.has(name) && !staticUploadTestFiles.includes(name));
     assert(afterUploads.length === 0, 'rejected forged upload should be removed from uploads directory');
 
+    trace('done');
     return {
       ok: true,
       port,
@@ -569,8 +644,7 @@ async function run() {
       forgedUploadStatus: fakeImageUpload.status
     };
   } finally {
-    child.kill();
-    await wait(300);
+    await stopChild(child);
     for (const fileName of staticUploadTestFiles) {
       fs.rmSync(path.resolve(__dirname, '..', 'uploads', fileName), { force: true });
     }

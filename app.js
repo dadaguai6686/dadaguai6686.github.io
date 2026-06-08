@@ -729,9 +729,11 @@ function init() {
       } else {
         prepareRunnerIdleScreen();
       }
+      window.__atherixRestorePremiumOverlays?.();
     } else {
       initLevelData();
       drawGame();
+      window.__atherixRestorePremiumOverlays?.();
     }
 
     if (!options.skipHash) {
@@ -6395,7 +6397,7 @@ function init() {
     function launchMasteryTarget(game, { announce = true } = {}) {
       if (!game) return;
       if (game === 'runner') {
-        document.querySelector('.arcade-cabinet-bezel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        focusRunnerCabinet();
         if (announce) showToast('已定位到主线远征，冲刺下一枚奖牌', 'info');
         return;
       }
@@ -7683,11 +7685,55 @@ function init() {
       el.dataset.tone = tone;
     }
 
+    function premiumStrategyState() {
+      if (premiumActive === 'heist') {
+        const status = heist.locked ? 'lost' : heist.won ? 'won' : 'running';
+        return {
+          running: status === 'running',
+          paused: false,
+          realtime: false,
+          turn: true,
+          status,
+          stateText: status === 'lost' ? '封锁' : status === 'won' ? '完成' : '潜入中',
+          startLabel: status === 'running' ? '新局' : '再来',
+          startText: status === 'running' ? 'Enter 新局' : 'Enter 再来'
+        };
+      }
+      if (premiumActive === 'chain') {
+        const cleared = chain.finished && chain.score >= chain.target;
+        const status = chain.finished ? (cleared ? 'won' : 'lost') : 'running';
+        return {
+          running: status === 'running',
+          paused: false,
+          realtime: false,
+          turn: true,
+          status,
+          stateText: status === 'won' ? '达标' : status === 'lost' ? '耗尽' : '炼成中',
+          startLabel: status === 'running' ? '新局' : '再来',
+          startText: status === 'running' ? 'Enter 新局' : 'Enter 再来'
+        };
+      }
+      if (premiumActive === 'tactics') {
+        const status = tactics.lost ? 'lost' : tactics.won ? 'won' : 'running';
+        return {
+          running: status === 'running',
+          paused: false,
+          realtime: false,
+          turn: true,
+          status,
+          stateText: status === 'lost' ? '离线' : status === 'won' ? '清场' : '战术中',
+          startLabel: status === 'running' ? '新局' : '再来',
+          startText: status === 'running' ? 'Enter 新局' : 'Enter 再来'
+        };
+      }
+      return { running: false, paused: false, realtime: false, status: 'idle', stateText: '待机', startLabel: '开始', startText: 'Enter 开始' };
+    }
+
     function premiumRealtimeState() {
-      if (premiumActive === 'survivor') return { running: survivor.running, paused: survivor.paused, realtime: true, draft: survivor.draftOpen };
-      if (premiumActive === 'boss') return { running: bossMode.running, paused: bossMode.paused, realtime: true };
-      if (premiumActive === 'drift') return { running: drift.running, paused: drift.paused, realtime: true };
-      return { running: false, paused: false, realtime: false };
+      if (premiumActive === 'survivor') return { running: survivor.running, paused: survivor.paused, realtime: true, draft: survivor.draftOpen, status: survivor.draftOpen ? 'draft' : survivor.paused ? 'paused' : survivor.running ? 'running' : 'idle' };
+      if (premiumActive === 'boss') return { running: bossMode.running, paused: bossMode.paused, realtime: true, status: bossMode.paused ? 'paused' : bossMode.running ? 'running' : 'idle' };
+      if (premiumActive === 'drift') return { running: drift.running, paused: drift.paused, realtime: true, status: drift.paused ? 'paused' : drift.running ? 'running' : 'idle' };
+      return premiumStrategyState();
     }
 
     function updatePremiumMetaControls() {
@@ -7696,8 +7742,12 @@ function init() {
       const state = premiumRealtimeState();
       const activeLabel = premiumTabLabels[premiumActive] || titles[premiumActive] || premiumActive;
       if (startBtn) {
-        startBtn.textContent = state.running ? '重开' : '开始';
-        startBtn.setAttribute('aria-label', `${state.running ? '重开' : '开始'} ${activeLabel}`);
+        const startLabel = state.realtime
+          ? state.draft ? '选择' : state.running ? '重开' : '开始'
+          : state.startLabel || '新局';
+        startBtn.textContent = startLabel;
+        startBtn.disabled = !!state.draft;
+        startBtn.setAttribute('aria-label', `${state.draft ? '升级选择中，请先选择改造' : startLabel} ${activeLabel}`);
       }
       if (pauseBtn) {
         const pauseLabel = state.draft ? '选择中' : state.paused ? '继续' : '暂停';
@@ -7721,11 +7771,11 @@ function init() {
       const stateEl = document.getElementById('premium-input-state');
       const stateText = state.realtime
         ? state.draft ? '升级' : state.paused ? '暂停' : state.running ? '运行' : '待机'
-        : ['heist', 'chain', 'tactics'].includes(premiumActive) ? '策略' : '待机';
+        : state.stateText || '待机';
       readout.dataset.mode = premiumActive;
       readout.dataset.state = state.realtime
         ? state.draft ? 'draft' : state.paused ? 'paused' : state.running ? 'running' : 'idle'
-        : 'turn';
+        : state.status || 'turn';
       if (modeEl) modeEl.textContent = premiumTabLabels[premiumActive] || titles[premiumActive] || premiumActive;
       if (moveEl) moveEl.textContent = config.move || '方向';
       if (actionEl) actionEl.textContent = state.draft ? '选升级' : config.action || 'ACT';
@@ -7733,11 +7783,17 @@ function init() {
         toolEl.textContent = config.tool || '--';
         toolEl.closest('span')?.classList.toggle('is-disabled', !premiumControlAvailable('tool'));
       }
-      if (startEl) startEl.textContent = state.draft ? '1/2/3 选择' : state.running ? 'Enter 重开' : 'Enter 开始';
+      if (startEl) startEl.textContent = state.draft ? '1/2/3 选择' : state.realtime ? state.running ? 'Enter 重开' : 'Enter 开始' : state.startText || 'Enter 新局';
       if (stateEl) stateEl.textContent = stateText;
     }
 
     function startPremiumActiveGame() {
+      if (premiumActive === 'survivor' && survivor.draftOpen) {
+        updatePremiumMetaControls();
+        triggerPremiumFeedback('special', { label: 'CHOOSE UPGRADE' });
+        return false;
+      }
+      pauseRunnerGame({ focusOverlay: false });
       clearPremiumKeys();
       if (premiumActive === 'survivor') startSurvivor();
       if (premiumActive === 'boss') startBoss();
@@ -7747,6 +7803,7 @@ function init() {
       if (premiumActive === 'tactics') newTactics({ shouldFocus: true });
       updatePremiumMetaControls();
       triggerPremiumFeedback('start', { label: `START ${premiumTabLabels[premiumActive] || premiumActive}` });
+      return true;
     }
 
     function togglePremiumActivePause() {
@@ -7808,7 +7865,7 @@ function init() {
     function launchDirectorChallenge() {
       const target = document.getElementById('premium-director-start')?.dataset.targetGame || arcadeDirective().game;
       if (target === 'runner') {
-        document.querySelector('.arcade-cabinet-bezel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        focusRunnerCabinet();
         showToast('已定位到主线远征，请按 Enter 或 START 开始挑战', 'info');
         return;
       }
@@ -7821,7 +7878,7 @@ function init() {
       const target = document.getElementById('premium-league-start')?.dataset.leagueTargetGame || league.activeStage?.game;
       if (!target) return;
       if (target === 'runner') {
-        document.querySelector('.arcade-cabinet-bezel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        focusRunnerCabinet();
         showToast('已定位到联赛主线阶段', 'info');
         return;
       }
@@ -7842,7 +7899,7 @@ function init() {
       const difficultyApplied = setArcadeDifficulty(coach.difficulty, { announce: false });
       const loadoutApplied = setActiveLoadout(coach.loadout, { announce: false });
       if (coach.game === 'runner') {
-        document.querySelector('.arcade-cabinet-bezel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        focusRunnerCabinet();
       } else {
         switchPremiumGame(coach.game);
         stage?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -7857,13 +7914,19 @@ function init() {
     document.getElementById('premium-director-start')?.addEventListener('click', launchDirectorChallenge);
     document.getElementById('premium-cockpit-play')?.addEventListener('click', () => {
       focusStage();
-      startPremiumActiveGame();
+      if (!startPremiumActiveGame()) {
+        showToast('升级选择中：请先选择一项改造', 'info');
+        return;
+      }
       stage?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       showToast(`开局：${premiumTabLabels[premiumActive] || titles[premiumActive] || premiumActive}`, 'success');
     });
     document.getElementById('premium-briefing-start')?.addEventListener('click', () => {
       focusStage();
-      startPremiumActiveGame();
+      if (!startPremiumActiveGame()) {
+        showToast('升级选择中：请先选择一项改造', 'info');
+        return;
+      }
       stage?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       showToast(`作战简报执行：${premiumTabLabels[premiumActive] || titles[premiumActive] || premiumActive}`, 'success');
     });
@@ -7900,7 +7963,10 @@ function init() {
     document.getElementById('premium-touch-start')?.addEventListener('click', () => {
       const wasRunning = premiumRealtimeState().running;
       focusStage();
-      startPremiumActiveGame();
+      if (!startPremiumActiveGame()) {
+        showToast('升级选择中：请先选择一项改造', 'info');
+        return;
+      }
       showToast(`${wasRunning ? '已重开' : '已开始'}：${premiumTabLabels[premiumActive] || titles[premiumActive] || premiumActive}`, 'success');
     });
     document.getElementById('premium-touch-pause')?.addEventListener('click', () => {
@@ -8869,11 +8935,23 @@ function init() {
       if (options) options.innerHTML = '';
     }
 
-    function placeSurvivorDraft(draft = document.getElementById('premium-survivor-draft')) {
+    function suspendSurvivorDraftOverlay() {
+      const draft = document.getElementById('premium-survivor-draft');
+      if (!draft || !survivor.draftOpen) return;
+      moveFocusBeforeHiding(draft, stage);
+      draft.classList.remove('active');
+      draft.setAttribute('aria-hidden', 'true');
+      placeSurvivorDraft(draft, { forceHome: true });
+      updatePremiumMetaControls();
+    }
+
+    function placeSurvivorDraft(draft = document.getElementById('premium-survivor-draft'), options = {}) {
       if (!draft) return;
       const home = document.querySelector('#premium-survivor .mini-playfield-stack');
       const mobile = window.matchMedia?.('(max-width: 768px)').matches;
-      if (survivor.draftOpen && mobile) {
+      if (options.forceHome && home) {
+        if (draft.parentElement !== home) home.appendChild(draft);
+      } else if (survivor.draftOpen && mobile) {
         if (draft.parentElement !== document.body) document.body.appendChild(draft);
       } else if (home && draft.parentElement !== home) {
         home.appendChild(draft);
@@ -11249,6 +11327,7 @@ function init() {
       alertEl.style.color = ['HIGH', 'LOCK', 'LOCKDOWN', 'CAM'].includes(heist.alert)
         ? '#EF4444'
         : (['MID', 'GHOST'].includes(heist.alert) ? '#FBBF24' : '#34D399');
+      if (premiumActive === 'heist') updatePremiumMetaControls();
     }
 
     function newHeist({ shouldFocus = true } = {}) {
@@ -12881,6 +12960,27 @@ function init() {
       return { before, after: chainDebugState() };
     }
 
+    function forceChainFinish(cleared = true) {
+      switchPremiumGame('chain');
+      if (!chain.grid.length) newChain();
+      const before = chainDebugState();
+      chain.finished = false;
+      chain.recorded = false;
+      chain.score = cleared ? Math.max(chain.score, chain.target + 250) : Math.max(0, Math.min(chain.score, chain.target - 1));
+      chain.moves = cleared ? Math.max(1, chain.moves) : 0;
+      finishChainIfNeeded();
+      renderChain();
+      return {
+        before,
+        after: chainDebugState(),
+        cleared: !!cleared,
+        readoutState: document.querySelector('#premium-input-readout')?.dataset.state || '',
+        readoutStateText: document.querySelector('#premium-input-state')?.textContent || '',
+        readoutStart: document.querySelector('#premium-input-start')?.textContent || '',
+        touchStart: document.querySelector('#premium-touch-start')?.textContent || ''
+      };
+    }
+
     function renderChain() {
       chain.bestMove = bestChainMove();
       const cursor = normalizeChainCursor();
@@ -12937,6 +13037,7 @@ function init() {
       chain.board.classList.toggle('chain-overcharged', chain.overcharge >= 100 && !chain.finished);
       chain.board.dataset.feedback = chain.feedback;
       chain.board.dataset.recipe = chainRecipeDetail();
+      if (premiumActive === 'chain') updatePremiumMetaControls();
     }
 
     document.getElementById('premium-chain-new').addEventListener('click', () => {
@@ -13401,6 +13502,7 @@ function init() {
         actionBtn.textContent = p.charge > 0 && forecast.blastTargets.length > 0 ? `相位爆破 x${p.charge}${targetText}` : noTargetText;
         actionBtn.title = forecast.suggestion;
       }
+      if (premiumActive === 'tactics') updatePremiumMetaControls();
     }
 
     function spendTacticsAp(amount = 1) {
@@ -14392,6 +14494,10 @@ function init() {
               securityText: document.querySelector('#premium-heist-security')?.textContent || '',
               bestText: document.querySelector('#premium-heist-best')?.textContent || '',
               bestStored: localStorage.getItem(heist.bestKey) || '0',
+              readoutState: document.querySelector('#premium-input-readout')?.dataset.state || '',
+              readoutStateText: document.querySelector('#premium-input-state')?.textContent || '',
+              readoutStart: document.querySelector('#premium-input-start')?.textContent || '',
+              touchStart: document.querySelector('#premium-touch-start')?.textContent || '',
               feedback: premiumFeedback.lastTone
             };
           },
@@ -14401,6 +14507,7 @@ function init() {
           forceChainRecipe: () => forceChainRecipe(),
           forceChainCatalyst: () => forceChainCatalyst(),
           forceChainNoMove: () => forceChainNoMove(),
+          forceChainFinish: (cleared = true) => forceChainFinish(cleared),
           tacticsTurn: () => tactics.turn,
           tacticsState: () => tacticsDebugState(),
           tacticsForecast: () => {
@@ -14535,6 +14642,10 @@ function init() {
               feedback: premiumFeedback.lastTone,
               bestText: document.querySelector('#premium-tactics-best')?.textContent || '',
               bestStored: localStorage.getItem(tactics.bestKey) || '0',
+              readoutState: document.querySelector('#premium-input-readout')?.dataset.state || '',
+              readoutStateText: document.querySelector('#premium-input-state')?.textContent || '',
+              readoutStart: document.querySelector('#premium-input-start')?.textContent || '',
+              touchStart: document.querySelector('#premium-touch-start')?.textContent || '',
               message: tactics.message
             };
           },
@@ -14587,6 +14698,7 @@ function init() {
 
     function pauseAllPremiumRealtimeGames(reason = 'auto') {
       const paused = [];
+      if (reason === 'navigate') suspendSurvivorDraftOverlay();
       if (survivor.running && !survivor.paused && !survivor.draftOpen) {
         survivor.paused = true;
         survivor.last = performance.now();
@@ -14611,6 +14723,11 @@ function init() {
     }
 
     window.__atherixPausePremiumRealtimeGames = pauseAllPremiumRealtimeGames;
+    window.__atherixRestorePremiumOverlays = () => {
+      if (survivor.draftOpen) renderSurvivorDraft();
+      updatePremiumMetaControls();
+      return { draftOpen: !!survivor.draftOpen };
+    };
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) pauseAllPremiumRealtimeGames('hidden');
     });
@@ -15207,10 +15324,25 @@ function init() {
   }
 
   function releaseArcadeButtonFocus() {
+    window.__atherixSetPremiumInputArmed?.(false);
     const active = document.activeElement;
     if (active && active.closest && active.closest('#game')) {
       active.blur();
     }
+  }
+
+  function focusRunnerCabinet() {
+    releaseArcadeButtonFocus();
+    document.querySelector('.arcade-cabinet-bezel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => {
+      const overlayVisible = gameOverlay && getComputedStyle(gameOverlay).display !== 'none';
+      if (overlayVisible && gameOverlayAction) {
+        gameOverlayAction.focus({ preventScroll: true });
+      } else {
+        arcadeCanvas?.focus?.({ preventScroll: true });
+      }
+      if (runnerGamepadState.connected) setRunnerGamepadStatus('PAD 就绪', 'ready');
+    }, 0);
   }
 
   function resetGameKeyState() {
@@ -15385,9 +15517,10 @@ function init() {
     updateRunnerMissionStrip();
   };
 
-  function pauseRunnerGame() {
+  function pauseRunnerGame(options = {}) {
     if (!gameRunning || gamePaused) return false;
-    runnerPauseFocusOrigin = document.activeElement;
+    const { focusOverlay = true } = options;
+    runnerPauseFocusOrigin = focusOverlay ? document.activeElement : null;
     gameElapsedBeforePause = getRunnerElapsedMs();
     gamePauseStartedAt = Date.now();
     gamePaused = true;
@@ -15400,7 +15533,7 @@ function init() {
     updateRunnerMissionStrip();
     updateRunnerPauseMuteLabel();
     setPauseOverlayVisible(true);
-    setTimeout(() => gamePauseResumeBtn?.focus({ preventScroll: true }), 0);
+    if (focusOverlay) setTimeout(() => gamePauseResumeBtn?.focus({ preventScroll: true }), 0);
     return true;
   }
 
