@@ -2490,6 +2490,19 @@ async function run() {
     elapsedAfter: Number(window.__atherixDebug?.premium?.survivorElapsed?.() || 0),
     scoreAfter: Number(window.__atherixDebug?.premium?.survivorScore?.() || 0)
   }))()`);
+  const survivorDraftAutoPauseState = await evaluate(`(() => {
+    const result = window.__atherixPausePremiumRealtimeGames?.('draft-smoke') || {};
+    return {
+      result,
+      open: !!window.__atherixDebug?.premium?.survivorDraftOpen?.(),
+      running: !!window.__atherixDebug?.premium?.survivorRunning?.(),
+      paused: !!window.__atherixDebug?.premium?.survivorPaused?.(),
+      readoutState: document.querySelector('#premium-input-readout')?.dataset.state || '',
+      readoutStateText: document.querySelector('#premium-input-state')?.textContent || '',
+      touchPause: document.querySelector('#premium-touch-pause')?.textContent || '',
+      touchPauseDisabled: !!document.querySelector('#premium-touch-pause')?.disabled
+    };
+  })()`);
   await key('keyDown', '1', 'Digit1');
   await key('keyUp', '1', 'Digit1');
   await wait(220);
@@ -2498,6 +2511,7 @@ async function run() {
     ariaHidden: document.querySelector('#premium-survivor-draft')?.getAttribute('aria-hidden') || '',
     optionCards: document.querySelectorAll('.survivor-upgrade-option').length,
     running: !!window.__atherixDebug?.premium?.survivorRunning?.(),
+    paused: !!window.__atherixDebug?.premium?.survivorPaused?.(),
     build: window.__atherixDebug?.premium?.survivorBuild?.() || '',
     buildText: document.querySelector('#premium-survivor-build')?.textContent || '',
     level: document.querySelector('#premium-survivor-level')?.textContent || '',
@@ -2927,7 +2941,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v53-quality') && swText.includes('/style.css?v=20260608-quality-v7') && swText.includes('/app.js?v=20260608-quality-v12'),
+      swHasQualityVersion: swText.includes('atherix-static-v54-quality') && swText.includes('/style.css?v=20260608-quality-v7') && swText.includes('/app.js?v=20260608-quality-v13'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
@@ -3633,7 +3647,8 @@ async function run() {
   assert(feedbackMuteState.muted?.muted === true && feedbackMuteState.muted?.togglePressed === 'false' && feedbackMuteState.afterSuppressed?.suppressed > feedbackMuteState.muted?.suppressed && feedbackMuteState.afterSuppressed?.total === feedbackMuteState.muted?.total && feedbackMuteState.unmuted?.muted === false && feedbackMuteState.unmuted?.togglePressed === 'true' && feedbackMuteState.panelMuted === 'false', `premium arcade feedback mute should suppress events and restore cleanly: ${JSON.stringify(feedbackMuteState)}`);
   assert(survivorDraftOpenState.open && survivorDraftOpenState.ariaHidden === 'false' && survivorDraftOpenState.optionCards === 3 && survivorDraftOpenState.choices.length === 3 && survivorDraftOpenState.running && !survivorDraftOpenState.paused && survivorDraftOpenState.readoutState === 'draft' && survivorDraftOpenState.readoutStateText === '升级' && survivorDraftOpenState.readoutAction === '选升级' && survivorDraftOpenState.readoutStart === '1/2/3 选择' && survivorDraftOpenState.touchPause === '选择中' && survivorDraftOpenState.touchPauseDisabled && /升级选择中/.test(survivorDraftOpenState.touchPauseLabel), `survivor roguelite draft should open three upgrade choices with clear draft-state controls and without using pause state: ${JSON.stringify(survivorDraftOpenState)}`);
   assert(survivorDraftFreezeState.open && Math.abs(survivorDraftFreezeState.elapsedAfter - survivorDraftOpenState.beforeElapsed) < 1 && Math.abs(survivorDraftFreezeState.scoreAfter - survivorDraftOpenState.beforeScore) < 1, `survivor roguelite draft should freeze the run clock and score until a choice is made: ${JSON.stringify({ survivorDraftOpenState, survivorDraftFreezeState })}`);
-  assert(!survivorDraftChosenState.open && survivorDraftChosenState.ariaHidden === 'true' && survivorDraftChosenState.optionCards === 0 && survivorDraftChosenState.running && Number(survivorDraftChosenState.level) >= 2 && survivorDraftChosenState.score > survivorDraftOpenState.beforeScore && survivorDraftChosenState.buildText.length > 2 && survivorDraftChosenState.readoutState === 'running' && survivorDraftChosenState.readoutStateText === '运行' && survivorDraftChosenState.readoutAction === '星爆' && survivorDraftChosenState.readoutStart === 'Enter 重开' && survivorDraftChosenState.touchPause === '暂停' && !survivorDraftChosenState.touchPauseDisabled && /暂停/.test(survivorDraftChosenState.touchPauseLabel), `survivor roguelite draft should apply a chosen upgrade and restore running controls: ${JSON.stringify(survivorDraftChosenState)}`);
+  assert(survivorDraftAutoPauseState.open && survivorDraftAutoPauseState.running && !survivorDraftAutoPauseState.paused && !(survivorDraftAutoPauseState.result?.paused || []).includes('survivor') && survivorDraftAutoPauseState.readoutState === 'draft' && survivorDraftAutoPauseState.readoutStateText === '升级' && survivorDraftAutoPauseState.touchPause === '选择中' && survivorDraftAutoPauseState.touchPauseDisabled, `survivor draft should ignore global auto-pause because the upgrade sheet already freezes play: ${JSON.stringify(survivorDraftAutoPauseState)}`);
+  assert(!survivorDraftChosenState.open && survivorDraftChosenState.ariaHidden === 'true' && survivorDraftChosenState.optionCards === 0 && survivorDraftChosenState.running && !survivorDraftChosenState.paused && Number(survivorDraftChosenState.level) >= 2 && survivorDraftChosenState.score > survivorDraftOpenState.beforeScore && survivorDraftChosenState.buildText.length > 2 && survivorDraftChosenState.readoutState === 'running' && survivorDraftChosenState.readoutStateText === '运行' && survivorDraftChosenState.readoutAction === '星爆' && survivorDraftChosenState.readoutStart === 'Enter 重开' && survivorDraftChosenState.touchPause === '暂停' && !survivorDraftChosenState.touchPauseDisabled && /暂停/.test(survivorDraftChosenState.touchPauseLabel), `survivor roguelite draft should apply a chosen upgrade and restore running controls: ${JSON.stringify(survivorDraftChosenState)}`);
   assert(survivorOverdriveState.before?.overdrive >= 100 && survivorOverdriveState.before?.hud?.overdrive === 'READY' && survivorOverdriveState.after?.overdrive === 0 && survivorOverdriveState.after?.overdriveFlash > 0 && survivorOverdriveState.after?.score > survivorOverdriveState.before?.score && survivorOverdriveState.after?.slowed >= 1 && survivorOverdriveState.after?.enemies < survivorOverdriveState.before?.enemies && survivorOverdriveState.after?.chain >= survivorOverdriveState.before?.chain, `survivor overdrive should consume a full meter, slow enemies, kill targets, and score: ${JSON.stringify(survivorOverdriveState)}`);
   assert(survivorAnomalyState.started && survivorAnomalyState.nonBlank && survivorAnomalyState.state?.anomaly?.type === 'meteor' && survivorAnomalyState.state?.hazards?.length >= 3 && survivorAnomalyState.state?.hud?.event === 'METEOR' && survivorAnomalyState.eventText === 'METEOR' && survivorAnomalyState.achieved, `survivor anomaly events should create a readable deep-space crisis with hazards and achievement credit: ${JSON.stringify(survivorAnomalyState)}`);
   assert(survivorBountyState.nonBlank && survivorBountyState.after?.bounty?.completed > survivorBountyState.before?.bounty?.completed && survivorBountyState.after?.score > survivorBountyState.before?.score && survivorBountyState.after?.bounty?.last === 'ELITE CLEAR' && survivorBountyState.after?.bounty?.flash > 0 && survivorBountyState.after?.hud?.bounty === survivorBountyState.bountyText && survivorBountyState.achieved, `survivor elite bounty should complete deterministically, reward score, sync HUD, and unlock achievement: ${JSON.stringify(survivorBountyState)}`);
@@ -3899,6 +3914,7 @@ async function run() {
     survivorState,
     survivorDraftOpenState,
     survivorDraftFreezeState,
+    survivorDraftAutoPauseState,
     survivorDraftChosenState,
     survivorOverdriveState,
     survivorAnomalyState,

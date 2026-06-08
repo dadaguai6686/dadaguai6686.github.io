@@ -14267,7 +14267,7 @@ function init() {
 
     function pauseAllPremiumRealtimeGames(reason = 'auto') {
       const paused = [];
-      if (survivor.running && !survivor.paused) {
+      if (survivor.running && !survivor.paused && !survivor.draftOpen) {
         survivor.paused = true;
         survivor.last = performance.now();
         updateSurvivorPauseButton();
