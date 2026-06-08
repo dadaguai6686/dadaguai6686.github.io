@@ -3822,6 +3822,123 @@ body.command-open {
   box-shadow: 0 0 30px rgba(0,0,0,0.9), inset 0 0 20px rgba(139, 92, 246, 0.3) !important;
 }
 
+.runner-mission-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(120px, 0.9fr) auto auto;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  margin: 0.72rem 0 0.58rem;
+  padding: 0.5rem 0.62rem;
+  border: 1px solid rgba(34, 211, 238, 0.24);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(8, 47, 73, 0.74), rgba(15, 23, 42, 0.82) 48%, rgba(63, 38, 8, 0.58)),
+    radial-gradient(circle at 8% 50%, rgba(34, 211, 238, 0.22), transparent 36%);
+  color: #e2e8f0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 24px rgba(2, 6, 23, 0.18);
+}
+
+.runner-mission-copy {
+  min-width: 0;
+  display: grid;
+  gap: 0.12rem;
+}
+
+#runner-mission-kicker,
+.runner-mission-meter,
+.runner-mission-danger {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+#runner-mission-kicker {
+  color: #67e8f9;
+  font-size: 0.64rem;
+  white-space: nowrap;
+}
+
+#runner-mission-objective {
+  min-width: 0;
+  overflow: hidden;
+  color: #f8fafc;
+  font-size: 0.82rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runner-mission-progress {
+  position: relative;
+  height: 8px;
+  min-width: 90px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.78);
+}
+
+.runner-mission-progress i {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22d3ee, #a7f3d0, #fde68a);
+  box-shadow: 0 0 14px rgba(34, 211, 238, 0.38);
+  transition: width 160ms ease;
+}
+
+.runner-mission-meter {
+  color: #cbd5e1;
+  font-size: 0.66rem;
+  white-space: nowrap;
+}
+
+.runner-mission-danger {
+  min-width: 68px;
+  padding: 0.2rem 0.42rem;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #cbd5e1;
+  font-size: 0.62rem;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.runner-mission-strip[data-state="portal"] {
+  border-color: rgba(16, 185, 129, 0.4);
+  background:
+    linear-gradient(90deg, rgba(6, 78, 59, 0.72), rgba(15, 23, 42, 0.82) 50%, rgba(20, 83, 45, 0.58)),
+    radial-gradient(circle at 90% 50%, rgba(16, 185, 129, 0.22), transparent 36%);
+}
+
+.runner-mission-strip[data-state="portal"] .runner-mission-danger {
+  border-color: rgba(52, 211, 153, 0.46);
+  background: rgba(6, 78, 59, 0.5);
+  color: #a7f3d0;
+}
+
+.runner-mission-strip[data-state="danger"] .runner-mission-danger {
+  border-color: rgba(248, 113, 113, 0.5);
+  background: rgba(127, 29, 29, 0.52);
+  color: #fecaca;
+}
+
+.runner-mission-strip[data-state="shield"] .runner-mission-danger {
+  border-color: rgba(52, 211, 153, 0.46);
+  background: rgba(5, 46, 34, 0.54);
+  color: #bbf7d0;
+}
+
+.runner-mission-strip[data-state="cooldown"] .runner-mission-danger,
+.runner-mission-strip[data-state="paused"] .runner-mission-danger {
+  border-color: rgba(251, 191, 36, 0.42);
+  background: rgba(120, 53, 15, 0.45);
+  color: #fde68a;
+}
+
 /* Scanlines on game overlay and screen */
 .arcade-bezel-screen::after {
   content: " ";
@@ -4164,8 +4281,17 @@ body.command-open {
 }
 
 #btn-dash-led {
+  min-width: 50px;
   background: radial-gradient(circle at 50% 28%, #f59e0b 0%, #b45309 100%);
   box-shadow: 0 3px 0 #78350f, 0 0 12px rgba(245, 158, 11, 0.48);
+}
+
+#btn-dash-led[data-ready="false"] {
+  background:
+    conic-gradient(from -90deg, rgba(251, 191, 36, 0.95) var(--dash-cooldown-angle, 360deg), rgba(30, 41, 59, 0.92) 0),
+    radial-gradient(circle at 50% 28%, #64748b 0%, #1e293b 100%);
+  box-shadow: 0 3px 0 #0f172a, 0 0 14px rgba(251, 191, 36, 0.22);
+  color: #f8fafc;
 }
 
 #btn-bgm-led {
@@ -4182,6 +4308,27 @@ body.command-open {
 }
 
 @media (max-width: 720px) {
+  .runner-mission-strip {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.42rem;
+    margin-top: 0.55rem;
+    padding: 0.46rem 0.52rem;
+  }
+
+  .runner-mission-progress {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  .runner-mission-meter {
+    font-size: 0.62rem;
+  }
+
+  .runner-mission-danger {
+    min-width: 62px;
+    padding-inline: 0.34rem;
+  }
+
   .runner-touch-pad {
     width: 100%;
     justify-content: center;

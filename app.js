@@ -14179,6 +14179,13 @@ function init() {
   const gameScoreSpan = document.getElementById('game-score');
   const gameComboSpan = document.getElementById('game-combo');
   const gameContractSpan = document.getElementById('game-contract');
+  const runnerMissionStrip = document.getElementById('runner-mission-strip');
+  const runnerMissionKicker = document.getElementById('runner-mission-kicker');
+  const runnerMissionObjective = document.getElementById('runner-mission-objective');
+  const runnerMissionProgressbar = document.getElementById('runner-mission-progressbar');
+  const runnerMissionProgress = document.getElementById('runner-mission-progress');
+  const runnerMissionProgressText = document.getElementById('runner-mission-progress-text');
+  const runnerMissionDanger = document.getElementById('runner-mission-danger');
 
   // New DOM elements for retro controls
   const levelSelect = document.getElementById('game-level-select');
@@ -14218,6 +14225,10 @@ function init() {
   let runnerLastScoreGain = 0;
   let runnerScorePulseUntil = 0;
   let runnerLandingBurstUntil = 0;
+  let runnerPortalPulseUntil = 0;
+  let runnerLastPortalHintAt = 0;
+  let runnerLastMissionKey = '';
+  let runnerLastDashUiKey = '';
   const runnerContractDefs = [
     { id: 'crystal', label: 'CRYSTAL', target: 3, reward: 420, events: ['crystal'], color: '#FDE68A' },
     { id: 'stomp', label: 'STOMP', target: 2, reward: 560, events: ['stomp'], color: '#FCA5A5' },
@@ -14292,16 +14303,152 @@ function init() {
     return { x: player.x, y: player.y, w: player.width, h: player.height };
   }
 
+  function clampRunnerValue(value, min = 0, max = 100) {
+    return Math.max(min, Math.min(max, Number.isFinite(value) ? value : min));
+  }
+
+  function runnerDistanceToRect(rect = {}) {
+    const px = player.x + player.width / 2;
+    const py = player.y + player.height / 2;
+    const rx = (rect.x || 0) + (rect.w || 0) / 2;
+    const ry = (rect.y || 0) + (rect.h || 0) / 2;
+    return Math.hypot(px - rx, py - ry);
+  }
+
+  function getRunnerDashCooldownMs(now = Date.now()) {
+    if (player.dashReady) return 0;
+    return Math.max(0, player.dashCooldownUntil - now);
+  }
+
+  function setRunnerDashUi(now = Date.now()) {
+    if (!btnDashLed) return;
+    const cooldownMs = getRunnerDashCooldownMs(now);
+    const ready = cooldownMs <= 0;
+    const cooldownSeconds = ready ? '0' : Math.max(0.1, cooldownMs / 1000).toFixed(1).replace(/\.0$/, '');
+    const key = `${ready}|${cooldownSeconds}`;
+    if (key === runnerLastDashUiKey) return;
+    runnerLastDashUiKey = key;
+    btnDashLed.dataset.ready = ready ? 'true' : 'false';
+    btnDashLed.textContent = ready ? 'DASH' : `${cooldownSeconds}s`;
+    btnDashLed.setAttribute('aria-label', ready ? '冲刺已就绪' : `冲刺冷却 ${cooldownSeconds} 秒`);
+    btnDashLed.style.setProperty('--dash-cooldown-angle', `${Math.round(clampRunnerValue(cooldownMs / 1100, 0, 1) * 360)}deg`);
+  }
+
+  function runnerMissionSnapshot(now = Date.now()) {
+    const lvl = gameLevels[currentLevelIndex] || {};
+    const overlayState = gameOverlay?.dataset.runnerOverlayState || '';
+    const collected = Number(player.coinsCollected || 0);
+    const remainingCrystals = Math.max(0, targetCoins - collected);
+    const routePercent = Math.round(clampRunnerValue((player.x / Math.max(1, levelWidth - player.width)) * 100, 0, 100));
+    const activeCheckpoints = checkpoints.filter(checkpoint => checkpoint.active).length;
+    const totalCheckpoints = checkpoints.length;
+    const liveThreats = [
+      ...hazards,
+      ...enemies.filter(enemy => !enemy.isDead)
+    ];
+    const nearestThreat = liveThreats.length
+      ? Math.min(...liveThreats.map(rect => runnerDistanceToRect(rect)))
+      : Infinity;
+    const nearThreat = nearestThreat <= 105;
+    const dashCooldownMs = getRunnerDashCooldownMs(now);
+    const contractLabel = formatRunnerContract();
+    let state = 'clear';
+    let danger = 'CLEAR';
+    let objective = remainingCrystals > 0
+      ? `还差 ${remainingCrystals} 个水晶`
+      : '进入传送门';
+
+    if (!gameRunning && gamePaused) {
+      state = 'paused';
+      danger = 'HOLD';
+      objective = '暂停中 · 计时冻结';
+    } else if (!gameRunning) {
+      state = overlayState === 'gameover' || overlayState === 'checkpoint' ? 'danger' : 'idle';
+      danger = overlayState === 'gameover' ? 'RETRY' : 'STANDBY';
+      objective = overlayState === 'victory' || overlayState === 'final'
+        ? '航线完成'
+        : overlayState === 'checkpoint'
+          ? '从信标继续'
+          : '按 Enter 开始';
+    } else if (remainingCrystals <= 0) {
+      state = 'portal';
+      danger = 'PORTAL';
+      objective = '进入传送门';
+    } else if (nearThreat) {
+      state = 'danger';
+      danger = 'DANGER';
+    } else if (now <= player.invulnerableUntil) {
+      state = 'shield';
+      danger = 'I-FRAME';
+    } else if (player.shield > 0) {
+      state = 'shield';
+      danger = `SHIELD ${player.shield}`;
+    } else if (dashCooldownMs > 0) {
+      state = 'cooldown';
+      danger = `DASH ${Math.max(0.1, dashCooldownMs / 1000).toFixed(1).replace(/\.0$/, '')}s`;
+    }
+
+    if (gameRunning && remainingCrystals > 0 && contractLabel) {
+      objective += ` · ${contractLabel}`;
+    }
+
+    return {
+      state,
+      stage: `STAGE ${currentLevelIndex + 1}/${gameLevels.length}${lvl.difficulty ? ` · ${lvl.difficulty}` : ''}`,
+      objective,
+      routePercent,
+      progressText: `${routePercent}% · CP ${activeCheckpoints}/${totalCheckpoints}`,
+      danger,
+      remainingCrystals,
+      activeCheckpoints,
+      totalCheckpoints,
+      nearThreat,
+      nearestThreat: Number.isFinite(nearestThreat) ? Math.round(nearestThreat) : null,
+      dashReady: dashCooldownMs <= 0,
+      dashCooldownMs,
+      shield: player.shield
+    };
+  }
+
+  function updateRunnerMissionStrip(now = Date.now()) {
+    setRunnerDashUi(now);
+    if (!runnerMissionStrip) return runnerMissionSnapshot(now);
+    const snapshot = runnerMissionSnapshot(now);
+    const key = [
+      snapshot.state,
+      snapshot.stage,
+      snapshot.objective,
+      snapshot.routePercent,
+      snapshot.progressText,
+      snapshot.danger
+    ].join('|');
+    if (key === runnerLastMissionKey) return snapshot;
+    runnerLastMissionKey = key;
+    runnerMissionStrip.dataset.state = snapshot.state;
+    if (runnerMissionKicker) runnerMissionKicker.textContent = snapshot.stage;
+    if (runnerMissionObjective) runnerMissionObjective.textContent = snapshot.objective;
+    if (runnerMissionProgress) runnerMissionProgress.style.width = `${snapshot.routePercent}%`;
+    if (runnerMissionProgressbar) {
+      runnerMissionProgressbar.setAttribute('aria-valuenow', String(snapshot.routePercent));
+      runnerMissionProgressbar.setAttribute('aria-valuetext', `航线进度 ${snapshot.routePercent}%`);
+    }
+    if (runnerMissionProgressText) runnerMissionProgressText.textContent = snapshot.progressText;
+    if (runnerMissionDanger) runnerMissionDanger.textContent = snapshot.danger;
+    return snapshot;
+  }
+
   function setGameStatus(text, color = '#8B5CF6', duration = 1600) {
     if (!gameStatusSpan) return;
     gameStatusSpan.textContent = text;
     gameStatusSpan.style.color = color;
+    updateRunnerMissionStrip();
     if (statusTimeoutId) clearTimeout(statusTimeoutId);
     if (duration > 0) {
       statusTimeoutId = setTimeout(() => {
         if (!gameRunning) return;
         gameStatusSpan.textContent = player.dashReady ? 'READY' : 'DASH CD';
         gameStatusSpan.style.color = player.dashReady ? '#8B5CF6' : '#64748B';
+        updateRunnerMissionStrip();
       }, duration);
     }
   }
@@ -14310,6 +14457,7 @@ function init() {
     if (!gameShieldSpan) return;
     gameShieldSpan.textContent = player.shield > 0 ? `${player.shield}` : '0';
     gameShieldSpan.style.color = player.shield > 0 ? '#34D399' : '#64748B';
+    updateRunnerMissionStrip();
   }
 
   function currentRunnerContract() {
@@ -14336,6 +14484,7 @@ function init() {
       gameContractSpan.textContent = formatRunnerContract();
       gameContractSpan.style.color = runnerLastContract ? '#FDE68A' : runnerContractProgress > 0 ? '#A7F3D0' : (contract?.color || '#CBD5E1');
     }
+    updateRunnerMissionStrip();
   }
 
   function resetRunnerMeta() {
@@ -14421,6 +14570,14 @@ function init() {
       lastContract: runnerLastContract,
       lastAction: runnerLastAction,
       lastScoreGain: runnerLastScoreGain,
+      dash: {
+        ready: !!player.dashReady,
+        cooldownMs: getRunnerDashCooldownMs(),
+        buttonReady: btnDashLed?.dataset.ready || '',
+        buttonText: btnDashLed?.textContent?.trim() || '',
+        buttonLabel: btnDashLed?.getAttribute('aria-label') || ''
+      },
+      mission: runnerMissionSnapshot(),
       scoreHud: gameScoreSpan?.textContent || '',
       comboHud: gameComboSpan?.textContent || '',
       contractHud: gameContractSpan?.textContent || '',
@@ -14454,9 +14611,14 @@ function init() {
   }
 
   function consumeShieldOrDie(hitX, hitY) {
-    if (player.shield > 0 && Date.now() > player.invulnerableUntil) {
+    const now = Date.now();
+    if (now <= player.invulnerableUntil) {
+      updateRunnerMissionStrip(now);
+      return false;
+    }
+    if (player.shield > 0) {
       player.shield--;
-      player.invulnerableUntil = Date.now() + 1100;
+      player.invulnerableUntil = now + 1100;
       player.vx = player.vx >= 0 ? -5 : 5;
       player.vy = -6.5;
       updateShieldDisplay();
@@ -14466,10 +14628,23 @@ function init() {
       runnerCombo = 0;
       runnerComboUntil = 0;
       addRunnerScore(35, 'SHIELD SAVE', { combo: false });
+      updateRunnerMissionStrip(now);
       return false;
     }
     triggerDeath();
     return true;
+  }
+
+  function handleLockedPortalContact(now = Date.now()) {
+    const remaining = Math.max(1, targetCoins - player.coinsCollected);
+    runnerPortalPulseUntil = now + 560;
+    if (now - runnerLastPortalHintAt > 850) {
+      runnerLastPortalHintAt = now;
+      setGameStatus(`还差 ${remaining} 个水晶`, '#FBBF24', 900);
+      createParticleExplosion(exitPortal.x + exitPortal.w / 2, exitPortal.y + exitPortal.h / 2, '#FBBF24', 10);
+    }
+    updateRunnerMissionStrip(now);
+    return remaining;
   }
 
   function triggerPlayerDash() {
@@ -14479,6 +14654,7 @@ function init() {
     player.dashReady = false;
     player.dashCooldownUntil = Date.now() + 1100;
     player.dashBurstUntil = Date.now() + 190;
+    setRunnerDashUi();
     setGameStatus('DASH', '#60A5FA', 700);
     playArcadeSound('dash');
     createParticleExplosion(player.x + player.width / 2, player.y + player.height / 2, '#60A5FA', 14);
@@ -14534,6 +14710,7 @@ function init() {
     [btnLeftLed, btnRightLed, btnStartLed, btnPauseLed, btnJumpLed, btnDashLed, btnBgmLed].forEach(button => {
       if (button) button.classList.remove('is-held');
     });
+    setRunnerDashUi();
   }
 
   function getRunnerElapsedMs() {
@@ -14616,6 +14793,7 @@ function init() {
     }
     gameOverlay.style.display = 'flex';
     safeCreateIcons(gameOverlay);
+    updateRunnerMissionStrip();
     if (focusAction && gameOverlayAction) {
       setTimeout(() => gameOverlayAction.focus({ preventScroll: true }), 0);
     }
@@ -14631,6 +14809,7 @@ function init() {
     gameOverlay.dataset.runnerOverlayState = 'hidden';
     gameOverlay.dataset.runnerOverlayTone = 'hidden';
     if (gameOverlayAction) gameOverlayAction.dataset.runnerOverlayAction = 'hidden';
+    updateRunnerMissionStrip();
   }
 
   function showRunnerStartOverlay({ focusAction = false } = {}) {
@@ -14690,6 +14869,7 @@ function init() {
     runnerPauseFocusOrigin = null;
     setPauseOverlayVisible(false);
     setRunnerTouchButtonState(btnPauseLed, false);
+    updateRunnerMissionStrip();
   };
 
   function pauseRunnerGame() {
@@ -14704,6 +14884,7 @@ function init() {
     resetGameKeyState();
     if (gameTimerSpan) gameTimerSpan.textContent = (gameElapsedBeforePause / 1000).toFixed(1);
     setGameStatus('PAUSED', '#F59E0B', 0);
+    updateRunnerMissionStrip();
     updateRunnerPauseMuteLabel();
     setPauseOverlayVisible(true);
     setTimeout(() => gamePauseResumeBtn?.focus({ preventScroll: true }), 0);
@@ -14721,6 +14902,7 @@ function init() {
     setPauseOverlayVisible(false);
     setRunnerTouchButtonState(btnPauseLed, false);
     setGameStatus(player.dashReady ? 'READY' : 'DASH CD', player.dashReady ? '#8B5CF6' : '#64748B', 0);
+    updateRunnerMissionStrip();
     if (musicSelect && musicSelect.value !== 'mute') startMusic();
     restoreRunnerPauseFocus();
     updateGame();
@@ -15610,6 +15792,47 @@ function init() {
       simulateRunnerGamepad: (snapshot = {}, holdMs = 650) => applyRunnerGamepadSnapshot({ connected: true, name: 'Smoke Pad', ...snapshot }, { force: true, holdMs }),
       forceRunnerContract: () => forceRunnerContract(),
       runnerOverlay: () => runnerOverlayDebugState(),
+      forceRunnerShieldDoubleHit: () => {
+        if (!gameRunning) startLevel();
+        player.shield = 1;
+        player.invulnerableUntil = 0;
+        updateShieldDisplay();
+        const firstDeath = consumeShieldOrDie(player.x + player.width / 2, player.y + player.height / 2);
+        const afterFirst = runnerDebugState();
+        const secondDeath = consumeShieldOrDie(player.x + player.width / 2, player.y + player.height / 2);
+        const afterSecond = runnerDebugState();
+        drawGame();
+        return {
+          firstDeath,
+          secondDeath,
+          running: !!gameRunning,
+          shield: player.shield,
+          invulnerableRemainingMs: Math.max(0, player.invulnerableUntil - Date.now()),
+          overlay: runnerOverlayDebugState(),
+          afterFirst,
+          afterSecond
+        };
+      },
+      forceRunnerLockedPortal: () => {
+        if (!gameRunning) startLevel();
+        player.coinsCollected = Math.max(0, targetCoins - 1);
+        if (gameCoinsSpan) gameCoinsSpan.textContent = String(player.coinsCollected);
+        player.x = exitPortal.x + 2;
+        player.y = Math.max(20, exitPortal.y + exitPortal.h - player.height - 2);
+        player.vx = 0;
+        player.vy = 0;
+        const remaining = handleLockedPortalContact();
+        drawGame();
+        return {
+          remaining,
+          running: !!gameRunning,
+          collected: player.coinsCollected,
+          targetCoins,
+          statusHud: gameStatusSpan?.textContent || '',
+          overlay: runnerOverlayDebugState(),
+          mission: runnerMissionSnapshot()
+        };
+      },
       forceRunnerGameOver: ({ checkpoint = false } = {}) => {
         if (!gameRunning) startLevel();
         if (checkpoint) player.checkpoint = { x: player.x + 24, y: Math.max(60, player.y - 18) };
@@ -15672,6 +15895,10 @@ function init() {
     player.dashBurstUntil = 0;
     player.invulnerableUntil = 0;
     runnerLandingBurstUntil = 0;
+    runnerPortalPulseUntil = 0;
+    runnerLastPortalHintAt = 0;
+    runnerLastMissionKey = '';
+    runnerLastDashUiKey = '';
 
     particles = [];
     resetRunnerMeta();
@@ -15680,6 +15907,7 @@ function init() {
     if (gameTimerSpan) gameTimerSpan.textContent = '0.0';
     updateShieldDisplay();
     setGameStatus('READY', '#8B5CF6', 0);
+    updateRunnerMissionStrip();
 
     const bestLvlTime = localStorage.getItem(`atherix_astro_runner_best_lvl_${currentLevelIndex}`) || '--';
     if (gameBestTimeSpan) gameBestTimeSpan.textContent = bestLvlTime === '--' ? '--' : `${bestLvlTime}s`;
@@ -16022,6 +16250,7 @@ function init() {
       subtitle: canRespawn ? '检查点已保存。按 Enter 或点击按钮从信标继续；Space 仍只用于跳跃。' : '任务失败。按 Enter 或点击按钮重新挑战本关；Space 仍只用于跳跃。',
       actionLabel: canRespawn ? '从信标继续' : '重试本关'
     });
+    updateRunnerMissionStrip();
   }
 
   function respawnAtCheckpoint() {
@@ -16045,6 +16274,7 @@ function init() {
     clearRunnerPauseState();
     gameRunning = true;
     setGameStatus('CHECKPOINT', '#A78BFA');
+    updateRunnerMissionStrip();
     if (musicSelect && musicSelect.value !== 'mute') startMusic();
     updateGame();
   }
@@ -16105,6 +16335,7 @@ function init() {
       subtitleHtml: victoryMsg,
       actionLabel: nextLevelAvail ? '下一关' : '重试最终关'
     });
+    updateRunnerMissionStrip();
   }
 
   // Core Game loop
@@ -16112,6 +16343,7 @@ function init() {
     if (!gameRunning) return;
 
     const now = Date.now();
+    setRunnerDashUi(now);
 
     for (const plat of platforms) {
       plat.prevX = plat.x;
@@ -16134,6 +16366,7 @@ function init() {
     if (!player.dashReady && now >= player.dashCooldownUntil) {
       player.dashReady = true;
       setGameStatus('READY', '#8B5CF6', 0);
+      setRunnerDashUi(now);
     }
 
     if (runnerCombo > 0 && runnerComboUntil > 0 && now > runnerComboUntil) {
@@ -16344,16 +16577,19 @@ function init() {
       }
     }
 
-    if (player.coinsCollected >= targetCoins &&
-        rectsOverlap(playerRect(), exitPortal)) {
-      triggerWin();
-      return;
+    if (rectsOverlap(playerRect(), exitPortal)) {
+      if (player.coinsCollected >= targetCoins) {
+        triggerWin();
+        return;
+      }
+      handleLockedPortalContact(now);
     }
 
     if (gameTimerSpan) {
       gameTimerSpan.textContent = (getRunnerElapsedMs() / 1000).toFixed(1);
     }
 
+    updateRunnerMissionStrip(now);
     drawGame();
     gameLoopId = requestAnimationFrame(updateGame);
   }
@@ -16533,15 +16769,23 @@ function init() {
       gameCtx.stroke();
       gameCtx.restore();
     } else {
-      gameCtx.strokeStyle = '#374151';
+      const portalPulse = clampRunnerValue((runnerPortalPulseUntil - Date.now()) / 560, 0, 1);
+      gameCtx.save();
+      if (portalPulse > 0) {
+        gameCtx.shadowColor = '#FBBF24';
+        gameCtx.shadowBlur = 10 + portalPulse * 14;
+      }
+      gameCtx.strokeStyle = portalPulse > 0 ? '#FBBF24' : '#374151';
       gameCtx.lineWidth = 2;
       gameCtx.strokeRect(exitPortal.x - cameraX, exitPortal.y, exitPortal.w, exitPortal.h);
-      gameCtx.fillStyle = '#111827';
+      gameCtx.fillStyle = portalPulse > 0 ? 'rgba(120, 53, 15, 0.72)' : '#111827';
       gameCtx.fillRect(exitPortal.x + 2 - cameraX, exitPortal.y + 2, exitPortal.w - 4, exitPortal.h - 4);
       
-      gameCtx.fillStyle = '#4B5563';
+      gameCtx.fillStyle = portalPulse > 0 ? '#FDE68A' : '#4B5563';
       gameCtx.font = 'bold 9px monospace';
-      gameCtx.fillText('LOCKED', exitPortal.x + 2 - cameraX, exitPortal.y + exitPortal.h/2 + 3);
+      const remainingLabel = `${Math.max(0, targetCoins - player.coinsCollected)} LEFT`;
+      gameCtx.fillText(remainingLabel, exitPortal.x + 2 - cameraX, exitPortal.y + exitPortal.h/2 + 3);
+      gameCtx.restore();
     }
 
     for (const enemy of enemies) {
@@ -16716,6 +16960,7 @@ function init() {
     hideRunnerOverlay();
     gameRunning = true;
     gameStartTime = Date.now();
+    updateRunnerMissionStrip();
     
     const songId = gameLevels[currentLevelIndex].musicId;
     if (musicSelect && musicSelect.value !== 'mute') {

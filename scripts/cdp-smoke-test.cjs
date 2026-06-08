@@ -1364,7 +1364,21 @@ async function run() {
     actionShortcut: document.querySelector('#game-overlay-action')?.getAttribute('aria-keyshortcuts') || '',
     actionDescribedBy: document.querySelector('#game-overlay-action')?.getAttribute('aria-describedby') || '',
     actionTarget: document.querySelector('#game-overlay-action')?.dataset.runnerOverlayAction || '',
-    actionButtonInsideOverlayCount: document.querySelectorAll('#game-overlay-screen button#game-overlay-action').length
+    actionButtonInsideOverlayCount: document.querySelectorAll('#game-overlay-screen button#game-overlay-action').length,
+    mission: (() => {
+      const strip = document.querySelector('#runner-mission-strip');
+      const progress = document.querySelector('#runner-mission-progressbar');
+      return {
+        exists: !!strip,
+        state: strip?.dataset.state || '',
+        objective: document.querySelector('#runner-mission-objective')?.textContent || '',
+        danger: document.querySelector('#runner-mission-danger')?.textContent || '',
+        role: progress?.getAttribute('role') || '',
+        valueNow: Number(progress?.getAttribute('aria-valuenow') || -1),
+        valueText: progress?.getAttribute('aria-valuetext') || '',
+        overflows: !!strip && strip.scrollWidth > strip.clientWidth + 2
+      };
+    })()
   }))()`);
   await evaluate(`document.querySelector('#game-overlay-action')?.focus()`);
   await key('keyDown', ' ', 'Space');
@@ -1455,16 +1469,35 @@ async function run() {
       }));
       return true;
     };
+    const missionSnapshot = () => {
+      const strip = document.querySelector('#runner-mission-strip');
+      const progress = document.querySelector('#runner-mission-progressbar');
+      const dash = document.querySelector('#btn-dash-led');
+      return {
+        state: strip?.dataset.state || '',
+        objective: document.querySelector('#runner-mission-objective')?.textContent || '',
+        progressNow: Number(progress?.getAttribute('aria-valuenow') || -1),
+        progressText: document.querySelector('#runner-mission-progress-text')?.textContent || '',
+        danger: document.querySelector('#runner-mission-danger')?.textContent || '',
+        valueText: progress?.getAttribute('aria-valuetext') || '',
+        overflows: !!strip && strip.scrollWidth > strip.clientWidth + 2,
+        dashReady: dash?.dataset.ready || '',
+        dashText: dash?.textContent?.trim() || '',
+        dashLabel: dash?.getAttribute('aria-label') || ''
+      };
+    };
     const controls = document.querySelectorAll('[data-runner-control]').length;
     const beforeX = window.__atherixDebug?.player?.x || 0;
     const scoreBefore = Number(document.querySelector('#game-score')?.textContent || 0);
     const initialDebug = window.__atherixDebug?.runnerState?.() || {};
+    const missionInitial = missionSnapshot();
     firePointer('#btn-start-led', 'pointerdown');
     firePointer('#btn-start-led', 'pointerup');
     await new Promise(resolve => setTimeout(resolve, 180));
     firePointer('#btn-right-led', 'pointerdown');
     await new Promise(resolve => setTimeout(resolve, 360));
     firePointer('#btn-right-led', 'pointerup');
+    const missionAfterMove = missionSnapshot();
     firePointer('#btn-dash-led', 'pointerdown');
     firePointer('#btn-dash-led', 'pointerup');
     await new Promise(resolve => setTimeout(resolve, 220));
@@ -1472,6 +1505,10 @@ async function run() {
     const comboAfterDash = document.querySelector('#game-combo')?.textContent || '';
     const contractAfterDash = document.querySelector('#game-contract')?.textContent || '';
     const debugAfterDash = window.__atherixDebug?.runnerState?.() || {};
+    const playerAfterDash = window.__atherixDebug?.player || {};
+    const missionAfterDash = missionSnapshot();
+    const dashReadyAfterDash = !!playerAfterDash.dashReady;
+    const dashCooldownUntilAfterDash = playerAfterDash.dashCooldownUntil || 0;
     const timerBeforePause = document.querySelector('#game-timer')?.textContent || '';
     firePointer('#btn-pause-led', 'pointerdown');
     firePointer('#btn-pause-led', 'pointerup');
@@ -1493,7 +1530,8 @@ async function run() {
     const pausedAfterResume = !!window.__atherixDebug?.gamePaused?.();
     const runningAfterResume = !!window.__atherixDebug?.gameRunning?.();
     const forceContract = window.__atherixDebug?.forceRunnerContract?.() || {};
-    await new Promise(resolve => setTimeout(resolve, 120));
+    await new Promise(resolve => setTimeout(resolve, 1240));
+    const missionAfterRecovery = missionSnapshot();
     const debug = window.__atherixDebug?.runnerState?.() || {};
     const player = window.__atherixDebug?.player || {};
     return {
@@ -1503,6 +1541,8 @@ async function run() {
       afterX: player.x || 0,
       dashReady: !!player.dashReady,
       dashCooldownUntil: player.dashCooldownUntil || 0,
+      dashReadyAfterDash,
+      dashCooldownUntilAfterDash,
       running: !!window.__atherixDebug?.gameRunning?.(),
       scoreBefore,
       scoreAfterDash,
@@ -1512,6 +1552,10 @@ async function run() {
       debugAfterDash,
       forceContract,
       debug,
+      missionInitial,
+      missionAfterMove,
+      missionAfterDash,
+      missionAfterRecovery,
       scoreHud: document.querySelector('#game-score')?.textContent || '',
       comboHud: document.querySelector('#game-combo')?.textContent || '',
       contractHud: document.querySelector('#game-contract')?.textContent || '',
@@ -1671,6 +1715,8 @@ async function run() {
 
     return { gameover, afterRetry, checkpoint, afterCheckpoint, victory, afterVictory, final, afterFinal };
   })()`, 5000, { retryOnTimeout: false });
+  const runnerShieldState = await evaluate(`(() => window.__atherixDebug?.forceRunnerShieldDoubleHit?.() || {})()`);
+  const runnerLockedPortalState = await evaluate(`(() => window.__atherixDebug?.forceRunnerLockedPortal?.() || {})()`);
   await evaluate(`window.__atherixDebug?.premium?.resetFeedback?.(false)`);
   const arcadeInitial = await evaluate(`(() => {
     const rectFor = selector => {
@@ -2733,7 +2779,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v48-quality') && swText.includes('/style.css?v=20260608-quality-v6') && swText.includes('/app.js?v=20260608-quality-v7'),
+      swHasQualityVersion: swText.includes('atherix-static-v49-quality') && swText.includes('/style.css?v=20260608-quality-v7') && swText.includes('/app.js?v=20260608-quality-v8'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
@@ -2767,6 +2813,7 @@ async function run() {
     const cabinet = rectFor('.arcade-cabinet-bezel');
     const library = rectFor('.arcade-library');
     const screen = rectFor('.arcade-bezel-screen');
+    const mission = rectFor('#runner-mission-strip');
     const overlay = rectFor('#game-overlay-screen');
     const canvas = rectFor('#arcade-canvas');
     const padBefore = rectFor('#runner-touch-controls');
@@ -2780,13 +2827,17 @@ async function run() {
       cabinet,
       library,
       screen,
+      mission,
       overlay,
       canvas,
       screenVisibleRatio: visibleRatio(screen),
+      missionVisibleRatio: visibleRatio(mission),
       overlayVisibleRatio: visibleRatio(overlay),
       canvasVisibleRatio: visibleRatio(canvas),
       cabinetBeforeLibrary: !!cabinet && !!library && cabinet.top <= library.top - 8,
       playfieldVisibleFirst: visibleRatio(screen) >= 0.35 && !!overlay?.visible,
+      missionBeforeScreen: !!mission && !!screen && mission.top <= screen.top + 2,
+      missionFits: !!mission && mission.width <= document.documentElement.clientWidth + 2 && mission.height <= 90,
       padBefore,
       padAfter,
       visibleAfterScroll: !!padAfter && padAfter.top < window.innerHeight && padAfter.bottom > 0,
@@ -3094,6 +3145,16 @@ async function run() {
     `runner start overlay should expose a real Enter-only CTA state: ${JSON.stringify(runnerOverlayCtaState)}`
   );
   assert(
+    runnerOverlayCtaState.mission?.exists &&
+      runnerOverlayCtaState.mission?.state === 'idle' &&
+      runnerOverlayCtaState.mission?.role === 'progressbar' &&
+      runnerOverlayCtaState.mission?.valueNow >= 0 &&
+      runnerOverlayCtaState.mission?.valueNow <= 100 &&
+      /航线进度/.test(runnerOverlayCtaState.mission?.valueText || '') &&
+      !runnerOverlayCtaState.mission?.overflows,
+    `runner mission strip should expose a compact accessible route state: ${JSON.stringify(runnerOverlayCtaState.mission)}`
+  );
+  assert(
     !runnerOverlayFocusedSpaceState.running &&
       runnerOverlayFocusedSpaceState.focusId === 'game-overlay-action' &&
       runnerOverlayFocusedSpaceState.overlay?.state === 'start' &&
@@ -3129,7 +3190,21 @@ async function run() {
   );
   assert(runnerTouchState.controls >= 7 && runnerTouchState.overlayAfterStart === 'none', 'runner touch controls should start the main game');
   assert(runnerTouchState.running && runnerTouchState.afterX > runnerTouchState.beforeX, 'runner touch controls should move the player horizontally');
-  assert(!runnerTouchState.dashReady && runnerTouchState.dashCooldownUntil > 0, 'runner touch controls should trigger dash cooldown');
+  assert(!runnerTouchState.dashReadyAfterDash && runnerTouchState.dashCooldownUntilAfterDash > 0, 'runner touch controls should trigger dash cooldown');
+  assert(
+    ['clear', 'cooldown', 'danger', 'shield', 'portal'].includes(runnerTouchState.missionInitial?.state) &&
+      !!runnerTouchState.missionInitial?.objective &&
+      runnerTouchState.missionAfterMove?.progressNow > runnerTouchState.missionInitial?.progressNow &&
+      runnerTouchState.missionAfterDash?.progressNow >= runnerTouchState.missionAfterMove?.progressNow &&
+      runnerTouchState.missionAfterDash?.dashReady === 'false' &&
+      /秒/.test(runnerTouchState.missionAfterDash?.dashLabel || '') &&
+      /\d/.test(runnerTouchState.missionAfterDash?.dashText || '') &&
+      ['clear', 'cooldown', 'danger', 'shield', 'portal'].includes(runnerTouchState.missionAfterDash?.state) &&
+      !runnerTouchState.missionAfterDash?.overflows &&
+      runnerTouchState.missionAfterRecovery?.dashReady === 'true' &&
+      runnerTouchState.missionAfterRecovery?.dashText === 'DASH',
+    `runner mission strip and dash cooldown should stay readable during touch play: ${JSON.stringify(runnerTouchState)}`
+  );
   assert(runnerTouchState.pauseVisible === 'flex' && runnerTouchState.pausedDuringHold && !runnerTouchState.runningAfterPause, `runner pause overlay should freeze the game: ${JSON.stringify(runnerTouchState)}`);
   assert(runnerTouchState.activeAfterPause === 'game-pause-resume', `runner pause overlay should move focus to the resume action: ${JSON.stringify(runnerTouchState)}`);
   assert(runnerTouchState.timerAtPause === runnerTouchState.timerAfterPauseWait && Math.abs(runnerTouchState.xAfterPauseWait - runnerTouchState.xAtPause) < 0.01, `runner should not advance while paused: ${JSON.stringify(runnerTouchState)}`);
@@ -3160,7 +3235,25 @@ async function run() {
       runnerOverlayMachineState.afterFinal?.levelBeforeFinalRetry === runnerOverlayMachineState.afterFinal?.levelAfterFinalRetry,
     `runner overlay state machine should route by data-state even when titles disagree: ${JSON.stringify(runnerOverlayMachineState)}`
   );
-  assert(runnerMobileState.controls >= 7 && runnerMobileState.cabinetBeforeLibrary && runnerMobileState.playfieldVisibleFirst && runnerMobileState.visibleAfterScroll && !runnerMobileState.horizontalOverflow, `runner cabinet and playable screen should come first on mobile while touch controls remain reachable: ${JSON.stringify(runnerMobileState)}`);
+  assert(
+    !runnerShieldState.firstDeath &&
+      !runnerShieldState.secondDeath &&
+      runnerShieldState.running &&
+      runnerShieldState.shield === 0 &&
+      runnerShieldState.invulnerableRemainingMs > 0 &&
+      runnerShieldState.overlay?.state === 'hidden',
+    `runner shield invulnerability window should absorb repeated collisions after a shield hit: ${JSON.stringify(runnerShieldState)}`
+  );
+  assert(
+    runnerLockedPortalState.running &&
+      runnerLockedPortalState.remaining >= 1 &&
+      /还差/.test(runnerLockedPortalState.statusHud || '') &&
+      runnerLockedPortalState.overlay?.state === 'hidden' &&
+      runnerLockedPortalState.mission?.state !== 'portal' &&
+      runnerLockedPortalState.mission?.remainingCrystals >= 1,
+    `runner locked portal contact should explain remaining crystals without winning: ${JSON.stringify(runnerLockedPortalState)}`
+  );
+  assert(runnerMobileState.controls >= 7 && runnerMobileState.cabinetBeforeLibrary && runnerMobileState.playfieldVisibleFirst && runnerMobileState.missionBeforeScreen && runnerMobileState.missionFits && runnerMobileState.missionVisibleRatio >= 0.8 && runnerMobileState.visibleAfterScroll && !runnerMobileState.horizontalOverflow, `runner cabinet, mission strip, and playable screen should come first on mobile while touch controls remain reachable: ${JSON.stringify(runnerMobileState)}`);
   assert(premiumMobileState.cockpit?.visible && premiumMobileState.tabs?.top >= premiumMobileState.cockpit?.bottom - 8 && premiumMobileState.stage?.top >= premiumMobileState.tabs?.bottom - 8 && premiumMobileState.career?.top >= premiumMobileState.stage?.bottom - 8 && !premiumMobileState.horizontalOverflow, `premium arcade cockpit, tabs, and stage should be prioritized before meta panels on mobile: ${JSON.stringify(premiumMobileState)}`);
   assert(premiumMobileState.controls?.visible && premiumMobileState.controlsPosition === 'sticky' && premiumMobileState.controls.bottom <= premiumMobileState.height && premiumMobileState.controlsCount >= 5 && premiumMobileState.minControlWidth >= 44 && premiumMobileState.minControlHeight >= 44 && premiumMobileState.metaControls === 2 && premiumMobileState.metaVisible === 2 && premiumMobileState.minMetaHeight >= 34 && premiumMobileState.metaLabels.includes('开始') && premiumMobileState.actionText && premiumMobileState.toolText, `premium arcade touch controls should stay visible and tappable on mobile with meta controls: ${JSON.stringify(premiumMobileState)}`);
   assert(
@@ -3581,6 +3674,8 @@ async function run() {
     runnerLifecycleState,
     runnerReturnEnterState,
     runnerOverlayMachineState,
+    runnerShieldState,
+    runnerLockedPortalState,
     runnerMobileState,
     premiumMobileState,
     arcadeInitial,
@@ -3701,6 +3796,9 @@ function summarizeSmokeResult(result) {
       spaceKeyDoesNotRestart: result.mainSpaceState?.overlayAfter === result.mainSpaceState?.overlayBefore,
       jumpButtonDoesNotRestart: result.jumpButtonIdleState?.overlayAfter === result.jumpButtonIdleState?.overlayBefore,
       runningAfterResume: result.runnerTouchState?.runningAfterResume,
+      missionAfterDash: result.runnerTouchState?.missionAfterDash?.danger,
+      shieldDoubleHitSafe: result.runnerShieldState?.running && !result.runnerShieldState?.secondDeath,
+      lockedPortalRemaining: result.runnerLockedPortalState?.remaining,
       blurAutoPaused: result.runnerLifecycleState?.paused?.paused,
       returnEnterStarts: result.runnerReturnEnterState?.running,
       gamepadStatus: result.runnerGamepadState?.statusText
