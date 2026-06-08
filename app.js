@@ -5224,6 +5224,10 @@ function init() {
         </div>
         <div class="premium-touch-controls" aria-label="触控街机控制器">
           <span class="premium-gamepad-status" id="premium-gamepad-status" data-tone="idle">PAD 待机</span>
+          <div class="premium-meta-controls" aria-label="局内控制">
+            <button type="button" class="premium-meta-control" id="premium-touch-start" data-premium-meta="start">开始</button>
+            <button type="button" class="premium-meta-control" id="premium-touch-pause" data-premium-meta="pause">暂停</button>
+          </div>
           <div class="premium-dpad">
             <button type="button" data-premium-control="up" aria-label="上">▲</button>
             <button type="button" data-premium-control="left" aria-label="左">◀</button>
@@ -7190,13 +7194,38 @@ function init() {
       el.dataset.tone = tone;
     }
 
+    function premiumRealtimeState() {
+      if (premiumActive === 'survivor') return { running: survivor.running, paused: survivor.paused, realtime: true };
+      if (premiumActive === 'boss') return { running: bossMode.running, paused: bossMode.paused, realtime: true };
+      if (premiumActive === 'drift') return { running: drift.running, paused: drift.paused, realtime: true };
+      return { running: false, paused: false, realtime: false };
+    }
+
+    function updatePremiumMetaControls() {
+      const startBtn = document.getElementById('premium-touch-start');
+      const pauseBtn = document.getElementById('premium-touch-pause');
+      const state = premiumRealtimeState();
+      const activeLabel = premiumTabLabels[premiumActive] || titles[premiumActive] || premiumActive;
+      if (startBtn) {
+        startBtn.textContent = state.running ? '重开' : '开始';
+        startBtn.setAttribute('aria-label', `${state.running ? '重开' : '开始'} ${activeLabel}`);
+      }
+      if (pauseBtn) {
+        pauseBtn.textContent = state.paused ? '继续' : '暂停';
+        pauseBtn.disabled = !state.realtime || !state.running;
+        pauseBtn.setAttribute('aria-label', `${state.paused ? '继续' : '暂停'} ${activeLabel}`);
+      }
+    }
+
     function startPremiumActiveGame() {
+      clearPremiumKeys();
       if (premiumActive === 'survivor') startSurvivor();
       if (premiumActive === 'boss') startBoss();
       if (premiumActive === 'drift') startDrift();
       if (premiumActive === 'heist') newHeist();
       if (premiumActive === 'chain') newChain();
       if (premiumActive === 'tactics') newTactics({ shouldFocus: true });
+      updatePremiumMetaControls();
       triggerPremiumFeedback('start', { label: `START ${premiumTabLabels[premiumActive] || premiumActive}` });
     }
 
@@ -7205,7 +7234,10 @@ function init() {
       if (premiumActive === 'survivor' && survivor.running) changed = toggleSurvivorPause();
       if (premiumActive === 'boss' && bossMode.running) changed = toggleBossPause();
       if (premiumActive === 'drift' && drift.running) changed = toggleDriftPause();
-      if (changed) triggerPremiumFeedback('pause', { label: 'PAUSE' });
+      if (changed) {
+        updatePremiumMetaControls();
+        triggerPremiumFeedback('pause', { label: 'PAUSE' });
+      }
     }
 
     function pauseRealtimePremiumGamesExcept(name) {
@@ -7253,6 +7285,7 @@ function init() {
       if (name === 'tactics') drawTactics();
       if (name === 'drift') drawDrift();
       updatePremiumTouchLabels();
+      updatePremiumMetaControls();
       renderPremiumBriefing();
       renderArcadeCockpit();
       if (previous !== name) triggerPremiumFeedback('switch', { label: premiumTabLabels[name] || titles[name] || name });
@@ -7350,6 +7383,16 @@ function init() {
     document.getElementById('premium-feedback-toggle')?.addEventListener('click', () => {
       setPremiumFeedbackMuted(!premiumFeedback.muted);
       focusStage();
+    });
+    document.getElementById('premium-touch-start')?.addEventListener('click', () => {
+      const wasRunning = premiumRealtimeState().running;
+      focusStage();
+      startPremiumActiveGame();
+      showToast(`${wasRunning ? '已重开' : '已开始'}：${premiumTabLabels[premiumActive] || titles[premiumActive] || premiumActive}`, 'success');
+    });
+    document.getElementById('premium-touch-pause')?.addEventListener('click', () => {
+      focusStage();
+      togglePremiumActivePause();
     });
     stage?.addEventListener('pointerdown', armPremiumFeedbackDevices, { capture: true, passive: true });
     stage?.addEventListener('mousedown', armPremiumFeedbackDevices, { capture: true, passive: true });
@@ -7965,6 +8008,7 @@ function init() {
         bountyEl.textContent = formatSurvivorBounty();
         bountyEl.style.color = survivor.bountyFlash > 0 ? '#FDE68A' : survivor.bountyProgress > 0 ? '#A7F3D0' : (bounty?.color || '#fff');
       }
+      updatePremiumMetaControls();
     }
 
     function startSurvivor() {
@@ -8707,6 +8751,7 @@ function init() {
       survivor.paused = typeof force === 'boolean' ? force : !survivor.paused;
       clearPremiumKeys();
       updateSurvivorPauseButton();
+      updatePremiumMetaControls();
       focusStage();
       return true;
     }
@@ -9028,6 +9073,7 @@ function init() {
         focusEl.style.color = surge > 0 ? '#FDE68A' : focus >= 80 ? '#A7F3D0' : '#fff';
       }
       document.getElementById('premium-boss-dash').textContent = bossMode.player.dashCooldown > 0 ? `${Math.ceil(bossMode.player.dashCooldown / 1000)}s` : 'READY';
+      updatePremiumMetaControls();
     }
 
     function startBoss() {
@@ -9092,6 +9138,7 @@ function init() {
       bossMode.last = performance.now();
       clearPremiumKeys();
       updateBossPauseButton();
+      updatePremiumMetaControls();
       focusStage();
       return true;
     }
@@ -9897,6 +9944,7 @@ function init() {
         phaseBtn.dataset.ready = drift.phaseCharge >= 100 && drift.phaseBrake <= 0 && drift.running && !drift.paused ? 'true' : 'false';
         phaseBtn.setAttribute('aria-disabled', !drift.running || drift.paused || drift.phaseBrake > 0 || drift.phaseCharge < 100 ? 'true' : 'false');
       }
+      updatePremiumMetaControls();
     }
 
     function resetDriftState() {
@@ -9964,6 +10012,7 @@ function init() {
       drift.last = performance.now();
       clearPremiumKeys();
       updateDriftPauseButton();
+      updatePremiumMetaControls();
       focusStage();
       return true;
     }

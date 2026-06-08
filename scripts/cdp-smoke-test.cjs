@@ -2201,7 +2201,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasDiscoveryFreshVersion: swText.includes('atherix-static-v41-discovery-fresh') && swText.includes('/style.css?v=20260608-mobile-draft-v1') && swText.includes('/app.js?v=20260608-mobile-draft-v1'),
+      swHasMobileMetaVersion: swText.includes('atherix-static-v42-mobile-meta') && swText.includes('/style.css?v=20260608-mobile-meta-v1') && swText.includes('/app.js?v=20260608-mobile-meta-v1'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
@@ -2222,6 +2222,7 @@ async function run() {
     const controls = document.querySelector('.premium-touch-controls');
     const career = document.querySelector('.arcade-career-panel');
     const controlButtons = Array.from(document.querySelectorAll('[data-premium-control]'));
+    const metaButtons = Array.from(document.querySelectorAll('[data-premium-meta]'));
     const rectFor = el => {
       const rect = el?.getBoundingClientRect();
       return rect ? {
@@ -2235,6 +2236,10 @@ async function run() {
       const rect = btn.getBoundingClientRect();
       return { width: Math.round(rect.width), height: Math.round(rect.height) };
     });
+    const metaRects = metaButtons.map(btn => {
+      const rect = btn.getBoundingClientRect();
+      return { width: Math.round(rect.width), height: Math.round(rect.height), visible: rect.bottom > 0 && rect.top < window.innerHeight };
+    });
     return {
       width: document.documentElement.clientWidth,
       height: window.innerHeight,
@@ -2247,12 +2252,73 @@ async function run() {
       controlsCount: controlButtons.length,
       minControlWidth: Math.min(...controlRects.map(rect => rect.width)),
       minControlHeight: Math.min(...controlRects.map(rect => rect.height)),
+      metaControls: metaButtons.length,
+      metaLabels: metaButtons.map(btn => btn.textContent.trim()),
+      metaVisible: metaRects.filter(rect => rect.visible).length,
+      minMetaHeight: Math.min(...metaRects.map(rect => rect.height)),
       career: rectFor(career),
       actionText: document.querySelector('[data-premium-control="action"]')?.textContent || '',
       toolText: document.querySelector('[data-premium-control="tool"]')?.textContent || '',
       horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
     };
   })()`);
+  const premiumMobileMetaState = await evaluate(`(async () => {
+    document.querySelector('[data-premium-game="survivor"]')?.click();
+    document.querySelector('.premium-touch-controls')?.scrollIntoView({ block: 'start' });
+    const startBtn = document.querySelector('#premium-touch-start');
+    const pauseBtn = document.querySelector('#premium-touch-pause');
+    const labelBefore = {
+      start: startBtn?.textContent.trim() || '',
+      pause: pauseBtn?.textContent.trim() || '',
+      pauseDisabled: !!pauseBtn?.disabled
+    };
+    startBtn?.click();
+    await new Promise(resolve => setTimeout(resolve, 360));
+    const started = window.__atherixDebug?.premium?.survivorState?.() || {};
+    const labelStarted = {
+      start: startBtn?.textContent.trim() || '',
+      pause: pauseBtn?.textContent.trim() || '',
+      pauseDisabled: !!pauseBtn?.disabled
+    };
+    pauseBtn?.click();
+    await new Promise(resolve => setTimeout(resolve, 180));
+    const paused = window.__atherixDebug?.premium?.survivorState?.() || {};
+    const labelPaused = {
+      start: startBtn?.textContent.trim() || '',
+      pause: pauseBtn?.textContent.trim() || '',
+      pauseDisabled: !!pauseBtn?.disabled
+    };
+    await new Promise(resolve => setTimeout(resolve, 520));
+    const frozen = window.__atherixDebug?.premium?.survivorState?.() || {};
+    pauseBtn?.click();
+    await new Promise(resolve => setTimeout(resolve, 260));
+    const resumed = window.__atherixDebug?.premium?.survivorState?.() || {};
+    await new Promise(resolve => setTimeout(resolve, 360));
+    const advanced = window.__atherixDebug?.premium?.survivorState?.() || {};
+    startBtn?.click();
+    await new Promise(resolve => setTimeout(resolve, 220));
+    const restarted = window.__atherixDebug?.premium?.survivorState?.() || {};
+    const labelRestarted = {
+      start: startBtn?.textContent.trim() || '',
+      pause: pauseBtn?.textContent.trim() || '',
+      pauseDisabled: !!pauseBtn?.disabled
+    };
+    const controls = document.querySelector('.premium-touch-controls')?.getBoundingClientRect();
+    return {
+      labelBefore,
+      labelStarted,
+      labelPaused,
+      labelRestarted,
+      started,
+      paused,
+      frozen,
+      resumed,
+      advanced,
+      restarted,
+      controlsVisible: !!controls && controls.bottom > 0 && controls.top < window.innerHeight,
+      horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+    };
+  })()`, 8000);
   const survivorDraftMobileState = await evaluate(`(async () => {
     document.querySelector('[data-premium-game="survivor"]')?.click();
     document.querySelector('#premium-game-stage')?.scrollIntoView({ block: 'start' });
@@ -2413,7 +2479,30 @@ async function run() {
   assert(runnerGamepadState.running && runnerGamepadState.afterX > runnerGamepadState.beforeX && runnerGamepadState.movingPad?.keys?.right && /PAD/.test(runnerGamepadState.statusText), `runner gamepad bridge should move the player and update PAD status: ${JSON.stringify(runnerGamepadState)}`);
   assert(runnerMobileState.controls >= 7 && runnerMobileState.visibleAfterScroll && !runnerMobileState.horizontalOverflow, `runner touch controls should remain reachable on mobile after premium-first layout: ${JSON.stringify(runnerMobileState)}`);
   assert(premiumMobileState.cockpit?.visible && premiumMobileState.tabs?.top >= premiumMobileState.cockpit?.bottom - 8 && premiumMobileState.stage?.top >= premiumMobileState.tabs?.bottom - 8 && premiumMobileState.career?.top >= premiumMobileState.stage?.bottom - 8 && !premiumMobileState.horizontalOverflow, `premium arcade cockpit, tabs, and stage should be prioritized before meta panels on mobile: ${JSON.stringify(premiumMobileState)}`);
-  assert(premiumMobileState.controls?.visible && premiumMobileState.controlsPosition === 'sticky' && premiumMobileState.controls.bottom <= premiumMobileState.height && premiumMobileState.controlsCount >= 5 && premiumMobileState.minControlWidth >= 44 && premiumMobileState.minControlHeight >= 44 && premiumMobileState.actionText && premiumMobileState.toolText, `premium arcade touch controls should stay visible and tappable on mobile: ${JSON.stringify(premiumMobileState)}`);
+  assert(premiumMobileState.controls?.visible && premiumMobileState.controlsPosition === 'sticky' && premiumMobileState.controls.bottom <= premiumMobileState.height && premiumMobileState.controlsCount >= 5 && premiumMobileState.minControlWidth >= 44 && premiumMobileState.minControlHeight >= 44 && premiumMobileState.metaControls === 2 && premiumMobileState.metaVisible === 2 && premiumMobileState.minMetaHeight >= 34 && premiumMobileState.metaLabels.includes('开始') && premiumMobileState.actionText && premiumMobileState.toolText, `premium arcade touch controls should stay visible and tappable on mobile with meta controls: ${JSON.stringify(premiumMobileState)}`);
+  assert(
+    premiumMobileMetaState.controlsVisible
+      && ['开始', '重开'].includes(premiumMobileMetaState.labelBefore.start)
+      && (['暂停', '继续'].includes(premiumMobileMetaState.labelBefore.pause) || premiumMobileMetaState.labelBefore.pauseDisabled)
+      && premiumMobileMetaState.started.running
+      && !premiumMobileMetaState.started.paused
+      && premiumMobileMetaState.labelStarted.start === '重开'
+      && premiumMobileMetaState.labelStarted.pause === '暂停'
+      && !premiumMobileMetaState.labelStarted.pauseDisabled
+      && premiumMobileMetaState.paused.paused
+      && premiumMobileMetaState.labelPaused.pause === '继续'
+      && premiumMobileMetaState.frozen.elapsed === premiumMobileMetaState.paused.elapsed
+      && premiumMobileMetaState.frozen.score === premiumMobileMetaState.paused.score
+      && !premiumMobileMetaState.resumed.paused
+      && premiumMobileMetaState.advanced.elapsed > premiumMobileMetaState.frozen.elapsed
+      && premiumMobileMetaState.restarted.running
+      && !premiumMobileMetaState.restarted.paused
+      && premiumMobileMetaState.restarted.elapsed < premiumMobileMetaState.advanced.elapsed
+      && premiumMobileMetaState.labelRestarted.start === '重开'
+      && premiumMobileMetaState.labelRestarted.pause === '暂停'
+      && !premiumMobileMetaState.horizontalOverflow,
+    `premium mobile meta controls should start, pause, resume, and restart a realtime run: ${JSON.stringify(premiumMobileMetaState)}`
+  );
   assert(survivorDraftMobileState.open && survivorDraftMobileState.role === 'dialog' && survivorDraftMobileState.modal === 'true' && survivorDraftMobileState.ariaHidden === 'false' && survivorDraftMobileState.position === 'fixed' && survivorDraftMobileState.rect?.visible && survivorDraftMobileState.optionCards === 3 && survivorDraftMobileState.visibleOptions === 3 && survivorDraftMobileState.focusedUpgrade && !survivorDraftMobileState.horizontalOverflow, `survivor mobile upgrade draft should behave like a reachable bottom sheet: ${JSON.stringify(survivorDraftMobileState)}`);
   assert(arcadeInitial.premium && arcadeInitial.careerPanel, 'premium arcade career panel should render');
   assert(arcadeInitial.oldPrototypeCount === 0, 'old prototype mini-games should be replaced');
@@ -2651,7 +2740,7 @@ async function run() {
   assert(tacticsForecastAfterAction.dangerCount > 0 && tacticsForecastAfterAction.coverHud && tacticsForecastAfterAction.momentumHud !== undefined && tacticsForecastAfterAction.comboHud && tacticsForecastAfterAction.surgeHud && tacticsForecastAfterAction.routeHud && tacticsJammedIntent, `tactics mode should expose post-action JAM, cover, momentum, combo, surge, and route forecast: ${JSON.stringify(tacticsForecastAfterAction)}`);
   assert(tacticsState.nonBlank && Number(tacticsState.ap) >= 0 && tacticsState.action && tacticsState.cover && tacticsState.momentum !== undefined && tacticsState.combo && tacticsState.surge && tacticsState.route && tacticsState.debug?.route?.length > 0, `tactics mode should render and accept enhanced actions: ${JSON.stringify(tacticsState)}`);
   assert(Number(tacticsState.danger) > 0 && tacticsState.intel && tacticsState.debug?.hud?.route === tacticsState.route && tacticsState.debug?.hud?.cover === tacticsState.cover && tacticsState.debug?.hud?.momentum === tacticsState.momentum && tacticsState.debug?.hud?.combo === tacticsState.combo && tacticsState.debug?.hud?.surge === tacticsState.surge && tacticsState.debug?.hud?.shield === tacticsState.shield, `tactics HUD should stay in sync with enhanced debug state: ${JSON.stringify(tacticsState)}`);
-  assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /discovery-fresh/.test(key)) && pwaState.swHasDiscoveryFreshVersion && pwaState.swHasNetworkFirstDiscovery, `service worker should register, cache the latest app shell, and keep discovery metadata fresh: ${JSON.stringify(pwaState)}`);
+  assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /mobile-meta/.test(key)) && pwaState.swHasMobileMetaVersion && pwaState.swHasNetworkFirstDiscovery, `service worker should register, cache the latest app shell, and keep discovery metadata fresh: ${JSON.stringify(pwaState)}`);
   assert(pwaState.swHasLocalProjectAssets, `service worker should precache local portfolio assets: ${JSON.stringify(pwaState)}`);
   assert(pwaState.swHasNavigationPreload && pwaState.swHasOfflineShellHeader && pwaState.swHasFallbackUrl, `service worker should include robust offline navigation fallback: ${JSON.stringify(pwaState)}`);
   const diagnosticText = JSON.stringify(diagnostics);
@@ -2751,6 +2840,7 @@ async function run() {
     tacticsForecastAfterAction,
     tacticsState,
     pwaState,
+    premiumMobileMetaState,
     survivorDraftMobileState,
     diagnostics: diagnosticsSummary()
   };
@@ -2780,6 +2870,11 @@ function summarizeSmokeResult(result) {
       mobileOverflow: result.premiumMobileState?.horizontalOverflow,
       touchControls: result.premiumMobileState?.controlsCount,
       runnerMobileOverflow: result.runnerMobileState?.horizontalOverflow,
+      mobileMetaControls: {
+        start: result.premiumMobileMetaState?.labelStarted?.start,
+        pause: result.premiumMobileMetaState?.labelPaused?.pause,
+        restartedElapsed: result.premiumMobileMetaState?.restarted?.elapsed
+      },
       survivorDraftMobile: {
         position: result.survivorDraftMobileState?.position,
         visible: result.survivorDraftMobileState?.rect?.visible,
@@ -2834,7 +2929,7 @@ function summarizeSmokeResult(result) {
       registered: result.pwaState?.registered,
       shellCached: result.pwaState?.shellCached,
       cacheKeys: result.pwaState?.cacheKeys,
-      latestVersion: result.pwaState?.swHasDiscoveryFreshVersion,
+      latestVersion: result.pwaState?.swHasMobileMetaVersion,
       networkFirstDiscovery: result.pwaState?.swHasNetworkFirstDiscovery
     },
     diagnostics: result.diagnostics

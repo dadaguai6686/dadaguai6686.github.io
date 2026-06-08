@@ -7544,6 +7544,27 @@ body.command-open {
 .premium-dpad [data-premium-control="right"] { grid-column: 3; grid-row: 2; }
 .premium-dpad [data-premium-control="down"] { grid-column: 2; grid-row: 3; }
 
+.premium-meta-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(64px, auto));
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.premium-meta-control {
+  min-height: 38px;
+  border: 1px solid rgba(253, 230, 138, 0.34);
+  border-radius: 10px;
+  padding: 0 0.75rem;
+  background: linear-gradient(135deg, rgba(253, 230, 138, 0.2), rgba(34, 211, 238, 0.12));
+  color: #fff7ed;
+  font: 900 0.72rem "JetBrains Mono", monospace;
+  letter-spacing: 0;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 8px 20px rgba(0, 0, 0, 0.22);
+  white-space: nowrap;
+}
+
 .premium-dpad button,
 .premium-action-pad {
   border: 1px solid rgba(139, 92, 246, 0.35);
@@ -7585,12 +7606,14 @@ body.command-open {
 }
 
 .premium-dpad button:active,
-.premium-action-pad:active {
+.premium-action-pad:active,
+.premium-meta-control:active {
   transform: translateY(2px) scale(0.97);
   filter: brightness(1.15);
 }
 
-.premium-action-pad:disabled {
+.premium-action-pad:disabled,
+.premium-meta-control:disabled {
   cursor: not-allowed;
   opacity: 0.42;
   filter: grayscale(0.35);
@@ -7919,7 +7942,10 @@ body.command-open {
     top: 0.55rem;
     z-index: 20;
     display: grid;
-    grid-template-columns: auto minmax(136px, 1fr) auto;
+    grid-template-columns: auto minmax(94px, 1fr) auto;
+    grid-template-areas:
+      "status meta actions"
+      "dpad dpad actions";
     align-items: center;
     gap: 0.3rem;
     margin: 0 0 0.35rem;
@@ -7934,12 +7960,26 @@ body.command-open {
     -webkit-backdrop-filter: blur(14px);
   }
   #game.active .premium-gamepad-status {
+    grid-area: status;
     justify-self: start;
     padding: 0.3rem 0.42rem;
     font-size: 0.62rem;
     white-space: nowrap;
   }
+  #game.active .premium-meta-controls {
+    grid-area: meta;
+    grid-template-columns: repeat(2, minmax(46px, 1fr));
+    gap: 0.25rem;
+    justify-self: stretch;
+  }
+  #game.active .premium-meta-control {
+    min-height: 36px;
+    padding: 0 0.38rem;
+    border-radius: 9px;
+    font-size: 0.66rem;
+  }
   #game.active .premium-dpad {
+    grid-area: dpad;
     justify-self: center;
     grid-template-columns: repeat(3, 44px);
     grid-template-rows: repeat(2, 44px);
@@ -7955,6 +7995,7 @@ body.command-open {
     border-radius: 11px;
   }
   #game.active .premium-action-stack {
+    grid-area: actions;
     grid-template-columns: repeat(2, auto);
     justify-self: end;
     gap: 0.38rem;
