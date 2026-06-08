@@ -6522,6 +6522,9 @@ function init() {
 
     function summarizeRunDetails(game, details = {}) {
       const highlights = runDetailHighlights(game, details);
+      if (game === 'heist' && details.outcome === 'lockdown') {
+        return ['金库封锁', ...highlights].slice(0, 4);
+      }
       if (game === 'tactics' && details.outcome === 'down') {
         return ['机甲离线', ...highlights].slice(0, 4);
       }
@@ -11162,7 +11165,10 @@ function init() {
       hackFlash: 0,
       heatCells: [],
       routeCells: [],
-      won: false
+      won: false,
+      locked: false,
+      recorded: false,
+      lockdownReason: ''
     };
     const heistHackGlyphs = { up: 'U', down: 'D', left: 'L', right: 'R' };
 
@@ -11207,7 +11213,7 @@ function init() {
       }
       const alertEl = document.getElementById('premium-heist-alert');
       alertEl.textContent = heist.alert;
-      alertEl.style.color = ['HIGH', 'LOCK', 'CAM'].includes(heist.alert)
+      alertEl.style.color = ['HIGH', 'LOCK', 'LOCKDOWN', 'CAM'].includes(heist.alert)
         ? '#EF4444'
         : (['MID', 'GHOST'].includes(heist.alert) ? '#FBBF24' : '#34D399');
     }
@@ -11270,6 +11276,9 @@ function init() {
       heist.heatCells = [];
       heist.routeCells = [];
       heist.won = false;
+      heist.locked = false;
+      heist.recorded = false;
+      heist.lockdownReason = '';
       setHeistUi();
       focusStage();
       drawHeist();
@@ -11308,7 +11317,7 @@ function init() {
     }
 
     function startHeistHack(terminal, risk = 0) {
-      if (!terminal || terminal.used) return false;
+      if (!terminal || terminal.used || heist.locked) return false;
       const sequence = (terminal.protocol || ['up', 'right', 'down']).slice();
       heist.hack = {
         active: true,
@@ -11376,7 +11385,7 @@ function init() {
 
     function inputHeistHack(control) {
       const hack = heist.hack;
-      if (!hack?.active || !['up', 'down', 'left', 'right'].includes(control)) return false;
+      if (heist.locked || !hack?.active || !['up', 'down', 'left', 'right'].includes(control)) return false;
       const expected = hack.sequence[hack.cursor];
       if (control !== expected) return failHeistHack(control);
       hack.cursor++;
@@ -11579,6 +11588,17 @@ function init() {
         const [x, y] = key.split(',').map(Number);
         return { x, y, risk: value };
       });
+      if (heist.locked) {
+        return {
+          label: 'LOCKDOWN',
+          risk: 9,
+          target: { kind: 'LOCKDOWN', x: heist.player.x, y: heist.player.y },
+          route: [],
+          cameras: cameraIntel,
+          caches: cacheIntel,
+          heatCells
+        };
+      }
       if (heist.hack?.active) {
         return {
           label: `HACK ${heist.hack.cursor}/${heist.hack.sequence.length}`,
@@ -11683,7 +11703,10 @@ function init() {
         decoys: heist.decoys,
         decoy: heist.decoy ? { ...heist.decoy } : null,
         lastTactic: heist.lastTactic,
-        won: heist.won
+        won: heist.won,
+        locked: heist.locked,
+        recorded: heist.recorded,
+        lockdownReason: heist.lockdownReason
       };
     }
 
@@ -11694,7 +11717,7 @@ function init() {
     }
 
     function triggerHeistCloak() {
-      if (premiumActive !== 'heist' || heist.won || heist.cloakTurns > 0 || heist.cloaks <= 0) return false;
+      if (premiumActive !== 'heist' || heist.won || heist.locked || heist.cloakTurns > 0 || heist.cloaks <= 0) return false;
       heist.cloaks--;
       heist.cloakTurns = 4;
       heist.alert = 'GHOST';
@@ -11707,7 +11730,7 @@ function init() {
     }
 
     function triggerHeistDecoy() {
-      if (premiumActive !== 'heist' || heist.won || heist.decoys <= 0 || heist.decoy?.timer > 0) return false;
+      if (premiumActive !== 'heist' || heist.won || heist.locked || heist.decoys <= 0 || heist.decoy?.timer > 0) return false;
       heist.decoys--;
       heist.decoy = {
         x: heist.player.x,
@@ -11716,6 +11739,12 @@ function init() {
         pulse: 5
       };
       heistRaiseSecurity(6, 'DECOY');
+      if (heist.security >= 100) {
+        finishHeistLockdown('DECOY TRACE');
+        setHeistUi();
+        drawHeist();
+        return true;
+      }
       heist.alert = heist.cloakTurns > 0 ? 'GHOST' : 'DECOY';
       heist.chain = Math.max(heist.chain, 1);
       heist.bestChain = Math.max(heist.bestChain, heist.chain);
@@ -11726,13 +11755,45 @@ function init() {
     }
 
     function heistCaught(cause = 'HIGH') {
-      heist.player = { x: 1, y: 1 };
       heist.cloakTurns = 0;
       heist.alert = cause;
       heist.chain = 0;
       heist.decoy = null;
       heist.hack = null;
       heistRaiseSecurity(cause === 'LOCK' ? 26 : 18, cause === 'LOCK' ? 'LOCKDOWN' : 'SPOTTED');
+      if (cause === 'LOCK' || heist.security >= 100) {
+        finishHeistLockdown(cause);
+        return;
+      }
+      heist.player = { x: 1, y: 1 };
+    }
+
+    function finishHeistLockdown(cause = 'LOCKDOWN') {
+      if (heist.won || heist.recorded) return;
+      heist.locked = true;
+      heist.recorded = true;
+      heist.alert = 'LOCKDOWN';
+      heist.lockdownReason = cause;
+      heist.hack = null;
+      heist.decoy = null;
+      heist.cloakTurns = 0;
+      heist.chain = 0;
+      heist.security = 100;
+      heist.securityPeak = Math.max(heist.securityPeak, heist.security);
+      heist.lastTactic = `LOCKDOWN ${cause}`;
+      const score = Math.max(70, 150 + heist.collected * 120 + heist.loot + heist.bestChain * 18 + heist.hacksCompleted * 140 + heist.cloaks * 25 - heist.steps * 10 - Math.round(heist.securityPeak * 2));
+      recordPremiumResult('heist', score, {
+        outcome: 'lockdown',
+        cause,
+        steps: heist.steps,
+        bestChain: heist.bestChain,
+        loot: heist.loot,
+        security: Math.round(heist.securityPeak),
+        hacksCompleted: heist.hacksCompleted,
+        keys: heist.collected,
+        runVariant: heist.variant
+      });
+      triggerPremiumFeedback('danger', { label: 'LOCKDOWN' });
     }
 
     function collectHeistTile(risk) {
@@ -11760,7 +11821,7 @@ function init() {
     }
 
     function moveHeist(dx, dy) {
-      if (premiumActive !== 'heist' || heist.won) return;
+      if (premiumActive !== 'heist' || heist.won || heist.locked) return;
       const nx = heist.player.x + dx;
       const ny = heist.player.y + dy;
       if (heistTileBlocked(nx, ny)) return;
@@ -11795,8 +11856,12 @@ function init() {
               ? 'MID'
               : 'LOW';
       }
-      if (heist.collected >= 4 && heist.player.x === heist.exit.x && heist.player.y === heist.exit.y) {
+      if (!heist.won && !heist.locked && heist.security >= 100) {
+        finishHeistLockdown('SECURITY MAX');
+      }
+      if (!heist.locked && !heist.recorded && heist.collected >= 4 && heist.player.x === heist.exit.x && heist.player.y === heist.exit.y) {
         heist.won = true;
+        heist.recorded = true;
         const securityPenalty = Math.round(heist.securityPeak * 2.2);
         const score = Math.max(100, 1200 - heist.steps * 18 + heist.bestChain * 28 + heist.cloaks * 35 + heist.loot - securityPenalty);
         localStorage.setItem(heist.bestKey, String(Math.max(Number(localStorage.getItem(heist.bestKey) || 0), score)));
@@ -11992,6 +12057,7 @@ function init() {
         ctx.restore();
       }
       if (heist.won) overlay(ctx, c.width, c.height, 'VAULT CLEAR', '高分已保存 · 点击生成任务再来一局');
+      if (heist.locked) overlay(ctx, c.width, c.height, 'LOCKDOWN', `${heist.lockdownReason || '安防封锁'} · 战报已保存，点击生成任务重试`);
     }
 
     document.getElementById('premium-heist-new').addEventListener('click', () => {
@@ -13991,6 +14057,52 @@ function init() {
               sequence,
               after: heistDebugState(),
               achieved: (career.achievements || []).includes('heist_protocol')
+            };
+          },
+          forceHeistLockdown: () => {
+            switchPremiumGame('heist');
+            newHeist();
+            heist.player = { x: 18, y: 5 };
+            heist.collected = 2;
+            heist.keys = heist.keys.slice(0, 2);
+            heist.loot = 360;
+            heist.steps = 18;
+            heist.security = 96;
+            heist.securityPeak = 96;
+            heist.bestChain = 7;
+            heist.chain = 7;
+            heist.hacksCompleted = 1;
+            heist.cloaks = 1;
+            heist.decoys = 1;
+            const runsBefore = Array.isArray(career.runs) ? career.runs.length : 0;
+            const totalBefore = Number(career.totalScore || 0);
+            const before = heistDebugState();
+            heistCaught('LOCK');
+            setHeistUi();
+            drawHeist();
+            const after = heistDebugState();
+            moveHeist(1, 0);
+            const afterMove = heistDebugState();
+            const latestRun = Array.isArray(career.runs) ? career.runs[0] : null;
+            return {
+              before,
+              after,
+              afterMove,
+              runsBefore,
+              runsAfter: Array.isArray(career.runs) ? career.runs.length : 0,
+              totalBefore,
+              totalAfter: Number(career.totalScore || 0),
+              latestRun,
+              coach: latestRunCoach(),
+              profile: arcadeProfileSnapshot(),
+              runCards: document.querySelectorAll('.arcade-run-log-item').length,
+              runReplayTarget: document.querySelector('.arcade-run-log-item')?.dataset.runLogGame || '',
+              runGrade: document.querySelector('.arcade-run-log-item .arcade-run-grade')?.textContent.trim() || '',
+              runTags: [...document.querySelectorAll('.arcade-run-log-item .arcade-run-tags b')].map(el => el.textContent.trim()),
+              alertText: document.querySelector('#premium-heist-alert')?.textContent || '',
+              routeText: document.querySelector('#premium-heist-route')?.textContent || '',
+              securityText: document.querySelector('#premium-heist-security')?.textContent || '',
+              feedback: premiumFeedback.lastTone
             };
           },
           chainState: () => chainDebugState(),

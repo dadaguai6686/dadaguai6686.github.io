@@ -2767,6 +2767,7 @@ async function run() {
       rating: document.querySelector('#premium-career-rating')?.textContent
     };
   })()`);
+  const heistLockdownState = await evaluate(`(() => window.__atherixDebug?.premium?.forceHeistLockdown?.() || {})()`);
   await click('#premium-career-open');
   await wait(220);
   const careerDialogState = await evaluate(`(() => {
@@ -2912,7 +2913,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v51-quality') && swText.includes('/style.css?v=20260608-quality-v7') && swText.includes('/app.js?v=20260608-quality-v10'),
+      swHasQualityVersion: swText.includes('atherix-static-v52-quality') && swText.includes('/style.css?v=20260608-quality-v7') && swText.includes('/app.js?v=20260608-quality-v11'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
@@ -3709,6 +3710,28 @@ async function run() {
   assert(heistState.hackState.opened?.hack?.active && /^HACK\s+\d+\/\d+$/.test(heistState.hackState.opened?.label || '') && Array.isArray(heistState.hackState.sequence) && heistState.hackState.sequence.length >= 3, `heist terminal should open a readable protocol hack sequence: ${JSON.stringify(heistState.hackState)}`);
   assert(heistState.hackState.after?.hacksCompleted > heistState.hackState.before?.hacksCompleted && heistState.hackState.after?.hack === null && heistState.hackState.after?.terminals?.some(terminal => terminal.used) && heistState.hackState.after?.cameras?.some(camera => camera.disabled) && heistState.hackState.after?.loot > heistState.hackState.before?.loot && heistState.hackState.after?.chain > heistState.hackState.before?.chain && heistState.hackState.after?.hackHud === heistState.hack && heistState.hackState.after?.protocolHud === heistState.protocol && heistState.hackState.achieved, `heist protocol hack should complete, change security systems, reward loot/chain, sync HUD, and unlock achievement: ${JSON.stringify(heistState.hackState)}`);
   assert(/^\d+x$/.test(heistState.chain) && /^\d+%$/.test(heistState.security) && /^\d+$/.test(heistState.loot) && /^DONE\s+\d+$/.test(heistState.hack) && heistState.protocol === '--' && heistState.debug.chainHud === heistState.chain && heistState.debug.routeHud === heistState.route && heistState.debug.securityHud === heistState.security && heistState.debug.lootHud === heistState.loot && heistState.debug.hackHud === heistState.hack && heistState.debug.protocolHud === heistState.protocol, `heist HUD should stay in sync with debug state: ${JSON.stringify(heistState)}`);
+  assert(
+    heistLockdownState.after?.locked &&
+      heistLockdownState.after?.recorded &&
+      heistLockdownState.after?.label === 'LOCKDOWN' &&
+      heistLockdownState.after?.security === 100 &&
+      heistLockdownState.afterMove?.player?.x === heistLockdownState.after?.player?.x &&
+      heistLockdownState.afterMove?.player?.y === heistLockdownState.after?.player?.y &&
+      heistLockdownState.runsAfter === heistLockdownState.runsBefore + 1 &&
+      heistLockdownState.totalAfter > heistLockdownState.totalBefore &&
+      heistLockdownState.latestRun?.game === 'heist' &&
+      Number(heistLockdownState.latestRun?.score || 0) > 0 &&
+      (heistLockdownState.latestRun?.highlights || []).includes('金库封锁') &&
+      heistLockdownState.coach?.game === 'heist' &&
+      heistLockdownState.profile?.latest?.game === 'heist' &&
+      heistLockdownState.runCards >= 1 &&
+      heistLockdownState.runReplayTarget === 'heist' &&
+      heistLockdownState.runTags.includes('金库封锁') &&
+      heistLockdownState.alertText === 'LOCKDOWN' &&
+      heistLockdownState.routeText === 'LOCKDOWN' &&
+      heistLockdownState.securityText === '100%',
+    `heist lockdown should become a recorded defeat with blocked movement and replayable coaching: ${JSON.stringify(heistLockdownState)}`
+  );
   assert(careerDialogState.open && careerDialogState.ariaHidden === 'false', `career dialog should open: ${JSON.stringify(careerDialogState)}`);
   assert(careerDialogState.medalCards >= 7 && careerDialogState.achievements >= 16 && careerDialogState.unlocked >= 1, `career dialog should show medals and achievements: ${JSON.stringify(careerDialogState)}`);
   assert(/RANK/.test(careerDialogState.summary) && careerDialogState.daily.length > 10 && careerDialogState.visibleInViewport && !careerDialogState.horizontalOverflow, `career dialog should show readable summary and daily challenge: ${JSON.stringify(careerDialogState)}`);
@@ -3883,6 +3906,7 @@ async function run() {
     driftPauseFreezeState,
     driftResumeState,
     heistState,
+    heistLockdownState,
     careerDialogState,
     careerDialogClosed,
     chainKeyboardState,
@@ -3987,7 +4011,8 @@ function summarizeSmokeResult(result) {
         route: result.heistState?.route,
         hackHud: result.heistState?.hack,
         protocolHud: result.heistState?.protocol,
-        protocolAchieved: result.heistState?.hackState?.achieved
+        protocolAchieved: result.heistState?.hackState?.achieved,
+        lockdownRecorded: result.heistLockdownState?.latestRun?.game === 'heist'
       },
       chain: {
         cells: result.chainState?.cells,
