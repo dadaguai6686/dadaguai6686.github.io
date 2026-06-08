@@ -8953,8 +8953,9 @@ function init() {
       const config = premiumFeedbackToneMap[tone] || premiumFeedbackToneMap.action;
       const now = Date.now();
       const throttleMs = Number(options.throttleMs ?? (tone === 'move' ? 90 : 28));
-      if (now - premiumFeedback.lastAt < throttleMs && premiumFeedback.lastTone === tone) return false;
       const label = options.label || config.label;
+      const sameFeedback = premiumFeedback.lastTone === tone && premiumFeedback.lastLabel === label;
+      if (!options.force && now - premiumFeedback.lastAt < throttleMs && sameFeedback) return false;
       premiumFeedback.total++;
       premiumFeedback.lastTone = tone;
       premiumFeedback.lastLabel = label;
@@ -16355,6 +16356,11 @@ function init() {
   let runnerLastPortalHintAt = 0;
   let runnerLastMissionKey = '';
   let runnerLastDashUiKey = '';
+  const runnerCoyoteMs = 115;
+  const runnerJumpBufferMs = 130;
+  let runnerLastGroundedAt = 0;
+  let runnerJumpBufferedUntil = 0;
+  let runnerLastJumpAssist = '';
   const runnerContractDefs = [
     { id: 'crystal', label: 'CRYSTAL', target: 3, reward: 420, events: ['crystal'], color: '#FDE68A' },
     { id: 'stomp', label: 'STOMP', target: 2, reward: 560, events: ['stomp'], color: '#FCA5A5' },
@@ -16676,6 +16682,34 @@ function init() {
     return { completed: true, label: contract.label, reward: contract.reward };
   }
 
+  function resetRunnerJumpAssist() {
+    runnerLastGroundedAt = 0;
+    runnerJumpBufferedUntil = 0;
+    runnerLastJumpAssist = '';
+  }
+
+  function expireRunnerJumpBuffer(now = Date.now()) {
+    if (!runnerJumpBufferedUntil || now <= runnerJumpBufferedUntil) return false;
+    runnerJumpBufferedUntil = 0;
+    if (runnerLastJumpAssist === 'buffered-pending') runnerLastJumpAssist = 'buffer-expired';
+    return true;
+  }
+
+  function runnerJumpAssistDebugState(now = Date.now()) {
+    expireRunnerJumpBuffer(now);
+    const coyoteRemainingMs = runnerLastGroundedAt > 0
+      ? Math.max(0, runnerCoyoteMs - (now - runnerLastGroundedAt))
+      : 0;
+    return {
+      coyoteMs: runnerCoyoteMs,
+      bufferMs: runnerJumpBufferMs,
+      coyoteRemainingMs,
+      bufferedRemainingMs: Math.max(0, runnerJumpBufferedUntil - now),
+      bufferActive: runnerJumpBufferedUntil > now,
+      last: runnerLastJumpAssist
+    };
+  }
+
   function runnerDebugState() {
     const contract = currentRunnerContract();
     return {
@@ -16703,6 +16737,7 @@ function init() {
         buttonText: btnDashLed?.textContent?.trim() || '',
         buttonLabel: btnDashLed?.getAttribute('aria-label') || ''
       },
+      jumpAssist: runnerJumpAssistDebugState(),
       keys: {
         left: !!gameKeys.ArrowLeft,
         right: !!gameKeys.ArrowRight,
@@ -17940,6 +17975,51 @@ function init() {
       simulateRunnerGamepad: (snapshot = {}, holdMs = 650) => applyRunnerGamepadSnapshot({ connected: true, name: 'Smoke Pad', ...snapshot }, { force: true, holdMs }),
       forceRunnerContract: () => forceRunnerContract(),
       runnerOverlay: () => runnerOverlayDebugState(),
+      forceRunnerCoyoteJump: () => {
+        if (gamePaused) resumeRunnerGame();
+        if (!gameRunning) startLevel();
+        const now = Date.now();
+        runnerJumpBufferedUntil = 0;
+        runnerLastGroundedAt = now - Math.floor(runnerCoyoteMs / 2);
+        player.isGrounded = false;
+        player.doubleJumpAvailable = true;
+        player.vx = 0;
+        player.vy = 1.2;
+        const result = triggerPlayerJump({ allowBuffer: false, now });
+        drawGame();
+        return {
+          result,
+          player: { ...player },
+          jumpAssist: runnerJumpAssistDebugState(),
+          running: !!gameRunning
+        };
+      },
+      forceRunnerBufferedJump: () => {
+        if (gamePaused) resumeRunnerGame();
+        if (!gameRunning) startLevel();
+        const now = Date.now();
+        runnerLastGroundedAt = 0;
+        runnerJumpBufferedUntil = 0;
+        player.isGrounded = false;
+        player.doubleJumpAvailable = false;
+        player.vx = 0;
+        player.vy = 4.2;
+        const request = triggerPlayerJump({ now });
+        const beforeConsume = runnerJumpAssistDebugState(now);
+        player.isGrounded = true;
+        player.vy = 0;
+        runnerLastGroundedAt = now;
+        const consumed = consumeRunnerJumpBuffer(now + 16);
+        drawGame();
+        return {
+          request,
+          beforeConsume,
+          consumed,
+          player: { ...player },
+          jumpAssist: runnerJumpAssistDebugState(),
+          running: !!gameRunning
+        };
+      },
       forceRunnerShieldDoubleHit: () => {
         if (!gameRunning) startLevel();
         player.shield = 1;
@@ -18042,6 +18122,7 @@ function init() {
     player.dashCooldownUntil = 0;
     player.dashBurstUntil = 0;
     player.invulnerableUntil = 0;
+    resetRunnerJumpAssist();
     runnerLandingBurstUntil = 0;
     runnerPortalPulseUntil = 0;
     runnerLastPortalHintAt = 0;
@@ -18408,23 +18489,78 @@ function init() {
     pauseRunnerForLifecycle('pagehide');
   });
 
-  function triggerPlayerJump() {
-    if (player.isGrounded) {
-      player.vy = -9.2;
-      player.isGrounded = false;
-      playArcadeSound('jump');
-      createParticleExplosion(player.x + player.width/2, player.y + player.height, '#06B6D4', 6);
-    } else if (player.doubleJumpAvailable) {
-      player.vy = -8.2;
-      player.doubleJumpAvailable = false;
-      playArcadeSound('jump');
-      createParticleExplosion(player.x + player.width/2, player.y + player.height, '#EC4899', 8);
+  function performRunnerJump(kind, power, color, particleCount, options = {}) {
+    const { now = Date.now(), fromBuffer = false, consumeDouble = false } = options;
+    player.vy = power;
+    player.isGrounded = false;
+    if (consumeDouble) player.doubleJumpAvailable = false;
+    runnerLastGroundedAt = 0;
+    runnerJumpBufferedUntil = 0;
+    runnerLastJumpAssist = fromBuffer ? 'buffered' : kind;
+    playArcadeSound('jump');
+    createParticleExplosion(player.x + player.width / 2, player.y + player.height, color, particleCount);
+    return {
+      jumped: true,
+      kind: fromBuffer ? 'buffered' : kind,
+      buffered: !!fromBuffer,
+      coyoteWindowMs: kind === 'coyote' ? runnerCoyoteMs : 0,
+      at: now
+    };
+  }
+
+  function triggerPlayerJump(options = {}) {
+    const { allowBuffer = true, fromBuffer = false, now = Date.now() } = options;
+    expireRunnerJumpBuffer(now);
+    const coyoteAge = runnerLastGroundedAt > 0 ? now - runnerLastGroundedAt : Infinity;
+    const canCoyoteJump = !player.isGrounded && coyoteAge >= 0 && coyoteAge <= runnerCoyoteMs;
+
+    if (player.isGrounded || canCoyoteJump || fromBuffer) {
+      const kind = fromBuffer ? 'buffered' : (player.isGrounded ? 'grounded' : 'coyote');
+      return performRunnerJump(kind, -9.2, '#06B6D4', fromBuffer ? 8 : 6, { now, fromBuffer });
     }
+
+    if (player.doubleJumpAvailable) {
+      return performRunnerJump('double', -8.2, '#EC4899', 8, { now, consumeDouble: true });
+    }
+
+    if (allowBuffer) {
+      runnerJumpBufferedUntil = now + runnerJumpBufferMs;
+      runnerLastJumpAssist = 'buffered-pending';
+      return {
+        jumped: false,
+        kind: 'buffered-pending',
+        buffered: true,
+        bufferedRemainingMs: runnerJumpBufferMs,
+        at: now
+      };
+    }
+
+    runnerLastJumpAssist = 'blocked';
+    return {
+      jumped: false,
+      kind: 'blocked',
+      buffered: false,
+      at: now
+    };
+  }
+
+  function consumeRunnerJumpBuffer(now = Date.now()) {
+    if (expireRunnerJumpBuffer(now) || !player.isGrounded || !runnerJumpBufferedUntil) {
+      return { consumed: false, bufferActive: runnerJumpBufferedUntil > now };
+    }
+    const bufferedRemainingMs = Math.max(0, runnerJumpBufferedUntil - now);
+    const jump = triggerPlayerJump({ fromBuffer: true, allowBuffer: false, now });
+    return {
+      consumed: !!jump.jumped,
+      bufferedRemainingMs,
+      ...jump
+    };
   }
 
   function triggerDeath() {
     gameRunning = false;
     clearRunnerPauseState();
+    resetRunnerJumpAssist();
     playArcadeSound('death');
     cancelAnimationFrame(gameLoopId);
     cancelAnimationFrame(deathAnimationId);
@@ -18470,6 +18606,7 @@ function init() {
     player.dashBurstUntil = 0;
     player.dashCooldownUntil = 0;
     player.invulnerableUntil = Date.now() + 1300;
+    resetRunnerJumpAssist();
     hideRunnerOverlay();
     cancelAnimationFrame(deathAnimationId);
     clearRunnerPauseState();
@@ -18484,6 +18621,7 @@ function init() {
     const finishTime = (getRunnerElapsedMs() / 1000).toFixed(1);
     gameRunning = false;
     clearRunnerPauseState();
+    resetRunnerJumpAssist();
     playArcadeSound('win');
     cancelAnimationFrame(gameLoopId);
     stopMusic();
@@ -18545,6 +18683,8 @@ function init() {
 
     const now = Date.now();
     setRunnerDashUi(now);
+    if (player.isGrounded) runnerLastGroundedAt = now;
+    expireRunnerJumpBuffer(now);
 
     for (const plat of platforms) {
       plat.prevX = plat.x;
@@ -18652,6 +18792,7 @@ function init() {
             player.vy = 0;
             player.isGrounded = true;
             player.doubleJumpAvailable = true;
+            runnerLastGroundedAt = now;
             player.x += plat.x - plat.prevX;
             if (!wasGrounded && fallSpeedBeforeCollision > 2.2) {
               landedThisFrame = true;
@@ -18665,6 +18806,11 @@ function init() {
           else if (player.vx < 0) player.x += overlapX;
         }
       }
+    }
+
+    if (player.isGrounded) {
+      runnerLastGroundedAt = now;
+      consumeRunnerJumpBuffer(now);
     }
 
     if (landedThisFrame && now > runnerLandingBurstUntil) {

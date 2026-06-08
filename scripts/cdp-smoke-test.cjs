@@ -2174,6 +2174,8 @@ async function run() {
   })()`, 5000, { retryOnTimeout: false });
   const runnerShieldState = await evaluate(`(() => window.__atherixDebug?.forceRunnerShieldDoubleHit?.() || {})()`);
   const runnerLockedPortalState = await evaluate(`(() => window.__atherixDebug?.forceRunnerLockedPortal?.() || {})()`);
+  const runnerCoyoteJumpState = await evaluate(`(() => window.__atherixDebug?.forceRunnerCoyoteJump?.() || {})()`);
+  const runnerBufferedJumpState = await evaluate(`(() => window.__atherixDebug?.forceRunnerBufferedJump?.() || {})()`);
   await evaluate(`window.__atherixDebug?.premium?.resetFeedback?.(false)`);
   const arcadeInitial = await evaluate(`(() => {
     const rectFor = selector => {
@@ -4168,6 +4170,27 @@ async function run() {
       runnerLockedPortalState.mission?.remainingCrystals >= 1,
     `runner locked portal contact should explain remaining crystals without winning: ${JSON.stringify(runnerLockedPortalState)}`
   );
+  assert(
+    runnerCoyoteJumpState.running &&
+      runnerCoyoteJumpState.result?.jumped &&
+      runnerCoyoteJumpState.result?.kind === 'coyote' &&
+      Number(runnerCoyoteJumpState.player?.vy || 0) < -1 &&
+      runnerCoyoteJumpState.player?.doubleJumpAvailable === true &&
+      runnerCoyoteJumpState.jumpAssist?.last === 'coyote',
+    `runner should allow a forgiving coyote jump after leaving a platform: ${JSON.stringify(runnerCoyoteJumpState)}`
+  );
+  assert(
+    runnerBufferedJumpState.running &&
+      runnerBufferedJumpState.request?.buffered &&
+      !runnerBufferedJumpState.request?.jumped &&
+      runnerBufferedJumpState.beforeConsume?.bufferActive &&
+      runnerBufferedJumpState.consumed?.jumped &&
+      runnerBufferedJumpState.consumed?.kind === 'buffered' &&
+      Number(runnerBufferedJumpState.player?.vy || 0) < -1 &&
+      !runnerBufferedJumpState.jumpAssist?.bufferActive &&
+      runnerBufferedJumpState.jumpAssist?.last === 'buffered',
+    `runner should buffer a missed jump and consume it on landing: ${JSON.stringify(runnerBufferedJumpState)}`
+  );
   assert(runnerMobileState.controls >= 7 && runnerMobileState.cabinetBeforeLibrary && runnerMobileState.playfieldVisibleFirst && runnerMobileState.missionBeforeScreen && runnerMobileState.missionFits && runnerMobileState.missionVisibleRatio >= 0.8 && runnerMobileState.visibleAfterScroll && !runnerMobileState.horizontalOverflow, `runner cabinet, mission strip, and playable screen should come first on mobile while touch controls remain reachable: ${JSON.stringify(runnerMobileState)}`);
   assert(premiumMobileState.cockpit?.visible && premiumMobileState.tabs?.top >= premiumMobileState.cockpit?.bottom - 8 && premiumMobileState.stage?.top >= premiumMobileState.tabs?.bottom - 8 && premiumMobileState.career?.top >= premiumMobileState.stage?.bottom - 8 && !premiumMobileState.horizontalOverflow, `premium arcade cockpit, tabs, and stage should be prioritized before meta panels on mobile: ${JSON.stringify(premiumMobileState)}`);
   assert(premiumMobileState.controls?.visible && premiumMobileState.controlsPosition === 'sticky' && premiumMobileState.controls.bottom <= premiumMobileState.height && premiumMobileState.controlsCount >= 5 && premiumMobileState.minControlWidth >= 44 && premiumMobileState.minControlHeight >= 44 && premiumMobileState.metaControls === 2 && premiumMobileState.metaVisible === 2 && premiumMobileState.minMetaHeight >= 34 && premiumMobileState.metaLabels.some(label => ['开始', '重开', '新局', '再来', '选择'].includes(label)) && premiumMobileState.actionText && premiumMobileState.toolText, `premium arcade touch controls should stay visible and tappable on mobile with meta controls: ${JSON.stringify(premiumMobileState)}`);
@@ -4708,6 +4731,8 @@ async function run() {
     runnerOverlayMachineState,
     runnerShieldState,
     runnerLockedPortalState,
+    runnerCoyoteJumpState,
+    runnerBufferedJumpState,
     runnerMobileState,
     premiumMobileState,
     arcadeInitial,
@@ -4850,6 +4875,8 @@ function summarizeSmokeResult(result) {
       missionAfterDash: result.runnerTouchState?.missionAfterDash?.danger,
       shieldDoubleHitSafe: result.runnerShieldState?.running && !result.runnerShieldState?.secondDeath,
       lockedPortalRemaining: result.runnerLockedPortalState?.remaining,
+      coyoteJumpVy: result.runnerCoyoteJumpState?.player?.vy,
+      bufferedJumpVy: result.runnerBufferedJumpState?.player?.vy,
       blurAutoPaused: result.runnerLifecycleState?.paused?.paused,
       returnEnterStarts: result.runnerReturnEnterState?.running,
       panelStartPausesRunner: result.premiumPanelStartState?.after?.runnerPaused,
