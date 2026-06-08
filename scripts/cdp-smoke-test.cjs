@@ -151,11 +151,39 @@ async function waitForAppServer() {
   throw lastError || new Error('App server did not become ready');
 }
 
+async function waitForAppDataReady() {
+  const deadline = Date.now() + 15000;
+  let lastState = null;
+  let lastError = null;
+  while (Date.now() < deadline) {
+    try {
+      const [postsResponse, projectsResponse] = await Promise.all([
+        fetch(`${appUrl}/api/posts`),
+        fetch(`${appUrl}/api/projects`)
+      ]);
+      const posts = postsResponse.ok ? await postsResponse.json() : [];
+      const projects = projectsResponse.ok ? await projectsResponse.json() : [];
+      lastState = {
+        postsStatus: postsResponse.status,
+        projectsStatus: projectsResponse.status,
+        posts: Array.isArray(posts) ? posts.length : -1,
+        projects: Array.isArray(projects) ? projects.length : -1
+      };
+      if (lastState.posts >= 1 && lastState.projects >= 4) return lastState;
+    } catch (error) {
+      lastError = error;
+    }
+    await wait(250);
+  }
+  throw new Error(`App data did not become ready; lastState=${JSON.stringify(lastState)}; lastError=${lastError?.message || ''}`);
+}
+
 async function run() {
   let launched = false;
   let appServer = null;
   let appTempDir = '';
   let managedServer = false;
+  let appDataReady = null;
   if (!requestedAppUrl) {
     const started = startAppServer();
     appServer = started.child;
@@ -165,6 +193,7 @@ async function run() {
     managedServer = true;
     await waitForAppServer();
   }
+  appDataReady = await waitForAppDataReady();
 
   let ws = null;
   if (!usesExternalCdp) {
@@ -229,6 +258,50 @@ async function run() {
       lastDomContentEventAt,
       socketReadyState: ws.readyState
     };
+  }
+  async function pageFailureState() {
+    try {
+      const result = await send('Runtime.evaluate', {
+        expression: `(() => {
+          const activeSection = [...document.querySelectorAll('.view-section.active')].map(section => section.id).join(',') || '';
+          const activeElement = document.activeElement
+            ? {
+                id: document.activeElement.id || '',
+                tag: document.activeElement.tagName || '',
+                classes: String(document.activeElement.className || '')
+              }
+            : null;
+          return {
+            url: location.href,
+            pathname: location.pathname,
+            search: location.search,
+            hash: location.hash,
+            title: document.title,
+            readyState: document.readyState,
+            activeSection,
+            activePremium: window.__atherixDebug?.premium?.active?.() || '',
+            activeElement,
+            blogCards: document.querySelectorAll('.blog-post-card').length,
+            commandOpen: !!document.querySelector('#command-palette.active'),
+            adminModalOpen: !!document.querySelector('#admin-login-modal.active'),
+            readerOpen: !!document.querySelector('#blog-reader.active'),
+            horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+          };
+        })()`,
+        returnByValue: true
+      }, 3500);
+      return result.result?.value || null;
+    } catch (error) {
+      return { unavailable: error.message };
+    }
+  }
+  async function failureDiagnostics(extra = {}) {
+    return JSON.stringify({
+      ...extra,
+      appDataReady,
+      page: await pageFailureState(),
+      diagnostics: diagnosticsSummary()
+    });
   }
   function rejectPending(reason) {
     for (const [callId, slot] of pending.entries()) {
@@ -345,7 +418,8 @@ async function run() {
       }, Math.max(timeout || 30000, 45000));
     }
     if (result.exceptionDetails) {
-      throw new Error(result.exceptionDetails.text || 'Runtime exception');
+      const description = result.exceptionDetails.exception?.description || result.exceptionDetails.text || 'Runtime exception';
+      throw new Error(`${description}; expression=${expression.slice(0, 240)}; diagnostics=${await failureDiagnostics({ kind: 'runtime-exception' })}`);
     }
     return result.result.value;
   }
@@ -356,24 +430,27 @@ async function run() {
 
   async function navigate(url, timeout = 45000) {
     await send('Page.navigate', { url }, timeout);
-    const ready = await waitForPageReady(timeout);
-    if (!ready) throw new Error(`Page did not become ready after navigation to ${url}; diagnostics=${JSON.stringify(diagnosticsSummary())}`);
+    await waitForPageReady(timeout);
   }
 
   async function reload(timeout = 45000) {
     await send('Page.reload', {}, timeout);
-    const ready = await waitForPageReady(timeout);
-    if (!ready) throw new Error(`Page did not become ready after reload; diagnostics=${JSON.stringify(diagnosticsSummary())}`);
+    await waitForPageReady(timeout);
   }
 
   async function click(selector) {
-    return evaluate(`(() => {
+    const clicked = await evaluate(`(() => {
       const el = document.querySelector(${JSON.stringify(selector)});
       if (!el) return false;
+      if (el.disabled) return false;
       el.focus?.({ preventScroll: true });
       el.click();
       return true;
     })()`);
+    if (!clicked) {
+      throw new Error(`Click target not found or disabled: ${selector}; diagnostics=${await failureDiagnostics({ kind: 'click', selector })}`);
+    }
+    return clicked;
   }
 
   async function waitFor(selector, timeout = 8000) {
@@ -383,7 +460,7 @@ async function run() {
       if (found) return true;
       await wait(200);
     }
-    return false;
+    throw new Error(`Selector not found after ${timeout}ms: ${selector}; diagnostics=${await failureDiagnostics({ kind: 'selector', selector, timeout })}`);
   }
 
   async function waitForCondition(expression, timeout = 8000) {
@@ -398,8 +475,7 @@ async function run() {
       }
       await wait(200);
     }
-    if (lastError) console.warn(`[smoke:games] Condition wait ended after error: ${lastError.message}`);
-    return false;
+    throw new Error(`Condition not met after ${timeout}ms: ${expression.slice(0, 240)}; lastError=${lastError?.message || ''}; diagnostics=${await failureDiagnostics({ kind: 'condition', expression: expression.slice(0, 240), timeout })}`);
   }
 
   async function key(type, key, code) {
@@ -2592,6 +2668,7 @@ async function run() {
     managedServer,
     cdpPort,
     appUrl,
+    appDataReady,
     adminStartupState,
     accessibilityBaseline,
     commandFocusOpenState,
@@ -2686,6 +2763,7 @@ function summarizeSmokeResult(result) {
     managedServer: result.managedServer,
     cdpPort: result.cdpPort,
     appUrl: result.appUrl,
+    appDataReady: result.appDataReady,
     hint: 'Set SMOKE_VERBOSE=1 for the full state dump.',
     blog: {
       hubCards: result.blogHubBefore?.cards,
