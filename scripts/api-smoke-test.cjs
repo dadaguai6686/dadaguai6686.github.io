@@ -91,6 +91,7 @@ async function assertProductionSecretRequired() {
 
 async function run() {
   await assertProductionSecretRequired();
+  const staticUploadTestFiles = [];
 
   const child = spawn(process.execPath, ['server.js'], {
     cwd: path.resolve(__dirname, '..'),
@@ -473,6 +474,21 @@ async function run() {
 
     const uploadDir = path.resolve(__dirname, '..', 'uploads');
     const beforeUploads = new Set(fs.readdirSync(uploadDir));
+    const staticValidUploadName = `smoke-static-${Date.now()}.png`;
+    const staticForgedUploadName = `smoke-static-${Date.now()}-forged.png`;
+    const staticTextUploadName = `smoke-static-${Date.now()}.txt`;
+    const tinyPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=', 'base64');
+    fs.writeFileSync(path.join(uploadDir, staticValidUploadName), tinyPng);
+    fs.writeFileSync(path.join(uploadDir, staticForgedUploadName), Buffer.from('not really a png'));
+    fs.writeFileSync(path.join(uploadDir, staticTextUploadName), Buffer.from('not an upload image'));
+    staticUploadTestFiles.push(staticValidUploadName, staticForgedUploadName, staticTextUploadName);
+    const staticValidUpload = await fetch(`${baseUrl}/uploads/${staticValidUploadName}`);
+    assert(staticValidUpload.status === 200 && (staticValidUpload.headers.get('content-type') || '').includes('image/png'), 'valid static upload image should be served');
+    const staticForgedUpload = await fetch(`${baseUrl}/uploads/${staticForgedUploadName}`);
+    assert(staticForgedUpload.status === 404, 'forged static upload image should not be publicly served');
+    const staticTextUpload = await fetch(`${baseUrl}/uploads/${staticTextUploadName}`);
+    assert(staticTextUpload.status === 404, 'non-image files in uploads should not be publicly served');
+
     const fakeImageForm = new FormData();
     fakeImageForm.append('image', new Blob([Buffer.from('not really a png')], { type: 'image/png' }), 'fake.png');
     const fakeImageUpload = await fetch(`${baseUrl}/api/upload`, {
@@ -481,7 +497,7 @@ async function run() {
       body: fakeImageForm
     });
     assert(fakeImageUpload.status === 400, 'forged image upload should be rejected');
-    const afterUploads = fs.readdirSync(uploadDir).filter(name => !beforeUploads.has(name));
+    const afterUploads = fs.readdirSync(uploadDir).filter(name => !beforeUploads.has(name) && !staticUploadTestFiles.includes(name));
     assert(afterUploads.length === 0, 'rejected forged upload should be removed from uploads directory');
 
     return {
@@ -514,11 +530,17 @@ async function run() {
       unsafeEncodedAssetPathStatus: unsafeProjectEncodedAssetPath.status,
       safeUploadPathProjectStatus: createdProject.status,
       safeAssetPathProjectStatus: createdAssetProject.status,
+      staticValidUploadStatus: staticValidUpload.status,
+      staticForgedUploadStatus: staticForgedUpload.status,
+      staticTextUploadStatus: staticTextUpload.status,
       forgedUploadStatus: fakeImageUpload.status
     };
   } finally {
     child.kill();
     await wait(300);
+    for (const fileName of staticUploadTestFiles) {
+      fs.rmSync(path.resolve(__dirname, '..', 'uploads', fileName), { force: true });
+    }
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 }

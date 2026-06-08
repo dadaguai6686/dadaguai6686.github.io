@@ -65,6 +65,13 @@ const allowedImageMimeTypes = new Map([
   ['image/gif', '.gif'],
   ['image/webp', '.webp']
 ]);
+const uploadExtensionMimeTypes = new Map([
+  ['.jpg', 'image/jpeg'],
+  ['.jpeg', 'image/jpeg'],
+  ['.png', 'image/png'],
+  ['.gif', 'image/gif'],
+  ['.webp', 'image/webp']
+]);
 const safeUploadUrlPattern = /^\/uploads\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.(?:jpe?g|png|gif|webp)$/i;
 const safeAssetImageUrlPattern = /^\/assets\/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.(?:jpe?g|png|gif|webp|svg)$/i;
 const publicRootFiles = new Set([
@@ -190,6 +197,38 @@ function hasImageSignature(filePath, mimeType) {
       header.subarray(8, 12).toString('ascii') === 'WEBP';
   }
   return false;
+}
+
+function safeUploadStaticPath(reqPath = '') {
+  let decodedPath = '';
+  try {
+    decodedPath = decodeURIComponent(reqPath);
+  } catch {
+    return null;
+  }
+  const candidate = `/uploads${decodedPath.startsWith('/') ? decodedPath : `/${decodedPath}`}`;
+  if (!safeUploadUrlPattern.test(candidate)) return null;
+  return {
+    publicPath: candidate,
+    filePath: path.join(uploadDir, path.basename(candidate)),
+    mimeType: uploadExtensionMimeTypes.get(path.extname(candidate).toLowerCase()) || ''
+  };
+}
+
+function guardStaticUpload(req, res, next) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+  const safePath = safeUploadStaticPath(req.path || '');
+  if (!safePath?.mimeType) return res.status(404).send('Not found');
+  if (!fs.existsSync(safePath.filePath)) return next();
+  try {
+    if (!hasImageSignature(safePath.filePath, safePath.mimeType)) {
+      return res.status(404).send('Not found');
+    }
+  } catch (err) {
+    console.warn(`[uploads] rejected unreadable file ${safePath.publicPath}:`, err.message);
+    return res.status(404).send('Not found');
+  }
+  next();
 }
 
 function removeUploadedFile(file) {
@@ -460,7 +499,7 @@ app.get('/sitemap.xml', (req, res) => {
   });
 });
 
-app.use('/uploads', express.static(uploadDir, {
+app.use('/uploads', guardStaticUpload, express.static(uploadDir, {
   maxAge: '7d',
   immutable: false,
   setHeaders: (res) => {
