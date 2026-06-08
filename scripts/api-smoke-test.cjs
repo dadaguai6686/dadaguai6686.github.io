@@ -8,6 +8,8 @@ const baseUrl = `http://127.0.0.1:${port}`;
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'atherix-api-smoke-'));
 const dbPath = path.join(tempDir, 'blog.db');
 const allowedOrigin = 'https://example.test';
+const smokeAdminPassword = 'ApiSmoke#20260608!';
+const smokeJwtSecret = 'ApiSmokeJwtSecret_20260608_7c2f9d8b41a6e5c0';
 
 function wait(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -46,7 +48,7 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-async function assertProductionSecretRequired() {
+async function expectProductionStartupFailure(envOverrides, message) {
   const failPort = port + 1;
   const failDir = fs.mkdtempSync(path.join(os.tmpdir(), 'atherix-api-secret-'));
   const child = spawn(process.execPath, ['server.js'], {
@@ -57,8 +59,9 @@ async function assertProductionSecretRequired() {
       PORT: String(failPort),
       DB_PATH: path.join(failDir, 'blog.db'),
       ADMIN_USERNAME: 'admin',
-      ADMIN_PASSWORD: 'api-smoke-password',
-      JWT_SECRET: ''
+      ADMIN_PASSWORD: smokeAdminPassword,
+      JWT_SECRET: smokeJwtSecret,
+      ...envOverrides
     },
     windowsHide: true,
     stdio: 'ignore'
@@ -72,12 +75,18 @@ async function assertProductionSecretRequired() {
         resolve(code);
       });
     });
-    assert(exitCode !== null, 'production server without JWT_SECRET should exit');
-    assert(exitCode !== 0, 'production server without JWT_SECRET should fail');
+    assert(exitCode !== null, `${message} should exit`);
+    assert(exitCode !== 0, `${message} should fail`);
   } finally {
     if (!child.killed) child.kill();
     fs.rmSync(failDir, { recursive: true, force: true });
   }
+}
+
+async function assertProductionSecretRequired() {
+  await expectProductionStartupFailure({ JWT_SECRET: '' }, 'production server without JWT_SECRET');
+  await expectProductionStartupFailure({ JWT_SECRET: 'replace-with-a-long-random-secret' }, 'production server with placeholder JWT_SECRET');
+  await expectProductionStartupFailure({ ADMIN_PASSWORD: 'replace-with-a-strong-password' }, 'production server with placeholder ADMIN_PASSWORD');
 }
 
 async function run() {
@@ -90,9 +99,9 @@ async function run() {
       NODE_ENV: 'production',
       PORT: String(port),
       DB_PATH: dbPath,
-      JWT_SECRET: 'api-smoke-secret-change-me-only-for-test',
+      JWT_SECRET: smokeJwtSecret,
       ADMIN_USERNAME: 'admin',
-      ADMIN_PASSWORD: 'api-smoke-password',
+      ADMIN_PASSWORD: smokeAdminPassword,
       ALLOWED_ORIGINS: allowedOrigin
     },
     windowsHide: true,
@@ -297,7 +306,7 @@ async function run() {
     const login = await fetch(`${baseUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: 'admin', password: 'api-smoke-password' })
+      body: JSON.stringify({ username: 'admin', password: smokeAdminPassword })
     });
     assert(login.status === 200, 'admin login should succeed in smoke test');
     const loginBody = await login.json();

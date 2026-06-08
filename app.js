@@ -5152,6 +5152,7 @@ function init() {
             <span><small>战术节奏</small><strong id="premium-briefing-tactic">绕圈聚怪</strong></span>
             <span><small>奖牌目标</small><strong id="premium-briefing-medal">铜 800 · 银 1600 · 金 2600</strong></span>
             <span><small>本局配置</small><strong id="premium-briefing-loadout">标准 · 脉冲校准</strong></span>
+            <span><small>赛事变体</small><strong id="premium-briefing-variant">自由训练</strong></span>
           </div>
           <button type="button" class="arcade-briefing-start" id="premium-briefing-start">
             <i data-lucide="play"></i>
@@ -5544,13 +5545,13 @@ function init() {
       { id: 'league_clear', label: '联赛冠军', desc: '完成一条每日挑战联赛路线' }
     ];
     const dailyChallenges = [
-      { id: 'survivor_1200', label: '星核幸存者得分 1200+', game: 'survivor', check: (game, score) => game === 'survivor' && score >= 1200 },
-      { id: 'boss_900', label: '棱镜 Boss 得分 900+', game: 'boss', check: (game, score) => game === 'boss' && score >= 900 },
-      { id: 'drift_1200', label: '霓虹漂移评分 1200+', game: 'drift', check: (game, score) => game === 'drift' && score >= 1200 },
-      { id: 'heist_700', label: '赛博潜入评分 700+', game: 'heist', check: (game, score) => game === 'heist' && score >= 700 },
-      { id: 'chain_6000', label: '连锁炼金得分 6000+', game: 'chain', check: (game, score) => game === 'chain' && score >= 6000 },
-      { id: 'tactics_1100', label: '裂隙战术评分 1100+', game: 'tactics', check: (game, score) => game === 'tactics' && score >= 1100 },
-      { id: 'runner_1500', label: '主线关卡评分 1500+', game: 'runner', check: (game, score) => game === 'runner' && score >= 1500 }
+      { id: 'survivor_1200', label: '星核幸存者得分 1200+', game: 'survivor', target: 1200, check: (game, score) => game === 'survivor' && score >= 1200 },
+      { id: 'boss_900', label: '棱镜 Boss 得分 900+', game: 'boss', target: 900, check: (game, score) => game === 'boss' && score >= 900 },
+      { id: 'drift_1200', label: '霓虹漂移评分 1200+', game: 'drift', target: 1200, check: (game, score) => game === 'drift' && score >= 1200 },
+      { id: 'heist_700', label: '赛博潜入评分 700+', game: 'heist', target: 700, check: (game, score) => game === 'heist' && score >= 700 },
+      { id: 'chain_6000', label: '连锁炼金得分 6000+', game: 'chain', target: 6000, check: (game, score) => game === 'chain' && score >= 6000 },
+      { id: 'tactics_1100', label: '裂隙战术评分 1100+', game: 'tactics', target: 1100, check: (game, score) => game === 'tactics' && score >= 1100 },
+      { id: 'runner_1500', label: '主线关卡评分 1500+', game: 'runner', target: 1500, check: (game, score) => game === 'runner' && score >= 1500 }
     ];
     const contractDefs = [
       { id: 'score_pool', title: '火力热身', desc: '任意街机累计声望', tone: 'score', type: 'score_pool', target: 2200, reward: 260 },
@@ -5958,6 +5959,7 @@ function init() {
       const medal = medalClass(career.medals?.[mode] || medalFor(mode, score));
       const difficulty = activeDifficultyDef();
       const loadout = activeLoadoutDef();
+      const variant = activeArcadeRunVariant(mode);
       return {
         mode,
         label: premiumTabLabels[mode] || titles[mode] || mode,
@@ -5973,7 +5975,8 @@ function init() {
         medalFull: medalTargetText(mode),
         best: score,
         difficulty: difficulty.short,
-        loadout: loadout.label
+        loadout: loadout.label,
+        variant
       };
     }
 
@@ -5988,6 +5991,7 @@ function init() {
       const tacticEl = document.getElementById('premium-briefing-tactic');
       const medalEl = document.getElementById('premium-briefing-medal');
       const loadoutEl = document.getElementById('premium-briefing-loadout');
+      const variantEl = document.getElementById('premium-briefing-variant');
       const startBtn = document.getElementById('premium-briefing-start');
       if (titleEl) titleEl.textContent = briefing.title;
       if (objectiveEl) objectiveEl.textContent = briefing.objective;
@@ -5999,6 +6003,10 @@ function init() {
           : briefing.medalFull;
       }
       if (loadoutEl) loadoutEl.textContent = `${briefing.difficulty} · ${briefing.loadout}`;
+      if (variantEl) {
+        variantEl.textContent = briefing.variant?.short || '自由训练';
+        variantEl.dataset.tone = briefing.variant?.tone || 'free';
+      }
       if (startBtn) {
         startBtn.dataset.briefingGame = briefing.mode;
         startBtn.setAttribute('aria-label', `开始${briefing.label}`);
@@ -6676,6 +6684,64 @@ function init() {
       return { ...(activeDifficultyDef().tuning || {}) };
     }
 
+    function activeArcadeRunVariant(game = premiumActive) {
+      const sources = [];
+      const daily = getDailyChallenge();
+      const dailyDone = career.daily?.date === daily.date && career.daily?.id === daily.id;
+      if (!dailyDone && daily.game === game) {
+        sources.push({
+          id: daily.id,
+          kind: 'daily',
+          label: '今日挑战',
+          target: Number(daily.target || 0),
+          tone: 'daily',
+          scoreBoost: 0.08,
+          pressure: 1.07,
+          summary: daily.label
+        });
+      }
+      const league = leagueSnapshot();
+      if (league.activeStage?.game === game) {
+        sources.push({
+          id: league.activeStage.id,
+          kind: 'league',
+          label: '联赛阶段',
+          target: Number(league.activeStage.target || 0),
+          tone: 'league',
+          scoreBoost: 0.06,
+          pressure: 1.06,
+          summary: `${league.title} ${league.stageIndex + 1}/${league.stages.length}`
+        });
+      }
+      const active = sources.length > 0;
+      const pressure = sources.reduce((value, source) => value * Number(source.pressure || 1), 1);
+      const scoreBoost = sources.reduce((sum, source) => sum + Number(source.scoreBoost || 0), 0);
+      const target = sources.reduce((best, source) => Math.max(best, Number(source.target || 0)), 0);
+      const tone = sources.some(source => source.kind === 'league') ? 'league' : (sources[0]?.tone || 'free');
+      const short = active
+        ? sources.map(source => `${source.label}${source.target ? ` ${source.target}+` : ''}`).join(' / ')
+        : '自由训练';
+      return {
+        active,
+        game,
+        tone,
+        sources,
+        sourceKinds: sources.map(source => source.kind),
+        short,
+        target,
+        pressure,
+        scoreBoost,
+        scoreBoostLabel: scoreBoost > 0 ? `+${Math.round(scoreBoost * 100)}%` : '0%',
+        summary: active
+          ? `${short} · 敌压 x${pressure.toFixed(2)} · 声望 ${scoreBoost > 0 ? '+' : ''}${Math.round(scoreBoost * 100)}%`
+          : '自由训练 · 仅应用难度与芯片'
+      };
+    }
+
+    function arcadeRunPressure(game = premiumActive, variant = activeArcadeRunVariant(game)) {
+      return Math.max(0.65, Number(activeDifficultyDef().pressure || 1) * Number(variant?.pressure || 1));
+    }
+
     function setArcadeDifficulty(id, { announce = true } = {}) {
       const target = difficultyDefs.find(def => def.id === id);
       if (!target) return false;
@@ -6972,6 +7038,7 @@ function init() {
       const prize = arcadePrizeTrackSnapshot();
       const difficulty = activeDifficultyDef();
       const loadout = activeLoadoutDef();
+      const variant = activeArcadeRunVariant(premiumActive);
       const activeLabel = premiumTabLabels[premiumActive] || titles[premiumActive] || premiumActive;
       const targetGame = directive.game || prize.targetGame || 'survivor';
       const targetLabel = targetGame === 'runner'
@@ -6984,9 +7051,10 @@ function init() {
         targetLabel,
         tone: directive.tone,
         title: directive.title,
-        summary: `${directive.reason} 当前 ${activeLabel} · ${difficulty.short}协议 · ${loadout.label}。`,
+        summary: `${directive.reason} 当前 ${activeLabel} · ${difficulty.short}协议 · ${loadout.label}。${variant.active ? ` 本局变体：${variant.summary}。` : ''}`,
         difficulty: difficulty.short,
         loadout: loadout.label,
+        variant,
         seasonProgress: prize.progress,
         seasonText: prize.complete ? '完成' : `${prize.progress}%`,
         complete: prize.complete
@@ -7139,7 +7207,10 @@ function init() {
       const rawValue = Math.max(0, Math.floor(score || 0));
       const difficulty = activeDifficultyDef();
       const loadout = activeLoadoutDef();
-      const scoreBoost = Number(loadoutBonuses().scoreBoost || 0) + Number(difficulty.scoreBoost || 0);
+      const variant = details.runVariant && typeof details.runVariant === 'object'
+        ? details.runVariant
+        : activeArcadeRunVariant(game);
+      const scoreBoost = Number(loadoutBonuses().scoreBoost || 0) + Number(difficulty.scoreBoost || 0) + Number(variant.scoreBoost || 0);
       const value = Math.max(0, Math.floor(rawValue * (1 + scoreBoost)));
       const totalBeforeRun = Number(career.totalScore || 0);
       career.totalScore = Math.max(0, (career.totalScore || 0) + value);
@@ -7162,7 +7233,8 @@ function init() {
           previousBest,
           previousMedal,
           difficulty: difficulty.id,
-          loadout: loadout.id
+          loadout: loadout.id,
+          variant: variant.active ? variant.short : ''
         },
         ...(Array.isArray(career.runs) ? career.runs : [])
       ].slice(0, 12);
@@ -7201,6 +7273,8 @@ function init() {
         tuning: difficultyTuning()
       }),
       setDifficulty: setArcadeDifficulty,
+      runVariant: (game = premiumActive) => activeArcadeRunVariant(game),
+      daily: () => getDailyChallenge(),
       mastery: () => careerGameOrder.map(masteryStatusForGame),
       leaderboard: () => careerLeaderboard(),
       rival: () => arcadeRivalIntel(),
@@ -8159,6 +8233,8 @@ function init() {
     function startSurvivor() {
       const bonuses = loadoutBonuses();
       const tuning = difficultyTuning();
+      const variant = activeArcadeRunVariant('survivor');
+      const runPressure = arcadeRunPressure('survivor', variant);
       survivor.running = true;
       survivor.paused = false;
       survivor.last = performance.now();
@@ -8173,8 +8249,10 @@ function init() {
       survivor.overdriveFlash = 0;
       survivor.overdriveText = 'SYNC';
       survivor.anomaly = null;
-      survivor.anomalyCooldown = 9200;
+      survivor.anomalyCooldown = Math.round(9200 / Math.sqrt(runPressure));
       survivor.anomalyCount = 0;
+      survivor.variant = variant;
+      survivor.runPressure = runPressure;
       resetSurvivorBounty();
       survivor.draftOpen = false;
       survivor.draftChoices = [];
@@ -8192,7 +8270,7 @@ function init() {
         damage: 18,
         bulletSpeed: 390,
         speed: 198 + Number(bonuses.survivorSpeed || 0),
-        build: activeLoadoutDef().id === 'pulse' ? 'Pulse Sync' : activeLoadoutDef().label,
+        build: variant.active ? `${variant.tone.toUpperCase()} ${activeLoadoutDef().label}` : (activeLoadoutDef().id === 'pulse' ? 'Pulse Sync' : activeLoadoutDef().label),
         magnet: 85 + Number(bonuses.survivorMagnet || 0),
         novaCooldown: 0,
         novaCooldownMax: 6200,
@@ -8218,9 +8296,8 @@ function init() {
 
     function spawnSurvivorEnemy() {
       const c = survivor.canvas;
-      const difficulty = activeDifficultyDef();
       const tuning = difficultyTuning();
-      const pressure = Number(difficulty.pressure || 1);
+      const pressure = Number(survivor.runPressure || arcadeRunPressure('survivor', survivor.variant));
       const enemyHpScale = Number(tuning.enemyHp || 1);
       const enemySpeedScale = 0.92 + pressure * 0.08;
       const side = Math.floor(Math.random() * 4);
@@ -8313,7 +8390,7 @@ function init() {
     function spawnSurvivorNemesis() {
       const c = survivor.canvas;
       const tuning = difficultyTuning();
-      const pressure = Number(activeDifficultyDef().pressure || 1);
+      const pressure = Number(survivor.runPressure || arcadeRunPressure('survivor', survivor.variant));
       const wave = Math.max(1, Math.floor(survivor.elapsed / 18000) + 1);
       const fromLeft = Math.random() < 0.5;
       survivor.enemies.push({
@@ -8629,7 +8706,7 @@ function init() {
       const finalScore = Math.floor(survivor.score + survivor.elapsed / 120 + survivor.bestChain * 42 + survivor.overdrive * 3 + survivor.anomalyCount * 95 + survivor.bountiesCompleted * 150);
       localStorage.setItem(survivor.bestKey, String(Math.max(Number(localStorage.getItem(survivor.bestKey) || 0), finalScore)));
       if (survivor.elapsed >= 90000) unlockAchievement('survivor_90');
-      recordPremiumResult('survivor', finalScore, { elapsed: survivor.elapsed, level: survivor.player?.level || 1, bestChain: survivor.bestChain, overdrive: Math.floor(survivor.overdrive), anomalies: survivor.anomalyCount, bounties: survivor.bountiesCompleted });
+      recordPremiumResult('survivor', finalScore, { elapsed: survivor.elapsed, level: survivor.player?.level || 1, bestChain: survivor.bestChain, overdrive: Math.floor(survivor.overdrive), anomalies: survivor.anomalyCount, bounties: survivor.bountiesCompleted, runVariant: survivor.variant });
       setSurvivorUi();
       drawSurvivor();
       overlay(survivor.ctx, survivor.canvas.width, survivor.canvas.height, text, `Score ${finalScore} · 点击部署再来一局`);
@@ -8668,7 +8745,7 @@ function init() {
       const len = Math.hypot(mx, my) || 1;
       p.x = Math.max(16, Math.min(c.width - 16, p.x + mx / len * p.speed * dt / 1000));
       p.y = Math.max(16, Math.min(c.height - 16, p.y + my / len * p.speed * dt / 1000));
-      while (survivor.spawn > Math.max(180, (700 - survivor.elapsed / 130) / Number(activeDifficultyDef().pressure || 1))) {
+      while (survivor.spawn > Math.max(180, (700 - survivor.elapsed / 130) / Number(survivor.runPressure || arcadeRunPressure('survivor', survivor.variant)))) {
         survivor.spawn = 0;
         spawnSurvivorEnemy();
       }
@@ -8922,6 +8999,8 @@ function init() {
         } : null,
         anomalyCount: survivor.anomalyCount,
         anomalyCooldown: Math.ceil(survivor.anomalyCooldown),
+        variant: survivor.variant || activeArcadeRunVariant('survivor'),
+        runPressure: Number((survivor.runPressure || arcadeRunPressure('survivor', survivor.variant)).toFixed(3)),
         bounty: {
           id: currentSurvivorBounty()?.id || '',
           label: currentSurvivorBounty()?.label || '',
@@ -9099,8 +9178,8 @@ function init() {
       sweep: { label: '横扫光栅', color: '#EC4899' }
     };
 
-    function bossShieldMaxHp() {
-      const pressure = Math.max(1, Number(activeDifficultyDef().pressure || 1));
+    function bossShieldMaxHp(pressure = Number(bossMode.runPressure || activeDifficultyDef().pressure || 1)) {
+      pressure = Math.max(1, Number(pressure || 1));
       return Math.round(112 + (pressure - 1) * 42);
     }
 
@@ -9224,7 +9303,9 @@ function init() {
     function startBoss() {
       const bonuses = loadoutBonuses();
       const tuning = difficultyTuning();
-      const maxHp = Math.round(1000 * Number(tuning.bossHp || 1));
+      const variant = activeArcadeRunVariant('boss');
+      const runPressure = arcadeRunPressure('boss', variant);
+      const maxHp = Math.round(1000 * Number(tuning.bossHp || 1) * runPressure);
       bossMode.running = true;
       bossMode.paused = false;
       bossMode.last = performance.now();
@@ -9243,6 +9324,8 @@ function init() {
       bossMode.telegraphDuration = 0;
       bossMode.patternFlash = 0;
       bossMode.weakpoint = { active: false, hits: 0, required: 3, x: 280, y: 92, r: 20, pattern: '', timer: 0 };
+      bossMode.variant = variant;
+      bossMode.runPressure = runPressure;
       bossMode.shield = createBossShield();
       bossMode.breakCount = 0;
       bossMode.breakChain = 0;
@@ -9265,7 +9348,7 @@ function init() {
       cancelAnimationFrame(bossMode.raf);
       localStorage.setItem(bossMode.bestKey, String(Math.max(Number(localStorage.getItem(bossMode.bestKey) || 0), Math.floor(bossMode.score))));
       if (text === 'PRISM BROKEN') unlockAchievement('boss_clear');
-      recordPremiumResult('boss', bossMode.score, { phase: bossMode.boss.phase, graze: bossMode.player.graze, bestGrazeStreak: bossMode.player.bestGrazeStreak, focusSurges: bossMode.focusSurges, breakChain: bossMode.breakChain, shieldShatters: Number(bossMode.shield?.shatters || 0) });
+      recordPremiumResult('boss', bossMode.score, { phase: bossMode.boss.phase, graze: bossMode.player.graze, bestGrazeStreak: bossMode.player.bestGrazeStreak, focusSurges: bossMode.focusSurges, breakChain: bossMode.breakChain, shieldShatters: Number(bossMode.shield?.shatters || 0), runVariant: bossMode.variant });
       setBossUi();
       updateBossPauseButton();
       drawBoss();
@@ -9389,6 +9472,8 @@ function init() {
         focusFlash: Math.ceil(Number(bossMode.focusFlash || 0)),
         focusSurges: Number(bossMode.focusSurges || 0),
         shield: bossShieldState(),
+        variant: bossMode.variant || activeArcadeRunVariant('boss'),
+        runPressure: Number((bossMode.runPressure || arcadeRunPressure('boss', bossMode.variant)).toFixed(3)),
         graze: Number(bossMode.player.graze || 0),
         grazeStreak: Number(bossMode.player.grazeStreak || 0),
         bestGrazeStreak: Number(bossMode.player.bestGrazeStreak || 0),
@@ -9452,7 +9537,7 @@ function init() {
     function startBossTelegraph(forcedPattern = '') {
       if (bossMode.queuedPattern) return bossMode.queuedPattern;
       const phase = bossPhaseFromHp();
-      const pressure = Number(activeDifficultyDef().pressure || 1);
+      const pressure = Number(bossMode.runPressure || arcadeRunPressure('boss', bossMode.variant));
       const pattern = forcedPattern || pickBossPattern(phase);
       bossMode.queuedPattern = pattern;
       bossMode.currentPattern = pattern;
@@ -9557,7 +9642,7 @@ function init() {
           spawnBossPattern(bossMode.queuedPattern);
           bossMode.patternTimer = 0;
         }
-      } else if (bossMode.patternTimer > Math.max(430, (1150 - phase * 170) / Number(activeDifficultyDef().pressure || 1))) {
+      } else if (bossMode.patternTimer > Math.max(430, (1150 - phase * 170) / Number(bossMode.runPressure || arcadeRunPressure('boss', bossMode.variant)))) {
         bossMode.patternTimer = 0;
         startBossTelegraph();
       }
@@ -10095,7 +10180,8 @@ function init() {
     function resetDriftState() {
       const bonuses = loadoutBonuses();
       const tuning = difficultyTuning();
-      const pressure = Number(activeDifficultyDef().pressure || 1);
+      const variant = activeArcadeRunVariant('drift');
+      const pressure = arcadeRunPressure('drift', variant);
       drift.running = true;
       drift.paused = false;
       drift.last = performance.now();
@@ -10125,7 +10211,9 @@ function init() {
       drift.contractProgress = 0;
       drift.contractsCompleted = 0;
       drift.lastContract = '';
-      drift.lastTactic = '起跑相位已就绪';
+      drift.lastTactic = variant.active ? `${variant.short} · 起跑相位已就绪` : '起跑相位已就绪';
+      drift.variant = variant;
+      drift.runPressure = pressure;
       drift.splits = [];
       drift.rival = { x: 132, y: 238, r: 13, segment: 0, progress: 0, speed: 0.000092 * pressure, flash: 0, pressure: 0, gap: -0.2 };
       drift.player = { x: 70, y: 276, vx: 0, vy: 0, angle: -0.62, r: 12, shield: 100 + Number(bonuses.driftShield || 0) + Number(tuning.shield || 0), trail: [] };
@@ -10374,7 +10462,8 @@ function init() {
         draft: Math.floor(drift.draftBank),
         contractsCompleted: drift.contractsCompleted,
         heatPeak: Math.floor(drift.heatPeak),
-        phaseUses: drift.phaseUses
+        phaseUses: drift.phaseUses,
+        runVariant: drift.variant
       });
       setDriftUi();
       updateDriftPauseButton();
@@ -10819,7 +10908,9 @@ function init() {
     function newHeist() {
       const bonuses = loadoutBonuses();
       const tuning = difficultyTuning();
-      const coneDelta = Number(tuning.guardCone || 0);
+      const variant = activeArcadeRunVariant('heist');
+      const runPressure = arcadeRunPressure('heist', variant);
+      const coneDelta = Number(tuning.guardCone || 0) + (variant.active ? 1 : 0);
       heist.grid = Array.from({ length: 13 }, (_, y) => Array.from({ length: 20 }, (_, x) => (x === 0 || y === 0 || x === 19 || y === 12 || (x % 4 === 0 && y % 3 !== 1)) ? 1 : 0));
       heist.player = { x: 1, y: 1 };
       heist.keys = [{ x: 5, y: 2 }, { x: 10, y: 5 }, { x: 15, y: 3 }, { x: 13, y: 10 }];
@@ -10851,14 +10942,16 @@ function init() {
       heist.collected = 0;
       heist.loot = 0;
       heist.steps = 0;
-      heist.security = 0;
-      heist.securityPeak = 0;
+      heist.security = variant.active ? 4 : 0;
+      heist.securityPeak = heist.security;
       heist.cloaks = Math.max(1, 2 + Number(bonuses.heistCloaks || 0) + (activeDifficultyDef().id === 'training' ? 1 : 0));
       heist.cloakTurns = 0;
       heist.decoys = Math.max(1, 2 + (activeDifficultyDef().id === 'training' ? 1 : 0));
       heist.decoy = null;
       heist.alert = 'LOW';
-      heist.lastTactic = 'INFILTRATE';
+      heist.lastTactic = variant.active ? variant.short : 'INFILTRATE';
+      heist.variant = variant;
+      heist.runPressure = runPressure;
       heist.alarmFlash = 0;
       heist.routeLabel = 'SCAN';
       heist.routeRisk = 0;
@@ -11228,6 +11321,8 @@ function init() {
         risk: intel.risk,
         target: intel.target,
         route: intel.route,
+        variant: heist.variant || activeArcadeRunVariant('heist'),
+        runPressure: Number((heist.runPressure || arcadeRunPressure('heist', heist.variant)).toFixed(3)),
         heatCells: intel.heatCells,
         cameras: intel.cameras,
         caches: intel.caches,
@@ -11267,8 +11362,10 @@ function init() {
           y: guard.y,
           axis: guard.axis,
           dir: guard.dir,
+          cone: guard.cone,
           distracted: guard.distracted || 0
         })),
+        cameraCones: heist.cameras.map(camera => camera.cone),
         keys: heist.collected,
         remainingKeys: heist.keys.length,
         loot: heist.loot,
@@ -11403,7 +11500,8 @@ function init() {
           route: heist.routeLabel,
           loot: heist.loot,
           security: Math.round(heist.securityPeak),
-          hacksCompleted: heist.hacksCompleted
+          hacksCompleted: heist.hacksCompleted,
+          runVariant: heist.variant
         });
         heist.alert = 'CLEAR';
       }
@@ -11764,19 +11862,23 @@ function init() {
     function newChain() {
       const bonuses = loadoutBonuses();
       const tuning = difficultyTuning();
+      const variant = activeArcadeRunVariant('chain');
+      const runPressure = arcadeRunPressure('chain', variant);
       chain.score = 0;
       chain.moves = Math.max(20, 30 + Number(bonuses.chainMoves || 0) + Number(tuning.chainMoves || 0));
       chain.combo = 0;
       chain.streak = 0;
       chain.mult = 1;
-      chain.target = Math.round(9000 * Number(tuning.chainTarget || 1));
+      chain.target = Math.round(Math.max(9000, Number(variant.target || 0)) * Number(tuning.chainTarget || 1) * Number(variant.pressure || 1));
       chain.phaseIndex = 0;
       chain.bestMove = null;
-      chain.feedback = '寻找 3+ 同色能量团';
+      chain.feedback = variant.active ? `${variant.short} · 寻找 3+ 同色能量团` : '寻找 3+ 同色能量团';
       chain.lastGain = 0;
       chain.lastClear = 0;
       chain.lastSpecial = '';
       chain.specialsTriggered = 0;
+      chain.variant = variant;
+      chain.runPressure = runPressure;
       resetChainLedger();
       chain.finished = false;
       chain.recorded = false;
@@ -12000,7 +12102,7 @@ function init() {
         if (!chain.recorded) {
           chain.recorded = true;
           if (chain.score >= chain.target) unlockAchievement('chain_clear');
-          recordPremiumResult('chain', chain.score, { movesLeft: chain.moves, combo: chain.combo, mult: chain.mult, phase: chain.phaseIndex, recipes: chain.recipesCompleted });
+          recordPremiumResult('chain', chain.score, { movesLeft: chain.moves, combo: chain.combo, mult: chain.mult, phase: chain.phaseIndex, recipes: chain.recipesCompleted, runVariant: chain.variant });
         }
       }
     }
@@ -12060,6 +12162,8 @@ function init() {
         streak: chain.streak,
         mult: Number(chain.mult.toFixed(2)),
         target: chain.target,
+        variant: chain.variant || activeArcadeRunVariant('chain'),
+        runPressure: Number((chain.runPressure || arcadeRunPressure('chain', chain.variant)).toFixed(3)),
         phase: phase?.label || 'MASTER',
         goal: phase?.goal || '目标分数',
         phaseIndex: chain.phaseIndex,
@@ -12274,7 +12378,9 @@ function init() {
     function newTactics({ shouldFocus = false } = {}) {
       const bonuses = loadoutBonuses();
       const tuning = difficultyTuning();
-      const enemyHpScale = Number(tuning.enemyHp || 1);
+      const variant = activeArcadeRunVariant('tactics');
+      const runPressure = arcadeRunPressure('tactics', variant);
+      const enemyHpScale = Number(tuning.enemyHp || 1) * Number(variant.pressure || 1);
       tactics.walls = new Set([
         tacticsKey(2, 2), tacticsKey(3, 2), tacticsKey(7, 2),
         tacticsKey(5, 3), tacticsKey(1, 4), tacticsKey(8, 4),
@@ -12318,7 +12424,9 @@ function init() {
       tactics.lastAction = '';
       tactics.won = false;
       tactics.lost = false;
-      tactics.message = '夺取 3 个数据核心后撤离';
+      tactics.variant = variant;
+      tactics.runPressure = runPressure;
+      tactics.message = variant.active ? `${variant.short} · 夺取 3 个数据核心后撤离` : '夺取 3 个数据核心后撤离';
       tactics.flash = 0;
       setTacticsUi();
       if (shouldFocus) focusStage();
@@ -12509,6 +12617,7 @@ function init() {
       const cover = tacticsCoverProfile();
 
       livingTacticsEnemies().forEach(enemy => {
+        const incomingPressure = Math.max(1, Number(tactics.runPressure || arcadeRunPressure('tactics', tactics.variant)));
         if (enemy.disrupted > 0) {
           intents.push({ id: enemy.id, type: enemy.type, mode: 'disrupted', label: 'JAM', turns: enemy.disrupted });
           return;
@@ -12529,7 +12638,7 @@ function init() {
             if (last) lines.push({ from: tacticsCellCenter(enemy.x, enemy.y), to: tacticsCellCenter(last.x, last.y), tone: 'lane' });
           });
           if (aligned && dist <= 6) {
-            incoming += Math.max(4, 16 - cover.mitigation);
+            incoming += Math.max(4, Math.round((16 - cover.mitigation) * incomingPressure));
             addTacticsDanger(danger, p.x, p.y, 'impact');
             lines.push({ from: tacticsCellCenter(enemy.x, enemy.y), to: tacticsCellCenter(p.x, p.y), tone: 'impact' });
             intents.push({ id: enemy.id, type: enemy.type, mode: 'lock', label: 'LOCK' });
@@ -12540,7 +12649,7 @@ function init() {
         }
 
         if (dist <= 1) {
-          incoming += Math.max(4, (enemy.type === 'warden' ? 24 : 15) - cover.mitigation);
+          incoming += Math.max(4, Math.round(((enemy.type === 'warden' ? 24 : 15) - cover.mitigation) * incomingPressure));
           addTacticsDanger(danger, p.x, p.y, 'impact');
           intents.push({ id: enemy.id, type: enemy.type, mode: 'strike', label: 'STRIKE' });
           return;
@@ -12689,7 +12798,9 @@ function init() {
     function damageTacticsPlayer(amount) {
       const cover = tacticsCoverProfile();
       const momentumGuard = tactics.momentum >= 5 ? 3 : 0;
-      const mitigated = Math.max(1, amount - cover.mitigation - momentumGuard);
+      const pressure = Math.max(1, Number(tactics.runPressure || arcadeRunPressure('tactics', tactics.variant)));
+      const pressuredAmount = Math.round(Number(amount || 0) * pressure);
+      const mitigated = Math.max(1, pressuredAmount - cover.mitigation - momentumGuard);
       const absorbed = Math.min(tactics.player.shield, mitigated);
       tactics.player.shield -= absorbed;
       tactics.player.hp -= mitigated - absorbed;
@@ -12700,7 +12811,7 @@ function init() {
         tactics.lost = true;
         tactics.message = '机甲失去行动能力';
       }
-      return { raw: amount, mitigated, absorbed, cover };
+      return { raw: amount, pressured: pressuredAmount, mitigated, absorbed, cover };
     }
 
     function damageTacticsEnemy(enemy, amount) {
@@ -12724,7 +12835,7 @@ function init() {
       unlockAchievement('tactics_clear');
       if (tactics.player.hp >= 80) unlockAchievement('tactics_clean');
       if (livingTacticsEnemies().length === 0) unlockAchievement('tactics_sweep');
-      recordPremiumResult('tactics', score, { turns: tactics.turn, hp: tactics.player.hp, kills: tactics.kills, combo: tactics.combo, surges: tactics.surges });
+      recordPremiumResult('tactics', score, { turns: tactics.turn, hp: tactics.player.hp, kills: tactics.kills, combo: tactics.combo, surges: tactics.surges, runVariant: tactics.variant });
       tactics.message = `撤离成功 · 评分 ${Math.floor(score)}`;
     }
 
@@ -13094,6 +13205,8 @@ function init() {
         surges: tactics.surges,
         lastAction: tactics.lastAction,
         message: tactics.message,
+        variant: tactics.variant || activeArcadeRunVariant('tactics'),
+        runPressure: Number((tactics.runPressure || arcadeRunPressure('tactics', tactics.variant)).toFixed(3)),
         cover,
         route: {
           label: route.label,
@@ -13142,6 +13255,8 @@ function init() {
         premium: {
           active: () => premiumActive,
           cockpit: () => arcadeCockpitSnapshot(),
+          runVariant: (game = premiumActive) => activeArcadeRunVariant(game),
+          daily: () => getDailyChallenge(),
           pauseRealtime: (reason = 'debug') => pauseAllPremiumRealtimeGames(reason),
           survivorRunning: () => survivor.running,
           survivorPaused: () => survivor.paused,
@@ -13171,6 +13286,8 @@ function init() {
             bullets: bossMode.bullets.length,
             weak: bossWeakState(),
             shield: bossShieldState(),
+            variant: bossMode.variant || activeArcadeRunVariant('boss'),
+            runPressure: Number((bossMode.runPressure || arcadeRunPressure('boss', bossMode.variant)).toFixed(3)),
             breakCount: bossMode.breakCount,
             hud: document.getElementById('premium-boss-pattern')?.textContent || '',
             weakHud: document.getElementById('premium-boss-weak')?.textContent || '',
@@ -13293,10 +13410,13 @@ function init() {
             },
             lastContract: drift.lastContract,
             lastTactic: drift.lastTactic,
+            variant: drift.variant || activeArcadeRunVariant('drift'),
+            runPressure: Number((drift.runPressure || arcadeRunPressure('drift', drift.variant)).toFixed(3)),
             rival: {
               gap: Number((drift.rival?.gap || 0).toFixed(2)),
               segment: drift.rival?.segment || 0,
               progress: Number((drift.rival?.progress || 0).toFixed(2)),
+              speed: Number((drift.rival?.speed || 0).toFixed(7)),
               flash: Math.ceil(drift.rival?.flash || 0)
             },
             splits: drift.splits.map(split => ({ ...split })),

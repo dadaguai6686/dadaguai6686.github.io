@@ -6,6 +6,40 @@ const bcrypt = require('bcryptjs');
 
 const dbPath = path.resolve(process.env.DB_PATH || path.join(__dirname, 'blog.db'));
 const dbDir = path.dirname(dbPath);
+const isProduction = process.env.NODE_ENV === 'production';
+
+function passwordComplexityScore(password) {
+  return [
+    /[a-z]/.test(password),
+    /[A-Z]/.test(password),
+    /\d/.test(password),
+    /[^A-Za-z0-9]/.test(password)
+  ].filter(Boolean).length;
+}
+
+function isUnsafeAdminPassword(password, username = 'admin') {
+  const value = String(password || '').trim();
+  const normalized = value.toLowerCase();
+  const normalizedUser = String(username || '').trim().toLowerCase();
+  return value.length < 12 ||
+    passwordComplexityScore(value) < 3 ||
+    (normalizedUser && normalized === normalizedUser) ||
+    normalized.includes('replace-with') ||
+    normalized.includes('change-me') ||
+    normalized.includes('changeme') ||
+    [
+      'admin',
+      'admin123',
+      'password',
+      'password123',
+      'your-password',
+      'test-password'
+    ].includes(normalized);
+}
+
+if (isProduction && process.env.ADMIN_PASSWORD && isUnsafeAdminPassword(process.env.ADMIN_PASSWORD, process.env.ADMIN_USERNAME || 'admin')) {
+  throw new Error('ADMIN_PASSWORD must be a non-placeholder production password with at least 12 characters and mixed character classes.');
+}
 
 if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
@@ -35,12 +69,15 @@ db.serialize(() => {
     if (err) {
       console.error('Error checking users:', err);
     } else if (row.count === 0) {
-      const defaultPasswordAllowed = process.env.NODE_ENV !== 'production';
+      const defaultPasswordAllowed = !isProduction;
       const adminUsername = process.env.ADMIN_USERNAME || 'admin';
       const adminPassword = process.env.ADMIN_PASSWORD || (defaultPasswordAllowed ? 'admin123' : '');
       if (!adminPassword) {
         console.warn('Skipping admin seed: set ADMIN_PASSWORD before first production deployment.');
         return;
+      }
+      if (isProduction && isUnsafeAdminPassword(adminPassword, adminUsername)) {
+        throw new Error('Refusing to seed production admin user with an unsafe ADMIN_PASSWORD.');
       }
       const salt = bcrypt.genSaltSync(10);
       const hash = bcrypt.hashSync(adminPassword, salt);

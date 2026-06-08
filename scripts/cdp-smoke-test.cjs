@@ -1454,8 +1454,12 @@ async function run() {
       briefingTactic: document.querySelector('#premium-briefing-tactic')?.textContent || '',
       briefingMedal: document.querySelector('#premium-briefing-medal')?.textContent || '',
       briefingLoadout: document.querySelector('#premium-briefing-loadout')?.textContent || '',
+      briefingVariant: document.querySelector('#premium-briefing-variant')?.textContent || '',
+      briefingVariantTone: document.querySelector('#premium-briefing-variant')?.dataset.tone || '',
       briefingStartTarget: document.querySelector('#premium-briefing-start')?.dataset.briefingGame || '',
       briefingStartLabel: document.querySelector('#premium-briefing-start')?.textContent.trim() || '',
+      debugDaily: window.__atherixDebug?.premium?.daily?.() || {},
+      debugVariant: window.__atherixDebug?.premium?.runVariant?.(window.__atherixDebug?.premium?.active?.() || 'survivor') || {},
       directorPanel: !!document.querySelector('#premium-arcade-director'),
       directorTarget: document.querySelector('#premium-director-start')?.dataset.targetGame || '',
       directorTitle: document.querySelector('#premium-director-title')?.textContent || '',
@@ -1571,6 +1575,9 @@ async function run() {
       tactic: document.querySelector('#premium-briefing-tactic')?.textContent.trim() || '',
       medal: document.querySelector('#premium-briefing-medal')?.textContent.trim() || '',
       loadout: document.querySelector('#premium-briefing-loadout')?.textContent.trim() || '',
+      variant: document.querySelector('#premium-briefing-variant')?.textContent.trim() || '',
+      variantTone: document.querySelector('#premium-briefing-variant')?.dataset.tone || '',
+      debugVariant: window.__atherixDebug?.premium?.runVariant?.(mode) || {},
       startTarget: document.querySelector('#premium-briefing-start')?.dataset.briefingGame || '',
       startLabel: document.querySelector('#premium-briefing-start')?.textContent.trim() || ''
     });
@@ -1586,6 +1593,72 @@ async function run() {
       horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
     };
   })()`);
+  const arcadeVariantState = await evaluate(`(async () => {
+    const api = window.__atherixDebug?.premium;
+    const modes = ['survivor', 'boss', 'drift', 'heist', 'chain', 'tactics'];
+    const daily = api?.daily?.() || {};
+    const league = api?.league?.() || {};
+    const snapshots = modes.map(mode => {
+      document.querySelector(\`[data-premium-game="\${mode}"]\`)?.click();
+      const variant = api?.runVariant?.(mode) || {};
+      return {
+        mode,
+        text: document.querySelector('#premium-briefing-variant')?.textContent.trim() || '',
+        tone: document.querySelector('#premium-briefing-variant')?.dataset.tone || '',
+        variant
+      };
+    });
+    const target = snapshots.find(item => item.variant?.active)?.mode || '';
+    let playState = null;
+    let appliedMetric = null;
+    if (target) {
+      document.querySelector(\`[data-premium-game="\${target}"]\`)?.click();
+      if (target === 'survivor') {
+        document.querySelector('#premium-survivor-start')?.click();
+        await new Promise(resolve => setTimeout(resolve, 180));
+        playState = api?.survivorState?.() || {};
+        appliedMetric = Number(playState.anomalyCooldown || 0);
+      } else if (target === 'boss') {
+        document.querySelector('#premium-boss-start')?.click();
+        await new Promise(resolve => setTimeout(resolve, 180));
+        playState = api?.bossPattern?.() || {};
+        appliedMetric = Number(playState.shield?.maxHp || 0);
+      } else if (target === 'drift') {
+        document.querySelector('#premium-drift-start')?.click();
+        await new Promise(resolve => setTimeout(resolve, 180));
+        playState = api?.driftLineState?.() || {};
+        appliedMetric = Number(playState.rival?.speed || 0);
+      } else if (target === 'heist') {
+        document.querySelector('#premium-heist-new')?.click();
+        await new Promise(resolve => setTimeout(resolve, 80));
+        playState = api?.heistIntel?.() || {};
+        appliedMetric = Math.max(...(playState.guards || []).map(guard => Number(guard.cone || 0)));
+      } else if (target === 'chain') {
+        document.querySelector('#premium-chain-new')?.click();
+        await new Promise(resolve => setTimeout(resolve, 80));
+        playState = api?.chainState?.() || {};
+        appliedMetric = Number(playState.target || 0);
+      } else if (target === 'tactics') {
+        document.querySelector('#premium-tactics-start')?.click();
+        await new Promise(resolve => setTimeout(resolve, 120));
+        playState = api?.tacticsState?.() || {};
+        appliedMetric = Math.max(...(playState.enemies || []).map(enemy => Number(enemy.maxHp || 0)));
+      }
+      api?.pauseRealtime?.('variant-smoke');
+    }
+    document.querySelector('[data-premium-game="survivor"]')?.click();
+    return {
+      daily,
+      league,
+      target,
+      activeModes: snapshots.filter(item => item.variant?.active).map(item => item.mode),
+      snapshots,
+      playState,
+      appliedMetric,
+      restoredMode: document.querySelector('#premium-mission-briefing')?.dataset.mode || '',
+      horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+    };
+  })()`, 8000);
   const briefingStartState = await evaluate(`(async () => {
     document.querySelector('[data-premium-game="survivor"]')?.click();
     const btn = document.querySelector('#premium-briefing-start');
@@ -2683,10 +2756,49 @@ async function run() {
         && snapshot.tactic.length > 3
         && snapshot.medal.length > 4
         && snapshot.loadout.length > 4
+        && snapshot.variant.length > 1
+        && snapshot.variantTone
+        && (!snapshot.debugVariant?.active || (snapshot.variant === snapshot.debugVariant.short && snapshot.variantTone === snapshot.debugVariant.tone))
         && snapshot.startLabel.length > 3
       )),
     `premium arcade mission briefing should update for every premium mode: ${JSON.stringify(briefingModeState)}`
   );
+  assert(arcadeInitial.briefingVariant && arcadeInitial.briefingVariantTone && arcadeInitial.debugVariant?.short === arcadeInitial.briefingVariant, `premium arcade briefing should expose the current event variant: ${JSON.stringify(arcadeInitial)}`);
+  assert(
+    arcadeVariantState.snapshots?.length === 6 &&
+      arcadeVariantState.snapshots.every(snapshot => (
+        snapshot.text &&
+        snapshot.tone &&
+        (!snapshot.variant?.active || (
+          snapshot.text === snapshot.variant.short &&
+          snapshot.tone === snapshot.variant.tone &&
+          Number(snapshot.variant.pressure || 0) > 1 &&
+          Number(snapshot.variant.scoreBoost || 0) > 0 &&
+          Array.isArray(snapshot.variant.sourceKinds) &&
+          snapshot.variant.sourceKinds.length >= 1
+        ))
+      )) &&
+      arcadeVariantState.restoredMode === 'survivor' &&
+      !arcadeVariantState.horizontalOverflow,
+    `premium arcade daily/league variants should sync between debug state and briefing UI: ${JSON.stringify(arcadeVariantState)}`
+  );
+  if (arcadeVariantState.target) {
+    const metric = Number(arcadeVariantState.appliedMetric || 0);
+    const metricOk = {
+      survivor: metric > 0 && metric < 9200,
+      boss: metric > 112,
+      drift: metric > 0.000092,
+      heist: metric > 4,
+      chain: metric > 9000,
+      tactics: metric > 95
+    }[arcadeVariantState.target];
+    assert(
+      arcadeVariantState.playState?.variant?.active &&
+        Number(arcadeVariantState.playState?.runPressure || 0) > 1 &&
+        metricOk,
+      `premium arcade active variants should affect actual in-game tuning, not only scoring panels: ${JSON.stringify(arcadeVariantState)}`
+    );
+  }
   assert(
     briefingStartState.clicked
       && briefingStartState.before?.mode === 'survivor'
@@ -2927,6 +3039,7 @@ async function run() {
     premiumMobileState,
     arcadeInitial,
     briefingModeState,
+    arcadeVariantState,
     briefingStartState,
     premiumGamepadState,
     premiumPauseHookState,
@@ -3011,6 +3124,11 @@ function summarizeSmokeResult(result) {
         start: result.premiumMobileMetaState?.labelStarted?.start,
         pause: result.premiumMobileMetaState?.labelPaused?.pause,
         restartedElapsed: result.premiumMobileMetaState?.restarted?.elapsed
+      },
+      variant: {
+        target: result.arcadeVariantState?.target,
+        activeModes: result.arcadeVariantState?.activeModes,
+        metric: result.arcadeVariantState?.appliedMetric
       },
       survivorDraftMobile: {
         position: result.survivorDraftMobileState?.position,
