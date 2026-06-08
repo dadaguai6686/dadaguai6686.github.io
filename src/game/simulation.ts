@@ -122,6 +122,26 @@ export type RunEndReason =
   | "hullDestroyed"
   | "chargeDepleted";
 
+export type LossSource =
+  | "none"
+  | "baseDrain"
+  | "boostDrain"
+  | "repairDrain"
+  | "pulseDrain"
+  | "hazardImpact"
+  | "stormDrain"
+  | "stormDamage";
+
+export type LossResource = "none" | "charge" | "hull";
+
+export type LossContext = {
+  source: LossSource;
+  resource: LossResource;
+  detail: string;
+  elapsed: number;
+  wave: number;
+};
+
 export type RunStats = {
   boostUses: number;
   contractsCompleted: number;
@@ -184,6 +204,15 @@ export type ContractId = "lumenRoute" | "relayRush" | "cleanWave" | "stormSkippe
 
 export type ContractStatus = "active" | "completed" | "failed";
 
+export type ContractFailureReason =
+  | "none"
+  | "waveEnded"
+  | "timeExpired"
+  | "hazardHit"
+  | "stormExposure"
+  | "pulseOveruse"
+  | "runLost";
+
 export type TacticalContract = {
   id: ContractId;
   name: string;
@@ -193,17 +222,26 @@ export type TacticalContract = {
 };
 
 export type ContractState = {
+  failureDetail: string;
+  failureElapsed: number;
+  failureReason: ContractFailureReason;
   id: ContractId;
   rewardClaimed: boolean;
   startElapsed: number;
   startStats: RunStats;
   status: ContractStatus;
+  statusChangedAtElapsed: number;
 };
 
 export type ContractSnapshot = TacticalContract & {
+  failureDetail: string;
+  failureElapsed: number;
+  failureReason: ContractFailureReason;
   progress: string;
   rewardClaimed: boolean;
+  scaledRewardScore: number;
   status: ContractStatus;
+  statusChangedAtElapsed: number;
 };
 
 export type ContractFocusKind = "avoidHazard" | "avoidStorm" | "conservePulse" | "lumen" | "relay";
@@ -262,6 +300,8 @@ export type HazardThreat = {
   id: number;
   level: HazardThreatLevel;
   distance: number;
+  projectedDistance: number;
+  timeToImpact: number;
   collisionRadius: number;
   warningRadius: number;
   position: Vec2;
@@ -274,11 +314,22 @@ export const MAX_UPGRADE_LEVEL = 3;
 export const RELAY_CHECKPOINT_COUNT = 4;
 export const REPAIR_RADIUS = 76;
 export const LUMEN_PICKUP_RADIUS = 34;
+export const LUMEN_CHARGE_RESTORE = 16;
+export const LUMEN_OVERCHARGE_BUFFER = 32;
+export const RELAY_CHECKPOINT_CHARGE = 5;
+export const RELAY_REPAIR_CHARGE = 18;
+export const GATE_STABILIZE_CHARGE = 24;
+export const REPAIR_CHARGE_DRAIN_PER_SECOND = 2.2;
 export const HAZARD_PLAYER_RADIUS = 28;
 export const HAZARD_NEAR_BUFFER = 112;
 export const HAZARD_CLOSE_CALL_BUFFER = 58;
 export const HAZARD_CLOSE_CALL_ESCAPE_BUFFER = 94;
+export const HAZARD_THREAT_LOOKAHEAD_SECONDS = 0.9;
 export const HIT_RECOVERY_SECONDS = 0.85;
+const SPAWN_SAFETY_HAZARD_BUFFER = 64;
+const SPAWN_SAFETY_STORM_BUFFER = 56;
+const STORM_RELAY_SAFE_BUFFER = 24;
+const TRAINING_STORM_RELAY_SAFE_BUFFER = 42;
 
 export const CONTRACTS: Record<ContractId, TacticalContract> = {
   lumenRoute: {
@@ -368,9 +419,9 @@ export const DIFFICULTY_SETTINGS: Record<DifficultyId, Difficulty> = {
     id: "training",
     name: "练习",
     description: "电量消耗更慢，维修更快，适合先熟悉路线。",
-    drainScale: 0.74,
+    drainScale: 0.62,
     damageScale: 0.78,
-    repairScale: 1.16,
+    repairScale: 1.22,
     scoreScale: 0.78,
     hazardBonus: -1,
     stormBonus: -1
@@ -379,23 +430,23 @@ export const DIFFICULTY_SETTINGS: Record<DifficultyId, Difficulty> = {
     id: "standard",
     name: "标准",
     description: "推荐第一次游玩，完整体验风险、连锁和升级。",
-    drainScale: 1,
-    damageScale: 1,
-    repairScale: 1,
+    drainScale: 0.68,
+    damageScale: 0.92,
+    repairScale: 1.18,
     scoreScale: 1,
-    hazardBonus: 0,
+    hazardBonus: -1,
     stormBonus: 0
   },
   hardcore: {
     id: "hardcore",
     name: "硬核",
-    description: "更高电量压力和伤害，分数倍率更高。",
-    drainScale: 1.18,
-    damageScale: 1.18,
-    repairScale: 0.9,
+    description: "高挑战但保留通关路线：首波练无损，后续逐步增加碎片、风暴和分数倍率。",
+    drainScale: 0.95,
+    damageScale: 1.1,
+    repairScale: 1,
     scoreScale: 1.28,
-    hazardBonus: 1,
-    stormBonus: 1
+    hazardBonus: 0,
+    stormBonus: 0
   }
 };
 
@@ -709,6 +760,7 @@ export type GameState = {
   message: string;
   elapsed: number;
   endReason: RunEndReason;
+  lossContext: LossContext;
   stats: RunStats;
   shake: number;
 };
@@ -766,6 +818,7 @@ export function createInitialState(): GameState {
     message: "修复全部信标，收集流明，最后从北侧光门撤离。",
     elapsed: 0,
     endReason: "none",
+    lossContext: createLossContext(),
     stats: createRunStats(),
     shake: 0
   };
@@ -785,6 +838,7 @@ export function restartRun(state: GameState, upgradeId?: UpgradeId, options: Res
   next.upgrades = wonPreviousWave ? { ...state.upgrades } : createUpgradeState();
   next.elapsed = wonPreviousWave ? state.elapsed : 0;
   next.endReason = "none";
+  next.lossContext = createLossContext(next.wave, next.elapsed);
   next.stats = wonPreviousWave ? { ...state.stats } : createRunStats();
   next.contract = createContractState(getContractFor(next.wave, next.difficulty), next.elapsed, next.stats);
   if (wonPreviousWave && upgradeId && next.upgrades[upgradeId] < MAX_UPGRADE_LEVEL) {
@@ -802,7 +856,7 @@ export function restartRun(state: GameState, upgradeId?: UpgradeId, options: Res
   next.score = wonPreviousWave ? state.score + state.wave * 500 : 0;
   next.bestCombo = wonPreviousWave ? state.bestCombo : 1;
   const difficulty = DIFFICULTY_SETTINGS[next.difficulty];
-  const extraHazards = clampInt(next.wave - 1 + difficulty.hazardBonus, 0, 4);
+  const extraHazards = getExtraHazardCount(next.wave, next.difficulty);
   next.hazards = next.hazards.concat(
     Array.from({ length: extraHazards }, (_, i) => ({
       id: 10 + i,
@@ -812,6 +866,7 @@ export function restartRun(state: GameState, upgradeId?: UpgradeId, options: Res
     }))
   );
   next.storms = createStorms(next.wave, next.difficulty, next.sector, next.routeSeed);
+  ensureSpawnSafety(next);
   const modifier = WAVE_MODIFIERS[next.waveModifier];
   const sector = SECTOR_LAYOUTS[next.sector];
   const route = getRoutePlan(next.routeSeed);
@@ -839,7 +894,7 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
   }
   if (next.briefingActive && playerActed) {
     next.briefingActive = false;
-    next.message = "正式开始：先沿导引线回收流明，再前往蓝色信标。";
+    next.message = getOpeningActionMessage(next);
   }
   next.elapsed += dt;
   next.comboTimer = Math.max(0, next.comboTimer - dt);
@@ -861,7 +916,8 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
 
   if (input.boost && player.boostCooldown <= 0 && (input.move.x !== 0 || input.move.y !== 0)) {
     player.boostCooldown = Math.max(0.62, 1.15 - engineLevel * 0.12);
-    player.charge = Math.max(0, player.charge - 8);
+    applyChargeLoss(next, 8, "boostDrain", "短推进耗尽了最后电量。");
+    if (finishRunIfResourcesDepleted(next)) return next;
     next.stats.boostUses += 1;
     next.shake = 0.18;
   }
@@ -883,11 +939,17 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
   const repairTarget = getActiveRepairTarget(next);
   if (repairTarget && input.repair) {
     const repairSpeed =
-      (0.26 + next.upgrades.repair * 0.07 + player.lumen * 0.005) *
+      (0.3 + next.upgrades.repair * 0.07 + player.lumen * 0.005) *
       difficulty.repairScale *
       (1 + modifier.repairBonus);
     repairTarget.progress = Math.min(1, repairTarget.progress + dt * repairSpeed);
-    player.charge = Math.max(0, player.charge - dt * 3.2);
+    applyChargeLoss(
+      next,
+      dt * REPAIR_CHARGE_DRAIN_PER_SECOND,
+      "repairDrain",
+      `维修 ${repairTarget.id + 1} 号信标时电量耗尽。`
+    );
+    if (finishRunIfResourcesDepleted(next)) return next;
     next.stats.repairSeconds += dt;
     next.message = "保持在信标旁，维修光束正在充能；每 25% 锁一个节点。";
     const nextCheckpoint = Math.min(
@@ -895,18 +957,27 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
       Math.floor(repairTarget.progress * RELAY_CHECKPOINT_COUNT)
     );
     if (nextCheckpoint > repairTarget.checkpoint && repairTarget.progress < 1) {
+      const checkpointDelta = nextCheckpoint - repairTarget.checkpoint;
       repairTarget.checkpoint = nextCheckpoint;
+      player.charge = Math.min(
+        player.maxCharge + LUMEN_OVERCHARGE_BUFFER + next.upgrades.capacitor * 4,
+        player.charge + RELAY_CHECKPOINT_CHARGE * checkpointDelta + next.upgrades.repair
+      );
       awardScore(next, 55 + nextCheckpoint * 15, 0.16);
-      next.message = `信标维修节点 ${nextCheckpoint}/${RELAY_CHECKPOINT_COUNT} 已锁定，离开也不会掉回节点以下。`;
+      next.message = `信标维修节点 ${nextCheckpoint}/${RELAY_CHECKPOINT_COUNT} 已锁定并回充，离开也不会掉回节点以下。`;
     }
     if (repairTarget.progress >= 1) {
       repairTarget.repaired = true;
       repairTarget.checkpoint = RELAY_CHECKPOINT_COUNT;
       player.lumen += 2;
+      player.charge = Math.min(
+        player.maxCharge + LUMEN_OVERCHARGE_BUFFER + next.upgrades.capacitor * 4,
+        player.charge + RELAY_REPAIR_CHARGE + next.upgrades.repair * 2
+      );
       next.stats.relaysRepaired += 1;
       awardScore(next, 260 + next.upgrades.repair * 75, 0.48);
       next.shake = 0.1;
-      next.message = `信标修复完成，${formatCombo(next.combo)} 连锁保持中。`;
+      next.message = `信标修复完成并释放回充，${formatCombo(next.combo)} 连锁保持中。`;
     }
   } else {
     let decayedRelay: Relay | undefined;
@@ -928,7 +999,8 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
   if (input.pulse && player.pulseCooldown <= 0) {
     const pulseLevel = next.upgrades.pulse;
     player.pulseCooldown = Math.max(2.8, 5.5 - pulseLevel * 0.45);
-    player.charge = Math.max(0, player.charge - 10);
+    applyChargeLoss(next, 10, "pulseDrain", "释放脉冲耗尽了最后电量。");
+    if (finishRunIfResourcesDepleted(next)) return next;
     next.stats.pulseUses += 1;
     next.hazards.forEach((hazard) => {
       const toHazard = subtract(hazard.position, player.position);
@@ -947,7 +1019,10 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
       drop.collected = true;
       player.lumen += 1;
       next.stats.lumenCollected += 1;
-      player.charge = Math.min(player.maxCharge, player.charge + 9 + next.upgrades.capacitor * 3 + modifier.lumenChargeBonus);
+      player.charge = Math.min(
+        player.maxCharge + LUMEN_OVERCHARGE_BUFFER + next.upgrades.capacitor * 4,
+        player.charge + LUMEN_CHARGE_RESTORE + next.upgrades.capacitor * 4 + modifier.lumenChargeBonus
+      );
       awardScore(next, 70, 0.25);
       next.message = `流明回收，${formatCombo(next.combo)} 连锁。`;
     }
@@ -968,8 +1043,8 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
     const collisionRadius = hazard.radius + HAZARD_PLAYER_RADIUS;
     if (hazardDistance < collisionRadius && player.invulnerable <= 0) {
       const damageScale = 1 - next.upgrades.shield * 0.12;
-      player.hull = Math.max(0, player.hull - 16 * damageScale * difficulty.damageScale);
-      player.charge = Math.max(0, player.charge - 7);
+      applyHullLoss(next, 16 * damageScale * difficulty.damageScale, "hazardImpact", "被粉色碎片撞击导致机体损毁。");
+      applyChargeLoss(next, 7, "hazardImpact", "被粉色碎片撞击耗尽了电量。");
       player.invulnerable = HIT_RECOVERY_SECONDS;
       next.stats.hitsTaken += 1;
       next.combo = 1;
@@ -988,6 +1063,7 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
       updateCloseCall(next, hazard, hazardDistance, collisionRadius);
     }
   });
+  if (finishRunIfResourcesDepleted(next)) return next;
 
   let insideStorm = false;
   next.storms.forEach((storm) => {
@@ -995,30 +1071,48 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
     const activeRadius = getStormActiveRadius(storm);
     if (distance(storm.position, player.position) < activeRadius) {
       insideStorm = true;
-      player.charge = Math.max(
-        0,
-        player.charge - dt * (9 + next.wave * 0.7) * difficulty.drainScale * (1 + modifier.stormDrainBonus)
+      applyChargeLoss(
+        next,
+        dt * (9 + next.wave * 0.7) * difficulty.drainScale * (1 + modifier.stormDrainBonus),
+        "stormDrain",
+        "紫色风暴吸走了最后电量。"
       );
       if (player.invulnerable <= 0 && storm.phase % (Math.PI * 2) > Math.PI * 1.35) {
-        player.hull = Math.max(0, player.hull - dt * (5.5 - next.upgrades.shield) * difficulty.damageScale);
+        applyHullLoss(
+          next,
+          dt * (5.5 - next.upgrades.shield) * difficulty.damageScale,
+          "stormDamage",
+          "紫色风暴震荡击穿了机体。"
+        );
       }
       next.shake = Math.max(next.shake, 0.08);
       next.message = "风暴场正在吸走电量，立刻脱离范围。";
     }
   });
+  if (finishRunIfResourcesDepleted(next)) return next;
   if (insideStorm) {
     next.stats.stormSeconds += dt;
   }
 
-  player.charge = Math.max(
-    0,
-    player.charge - dt * (2.05 + next.wave * 0.22) * difficulty.drainScale * (1 + modifier.drainBonus)
+  applyChargeLoss(
+    next,
+    dt * (1.72 + next.wave * 0.18) * difficulty.drainScale * (1 + modifier.drainBonus),
+    "baseDrain",
+    "基础航行耗电耗尽了最后电量。"
   );
+  if (finishRunIfResourcesDepleted(next)) return next;
+  const wasGateOpen = next.gate.open;
   next.gate.open = next.relays.every((relay) => relay.repaired);
+  if (!wasGateOpen && next.gate.open) {
+    player.charge = Math.min(player.maxCharge + LUMEN_OVERCHARGE_BUFFER, player.charge + GATE_STABILIZE_CHARGE);
+    if (!insideStorm) {
+      next.message = "全部信标接入，光门回充已释放，立刻向北侧撤离。";
+    }
+  }
 
-  if (next.gate.open) {
+  if (next.status === "playing" && next.gate.open) {
     const hazardDanger = getHazardThreats(next).some((threat) => threat.level === "danger");
-    if (!insideStorm && !hazardDanger) {
+    if (wasGateOpen && !insideStorm && !hazardDanger) {
       next.message = "光门已开启，飞向北侧出口。";
     }
     if (distance(next.gate.position, player.position) < 58) {
@@ -1033,13 +1127,7 @@ export function updateSimulation(state: GameState, input: InputState, dt: number
     }
   }
 
-  if (next.status === "playing" && (player.hull <= 0 || player.charge <= 0)) {
-    next.status = "lost";
-    next.endReason = player.hull <= 0 ? "hullDestroyed" : "chargeDepleted";
-    next.message = player.hull <= 0 ? "无人机损毁，重新启动救援。" : "电量归零，光网被虚空吞没。";
-  }
-
-  updateContractProgress(next, difficulty, modifier);
+  updateContractProgress(next);
   if (next.status === "won" || next.status === "completed") {
     next.message =
       next.status === "completed"
@@ -1120,6 +1208,9 @@ function addNextWaveUpgradePriority(state: GameState, waveStats: RunStats, add: 
   const nextWave = state.wave + 1;
   const nextContract = getContractFor(nextWave, state.difficulty);
   const nextModifier = getWaveModifierFor(nextWave, state.difficulty);
+  if (state.difficulty === "hardcore" && nextWave === 4 && waveStats.lumenCollected <= 2) {
+    add("engine");
+  }
   if (nextContract === "relayRush" || nextModifier === "overclockedGrid") {
     add("repair");
   }
@@ -1303,7 +1394,7 @@ function getPerformanceDetail(state: GameState): string {
 export function getContractFor(wave: number, difficulty: DifficultyId): ContractId {
   const standardOrder: ContractId[] = ["lumenRoute", "relayRush", "cleanWave", "stormSkipper", "pulseDiscipline"];
   if (difficulty === "hardcore") {
-    const hardcoreOrder: ContractId[] = ["cleanWave", "stormSkipper", "pulseDiscipline", "relayRush", "lumenRoute"];
+    const hardcoreOrder: ContractId[] = ["cleanWave", "relayRush", "stormSkipper", "pulseDiscipline", "lumenRoute"];
     return hardcoreOrder[clampInt(wave - 1, 0, hardcoreOrder.length - 1)];
   }
   return standardOrder[clampInt(wave - 1, 0, standardOrder.length - 1)];
@@ -1311,11 +1402,15 @@ export function getContractFor(wave: number, difficulty: DifficultyId): Contract
 
 export function createContractState(id: ContractId, startElapsed = 0, startStats: RunStats = createRunStats()): ContractState {
   return {
+    failureDetail: "",
+    failureElapsed: 0,
+    failureReason: "none",
     id,
     rewardClaimed: false,
     startElapsed,
     startStats: { ...startStats },
-    status: "active"
+    status: "active",
+    statusChangedAtElapsed: startElapsed
   };
 }
 
@@ -1323,9 +1418,14 @@ export function getContractSnapshot(state: GameState): ContractSnapshot {
   const contract = CONTRACTS[state.contract.id];
   return {
     ...contract,
+    failureDetail: state.contract.failureDetail,
+    failureElapsed: state.contract.failureElapsed,
+    failureReason: state.contract.failureReason,
     progress: getContractProgressText(state),
     rewardClaimed: state.contract.rewardClaimed,
-    status: state.contract.status
+    scaledRewardScore: getContractRewardScore(state),
+    status: state.contract.status,
+    statusChangedAtElapsed: state.contract.statusChangedAtElapsed
   };
 }
 
@@ -1438,20 +1538,56 @@ export function getActiveRepairTarget(state: GameState): Relay | undefined {
 }
 
 export function getHazardThreats(state: GameState): HazardThreat[] {
+  const modifier = WAVE_MODIFIERS[state.waveModifier];
+  const hazardSpeed = 1 + modifier.hazardSpeedBonus;
   return state.hazards.map((hazard) => {
     const collisionRadius = hazard.radius + HAZARD_PLAYER_RADIUS;
     const warningRadius = collisionRadius + HAZARD_NEAR_BUFFER;
     const hazardDistance = distance(hazard.position, state.player.position);
+    let projectedDistance = hazardDistance;
+    let timeToImpact =
+      hazardDistance <= collisionRadius + 22 ? 0 : Number.POSITIVE_INFINITY;
+    const samples = 10;
+    for (let sample = 1; sample <= samples; sample += 1) {
+      const sampleTime = (HAZARD_THREAT_LOOKAHEAD_SECONDS * sample) / samples;
+      const projectedHazard = projectHazardPosition(hazard, sampleTime, state.arena, hazardSpeed);
+      const projectedPlayer = {
+        x: clamp(state.player.position.x + state.player.velocity.x * sampleTime, 44, state.arena.width - 44),
+        y: clamp(state.player.position.y + state.player.velocity.y * sampleTime, 44, state.arena.height - 44)
+      };
+      const sampleDistance = distance(projectedHazard, projectedPlayer);
+      if (sampleDistance < projectedDistance) {
+        projectedDistance = sampleDistance;
+      }
+      if (sampleDistance <= collisionRadius + 22 && timeToImpact === Number.POSITIVE_INFINITY) {
+        timeToImpact = sampleTime;
+      }
+    }
+    const threatDistance = Math.min(hazardDistance, projectedDistance);
     return {
       id: hazard.id,
-      level: hazardDistance <= collisionRadius + 18 ? "danger" : hazardDistance <= warningRadius ? "near" : "safe",
+      level: threatDistance <= collisionRadius + 18 ? "danger" : threatDistance <= warningRadius ? "near" : "safe",
       distance: hazardDistance,
+      projectedDistance,
+      timeToImpact,
       collisionRadius,
       warningRadius,
       position: { ...hazard.position },
       radius: hazard.radius
     };
   });
+}
+
+export function projectHazardPosition(
+  hazard: Hazard,
+  seconds: number,
+  arena: { width: number; height: number },
+  speedScale: number
+): Vec2 {
+  return {
+    x: reflectWithin(hazard.position.x + hazard.velocity.x * seconds * speedScale, 70, arena.width - 70),
+    y: reflectWithin(hazard.position.y + hazard.velocity.y * seconds * speedScale, 84, arena.height - 70)
+  };
 }
 
 export function getUnlockedAchievementsForRun(context: AchievementRunContext): AchievementId[] {
@@ -1488,11 +1624,11 @@ export function getWaveModifierFor(wave: number, difficulty: DifficultyId): Wave
   ];
   if (difficulty === "hardcore") {
     const hardcoreOrder: WaveModifierId[] = [
+      "steadySignal",
       "shardCurrent",
-      "stormFront",
-      "overclockedGrid",
       "lumenSurge",
-      "stormFront"
+      "stormFront",
+      "overclockedGrid"
     ];
     return hardcoreOrder[clampInt(wave - 1, 0, hardcoreOrder.length - 1)];
   }
@@ -1502,7 +1638,7 @@ export function getWaveModifierFor(wave: number, difficulty: DifficultyId): Wave
 export function getSectorFor(wave: number, difficulty: DifficultyId): SectorId {
   const standardOrder: SectorId[] = ["outerRing", "crossCurrent", "southernArc", "stormSpine", "overclockCore"];
   if (difficulty === "hardcore") {
-    const hardcoreOrder: SectorId[] = ["stormSpine", "overclockCore", "crossCurrent", "southernArc", "outerRing"];
+    const hardcoreOrder: SectorId[] = ["outerRing", "crossCurrent", "stormSpine", "overclockCore", "southernArc"];
     return hardcoreOrder[clampInt(wave - 1, 0, hardcoreOrder.length - 1)];
   }
   return standardOrder[clampInt(wave - 1, 0, standardOrder.length - 1)];
@@ -1932,6 +2068,88 @@ function createRunStats(): RunStats {
   };
 }
 
+function createLossContext(wave = 0, elapsed = 0): LossContext {
+  return {
+    source: "none",
+    resource: "none",
+    detail: "",
+    elapsed,
+    wave
+  };
+}
+
+function applyChargeLoss(state: GameState, amount: number, source: LossSource, detail: string): void {
+  applyResourceLoss(state, "charge", amount, source, detail);
+}
+
+function applyHullLoss(state: GameState, amount: number, source: LossSource, detail: string): void {
+  applyResourceLoss(state, "hull", amount, source, detail);
+}
+
+function applyResourceLoss(
+  state: GameState,
+  resource: Exclude<LossResource, "none">,
+  amount: number,
+  source: LossSource,
+  detail: string
+): void {
+  if (amount <= 0) return;
+  const player = state.player;
+  const before = resource === "charge" ? player.charge : player.hull;
+  const after = Math.max(0, before - amount);
+  if (resource === "charge") {
+    player.charge = after;
+  } else {
+    player.hull = after;
+  }
+  if (after >= before) return;
+
+  if (after <= 0 && shouldReplaceLossContext(state.lossContext, resource)) {
+    state.lossContext = {
+      source,
+      resource,
+      detail,
+      elapsed: state.elapsed,
+      wave: state.wave
+    };
+  }
+}
+
+function shouldReplaceLossContext(
+  current: LossContext,
+  incomingResource: Exclude<LossResource, "none">
+): boolean {
+  if (current.resource === "none") return true;
+  if (current.resource === "charge" && incomingResource === "hull") return true;
+  return false;
+}
+
+function finishRunIfResourcesDepleted(state: GameState): boolean {
+  if (state.status !== "playing") {
+    if (state.status === "lost") {
+      updateContractProgress(state);
+    }
+    return state.status === "lost";
+  }
+  if (state.player.hull > 0 && state.player.charge > 0) {
+    return false;
+  }
+  state.status = "lost";
+  state.endReason = state.player.hull <= 0 ? "hullDestroyed" : "chargeDepleted";
+  state.message = state.player.hull <= 0 ? "无人机损毁，重新启动救援。" : "电量归零，光网被虚空吞没。";
+  if (state.lossContext.resource === "none") {
+    state.lossContext = {
+      source: state.endReason === "hullDestroyed" ? "hazardImpact" : "baseDrain",
+      resource: state.endReason === "hullDestroyed" ? "hull" : "charge",
+      detail: state.message,
+      elapsed: state.elapsed,
+      wave: state.wave
+    };
+  }
+  updateContractProgress(state);
+  return true;
+}
+
 export function getCurrentWaveStats(state: GameState): RunStats {
   return {
     boostUses: state.stats.boostUses - state.contract.startStats.boostUses,
@@ -1992,6 +2210,9 @@ function applySectorLayout(state: GameState): void {
 }
 
 function createStorms(wave: number, difficulty: DifficultyId, sector: SectorId, routeSeed: number): Storm[] {
+  if (wave <= 2) {
+    return [];
+  }
   const baseStorms = SECTOR_LAYOUTS[sector].storms;
   const stormCount = clampInt(Math.ceil(wave / 2) + DIFFICULTY_SETTINGS[difficulty].stormBonus, 0, baseStorms.length);
   const salt = sectorSalt(sector) + 0x5000;
@@ -2000,6 +2221,109 @@ function createStorms(wave: number, difficulty: DifficultyId, sector: SectorId, 
     position: varyRoutePosition(storm.position, routeSeed, wave, salt + storm.id, 24),
     phase: storm.phase + routeNoise(routeSeed, wave, salt + storm.id + 101) * Math.PI * 0.65
   }));
+}
+
+function ensureSpawnSafety(state: GameState): void {
+  const spawn = state.player.position;
+  state.hazards.forEach((hazard) => {
+    const minimumDistance = hazard.radius + HAZARD_PLAYER_RADIUS + SPAWN_SAFETY_HAZARD_BUFFER;
+    hazard.position = pushPointAwayFromAnchor(
+      hazard.position,
+      spawn,
+      minimumDistance,
+      state.routeSeed,
+      state.wave,
+      0x9100 + hazard.id
+    );
+  });
+  state.storms.forEach((storm) => {
+    const spawnMinimumDistance = getStormActiveRadius(storm) + SPAWN_SAFETY_STORM_BUFFER;
+    const relayMinimumDistance = getStormRelayMinimumDistance(storm, state.difficulty);
+    let position = storm.position;
+    for (let pass = 0; pass < 4; pass += 1) {
+      position = pushPointAwayFromAnchor(
+        position,
+        spawn,
+        spawnMinimumDistance,
+        state.routeSeed,
+        state.wave,
+        0x9200 + storm.id + pass * 29
+      );
+      state.relays.forEach((relay, relayIndex) => {
+        position = pushPointAwayFromAnchor(
+          position,
+          relay.position,
+          relayMinimumDistance,
+          state.routeSeed,
+          state.wave,
+          0x9300 + storm.id * 17 + relay.id + relayIndex + pass * 31
+        );
+      });
+    }
+    storm.position = position;
+  });
+}
+
+function getStormRelayMinimumDistance(storm: Storm, difficulty: DifficultyId): number {
+  return getStormActiveRadius(storm) + (difficulty === "training" ? TRAINING_STORM_RELAY_SAFE_BUFFER : STORM_RELAY_SAFE_BUFFER);
+}
+
+function pushPointAwayFromAnchor(
+  position: Vec2,
+  anchor: Vec2,
+  minimumDistance: number,
+  routeSeed: number,
+  wave: number,
+  salt: number
+): Vec2 {
+  const currentDistance = distance(position, anchor);
+  if (currentDistance >= minimumDistance) {
+    return position;
+  }
+  let dx = position.x - anchor.x;
+  let dy = position.y - anchor.y;
+  const length = Math.hypot(dx, dy);
+  if (length <= 0.001) {
+    const angle = routeNoise(routeSeed || 1, wave, salt) * Math.PI * 2;
+    dx = Math.cos(angle);
+    dy = Math.sin(angle);
+  } else {
+    dx /= length;
+    dy /= length;
+  }
+  return {
+    x: clamp(anchor.x + dx * minimumDistance, 92, 908),
+    y: clamp(anchor.y + dy * minimumDistance, 96, 646)
+  };
+}
+
+function getExtraHazardCount(wave: number, difficultyId: DifficultyId): number {
+  const difficulty = DIFFICULTY_SETTINGS[difficultyId];
+  if (difficultyId === "hardcore" && wave === 1) {
+    return 0;
+  }
+  return clampInt(wave - 1 + difficulty.hazardBonus, 0, 4);
+}
+
+function getOpeningActionMessage(state: GameState): string {
+  switch (state.contract.id) {
+    case "lumenRoute":
+      return "正式开始：先沿导引线回收流明，再前往蓝色信标。";
+    case "relayRush":
+      return "正式开始：速修信标合约计时中，直奔最近蓝色信标。";
+    case "cleanWave":
+      return "正式开始：无损救援合约已开始，先读粉色碎片路线，再安全切入信标。";
+    case "stormSkipper":
+      return "正式开始：风暴停留会让合约失败，先绕开紫色区域再维修。";
+    case "pulseDiscipline":
+      return "正式开始：脉冲要留给危险贴脸，用走位和推进处理普通碎片。";
+  }
+}
+
+function getContractRewardScore(state: GameState): number {
+  const difficulty = DIFFICULTY_SETTINGS[state.difficulty];
+  const modifier = WAVE_MODIFIERS[state.waveModifier];
+  return Math.round(CONTRACTS[state.contract.id].rewardScore * difficulty.scoreScale * (1 + modifier.scoreBonus));
 }
 
 function createRouteSeed(): number {
@@ -2098,12 +2422,12 @@ function formatUpgradeEffect(id: UpgradeId, level: number): string {
   if (id === "repair") {
     return level === 0
       ? "基础维修速度，信标基础得分 260"
-      : `维修速度 +${level * 7}%，信标得分 +${level * 75}`;
+      : `维修速度约 +${Math.round((level * 0.07 / 0.3) * 100)}%，信标得分 +${level * 75}`;
   }
   if (id === "capacitor") {
     return level === 0
-      ? "最大电量 100，流明回电 +9"
-      : `最大电量 +${level * 16}，流明额外回电 +${level * 3}`;
+      ? `最大电量 100，流明回电 +${LUMEN_CHARGE_RESTORE}`
+      : `最大电量 +${level * 16}，流明额外回电 +${level * 4}`;
   }
   if (id === "pulse") {
     return level === 0
@@ -2129,45 +2453,76 @@ function nearest<T extends { position: Vec2 }>(items: T[], origin: Vec2): { item
   }, undefined);
 }
 
-function updateContractProgress(state: GameState, difficulty: Difficulty, modifier: WaveModifier): void {
+function updateContractProgress(state: GameState): void {
   if (state.contract.status !== "active") return;
 
   const deltas = getContractDeltas(state);
   const waveEnded = state.status === "won" || state.status === "completed";
   const elapsed = state.elapsed - state.contract.startElapsed;
   let nextStatus: ContractStatus = "active";
+  let failureReason: ContractFailureReason = "none";
+  let failureDetail = "";
 
   switch (state.contract.id) {
     case "lumenRoute":
       if (deltas.lumenCollected >= 4) nextStatus = "completed";
-      else if (waveEnded) nextStatus = "failed";
+      else if (waveEnded) {
+        nextStatus = "failed";
+        failureReason = "waveEnded";
+        failureDetail = `本波只回收 ${Math.min(deltas.lumenCollected, 4)}/4 个流明。`;
+      }
       break;
     case "relayRush":
-      if (deltas.relaysRepaired >= 1) nextStatus = elapsed <= 38 ? "completed" : "failed";
-      else if (elapsed > 38 && deltas.relaysRepaired < 1) nextStatus = "failed";
+      if (deltas.relaysRepaired >= 1) {
+        nextStatus = elapsed <= 38 ? "completed" : "failed";
+        if (nextStatus === "failed") {
+          failureReason = "timeExpired";
+          failureDetail = `第 ${elapsed.toFixed(1)} 秒才修复第一座信标，超过 38 秒限制。`;
+        }
+      } else if (elapsed > 38 && deltas.relaysRepaired < 1) {
+        nextStatus = "failed";
+        failureReason = "timeExpired";
+        failureDetail = "38 秒内没有修复第一座信标。";
+      }
       break;
     case "cleanWave":
-      if (deltas.hitsTaken > 0) nextStatus = "failed";
+      if (deltas.hitsTaken > 0) {
+        nextStatus = "failed";
+        failureReason = "hazardHit";
+        failureDetail = `本波受击 ${deltas.hitsTaken} 次，无损合约中断。`;
+      }
       else if (waveEnded) nextStatus = "completed";
       break;
     case "stormSkipper":
-      if (deltas.stormSeconds > 1) nextStatus = "failed";
+      if (deltas.stormSeconds > 1) {
+        nextStatus = "failed";
+        failureReason = "stormExposure";
+        failureDetail = `风暴停留 ${deltas.stormSeconds.toFixed(1)} 秒，超过 1.0 秒限制。`;
+      }
       else if (waveEnded) nextStatus = "completed";
       break;
     case "pulseDiscipline":
-      if (deltas.pulseUses > 1) nextStatus = "failed";
+      if (deltas.pulseUses > 1) {
+        nextStatus = "failed";
+        failureReason = "pulseOveruse";
+        failureDetail = `本波使用 ${deltas.pulseUses} 次脉冲，超过 1 次限制。`;
+      }
       else if (waveEnded) nextStatus = "completed";
       break;
   }
 
   if (state.status === "lost" && nextStatus === "active") {
     nextStatus = "failed";
+    failureReason = "runLost";
+    failureDetail =
+      state.lossContext.source !== "none" ? state.lossContext.detail : "救援中断时合约尚未完成。";
   }
 
   if (nextStatus === "active") return;
   state.contract.status = nextStatus;
+  state.contract.statusChangedAtElapsed = state.elapsed;
   if (nextStatus === "completed" && !state.contract.rewardClaimed) {
-    const reward = Math.round(CONTRACTS[state.contract.id].rewardScore * difficulty.scoreScale * (1 + modifier.scoreBonus));
+    const reward = getContractRewardScore(state);
     state.score += reward;
     state.stats.contractsCompleted += 1;
     state.contract.rewardClaimed = true;
@@ -2175,7 +2530,18 @@ function updateContractProgress(state: GameState, difficulty: Difficulty, modifi
       state.message = `战术合约完成：${CONTRACTS[state.contract.id].name}，奖励 ${reward} 分。`;
     }
   } else if (nextStatus === "failed" && state.status === "playing") {
+    if (state.contract.failureReason === "none") {
+      state.contract.failureReason = failureReason;
+      state.contract.failureDetail = failureDetail;
+      state.contract.failureElapsed = state.elapsed;
+    }
     state.message = `战术合约失败：${CONTRACTS[state.contract.id].name}。继续完成主目标。`;
+  } else if (nextStatus === "failed") {
+    if (state.contract.failureReason === "none") {
+      state.contract.failureReason = failureReason;
+      state.contract.failureDetail = failureDetail;
+      state.contract.failureElapsed = state.elapsed;
+    }
   }
 }
 
@@ -2229,4 +2595,17 @@ function clamp(value: number, min: number, max: number): number {
 
 function clampInt(value: number, min: number, max: number): number {
   return Math.round(clamp(value, min, max));
+}
+
+function reflectWithin(value: number, min: number, max: number): number {
+  if (max <= min) return min;
+  let next = value;
+  for (let guard = 0; guard < 4 && (next < min || next > max); guard += 1) {
+    if (next < min) {
+      next = min + (min - next);
+    } else if (next > max) {
+      next = max - (next - max);
+    }
+  }
+  return clamp(next, min, max);
 }

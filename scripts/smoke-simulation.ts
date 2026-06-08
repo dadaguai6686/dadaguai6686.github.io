@@ -27,6 +27,7 @@ import {
   getRunPerformance,
   getRunRating,
   getSectorFor,
+  getStormActiveRadius,
   getUnlockedAchievementsForRun,
   getUpgradeChoices,
   getUpgradeSummaries,
@@ -48,6 +49,7 @@ const idle: InputState = {
   pulse: false
 };
 const TEST_ROUTE_SEED = 1001;
+const ROUTE_SAFETY_SEEDS = [1, 7, 42, 313, 1001, 2048, 4660, 8192, 12345, 32768, 49152, 65535];
 
 let state = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
 assert.equal(state.status, "playing");
@@ -62,17 +64,26 @@ assert.equal(state.waveModifier, "steadySignal");
 assert.equal(getUpgradeSummaries(state.upgrades).length, 5, "all upgrade tracks should be summarized");
 assert.equal(getUpgradeSummary(state.upgrades, "engine").maxLevel, MAX_UPGRADE_LEVEL);
 assert.ok(getUpgradeSummary(state.upgrades, "engine").nextEffect?.includes("推进"), "upgrade summaries should explain next effects");
+assert.ok(
+  getUpgradeSummary(state.upgrades, "repair").nextEffect?.includes("+23%"),
+  "repair upgrade summaries should show the real relative repair speed gain"
+);
 assert.equal(getWaveModifierFor(2, "standard"), "lumenSurge", "standard wave 2 should introduce lumen surge");
-assert.equal(getWaveModifierFor(1, "hardcore"), "shardCurrent", "hardcore should start with a combat modifier");
+assert.equal(getWaveModifierFor(1, "hardcore"), "steadySignal", "hardcore first wave should teach precision before stacking modifiers");
+assert.equal(getWaveModifierFor(2, "hardcore"), "shardCurrent", "hardcore wave 2 should add shard pressure before storm pressure");
 assert.equal(getSectorFor(1, "standard"), "outerRing", "standard wave 1 should start in the teaching sector");
 assert.equal(getSectorFor(2, "standard"), "crossCurrent", "standard wave 2 should change the map layout");
-assert.equal(getSectorFor(1, "hardcore"), "stormSpine", "hardcore should start in a more demanding sector");
+assert.equal(getSectorFor(1, "hardcore"), "outerRing", "hardcore first wave should keep a readable opening route");
+assert.equal(getSectorFor(2, "hardcore"), "crossCurrent", "hardcore wave 2 should remain readable before the storm spine");
 assert.equal(state.sector, "outerRing", "new standard runs should expose their sector");
+assert.equal(state.storms.length, 0, "standard wave 1 should teach supply and repair before adding storms");
 assert.equal(SECTOR_LAYOUTS[state.sector].name, "北环补给", "sector layouts should be named for the HUD");
 assert.equal(getContractFor(1, "standard"), "lumenRoute", "standard wave 1 should teach the lumen route contract");
 assert.equal(getContractFor(1, "hardcore"), "cleanWave", "hardcore should start with a precision contract");
+assert.equal(getContractFor(2, "hardcore"), "relayRush", "hardcore wave 2 should test repair tempo before storm discipline");
 assert.equal(state.contract.id, "lumenRoute", "new standard runs should include the first tactical contract");
 assert.equal(getContractSnapshot(state).status, "active", "contract snapshots should expose the active status");
+assert.equal(getContractSnapshot(state).scaledRewardScore, 360, "contract snapshots should expose the actual visible payout");
 assert.equal(getContractFocus(state).kind, "lumen", "lumen route contracts should mark lumen as the battlefield focus");
 assert.ok(getContractFocus(state).targets.length > 0, "active contracts should expose battlefield focus targets");
 assert.equal(getObjectiveHint(state).title, "先读图再出发", "fresh runs should first tell players they can read the map");
@@ -134,8 +145,15 @@ carriedSeed.status = "won";
 const seededNextWave = restartRun(carriedSeed);
 assert.equal(seededNextWave.wave, 2, "seeded wins should still advance the wave");
 assert.equal(seededNextWave.routeSeed, seededA.routeSeed, "route seeds should carry across a campaign");
+assert.equal(seededNextWave.storms.length, 0, "wave 2 should add route pressure before storm pressure");
+assertCampaignSpawnSafety("training", ROUTE_SAFETY_SEEDS);
+assertCampaignSpawnSafety("standard", ROUTE_SAFETY_SEEDS);
+assertCampaignSpawnSafety("hardcore", ROUTE_SAFETY_SEEDS);
 
 let lumenContract = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
+const openingOvercharge = movePlayerTo(lumenContract, lumenContract.lumen[0].position.x, lumenContract.lumen[0].position.y);
+const overcharged = updateSimulation(openingOvercharge, idle, 0.016);
+assert.ok(overcharged.player.charge > overcharged.player.maxCharge, "opening lumen should grant a small overcharge buffer");
 const lumenContractScore = lumenContract.score;
 for (const drop of lumenContract.lumen.slice(0, 4)) {
   lumenContract = movePlayerTo(lumenContract, drop.position.x, drop.position.y);
@@ -170,6 +188,7 @@ rushContract.player.maxCharge = 220;
 rushContract.player.charge = 220;
 rushContract = updateSimulation(rushContract, idle, 38.1);
 assert.equal(rushContract.contract.status, "failed", "relay rush should fail after the time limit without a repair");
+assert.equal(rushContract.contract.failureReason, "timeExpired", "relay rush should record timeout as its failure reason");
 const failedContractGuidance = structuredClone(rushContract);
 failedContractGuidance.player.charge = 90;
 assert.ok(
@@ -189,6 +208,7 @@ assert.equal(getContractFocus(cleanContract).kind, "avoidHazard", "clean wave sh
 cleanContract.hazards[0].position = { ...cleanContract.player.position };
 cleanContract = updateSimulation(cleanContract, idle, 0.016);
 assert.equal(cleanContract.contract.status, "failed", "no-hit contracts should fail on hazard impact");
+assert.equal(cleanContract.contract.failureReason, "hazardHit", "no-hit contracts should record hazard hits as the failure reason");
 
 let cleanClear = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
 cleanClear.contract = createContractState("cleanWave", cleanClear.elapsed, cleanClear.stats);
@@ -288,9 +308,21 @@ assert.equal(repairState.stats.relaysRepaired, 1, "completed relay repairs shoul
 assert.ok(repairState.stats.repairSeconds > 0, "time spent repairing should be counted");
 assert.ok(repairState.score > 0, "repairing a relay should award score");
 assert.ok(repairState.combo > 1, "scoring actions should raise combo");
+let relayRecharge = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
+relayRecharge = movePlayerTo(relayRecharge, relayRecharge.relays[0].position.x, relayRecharge.relays[0].position.y);
+relayRecharge.hazards = [];
+relayRecharge.storms = [];
+relayRecharge.player.charge = 20;
+relayRecharge.relays[0].progress = 0.999;
+relayRecharge = updateSimulation(relayRecharge, { ...idle, repair: true }, 0.016);
+assert.equal(relayRecharge.relays[0].repaired, true, "finishing a relay should complete from near-final progress");
+assert.ok(relayRecharge.player.charge > 28, "completed relays should release a small charge refill");
+assert.ok(relayRecharge.message.includes("回充"), "relay repair recharge should be explained in Chinese");
 state = repairState;
 
-const stormState = movePlayerTo(state, state.storms[0].position.x, state.storms[0].position.y);
+const stormSample = createHardcoreStormState();
+stormSample.briefingActive = false;
+const stormState = movePlayerTo(stormSample, stormSample.storms[0].position.x, stormSample.storms[0].position.y);
 stormState.contract = createContractState("stormSkipper", stormState.elapsed, stormState.stats);
 assert.equal(getContractFocus(stormState).kind, "avoidStorm", "storm skipper should focus storm avoidance");
 const stormCharge = stormState.player.charge;
@@ -299,6 +331,8 @@ assert.ok(stormed.player.charge < stormCharge, "standing in a storm should sipho
 assert.ok(stormed.stats.stormSeconds >= 0.5, "storm exposure should be counted once per tick");
 assert.equal(getObjectiveHint(stormed).kind, "danger", "storm exposure should become the urgent hint");
 assert.equal(getCoachDirective(stormed).id, "escapeStorm", "storm exposure should override normal coaching");
+const stormContractFailed = updateSimulation(stormed, idle, 0.7);
+assert.equal(stormContractFailed.contract.failureReason, "stormExposure", "storm skipper should record storm exposure as the failure reason");
 const openGateStorm = structuredClone(stormState);
 openGateStorm.relays.forEach((relay) => {
   relay.repaired = true;
@@ -351,6 +385,39 @@ assert.equal(getCoachDirective(hazardThreatState).id, "pulseDanger", "dangerous 
 assert.equal(getObjectiveHint(hazardThreatState).kind, "danger", "objective strip should also prioritize dangerous close hazards");
 hazardThreatState.hazards[0].position = { x: hazardThreatState.player.position.x + 118, y: hazardThreatState.player.position.y };
 assert.equal(getHazardThreats(hazardThreatState)[0].level, "near", "near hazards should be flagged before collision");
+const projectedThreatState = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
+projectedThreatState.briefingActive = false;
+projectedThreatState.hazards[0].position = {
+  x: projectedThreatState.player.position.x + 260,
+  y: projectedThreatState.player.position.y
+};
+projectedThreatState.hazards[0].velocity = { x: -260, y: 0 };
+const projectedThreat = getHazardThreats(projectedThreatState)[0];
+assert.equal(projectedThreat.level, "danger", "incoming hazards should be flagged before current-distance collision");
+assert.ok(projectedThreat.projectedDistance < projectedThreat.distance, "hazard threats should expose projected approach distance");
+assert.ok(projectedThreat.timeToImpact <= 0.9, "hazard threats should expose a short time-to-impact estimate");
+const reboundThreatState = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
+reboundThreatState.briefingActive = false;
+reboundThreatState.player.position = { x: 760, y: 350 };
+reboundThreatState.player.velocity = { x: 0, y: 0 };
+reboundThreatState.hazards[0].position = { x: 930, y: 350 };
+reboundThreatState.hazards[0].velocity = { x: 360, y: 0 };
+reboundThreatState.hazards[0].radius = 24;
+const reboundThreat = getHazardThreats(reboundThreatState)[0];
+assert.equal(reboundThreat.level, "danger", "wall-bounce hazards should be warned before reflected impact");
+assert.ok(
+  reboundThreat.projectedDistance < reboundThreat.distance,
+  "wall-bounce hazard threats should use reflected projected positions"
+);
+let pulseFail = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
+pulseFail.briefingActive = false;
+pulseFail.contract = createContractState("pulseDiscipline", pulseFail.elapsed, pulseFail.stats);
+pulseFail.player.charge = 120;
+pulseFail = updateSimulation(pulseFail, { ...idle, pulse: true }, 0.016);
+pulseFail.player.pulseCooldown = 0;
+pulseFail = updateSimulation(pulseFail, { ...idle, pulse: true }, 0.016);
+assert.equal(pulseFail.contract.status, "failed", "pulse discipline should fail on the second pulse");
+assert.equal(pulseFail.contract.failureReason, "pulseOveruse", "pulse discipline should record pulse overuse as the failure reason");
 
 const steadyHazards = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
 steadyHazards.briefingActive = false;
@@ -366,7 +433,8 @@ assert.ok(
   "shard current should move hazards faster"
 );
 
-const steadyStorm = movePlayerTo(restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED }), state.storms[0].position.x, state.storms[0].position.y);
+const steadyStormBase = createHardcoreStormState();
+const steadyStorm = movePlayerTo(steadyStormBase, steadyStormBase.storms[0].position.x, steadyStormBase.storms[0].position.y);
 steadyStorm.player.charge = 80;
 const frontStorm = structuredClone(steadyStorm);
 frontStorm.waveModifier = "stormFront";
@@ -383,8 +451,31 @@ state = state.relays.reduce((current, relay) => {
   return repaired;
 }, state);
 assert.equal(state.gate.open, true, "all repaired relays should open the gate");
+const gateRechargeState = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
+gateRechargeState.briefingActive = false;
+gateRechargeState.player.charge = 5;
+gateRechargeState.relays.forEach((relay) => {
+  relay.repaired = true;
+  relay.progress = 1;
+});
+const gateRecharged = updateSimulation(gateRechargeState, idle, 0.016);
+assert.ok(gateRecharged.player.charge > 5, "opening the gate should grant a small evacuation charge buffer");
+assert.ok(gateRecharged.message.includes("回充"), "gate recharge should be explained in the runtime message");
 assert.equal(getObjectiveHint(state).kind, "gate", "an open gate should become the next objective");
 assert.equal(getCoachDirective(state).id, "exitGate", "the coach should switch to evacuation after all relays are repaired");
+
+const depletedAtGate = movePlayerTo(structuredClone(state), state.gate.position.x, state.gate.position.y);
+depletedAtGate.player.charge = 0.01;
+const depletedAtGateResult = updateSimulation(depletedAtGate, idle, 0.5);
+assert.equal(depletedAtGateResult.status, "lost", "depleted charge should not be overwritten by gate victory");
+assert.equal(depletedAtGateResult.endReason, "chargeDepleted", "gate-adjacent charge death should keep its failure reason");
+
+const brokenAtGate = movePlayerTo(structuredClone(state), state.gate.position.x, state.gate.position.y);
+brokenAtGate.player.hull = 0.01;
+brokenAtGate.hazards[0].position = { ...brokenAtGate.player.position };
+const brokenAtGateResult = updateSimulation(brokenAtGate, idle, 0.016);
+assert.equal(brokenAtGateResult.status, "lost", "destroyed hull should not be overwritten by gate victory");
+assert.equal(brokenAtGateResult.endReason, "hullDestroyed", "gate-adjacent hull death should keep its failure reason");
 
 state = movePlayerTo(state, state.gate.position.x, state.gate.position.y);
 state = updateSimulation(state, idle, 0.016);
@@ -476,7 +567,78 @@ drained.player.charge = 0.01;
 drained = updateSimulation(drained, idle, 0.5);
 assert.equal(drained.status, "lost", "empty charge should lose the run");
 assert.equal(drained.endReason, "chargeDepleted", "charge loss should record the end reason");
+assert.equal(drained.lossContext.source, "baseDrain", "base drain should record the concrete loss source");
+assert.equal(drained.contract.status, "failed", "fatal losses should close active contracts before recap");
+assert.equal(drained.contract.failureReason, "runLost", "fatal losses should explain contract failure as run loss");
 assert.equal(getRunRating(drained).id, "C", "early lost runs should receive a low rating with advice");
+
+let boostDrained = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
+boostDrained.briefingActive = false;
+boostDrained.player.charge = 7;
+boostDrained = updateSimulation(boostDrained, { ...idle, move: { x: 1, y: 0 }, boost: true }, 0.016);
+assert.equal(boostDrained.lossContext.source, "boostDrain", "boost should record a concrete low-charge loss source");
+
+let repairDrained = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
+repairDrained = movePlayerTo(repairDrained, repairDrained.relays[0].position.x, repairDrained.relays[0].position.y);
+repairDrained.player.charge = 0.04;
+repairDrained = updateSimulation(repairDrained, { ...idle, repair: true }, 0.05);
+assert.equal(repairDrained.lossContext.source, "repairDrain", "repair should record a concrete low-charge loss source");
+
+let repairRechargeEscape = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
+repairRechargeEscape = movePlayerTo(
+  repairRechargeEscape,
+  repairRechargeEscape.relays[0].position.x,
+  repairRechargeEscape.relays[0].position.y
+);
+repairRechargeEscape.player.charge = 0.01;
+repairRechargeEscape.relays[0].progress = 0.99;
+repairRechargeEscape = updateSimulation(repairRechargeEscape, { ...idle, repair: true }, 0.2);
+assert.equal(repairRechargeEscape.status, "lost", "fatal repair drain should not be rescued by same-frame relay recharge");
+assert.equal(repairRechargeEscape.endReason, "chargeDepleted", "fatal repair drain should keep the charge-depleted end reason");
+assert.equal(repairRechargeEscape.lossContext.source, "repairDrain", "fatal repair drain should keep its concrete loss source");
+
+let pulseDrained = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
+pulseDrained.briefingActive = false;
+pulseDrained.player.charge = 9;
+pulseDrained = updateSimulation(pulseDrained, { ...idle, pulse: true }, 0.016);
+assert.equal(pulseDrained.lossContext.source, "pulseDrain", "pulse should record a concrete low-charge loss source");
+
+let stormDrained = createHardcoreStormState();
+stormDrained.briefingActive = false;
+stormDrained = movePlayerTo(stormDrained, stormDrained.storms[0].position.x, stormDrained.storms[0].position.y);
+stormDrained.hazards.forEach((hazard, index) => {
+  hazard.position = { x: 120 + index * 120, y: 620 };
+});
+stormDrained.player.charge = 2;
+stormDrained = updateSimulation(stormDrained, idle, 0.5);
+assert.equal(stormDrained.lossContext.source, "stormDrain", "storm drain should record a concrete low-charge loss source");
+
+let hazardDestroyed = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
+hazardDestroyed.briefingActive = false;
+hazardDestroyed.player.hull = 5;
+hazardDestroyed.player.charge = 80;
+hazardDestroyed.hazards[0].position = { ...hazardDestroyed.player.position };
+hazardDestroyed = updateSimulation(hazardDestroyed, idle, 0.016);
+assert.equal(hazardDestroyed.lossContext.source, "hazardImpact", "hazard impact should record a concrete hull loss source");
+assert.equal(hazardDestroyed.lossContext.resource, "hull", "hazard impact should identify hull as the lethal resource");
+
+let doubleResourceDestroyed = restartRun(createInitialState(), undefined, { routeSeed: TEST_ROUTE_SEED });
+doubleResourceDestroyed.briefingActive = false;
+doubleResourceDestroyed.player.hull = 5;
+doubleResourceDestroyed.player.charge = 4;
+doubleResourceDestroyed.hazards[0].position = { ...doubleResourceDestroyed.player.position };
+doubleResourceDestroyed = updateSimulation(doubleResourceDestroyed, idle, 0.016);
+assert.equal(doubleResourceDestroyed.endReason, "hullDestroyed", "simultaneous hazard losses should keep hull destruction as the end reason");
+assert.equal(
+  doubleResourceDestroyed.lossContext.resource,
+  "hull",
+  "simultaneous hazard hull and charge losses should keep the hull loss context for recap consistency"
+);
+assert.equal(
+  doubleResourceDestroyed.lossContext.source,
+  "hazardImpact",
+  "simultaneous hazard losses should keep the concrete hazard source"
+);
 
 console.log("Simulation smoke checks passed.");
 
@@ -488,6 +650,61 @@ function movePlayerTo(state: GameState, x: number, y: number): GameState {
   next.player.invulnerable = 0;
   next.player.charge = Math.max(next.player.charge, 55);
   return next;
+}
+
+function createHardcoreStormState(): GameState {
+  const clearedFirstWave = restartRun(createInitialState(), undefined, {
+    difficulty: "hardcore",
+    routeSeed: TEST_ROUTE_SEED
+  });
+  clearedFirstWave.status = "won";
+  const clearedSecondWave = restartRun(clearedFirstWave);
+  clearedSecondWave.status = "won";
+  return restartRun(clearedSecondWave);
+}
+
+function assertCampaignSpawnSafety(difficulty: GameState["difficulty"], seeds: number[]): void {
+  for (const seed of seeds) {
+    let waveState = restartRun(createInitialState(), undefined, { difficulty, routeSeed: seed });
+    for (let wave = 1; wave <= CAMPAIGN_WAVES; wave += 1) {
+      assertSpawnSafety(waveState, `${difficulty} seed ${seed} wave ${wave}`);
+      const firstStep = updateSimulation(structuredClone(waveState), { ...idle, move: { x: 1, y: 0 } }, 0.016);
+      assert.equal(firstStep.stats.hitsTaken, waveState.stats.hitsTaken, `${difficulty} seed ${seed} wave ${wave} should not take a hit on first input`);
+      assert.equal(
+        getCurrentWaveStats(firstStep).stormSeconds,
+        0,
+        `${difficulty} seed ${seed} wave ${wave} should not start inside an active storm`
+      );
+      if (wave === CAMPAIGN_WAVES) break;
+      waveState.status = "won";
+      waveState = restartRun(waveState);
+    }
+  }
+}
+
+function assertSpawnSafety(state: GameState, label: string): void {
+  for (const hazard of state.hazards) {
+    assert.ok(
+      distanceBetween(state.player.position, hazard.position) >= hazard.radius + HAZARD_PLAYER_RADIUS + 40,
+      `${label} hazard ${hazard.id} should start outside the immediate collision lane`
+    );
+  }
+  for (const storm of state.storms) {
+    assert.ok(
+      distanceBetween(state.player.position, storm.position) >= getStormActiveRadius(storm) + 30,
+      `${label} storm ${storm.id} should start outside the active storm radius`
+    );
+    for (const relay of state.relays) {
+      assert.ok(
+        distanceBetween(relay.position, storm.position) >= getStormActiveRadius(storm) + 18,
+        `${label} storm ${storm.id} should not cover relay ${relay.id}`
+      );
+    }
+  }
+}
+
+function distanceBetween(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
 function achievementIdsFor(state: GameState) {

@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="lumen-asset-version" content="%LUMEN_ASSET_VERSION%" />
     <title>流明漂航</title>
     <link
       rel="icon"
@@ -34,6 +35,10 @@
         visibility: hidden;
         opacity: 0;
         pointer-events: none;
+      }
+
+      #boot-status[hidden] {
+        display: none;
       }
 
       .boot-card {
@@ -101,6 +106,16 @@
           transform: translateX(164%);
         }
       }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.001ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.001ms !important;
+        }
+      }
     </style>
   </head>
   <body>
@@ -131,7 +146,7 @@
         <span id="combat-log-detail">拾取、受击和技能反馈会显示在这里。</span>
         <ol id="combat-log-history" aria-label="最近战斗记录"></ol>
       </div>
-      <aside id="hud" aria-live="polite">
+      <aside id="hud">
         <div class="brand">
           <span class="mark"></span>
           <div>
@@ -187,29 +202,31 @@
           <strong id="wave-event-title">本波事件：稳定信号</strong>
           <span id="wave-event-detail">基础战场，没有额外异常。</span>
         </div>
-        <div id="contract-panel" hidden data-status="active">
-          <strong id="contract-title">战术合约：流明航线</strong>
-          <span id="contract-requirement">本波回收 4 个流明</span>
-          <div class="contract-progress">
-            <b id="contract-progress">0/4 流明</b>
-            <em id="contract-reward">奖励 360 分</em>
+        <div id="directive-chip" hidden aria-label="当前战术指令">
+          <div id="contract-panel" hidden data-status="active">
+            <strong id="contract-title">战术合约：流明航线</strong>
+            <span id="contract-requirement">本波回收 4 个流明</span>
+            <div class="contract-progress">
+              <b id="contract-progress">0/4 流明</b>
+              <em id="contract-reward">奖励 360 分</em>
+            </div>
           </div>
-        </div>
-        <div id="coach-panel" hidden data-urgent="false">
-          <div class="coach-head">
-            <strong class="coach-title-stack">
-              <span class="coach-kicker">路线教练</span>
-              <span id="coach-title">开局读图缓冲</span>
-            </strong>
-            <b id="coach-step">1/4</b>
+          <div id="coach-panel" hidden data-urgent="false">
+            <div class="coach-head">
+              <strong class="coach-title-stack">
+                <span class="coach-kicker">路线教练</span>
+                <span id="coach-title">开局读图缓冲</span>
+              </strong>
+              <b id="coach-step">1/4</b>
+            </div>
+            <div id="coach-rail" role="list" aria-label="路线教练四步进度"></div>
+            <span id="coach-detail">先回收金色流明，再靠近蓝色信标维修。</span>
+            <em id="coach-progress">准备开始</em>
           </div>
-          <div id="coach-rail" role="list" aria-label="路线教练四步进度"></div>
-          <span id="coach-detail">先回收金色流明，再靠近蓝色信标维修。</span>
-          <em id="coach-progress">准备开始</em>
-        </div>
-        <div id="pilot-tip" hidden>
-          <strong id="pilot-tip-title">导航提示</strong>
-          <span id="pilot-tip-detail">前往最近信标，靠近后按住 E / 修复键。</span>
+          <div id="pilot-tip" hidden>
+            <strong id="pilot-tip-title">导航提示</strong>
+            <span id="pilot-tip-detail">前往最近信标，靠近后按住 E / 修复键。</span>
+          </div>
         </div>
         <p id="mission-text">修复全部信标，收集流明，最后从北侧光门撤离。</p>
         <button id="help-button" type="button">玩法说明 / 暂停</button>
@@ -230,9 +247,9 @@
         </div>
       </div>
       <div id="overlay" class="show">
-        <div class="panel" tabindex="-1">
-          <span class="eyebrow">中文二维太空救援轻度肉鸽</span>
-          <h1>流明漂航</h1>
+        <div class="panel" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="overlay-title">
+          <span class="eyebrow">五波救援街机</span>
+          <h1 id="overlay-title">流明漂航</h1>
           <p>
             你是一台维修无人机。城市光网正在坍缩：修复蓝色信标、收集金色流明、
             避开紫色风暴和粉色碎片，在电量耗尽前冲进北侧光门。
@@ -240,11 +257,11 @@
           <div id="quick-brief" aria-label="首屏快速目标">
             <article data-kind="lumen">
               <b>先移动补给</b>
-              <span>方向键/摇杆吃流明</span>
+              <span>WASD / 方向键 / 摇杆吃流明</span>
             </article>
             <article data-kind="relay">
               <b>再维修</b>
-              <span>按住 E / 修复键</span>
+              <span>电脑按 E，手机长按修复</span>
             </article>
             <article data-kind="danger">
               <b>躲危险</b>
@@ -277,14 +294,16 @@
               <button type="button" data-difficulty="hardcore">硬核</button>
             </div>
             <button id="audio-toggle" type="button" aria-pressed="true">音效 开</button>
-            <button id="daily-route-button" type="button">今日挑战</button>
+            <button id="daily-route-button" type="button">固定路线</button>
           </div>
           <p id="difficulty-detail">标准模式：推荐第一次游玩，完整体验风险、连锁和升级。</p>
           <p id="daily-detail">今日挑战会使用当天固定救援代号。</p>
+          <button id="start-button" type="button">开始标准救援</button>
+          <button id="resume-button" type="button" hidden>继续游戏</button>
           <div id="control-primer" aria-label="首屏操作条">
-            <span><b>移动</b>方向键 / 字母键 / 左摇杆</span>
-            <span><b>修复</b>按住 E / 修复键</span>
-            <span><b>脱险</b>空格推进 / Q 脉冲</span>
+            <span><b>移动</b>WASD / 方向键 / 左下摇杆</span>
+            <span><b>修复</b>电脑按住 E，手机长按修复</span>
+            <span><b>脱险</b>Space 推进，Q 或脉冲键保命</span>
           </div>
           <div id="loop-primer" aria-label="继续游玩目标">
             <span>五波救援</span>
@@ -292,11 +311,11 @@
             <span>今日挑战与路线复盘</span>
           </div>
           <div id="launch-commit" aria-label="出发任务板">
-            <strong>出发后第一步</strong>
-            <span>安全读图缓冲中，先沿虚线完成 4 个金色流明合约，再按导航靠近蓝色信标维修。</span>
+            <strong id="launch-commit-title">补给起手</strong>
+            <span id="launch-commit-detail">读图补电：安全缓冲中先沿虚线完成 4 个金色流明合约，再按导航靠近蓝色信标维修。</span>
           </div>
-          <button id="start-button" type="button">开始标准救援</button>
-          <button id="resume-button" type="button" hidden>继续游戏</button>
+          <details id="mission-library" class="mission-library">
+            <summary>展开任务资料、路线和图例</summary>
           <div id="game-dossier" aria-label="任务档案">
             <article>
               <strong>玩法类型</strong>
@@ -342,8 +361,8 @@
               <strong>首局作战令</strong>
               <ol>
                 <li><b>安全读图</b><span>开局不耗电，先看路线和合约。</span></li>
-                <li><b>补给起手</b><span>先完成 4 个金色流明合约，再进维修圈。</span></li>
-                <li><b>按住维修</b><span>蓝色信标旁按住 E / 修复键。</span></li>
+                <li><b id="launch-order-focus-title">补给起手</b><span id="launch-order-focus-detail">先完成 4 个金色流明合约，再进维修圈。</span></li>
+                <li><b>按住维修</b><span>蓝色信标旁：电脑按住 E，手机长按修复。</span></li>
                 <li><b>北侧撤离</b><span>4 座信标亮起后冲进光门选升级。</span></li>
               </ol>
             </div>
@@ -351,13 +370,13 @@
           <div id="first-minute-route" aria-label="第一分钟路线">
             <article>
               <b>1</b>
-              <strong>读图补电</strong>
-              <span>开局安全缓冲中，先沿虚线回收 4 个金色流明。</span>
+              <strong id="first-route-title">读图补电</strong>
+              <span id="first-route-detail">开局安全缓冲中，先沿虚线回收 4 个金色流明。</span>
             </article>
             <article>
               <b>2</b>
               <strong>贴近维修</strong>
-              <span>靠近蓝色信标按住 E / 修复键；电量低就先撤出来补给。</span>
+              <span>靠近蓝色信标后电脑按住 E，手机长按修复；电量低就先撤出来补给。</span>
             </article>
             <article>
               <b>3</b>
@@ -372,13 +391,13 @@
           </div>
           <div id="mission-brief" aria-label="核心循环">
             <strong>核心循环：补流明 → 修信标 → 撤离升级</strong>
-            <span>开局先捡金色流明补电，靠近蓝色信标按住 E / 修复键；全部信标亮起后，从北侧光门撤离并选择升级。想冲高评级，就完成战术合约、少受击、保留电量和连锁。</span>
+            <span>开局先捡金色流明补电，靠近蓝色信标后电脑按住 E、手机长按修复；全部信标亮起后，从北侧光门撤离并选择升级。想冲高评级，就完成战术合约、少受击、保留电量和连锁。</span>
           </div>
           <div id="field-guide" aria-label="战场图例">
             <article data-kind="relay">
               <i></i>
               <strong>蓝色信标</strong>
-              <span>靠近后按住 E / 修复键</span>
+              <span>电脑按 E，手机长按修复</span>
             </article>
             <article data-kind="lumen">
               <i></i>
@@ -396,13 +415,7 @@
               <span>停留会快速耗电</span>
             </article>
           </div>
-          <div id="next-run-panel" aria-label="下一局目标">
-            <div class="next-run-head">
-              <strong id="next-run-title">下一局目标</strong>
-              <span id="next-run-focus">先补流明，再修信标，最后撤离升级。</span>
-            </div>
-            <div id="next-run-goals"></div>
-          </div>
+          </details>
           <div id="run-recap" hidden aria-live="polite">
             <div id="recap-rating" data-grade="B" aria-label="本局评级">
               <strong id="recap-rating-grade">B</strong>
@@ -418,17 +431,30 @@
             <div id="achievement-unlocks" hidden></div>
             <p id="recap-advice"></p>
           </div>
+          <div id="upgrade-choices" hidden></div>
           <div id="session-tools" hidden>
             <button id="copy-route-button" type="button" hidden>复制路线链接</button>
             <button id="restart-route-button" type="button" hidden>重开当前代号</button>
+            <button id="pause-audio-toggle" type="button" aria-pressed="true">音效 开</button>
             <button id="motion-toggle" type="button" aria-pressed="false">精简动效 关</button>
             <button id="label-toggle" type="button" aria-pressed="false">大字标签 关</button>
             <button id="reset-save-button" type="button">清空本地存档</button>
             <span id="session-feedback">本地设置</span>
           </div>
-          <div id="achievement-strip" aria-label="成就与挑战"></div>
-          <div id="upgrade-choices" hidden></div>
-          <div id="run-history" aria-label="最近航行日志"></div>
+          <details id="progress-library" class="mission-library meta-library">
+            <summary>展开记录、成就与设置</summary>
+            <div id="next-run-panel" aria-label="下一局目标">
+              <div class="next-run-head">
+                <strong id="next-run-title">下一局目标</strong>
+                <span id="next-run-focus">先补流明，再修信标，最后撤离升级。</span>
+              </div>
+              <div id="next-run-goals"></div>
+            </div>
+            <div id="achievement-strip" aria-label="成就与挑战"></div>
+            <div id="run-history" aria-label="最近航行日志"></div>
+          </details>
+          <details id="control-library" class="mission-library compact">
+            <summary>展开详细操作说明</summary>
           <div id="how-to-play">
             <article>
               <strong>第一步：补流明</strong>
@@ -454,14 +480,16 @@
             <span>Q / 脉冲键</span>
             <span>H 暂停说明</span>
           </div>
+          </details>
         </div>
       </div>
       <div id="touch-controls" aria-label="触控操作">
-        <div id="touch-stick" aria-hidden="true">
+        <div id="touch-stick" role="group" aria-label="拖动移动">
+          <b>拖动移动</b>
           <span></span>
         </div>
         <div class="touch-actions">
-          <button type="button" data-touch-action="repair" aria-label="按住修复">修复</button>
+          <button type="button" data-touch-action="repair" aria-label="按住修复">按住修复</button>
           <button type="button" data-touch-action="boost" aria-label="推进">推进</button>
           <button type="button" data-touch-action="pulse" aria-label="释放脉冲">脉冲</button>
         </div>
@@ -480,13 +508,27 @@
           bootDetail.textContent = "游戏资源没有成功启动。请刷新页面；如果仍失败，稍后再打开 GitHub Pages。";
         }
       };
-      const isPagesBuild = location.hostname.endsWith("github.io");
-      if (isPagesBuild) {
+      const localDevHosts = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+      const isLocalDev = localDevHosts.has(location.hostname) && location.port === "5173";
+      if (!isLocalDev) {
+        const assetBase = new URL("assets/", location.href);
+        const configuredAssetVersion = document.querySelector('meta[name="lumen-asset-version"]')?.content;
+        const fallbackAssetVersion = "0.1.0";
+        const assetVersion =
+          new URLSearchParams(location.search).get("v") ||
+          (configuredAssetVersion && !configuredAssetVersion.includes("%")
+            ? configuredAssetVersion
+            : fallbackAssetVersion);
+        const versionedAsset = (name) => {
+          const url = new URL(name, assetBase);
+          url.searchParams.set("v", assetVersion);
+          return url.href;
+        };
         const stylesheet = document.createElement("link");
         stylesheet.rel = "stylesheet";
-        stylesheet.href = "/assets/main.css";
+        stylesheet.href = versionedAsset("main.css");
         document.head.append(stylesheet);
-        const productionEntry = "/assets/main.js";
+        const productionEntry = versionedAsset("main.js");
         import(/* @vite-ignore */ productionEntry).catch(markBootError);
       } else {
         import("/src/main.ts").catch(markBootError);

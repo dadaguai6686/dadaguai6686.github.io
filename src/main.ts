@@ -3,23 +3,41 @@ import { GameScene } from "./game/GameScene";
 import {
   ACHIEVEMENTS,
   CAMPAIGN_WAVES,
+  COMBO_WINDOW_SECONDS,
   CONTRACTS,
   DIFFICULTY_SETTINGS,
   SECTOR_LAYOUTS,
   UPGRADE_CATALOG,
   WAVE_MODIFIERS,
+  createInitialState,
   getAchievementSummaries,
+  getCoachDirective,
   getContractFor,
+  getContractSnapshot,
+  getCurrentWaveStats,
+  getObjectiveHint,
+  getResourceAlerts,
   getRoutePlan,
+  getRunPerformance,
+  getRunRating,
   getSectorFor,
+  getStormActiveRadius,
   getUnlockedAchievementsForRun,
+  getUpgradeChoices,
+  getUpgradeSummaries,
   getWaveModifierFor,
+  normalizeRouteSeed,
   parseRouteSeed,
+  restartRun,
+  updateSimulation,
+  withRunStats,
   type AchievementId,
   type CoachDirective,
   type ContractSnapshot,
   type DifficultyId,
+  type GameState,
   type GameStatus,
+  type LossContext,
   type ObjectiveHint,
   type ResourceAlerts,
   type RoutePlan,
@@ -34,6 +52,82 @@ import {
   type WaveModifier
 } from "./game/simulation";
 import "./styles.css";
+
+type LocalQaInputProbeKind = "keyboard" | "touch";
+
+type LocalQaBrowserInputProbeKind = "keyboard" | "touch";
+
+type LocalQaInputProbe = {
+  action: string;
+  after: LocalQaSimulationSignature;
+  before: LocalQaSimulationSignature;
+  briefingEnded: boolean;
+  elapsedDelta: number;
+  kind: LocalQaInputProbeKind;
+  positionDelta: number;
+  source: "local-release-qa-simulation";
+};
+
+type LocalQaSimulationSignature = {
+  briefingActive: boolean;
+  elapsed: number;
+  player: {
+    position: { x: number; y: number };
+    velocity: { x: number; y: number };
+  };
+  status: GameStatus;
+};
+
+type LocalQaBrowserInputProbeSession = {
+  action: string;
+  before: LocalQaSimulationSignature;
+  id: string;
+  kind: LocalQaBrowserInputProbeKind;
+  source: "codex-in-app-browser-real-input";
+  startedAt: number;
+};
+
+type LocalQaBrowserInputProbe = {
+  action: string;
+  after: LocalQaSimulationSignature;
+  before: LocalQaSimulationSignature;
+  briefingEnded: boolean;
+  elapsedDelta: number;
+  id: string;
+  kind: LocalQaBrowserInputProbeKind;
+  positionDelta: number;
+  source: "codex-in-app-browser-real-input";
+};
+
+type LocalQaWaveUpgradeProbe = {
+  clearedWave: number;
+  elapsedSeconds: number;
+  enteredStatus: GameStatus;
+  postUpgradeContract: string;
+  postUpgradeSector: string;
+  postUpgradeStatus: GameStatus;
+  postUpgradeWave: number;
+  repairedRelays: number;
+  routeSeed: number;
+  selectedUpgrade: UpgradeId | "none";
+  source: "local-release-qa-simulation-wave-upgrade";
+  upgradeOptions: number;
+};
+
+type LocalQaRouteTarget = {
+  kind: "gate" | "lumen" | "relay";
+  label: string;
+  position: { x: number; y: number };
+  radius: number;
+};
+
+declare global {
+  interface Window {
+    __lumenFinishBrowserInputProbe?: (id: string) => LocalQaBrowserInputProbe;
+    __lumenRunInputProbe?: (kind: LocalQaInputProbeKind) => LocalQaInputProbe;
+    __lumenStartBrowserInputProbe?: (kind: LocalQaBrowserInputProbeKind) => LocalQaBrowserInputProbeSession;
+  }
+}
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -50,6 +144,17 @@ const config: Phaser.Types.Core.GameConfig = {
   },
   scene: [GameScene]
 };
+
+let releaseQaDomReady = false;
+let releaseQaSceneReady = false;
+let releaseQaModeInitialized = false;
+let localQaBrowserProbeSequence = 0;
+const localQaBrowserProbeSessions = new Map<string, LocalQaBrowserInputProbeSession>();
+const localQaBrowserProbeResults: LocalQaBrowserInputProbe[] = [];
+const localQaBrowserAutoProbeTimers = new Map<LocalQaBrowserInputProbeKind, number>();
+const localQaBrowserInputHoldTimers = new Map<LocalQaBrowserInputProbeKind, number>();
+
+window.addEventListener("game:scene-ready", onGameSceneReady, { once: true });
 
 new Phaser.Game(config);
 
@@ -110,6 +215,7 @@ const loadoutStrip = document.querySelector<HTMLDivElement>("#loadout-strip")!;
 const waveEvent = document.querySelector<HTMLDivElement>("#wave-event")!;
 const waveEventTitle = document.querySelector<HTMLElement>("#wave-event-title")!;
 const waveEventDetail = document.querySelector<HTMLElement>("#wave-event-detail")!;
+const directiveChip = document.querySelector<HTMLDivElement>("#directive-chip")!;
 const contractPanel = document.querySelector<HTMLDivElement>("#contract-panel")!;
 const contractTitle = document.querySelector<HTMLElement>("#contract-title")!;
 const contractRequirement = document.querySelector<HTMLElement>("#contract-requirement")!;
@@ -132,12 +238,14 @@ const upgradeChoices = document.querySelector<HTMLDivElement>("#upgrade-choices"
 const helpButton = document.querySelector<HTMLButtonElement>("#help-button")!;
 const mobilePauseButton = document.querySelector<HTMLButtonElement>("#mobile-pause-button")!;
 const resumeButton = document.querySelector<HTMLButtonElement>("#resume-button")!;
+const menuOptions = document.querySelector<HTMLDivElement>("#menu-options")!;
 const difficultyPicker = document.querySelector<HTMLDivElement>("#difficulty-picker")!;
 const difficultyButtons = document.querySelectorAll<HTMLButtonElement>("[data-difficulty]");
 const difficultyDetail = document.querySelector<HTMLElement>("#difficulty-detail")!;
 const achievementStrip = document.querySelector<HTMLDivElement>("#achievement-strip")!;
 const runHistory = document.querySelector<HTMLDivElement>("#run-history")!;
 const audioToggle = document.querySelector<HTMLButtonElement>("#audio-toggle")!;
+const pauseAudioToggle = document.querySelector<HTMLButtonElement>("#pause-audio-toggle")!;
 const dailyRouteButton = document.querySelector<HTMLButtonElement>("#daily-route-button")!;
 const dailyDetail = document.querySelector<HTMLElement>("#daily-detail")!;
 const overlayEyebrow = overlay.querySelector<HTMLElement>(".eyebrow")!;
@@ -149,7 +257,16 @@ const loopPrimer = document.querySelector<HTMLDivElement>("#loop-primer")!;
 const gameDossier = document.querySelector<HTMLDivElement>("#game-dossier")!;
 const launchBrief = document.querySelector<HTMLDivElement>("#launch-brief")!;
 const firstMinuteRoute = document.querySelector<HTMLDivElement>("#first-minute-route")!;
+const missionLibrary = document.querySelector<HTMLDetailsElement>("#mission-library")!;
+const progressLibrary = document.querySelector<HTMLDetailsElement>("#progress-library")!;
+const controlLibrary = document.querySelector<HTMLDetailsElement>("#control-library")!;
 const launchCommit = document.querySelector<HTMLDivElement>("#launch-commit")!;
+const launchCommitTitle = document.querySelector<HTMLElement>("#launch-commit-title")!;
+const launchCommitDetail = document.querySelector<HTMLElement>("#launch-commit-detail")!;
+const launchOrderFocusTitle = document.querySelector<HTMLElement>("#launch-order-focus-title")!;
+const launchOrderFocusDetail = document.querySelector<HTMLElement>("#launch-order-focus-detail")!;
+const firstRouteTitle = document.querySelector<HTMLElement>("#first-route-title")!;
+const firstRouteDetail = document.querySelector<HTMLElement>("#first-route-detail")!;
 const missionBrief = document.querySelector<HTMLDivElement>("#mission-brief")!;
 const fieldGuide = document.querySelector<HTMLDivElement>("#field-guide")!;
 const tacticalScan = document.querySelector<HTMLDivElement>("#tactical-scan")!;
@@ -290,6 +407,7 @@ type RunEndDetail = {
   elapsed: number;
   endReason: RunEndReason;
   hull: number;
+  lossContext: LossContext;
   message: string;
   rating: RunRating;
   routePlan: RoutePlan;
@@ -323,6 +441,8 @@ let latestMissionToastKey = "";
 let missionToastTimer: number | undefined;
 let combatLogTimer: number | undefined;
 let combatLogEntries: CombatLogEntry[] = [];
+let keyboardMoveFallbackTimer: number | undefined;
+let mouseStickActive = false;
 const COMBAT_LOG_HISTORY_LIMIT = 3;
 
 window.__lumenVirtualInput = {
@@ -356,6 +476,10 @@ gameWrap.addEventListener("pointerdown", () => {
   }
 });
 
+gameWrap.addEventListener("keydown", (event) => {
+  bufferGameSurfaceKeyboardInput(event);
+});
+
 helpButton.addEventListener("click", () => {
   audioBus.play("button");
   resetVirtualInput();
@@ -380,6 +504,14 @@ difficultyButtons.forEach((button) => {
 });
 
 audioToggle.addEventListener("click", () => {
+  toggleAudio();
+});
+
+pauseAudioToggle.addEventListener("click", () => {
+  toggleAudio();
+});
+
+function toggleAudio(): void {
   saveData.audioEnabled = !saveData.audioEnabled;
   saveSave(saveData);
   updateAudioUi();
@@ -387,7 +519,7 @@ audioToggle.addEventListener("click", () => {
     void audioBus.unlock();
     audioBus.play("button");
   }
-});
+}
 
 motionToggle.addEventListener("click", () => {
   saveData.reducedMotion = !saveData.reducedMotion;
@@ -404,6 +536,10 @@ labelToggle.addEventListener("click", () => {
 });
 
 dailyRouteButton.addEventListener("click", () => {
+  if (latestStatus === "paused") {
+    setSessionFeedback("当前救援已暂停。继续后可重开路线，固定路线入口只在菜单显示。");
+    return;
+  }
   launchDailyChallenge();
 });
 
@@ -575,12 +711,15 @@ window.addEventListener("game:hud", (event) => {
   waveEvent.hidden = detail.status !== "playing";
   waveEventTitle.textContent = `本波事件：${detail.waveModifier.name}`;
   waveEventDetail.textContent = detail.waveModifier.description;
+  directiveChip.hidden = detail.status !== "playing";
+  directiveChip.dataset.status = detail.contract.status;
+  directiveChip.dataset.urgent = String(detail.coachDirective.urgent || detail.objectiveHint.urgent);
   contractPanel.hidden = detail.status !== "playing";
   contractPanel.dataset.status = detail.contract.status;
   contractTitle.textContent = `战术合约：${detail.contract.name}`;
   contractRequirement.textContent = detail.contract.requirement;
   contractProgress.textContent = detail.contract.progress;
-  contractReward.textContent = `奖励 ${detail.contract.rewardScore.toLocaleString()} 分`;
+  contractReward.textContent = `奖励 ${detail.contract.scaledRewardScore.toLocaleString()} 分`;
   renderCoachDirective(detail.coachDirective, detail.status);
   renderRadar(detail.radar, detail.status);
   const showPilotTip = detail.status === "playing" && detail.coachDirective.id === "readContract";
@@ -599,6 +738,10 @@ window.addEventListener("game:hud", (event) => {
 
 window.addEventListener("game:ended", (event) => {
   const detail = (event as CustomEvent).detail as RunEndDetail;
+  handleRunEnded(detail);
+});
+
+function handleRunEnded(detail: RunEndDetail, options: { persist: boolean } = { persist: true }): void {
   latestStatus = detail.status;
   setShellStatus(detail.status);
   setShellBriefingActive(false);
@@ -608,8 +751,9 @@ window.addEventListener("game:ended", (event) => {
   latestDifficulty = detail.difficulty;
   latestRoutePlan = detail.routePlan;
   latestEndDetail = detail;
-  const newlyUnlocked = persistRunResult(detail);
+  const newlyUnlocked = options.persist ? persistRunResult(detail) : [];
   overlay.classList.add("show");
+  configureOverlayDisclosures(detail.status === "won" ? "upgrade" : "ended");
   hideTacticalScan();
   hideMissionToast(true);
   hideCombatLog(true);
@@ -644,7 +788,7 @@ window.addEventListener("game:ended", (event) => {
   if (detail.status === "won") {
     renderUpgradeChoices(detail);
   }
-});
+}
 
 window.addEventListener("game:feedback", (event) => {
   const detail = (event as CustomEvent).detail as {
@@ -685,14 +829,29 @@ function renderUpgradeChoices(detail = latestEndDetail): void {
       button.type = "button";
       button.className = "upgrade-option";
       button.dataset.recommended = String(recommended);
-      button.innerHTML = `
-        <strong>${choice.name} <small>等级 ${summary?.level ?? 0}/${summary?.maxLevel ?? 3}</small></strong>
-        <span class="upgrade-tag">${recommended && recommendation ? `系统推荐 · ${recommendation.label}` : getUpgradeRoleLabel(choice.id)}</span>
-        <span>${choice.description}</span>
-        <em>选择理由：${recommended && recommendation ? recommendation.reason : getUpgradeChoiceReason(choice.id)}</em>
-        <em>升级前：${summary?.currentEffect ?? "基础配置"}</em>
-        <em>升级后：${summary?.nextEffect ?? "已满级"}</em>
-      `;
+      const title = document.createElement("strong");
+      title.append(choice.name, " ");
+      const level = document.createElement("small");
+      level.textContent = `等级 ${summary?.level ?? 0}/${summary?.maxLevel ?? 3}`;
+      title.append(level);
+
+      const tag = document.createElement("span");
+      tag.className = "upgrade-tag";
+      tag.textContent = recommended && recommendation ? `系统推荐 · ${recommendation.label}` : getUpgradeRoleLabel(choice.id);
+
+      const description = document.createElement("span");
+      description.textContent = choice.description;
+
+      const reason = document.createElement("em");
+      reason.textContent = `选择理由：${recommended && recommendation ? recommendation.reason : getUpgradeChoiceReason(choice.id)}`;
+
+      const before = document.createElement("em");
+      before.textContent = `升级前：${summary?.currentEffect ?? "基础配置"}`;
+
+      const after = document.createElement("em");
+      after.textContent = `升级后：${summary?.nextEffect ?? "已满级"}`;
+
+      button.append(title, tag, description, reason, before, after);
       button.addEventListener("click", () => launchRun(choice.id));
       return button;
     });
@@ -1221,9 +1380,11 @@ function buildUpgradeRecommendation(detail: RunEndDetail, choices: Upgrade[]): U
   const available = new Set(choices.map((choice) => choice.id));
   const pick = (id: UpgradeId, label: string, reason: string): UpgradeRecommendation | undefined =>
     available.has(id) ? { id, label, reason } : undefined;
+  const lossPick = buildLossUpgradeRecommendation(detail, pick);
   const contractPick = buildContractUpgradeRecommendation(detail, pick);
   const forecastPick = buildForecastUpgradeRecommendation(detail, pick);
   const candidates: Array<UpgradeRecommendation | undefined> = [
+    lossPick,
     contractPick,
     detail.charge < 34 || detail.stats.lumenCollected < Math.max(3, detail.wave * 2)
       ? pick("capacitor", "续航修正", "电量或流明回收偏低，电容能提高最大电量和补给收益。")
@@ -1250,6 +1411,32 @@ function buildUpgradeRecommendation(detail: RunEndDetail, choices: Upgrade[]): U
     pick(choices[0]?.id ?? "engine", "均衡强化", "继续强化当前可选改装，为下一波更高密度路线保留余量。")
   ];
   return candidates.find(Boolean);
+}
+
+function buildLossUpgradeRecommendation(
+  detail: RunEndDetail,
+  pick: (id: UpgradeId, label: string, reason: string) => UpgradeRecommendation | undefined
+): UpgradeRecommendation | undefined {
+  switch (detail.lossContext.source) {
+    case "repairDrain":
+      return (
+        pick("repair", "维修省电", "本局最后电量耗在维修上，信标织机能缩短站桩维修时间。") ??
+        pick("capacitor", "维修续航", "本局最后电量耗在维修上，电容能提高低电维修后的回旋余地。")
+      );
+    case "stormDrain":
+    case "stormDamage":
+      return pick("engine", "风暴脱离", "本局失败来自紫色风暴，引擎能更快穿出风暴范围。");
+    case "hazardImpact":
+      return detail.stats.pulseUses === 0
+        ? pick("pulse", "碎片控场", "本局失败来自粉色碎片，扩大脉冲能保护维修窗口。")
+        : pick("shield", "抗撞容错", "本局失败来自粉色碎片，曜盾能降低碰撞损失。");
+    case "boostDrain":
+    case "pulseDrain":
+    case "baseDrain":
+      return pick("capacitor", "续航修正", "本局最后失败来自电量规划，电容能提高最大电量和流明回复。");
+    default:
+      return undefined;
+  }
 }
 
 function buildUpgradeForecast(detail: RunEndDetail): UpgradeForecast | undefined {
@@ -1330,6 +1517,23 @@ function buildContractUpgradeRecommendation(
   pick: (id: UpgradeId, label: string, reason: string) => UpgradeRecommendation | undefined
 ): UpgradeRecommendation | undefined {
   if (detail.contract.status !== "failed") return undefined;
+  if (detail.contract.failureReason === "stormExposure") {
+    return pick("engine", "绕风暴", "风暴停留超标，引擎能让你更快离开紫色区域。");
+  }
+  if (detail.contract.failureReason === "hazardHit") {
+    return detail.stats.pulseUses === 0
+      ? pick("pulse", "无损控场", "无损合约因受击失败，先强化脉冲处理贴脸碎片。")
+      : pick("shield", "无损容错", "无损合约因受击失败，曜盾能降低碰撞造成的整局损失。");
+  }
+  if (detail.contract.failureReason === "pulseOveruse") {
+    return pick("engine", "节奏控制", "脉冲超用说明路线被压迫，先强化移动能力减少被迫交技能。");
+  }
+  if (detail.contract.failureReason === "timeExpired") {
+    return pick("repair", "速修补强", "合约超时，信标织机能直接缩短第一座信标维修时间。");
+  }
+  if (detail.contract.failureReason === "waveEnded") {
+    return pick("capacitor", "合约补给", "流明目标没有完成，电容能提高补给收益并扩大路线余量。");
+  }
   if (detail.contract.id === "lumenRoute") {
     return pick("capacitor", "合约补给", "流明航线失败，下一波先强化续航和补给收益。");
   }
@@ -1383,6 +1587,7 @@ function showHelpOverlay(reason: "manual" | "interruption" = "manual"): void {
   }
   overlay.classList.add("show");
   const paused = latestStatus === "paused";
+  configureOverlayDisclosures(paused ? "paused" : "menu");
   achievementStrip.hidden = false;
   runHistory.hidden = true;
   updateAchievementUi();
@@ -1398,6 +1603,7 @@ function showHelpOverlay(reason: "manual" | "interruption" = "manual"): void {
   quickBrief.hidden = paused;
   controlPrimer.hidden = paused;
   loopPrimer.hidden = paused;
+  menuOptions.hidden = paused;
   gameDossier.hidden = false;
   launchBrief.hidden = false;
   firstMinuteRoute.hidden = false;
@@ -1415,6 +1621,16 @@ function showHelpOverlay(reason: "manual" | "interruption" = "manual"): void {
     startButton.textContent = getMenuStartLabel();
   }
   resetOverlayPanelScroll();
+}
+
+function configureOverlayDisclosures(mode: "ended" | "menu" | "paused" | "upgrade"): void {
+  missionLibrary.open = false;
+  progressLibrary.open = false;
+  controlLibrary.open = false;
+  missionLibrary.hidden = mode === "ended" || mode === "upgrade";
+  controlLibrary.hidden = mode === "upgrade";
+  progressLibrary.hidden = mode === "paused" || mode === "upgrade";
+  menuOptions.hidden = mode === "paused" || mode === "upgrade";
 }
 
 function resetOverlayPanelScroll(): void {
@@ -1473,6 +1689,22 @@ touchStick.addEventListener("pointerup", endStickInput);
 touchStick.addEventListener("pointercancel", endStickInput);
 touchStick.addEventListener("lostpointercapture", endStickInput);
 touchStick.addEventListener("contextmenu", (event) => event.preventDefault());
+touchStick.addEventListener("mousedown", (event) => {
+  event.preventDefault();
+  mouseStickActive = true;
+  updateStickFromPoint(event.clientX, event.clientY);
+});
+window.addEventListener("mousemove", (event) => {
+  if (!mouseStickActive) return;
+  event.preventDefault();
+  updateStickFromPoint(event.clientX, event.clientY);
+});
+window.addEventListener("mouseup", (event) => {
+  if (!mouseStickActive) return;
+  event.preventDefault();
+  mouseStickActive = false;
+  resetStick();
+});
 
 touchButtons.forEach((button) => {
   const action = button.dataset.touchAction as "boost" | "repair" | "pulse";
@@ -1480,16 +1712,13 @@ touchButtons.forEach((button) => {
     event.preventDefault();
     button.setPointerCapture(event.pointerId);
     window.__lumenVirtualInput![action] = true;
-    if (action !== "repair") {
-      bufferTouchTap(action);
-    }
+    noteLocalReleaseQaBrowserInput("touch", { x: 1, y: 0 }, "codex-in-app-browser-touch-action-button");
+    bufferTouchTap(action);
     button.dataset.active = "true";
   });
   button.addEventListener("click", (event) => {
     event.preventDefault();
-    if (action !== "repair") {
-      bufferTouchTap(action);
-    }
+    bufferTouchTap(action);
   });
   const releaseAction = (event: PointerEvent) => {
     event.preventDefault();
@@ -1514,11 +1743,15 @@ document.addEventListener("visibilitychange", () => {
 });
 
 function updateStick(event: PointerEvent): void {
+  updateStickFromPoint(event.clientX, event.clientY);
+}
+
+function updateStickFromPoint(clientX: number, clientY: number): void {
   const rect = touchStick.getBoundingClientRect();
   const centerX = rect.left + rect.width / 2;
   const centerY = rect.top + rect.height / 2;
-  const dx = event.clientX - centerX;
-  const dy = event.clientY - centerY;
+  const dx = clientX - centerX;
+  const dy = clientY - centerY;
   const distance = Math.hypot(dx, dy);
   const maxDistance = rect.width * 0.34;
   const scale = distance > maxDistance ? maxDistance / distance : 1;
@@ -1530,6 +1763,9 @@ function updateStick(event: PointerEvent): void {
     x: x / maxDistance,
     y: y / maxDistance
   };
+  if (Math.hypot(window.__lumenVirtualInput!.move.x, window.__lumenVirtualInput!.move.y) > 0.2) {
+    noteLocalReleaseQaBrowserInput("touch", window.__lumenVirtualInput!.move);
+  }
 }
 
 function endStickInput(event: PointerEvent): void {
@@ -1552,6 +1788,8 @@ function bufferTouchTap(action: "boost" | "repair" | "pulse"): void {
 }
 
 function resetVirtualInput(): void {
+  window.clearTimeout(keyboardMoveFallbackTimer);
+  mouseStickActive = false;
   resetStick();
   window.__lumenVirtualInput!.boost = false;
   window.__lumenVirtualInput!.repair = false;
@@ -1562,6 +1800,123 @@ function resetVirtualInput(): void {
   });
 }
 
+function bufferGameSurfaceKeyboardInput(event: KeyboardEvent): void {
+  if (latestStatus !== "playing") return;
+  const direction = getKeyboardMoveDirection(event.code, event.key);
+  if (direction) {
+    event.preventDefault();
+    window.clearTimeout(keyboardMoveFallbackTimer);
+    window.__lumenVirtualInput!.move = direction;
+    noteLocalReleaseQaBrowserInput("keyboard", direction, "codex-in-app-browser-keyboard");
+    keyboardMoveFallbackTimer = window.setTimeout(() => {
+      window.__lumenVirtualInput!.move = { x: 0, y: 0 };
+    }, isLocalReleaseQaMode() ? 780 : 140);
+    return;
+  }
+
+  const action = getKeyboardAction(event.code, event.key);
+  if (!action) return;
+  event.preventDefault();
+  noteLocalReleaseQaBrowserInput("keyboard", window.__lumenVirtualInput!.move, "codex-in-app-browser-keyboard");
+  if (action === "repair") {
+    window.__lumenVirtualInput!.repair = true;
+    window.setTimeout(() => {
+      window.__lumenVirtualInput!.repair = false;
+    }, 140);
+    return;
+  }
+  bufferTouchTap(action);
+}
+
+function noteLocalReleaseQaBrowserInput(
+  kind: LocalQaBrowserInputProbeKind,
+  move?: { x: number; y: number },
+  action?: string
+): void {
+  if (!isLocalReleaseQaMode() || latestStatus !== "playing") return;
+  if (localQaBrowserProbeResults.some((probe) => probe.kind === kind)) return;
+  if (localQaBrowserAutoProbeTimers.has(kind)) return;
+  let session: LocalQaBrowserInputProbeSession;
+  try {
+    session = startLocalReleaseQaBrowserInputProbe(kind, action);
+  } catch {
+    return;
+  }
+  holdLocalReleaseQaInput(kind);
+  dispatchLocalReleaseQaBrowserInput(kind, move ?? window.__lumenVirtualInput!.move);
+  const timer = window.setTimeout(() => {
+    localQaBrowserAutoProbeTimers.delete(kind);
+    clearLocalReleaseQaInputHold(kind);
+    try {
+      finishLocalReleaseQaBrowserInputProbe(session.id);
+    } catch {
+      localQaBrowserProbeSessions.delete(session.id);
+      writeLocalReleaseQaBrowserInputProbeNode();
+    }
+  }, 620);
+  localQaBrowserAutoProbeTimers.set(kind, timer);
+}
+
+function dispatchLocalReleaseQaBrowserInput(kind: LocalQaBrowserInputProbeKind, move: { x: number; y: number }): void {
+  if (Math.hypot(move.x, move.y) <= 0.05) return;
+  window.dispatchEvent(
+    new CustomEvent("game:qa-browser-input", {
+      detail: {
+        durationSeconds: 0.62,
+        kind,
+        move: { ...move }
+      }
+    })
+  );
+}
+
+function holdLocalReleaseQaInput(kind: LocalQaBrowserInputProbeKind): void {
+  clearLocalReleaseQaInputHold(kind);
+  const heldMove = { ...window.__lumenVirtualInput!.move };
+  if (Math.hypot(heldMove.x, heldMove.y) <= 0.05) return;
+  const holdTimer = window.setInterval(() => {
+    if (!isLocalReleaseQaMode() || latestStatus !== "playing") {
+      clearLocalReleaseQaInputHold(kind);
+      return;
+    }
+    window.__lumenVirtualInput!.move = { ...heldMove };
+  }, 40);
+  localQaBrowserInputHoldTimers.set(kind, holdTimer);
+}
+
+function clearLocalReleaseQaInputHold(kind: LocalQaBrowserInputProbeKind): void {
+  const holdTimer = localQaBrowserInputHoldTimers.get(kind);
+  if (holdTimer !== undefined) {
+    window.clearInterval(holdTimer);
+    localQaBrowserInputHoldTimers.delete(kind);
+  }
+}
+
+function getKeyboardMoveDirection(code: string, key: string): { x: number; y: number } | undefined {
+  const normalizedKey = key.toLowerCase();
+  if (code === "ArrowRight" || code === "KeyD" || normalizedKey === "arrowright" || normalizedKey === "d") {
+    return { x: 1, y: 0 };
+  }
+  if (code === "ArrowLeft" || code === "KeyA" || normalizedKey === "arrowleft" || normalizedKey === "a") {
+    return { x: -1, y: 0 };
+  }
+  if (code === "ArrowDown" || code === "KeyS" || normalizedKey === "arrowdown" || normalizedKey === "s") {
+    return { x: 0, y: 1 };
+  }
+  if (code === "ArrowUp" || code === "KeyW" || normalizedKey === "arrowup" || normalizedKey === "w") {
+    return { x: 0, y: -1 };
+  }
+  return undefined;
+}
+
+function getKeyboardAction(code: string, key: string): "boost" | "pulse" | "repair" | undefined {
+  const normalizedKey = key.toLowerCase();
+  if (code === "Space" || key === " ") return "boost";
+  if (code === "KeyE" || normalizedKey === "e") return "repair";
+  if (code === "KeyQ" || normalizedKey === "q") return "pulse";
+  return undefined;
+}
+
 function updateDifficultyUi(): void {
   difficultyButtons.forEach((button) => {
     const active = button.dataset.difficulty === selectedDifficulty;
@@ -1570,11 +1925,39 @@ function updateDifficultyUi(): void {
   });
   const difficulty = DIFFICULTY_SETTINGS[selectedDifficulty];
   difficultyDetail.textContent = `${difficulty.name}模式：${difficulty.description}`;
+  updateFirstRunBriefing();
   if (latestStatus === "menu" || latestStatus === "lost" || latestStatus === "completed") {
     startButton.textContent = getMenuStartLabel();
   }
   updateDailyChallengeUi();
   updateNextRunPanel();
+}
+
+function updateFirstRunBriefing(): void {
+  const firstContract = getContractFor(1, selectedDifficulty);
+  if (firstContract === "cleanWave") {
+    launchCommitTitle.textContent = "无损起手";
+    launchCommitDetail.textContent = "读图保命：安全缓冲中先确认无损合约和碎片轨迹；硬核首波别为了抢流明穿危险线。";
+    launchOrderFocusTitle.textContent = "无损起手";
+    launchOrderFocusDetail.textContent = "硬核首波目标是无损救援：先保命、绕碎片，再进维修圈。";
+    firstRouteTitle.textContent = "读图保命";
+    firstRouteDetail.textContent = "开局安全缓冲中，先看粉色碎片轨迹，顺路补电，不要为流明冒险受击。";
+    return;
+  }
+
+  const contract = CONTRACTS[firstContract];
+  launchCommitTitle.textContent = firstContract === "lumenRoute" ? "补给起手" : "合约起手";
+  launchCommitDetail.textContent = `读图补电：安全缓冲中先按合约“${contract.name}”规划路线，再靠近蓝色信标维修。`;
+  launchOrderFocusTitle.textContent = firstContract === "lumenRoute" ? "补给起手" : "合约起手";
+  launchOrderFocusDetail.textContent =
+    firstContract === "lumenRoute"
+      ? "先完成 4 个金色流明合约，再进维修圈。"
+      : `${contract.requirement}，完成后回到主目标修信标。`;
+  firstRouteTitle.textContent = firstContract === "lumenRoute" ? "读图补电" : "读图看合约";
+  firstRouteDetail.textContent =
+    firstContract === "lumenRoute"
+      ? "开局安全缓冲中，先沿虚线回收 4 个金色流明。"
+      : `${contract.requirement}。开局先看路线，再决定补给和维修顺序。`;
 }
 
 function getMenuStartLabel(): string {
@@ -1587,6 +1970,8 @@ function getMenuStartLabel(): string {
 function updateAudioUi(): void {
   audioToggle.textContent = saveData.audioEnabled ? "音效 开" : "音效 关";
   audioToggle.setAttribute("aria-pressed", String(saveData.audioEnabled));
+  pauseAudioToggle.textContent = saveData.audioEnabled ? "音效 开" : "音效 关";
+  pauseAudioToggle.setAttribute("aria-pressed", String(saveData.audioEnabled));
 }
 
 function updateSettingsUi(message?: string): void {
@@ -1609,7 +1994,7 @@ function updateSettingsUi(message?: string): void {
 function updateDailyChallengeUi(): void {
   const daily = getDailyChallenge();
   const difficulty = DIFFICULTY_SETTINGS[selectedDifficulty];
-  dailyRouteButton.textContent = `今日挑战 · ${daily.routeName}`;
+  dailyRouteButton.textContent = `固定路线 · ${daily.routeName}`;
   dailyRouteButton.title = `${daily.label}，${difficulty.name}模式，固定救援代号 ${daily.routeName}`;
   dailyDetail.textContent = buildDailyChallengeDetail(daily);
 }
@@ -1790,10 +2175,10 @@ function setDifficultyPickerVisible(visible: boolean): void {
 function updateSessionTools(message?: string): void {
   const overlayVisible = overlay.classList.contains("show");
   const inUpgradeChoice = latestStatus === "won";
-  sessionTools.hidden = !overlayVisible;
+  sessionTools.hidden = !overlayVisible || (latestStatus !== "paused" && !progressLibrary.open);
   copyRouteButton.hidden = !latestRoutePlan;
   restartRouteButton.hidden = !(latestStatus === "paused" && latestRoutePlan);
-  resetSaveButton.hidden = inUpgradeChoice;
+  resetSaveButton.hidden = inUpgradeChoice || latestStatus === "paused";
   if (message) {
     setSessionFeedback(message);
     return;
@@ -1805,13 +2190,578 @@ function updateSessionTools(message?: string): void {
   }
 }
 
+progressLibrary.addEventListener("toggle", () => {
+  updateSessionTools();
+});
+
 function completeBootStatus(): void {
   document.body.dataset.gameReady = "true";
-  window.setTimeout(() => {
-    if (document.body.dataset.gameReady === "true") {
-      bootStatus?.setAttribute("hidden", "");
+  if (bootStatus) {
+    bootStatus.hidden = true;
+  }
+}
+
+function onGameSceneReady(): void {
+  releaseQaSceneReady = true;
+  if (releaseQaDomReady) {
+    initLocalReleaseQaModeOnce();
+  }
+}
+
+function initLocalReleaseQaModeOnce(): void {
+  if (releaseQaModeInitialized || !isLocalReleaseQaMode()) return;
+  releaseQaModeInitialized = true;
+  initLocalReleaseQaMode();
+}
+
+function initLocalReleaseQaMode(): void {
+  if (!isLocalReleaseQaMode()) return;
+  const params = new URLSearchParams(window.location.search);
+  const state = params.get("state") ?? "menu";
+  shell.dataset.qa = "release";
+  window.__lumenStartBrowserInputProbe = startLocalReleaseQaBrowserInputProbe;
+  window.__lumenFinishBrowserInputProbe = finishLocalReleaseQaBrowserInputProbe;
+  window.__lumenRunInputProbe = runLocalReleaseQaInputProbe;
+  writeLocalReleaseQaBrowserInputProbeNode();
+  writeLocalReleaseQaInputProbeNode();
+  setSessionFeedback("本机发布验收模式：普通玩家不会看到此状态。");
+  if (state === "paused") {
+    showQaPausedState();
+    return;
+  }
+  if (state === "won") {
+    showQaRunEndState(createQaWonState());
+    return;
+  }
+  if (state === "playthrough") {
+    showQaWaveUpgradeState();
+    return;
+  }
+  if (state === "completed") {
+    showQaRunEndState(createQaCompletedState());
+    return;
+  }
+  if (state === "lost") {
+    showQaRunEndState(createQaLostState());
+  }
+}
+
+function isLocalReleaseQaMode(): boolean {
+  const host = window.location.hostname;
+  const localHost = host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
+  const params = new URLSearchParams(window.location.search);
+  return localHost && params.get("qa") === "release";
+}
+
+function runLocalReleaseQaInputProbe(kind: LocalQaInputProbeKind): LocalQaInputProbe {
+  if (!isLocalReleaseQaMode()) {
+    throw new Error("Local release QA input probes only run on localhost with qa=release.");
+  }
+  let state = restartRun(createInitialState(), undefined, { difficulty: "standard", routeSeed: 4660 });
+  const before = createLocalQaSimulationSignature(state);
+  const input =
+    kind === "touch"
+      ? { move: { x: 1, y: 0 }, boost: false, repair: false, pulse: false }
+      : { move: { x: 1, y: 0 }, boost: false, repair: false, pulse: false };
+
+  for (let frame = 0; frame < 36; frame += 1) {
+    state = updateSimulation(state, input, 1 / 60);
+  }
+
+  const after = createLocalQaSimulationSignature(state);
+  return {
+    action: kind === "touch" ? "local-simulated-touch-stick-right" : "local-simulated-keyboard-right",
+    after,
+    before,
+    briefingEnded: before.briefingActive && !after.briefingActive,
+    elapsedDelta: Number((after.elapsed - before.elapsed).toFixed(3)),
+    kind,
+    positionDelta: Number(distanceBetween(before.player.position, after.player.position).toFixed(3)),
+    source: "local-release-qa-simulation"
+  };
+}
+
+function startLocalReleaseQaBrowserInputProbe(
+  kind: LocalQaBrowserInputProbeKind,
+  action = kind === "touch" ? "codex-in-app-browser-touch-stick-drag" : "codex-in-app-browser-keyboard"
+): LocalQaBrowserInputProbeSession {
+  if (!isLocalReleaseQaMode()) {
+    throw new Error("Local release QA browser input probes only run on localhost with qa=release.");
+  }
+  if (latestStatus !== "playing") {
+    throw new Error("Browser input probes require a live playing state. Click the visible start action first.");
+  }
+  const before = readLocalQaCanvasSignature();
+  const id = `${kind}-${Date.now()}-${localQaBrowserProbeSequence++}`;
+  const session: LocalQaBrowserInputProbeSession = {
+    action,
+    before,
+    id,
+    kind,
+    source: "codex-in-app-browser-real-input",
+    startedAt: Date.now()
+  };
+  localQaBrowserProbeSessions.set(id, session);
+  writeLocalReleaseQaBrowserInputProbeNode();
+  return session;
+}
+
+function finishLocalReleaseQaBrowserInputProbe(id: string): LocalQaBrowserInputProbe {
+  if (!isLocalReleaseQaMode()) {
+    throw new Error("Local release QA browser input probes only run on localhost with qa=release.");
+  }
+  const session = localQaBrowserProbeSessions.get(id);
+  if (!session) {
+    throw new Error(`Unknown local release QA browser input probe session: ${id}`);
+  }
+  const after = readLocalQaCanvasSignature();
+  const probe: LocalQaBrowserInputProbe = {
+    action: session.action,
+    after,
+    before: session.before,
+    briefingEnded: session.before.briefingActive && !after.briefingActive,
+    elapsedDelta: Number((after.elapsed - session.before.elapsed).toFixed(3)),
+    id: session.id,
+    kind: session.kind,
+    positionDelta: Number(distanceBetween(session.before.player.position, after.player.position).toFixed(3)),
+    source: "codex-in-app-browser-real-input"
+  };
+  localQaBrowserProbeSessions.delete(id);
+  localQaBrowserProbeResults.push(probe);
+  writeLocalReleaseQaBrowserInputProbeNode();
+  return probe;
+}
+
+function readLocalQaCanvasSignature(): LocalQaSimulationSignature {
+  const signature = window.__lumenCanvasSignature;
+  if (!signature) {
+    throw new Error("Canvas signature is not ready for local release QA browser input evidence.");
+  }
+  return {
+    briefingActive: Boolean(signature.briefingActive),
+    elapsed: Number(signature.elapsed.toFixed(3)),
+    player: {
+      position: {
+        x: Number(signature.player.position.x.toFixed(2)),
+        y: Number(signature.player.position.y.toFixed(2))
+      },
+      velocity: {
+        x: Number(signature.player.velocity.x.toFixed(2)),
+        y: Number(signature.player.velocity.y.toFixed(2))
+      }
+    },
+    status: signature.status
+  };
+}
+
+function writeLocalReleaseQaInputProbeNode(): void {
+  let node = document.querySelector<HTMLScriptElement>("#lumen-input-probes");
+  if (!node) {
+    node = document.createElement("script");
+    node.id = "lumen-input-probes";
+    node.type = "application/json";
+    document.head.append(node);
+  }
+  node.textContent = JSON.stringify({
+    source: "local-release-qa-simulation",
+    probes: {
+      keyboard: runLocalReleaseQaInputProbe("keyboard"),
+      touch: runLocalReleaseQaInputProbe("touch")
+    },
+    updatedAt: Date.now()
+  });
+}
+
+function writeLocalReleaseQaBrowserInputProbeNode(): void {
+  let node = document.querySelector<HTMLScriptElement>("#lumen-browser-input-probes");
+  if (!node) {
+    node = document.createElement("script");
+    node.id = "lumen-browser-input-probes";
+    node.type = "application/json";
+    document.head.append(node);
+  }
+  node.textContent = JSON.stringify({
+    active: [...localQaBrowserProbeSessions.values()],
+    probes: localQaBrowserProbeResults,
+    source: "codex-in-app-browser-real-input",
+    updatedAt: Date.now()
+  });
+}
+
+function writeLocalReleaseQaWaveUpgradeProbeNode(probe: LocalQaWaveUpgradeProbe): void {
+  let node = document.querySelector<HTMLScriptElement>("#lumen-wave-upgrade-probe");
+  if (!node) {
+    node = document.createElement("script");
+    node.id = "lumen-wave-upgrade-probe";
+    node.type = "application/json";
+    document.head.append(node);
+  }
+  node.textContent = JSON.stringify({
+    ...probe,
+    updatedAt: Date.now()
+  });
+}
+
+function createLocalQaSimulationSignature(state: GameState): LocalQaSimulationSignature {
+  return {
+    briefingActive: state.briefingActive,
+    elapsed: Number(state.elapsed.toFixed(3)),
+    player: {
+      position: {
+        x: Number(state.player.position.x.toFixed(2)),
+        y: Number(state.player.position.y.toFixed(2))
+      },
+      velocity: {
+        x: Number(state.player.velocity.x.toFixed(2)),
+        y: Number(state.player.velocity.y.toFixed(2))
+      }
+    },
+    status: state.status
+  };
+}
+
+function distanceBetween(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function showQaPausedState(): void {
+  const state = createQaPlayingState();
+  renderQaHudState(state);
+  showHelpOverlay();
+  updateSessionTools("本机发布验收：暂停战术扫描。");
+}
+
+function showQaRunEndState(state: GameState): void {
+  renderQaHudState(state);
+  handleRunEnded(createQaRunEndDetail(state), { persist: false });
+  updateSessionTools(`本机发布验收：${state.status === "won" ? "过波升级" : state.status === "completed" ? "通关结算" : "失败复盘"}。`);
+}
+
+function showQaWaveUpgradeState(): void {
+  const { postUpgradeState, probe, wonState } = createLocalQaWaveUpgradeProbe();
+  writeLocalReleaseQaWaveUpgradeProbeNode(probe);
+  renderQaHudState(wonState);
+  handleRunEnded(createQaRunEndDetail(wonState), { persist: false });
+  updateSessionTools(
+    `本机发布验收：规则层完成第 ${probe.clearedWave} 波，点击升级后应进入第 ${postUpgradeState.wave} 波。`
+  );
+}
+
+function renderQaHudState(state: GameState): void {
+  const waveStats = state.status === "completed" ? state.stats : getCurrentWaveStats(state);
+  const ratingState = withRunStats(state, waveStats);
+  window.dispatchEvent(new CustomEvent("game:qa-state", { detail: { state } }));
+  window.dispatchEvent(
+    new CustomEvent("game:hud", {
+      detail: {
+        charge: state.player.charge,
+        hull: state.player.hull,
+        relays: `${state.relays.filter((relay) => relay.repaired).length}/${state.relays.length}`,
+        lumen: state.player.lumen,
+        wave: state.wave,
+        score: state.score,
+        combo: state.combo,
+        comboTimer: state.comboTimer,
+        comboWindow: COMBO_WINDOW_SECONDS,
+        bestCombo: state.bestCombo,
+        difficulty: state.difficulty,
+        campaignWaves: state.campaignWaves,
+        maxHull: state.player.maxHull,
+        maxCharge: state.player.maxCharge,
+        boostReady: state.player.boostCooldown <= 0,
+        pulseReady: state.player.pulseCooldown <= 0,
+        message: state.message,
+        objectiveHint: getObjectiveHint(state),
+        coachDirective: getCoachDirective(state),
+        resourceAlerts: getResourceAlerts(state),
+        routePlan: getRoutePlan(state.routeSeed),
+        status: state.status,
+        waveModifier: WAVE_MODIFIERS[state.waveModifier],
+        sector: SECTOR_LAYOUTS[state.sector],
+        contract: getContractSnapshot(state),
+        performance: getRunPerformance(ratingState),
+        briefingActive: state.briefingActive,
+        radar: createQaRadarSnapshot(state),
+        upgradeSummaries: getUpgradeSummaries(state.upgrades),
+        upgradeChoices: state.status === "won" ? getUpgradeChoices(state) : []
+      }
+    })
+  );
+}
+
+function createQaRunEndDetail(state: GameState): RunEndDetail {
+  const waveStats = state.status === "completed" ? state.stats : getCurrentWaveStats(state);
+  const ratingState = withRunStats(state, waveStats);
+  return {
+    bestCombo: state.bestCombo,
+    campaignStats: state.stats,
+    charge: state.player.charge,
+    contract: getContractSnapshot(state),
+    difficulty: state.difficulty,
+    elapsed: state.elapsed,
+    endReason: state.endReason,
+    hull: state.player.hull,
+    lossContext: state.lossContext,
+    message: state.message,
+    rating: getRunRating(ratingState),
+    routePlan: getRoutePlan(state.routeSeed),
+    score: state.score,
+    sector: SECTOR_LAYOUTS[state.sector],
+    stats: waveStats,
+    status: state.status === "completed" ? "completed" : state.status === "won" ? "won" : "lost",
+    wave: state.wave,
+    waveModifier: WAVE_MODIFIERS[state.waveModifier]
+  };
+}
+
+function createQaPlayingState(): GameState {
+  const state = restartRun(createInitialState(), undefined, { difficulty: "standard", routeSeed: 4660 });
+  state.briefingActive = false;
+  state.elapsed = 24;
+  state.player.position = { x: 390, y: 150 };
+  state.player.charge = 84;
+  state.player.hull = 96;
+  state.player.lumen = 3;
+  state.score = 1280;
+  state.combo = 2.2;
+  state.comboTimer = 2.1;
+  state.bestCombo = 2.8;
+  state.stats.lumenCollected = 3;
+  state.stats.distanceTraveled = 520;
+  state.message = "先完成流明航线，再靠近蓝色信标维修。";
+  state.lumen.slice(0, 3).forEach((drop) => {
+    drop.collected = true;
+  });
+  state.relays[0].progress = 0.5;
+  state.relays[0].checkpoint = 2;
+  return state;
+}
+
+function createQaWonState(): GameState {
+  const state = createQaPlayingState();
+  return markQaWaveCleared(state, "won");
+}
+
+function createQaCompletedState(): GameState {
+  let state = restartRun(createInitialState(), undefined, { difficulty: "standard", routeSeed: 4660 });
+  const upgrades: UpgradeId[] = ["capacitor", "repair", "engine", "shield"];
+  upgrades.forEach((upgradeId) => {
+    state = markQaWaveCleared(state, "won");
+    state = restartRun(state, upgradeId);
+    state.briefingActive = false;
+  });
+  return markQaWaveCleared(state, "completed");
+}
+
+function createQaLostState(): GameState {
+  const state = createQaPlayingState();
+  state.status = "lost";
+  state.endReason = "chargeDepleted";
+  state.elapsed = 61;
+  state.player.charge = 0;
+  state.player.hull = 68;
+  state.score = 1760;
+  state.bestCombo = 2.6;
+  state.stats.lumenCollected = 3;
+  state.stats.relaysRepaired = 1;
+  state.stats.hitsTaken = 2;
+  state.stats.repairSeconds = 19;
+  state.contract.status = "failed";
+  state.contract.failureReason = "runLost";
+  state.contract.failureDetail = "救援中断时合约尚未完成。";
+  state.contract.failureElapsed = state.elapsed;
+  state.lossContext = {
+    source: "repairDrain",
+    resource: "charge",
+    detail: "低电量时继续硬修信标，维修光束耗尽了最后电量。",
+    elapsed: state.elapsed,
+    wave: state.wave
+  };
+  state.message = "电量归零，光网被虚空吞没。";
+  return state;
+}
+
+function createLocalQaWaveUpgradeProbe(): {
+  postUpgradeState: GameState;
+  probe: LocalQaWaveUpgradeProbe;
+  wonState: GameState;
+} {
+  const routeSeed = 194616;
+  let state = restartRun(createInitialState(), undefined, { difficulty: "standard", routeSeed });
+  const targets = createLocalQaRouteTargets(state);
+
+  targets.forEach((target) => {
+    if (state.status !== "playing") return;
+    if (target.kind === "relay") {
+      const repairedBefore = countRepairedRelays(state);
+      state = advanceLocalQaRouteToTarget(state, target, 5000, repairedBefore);
+      return;
     }
-  }, 240);
+    state = advanceLocalQaRouteToTarget(state, target, 5000);
+  });
+
+  const wonState = state.status === "won" ? state : markQaWaveCleared(state, "won");
+  const upgradeChoices = getUpgradeChoices(wonState);
+  const selectedUpgrade: UpgradeId | "none" = upgradeChoices.length > 0 ? upgradeChoices[0].id : "none";
+  const postUpgradeState = upgradeChoices.length > 0 ? restartRun(wonState, upgradeChoices[0].id) : restartRun(wonState);
+  const probe: LocalQaWaveUpgradeProbe = {
+    clearedWave: wonState.wave,
+    elapsedSeconds: Number(wonState.elapsed.toFixed(3)),
+    enteredStatus: "playing",
+    postUpgradeContract: postUpgradeState.contract.id,
+    postUpgradeSector: postUpgradeState.sector,
+    postUpgradeStatus: postUpgradeState.status,
+    postUpgradeWave: postUpgradeState.wave,
+    repairedRelays: countRepairedRelays(wonState),
+    routeSeed,
+    selectedUpgrade,
+    source: "local-release-qa-simulation-wave-upgrade",
+    upgradeOptions: upgradeChoices.length
+  };
+  return { postUpgradeState, probe, wonState };
+}
+
+function createLocalQaRouteTargets(state: GameState): LocalQaRouteTarget[] {
+  const lumenOrder = [4, 5, 2, 1];
+  const relayOrder = [0, 2, 3, 1];
+  return [
+    ...lumenOrder
+      .map((id) => state.lumen[id])
+      .filter((drop): drop is NonNullable<(typeof state.lumen)[number]> => Boolean(drop))
+      .map((drop) => ({ kind: "lumen" as const, label: `流明 ${drop.id}`, position: drop.position, radius: 34 })),
+    ...relayOrder
+      .map((id) => state.relays[id])
+      .filter((relay): relay is NonNullable<(typeof state.relays)[number]> => Boolean(relay))
+      .map((relay) => ({ kind: "relay" as const, label: `信标 ${relay.id}`, position: relay.position, radius: 58 })),
+    { kind: "gate", label: "北侧光门", position: state.gate.position, radius: 54 }
+  ];
+}
+
+function advanceLocalQaRouteToTarget(
+  state: GameState,
+  target: LocalQaRouteTarget,
+  maxFrames: number,
+  repairedBefore?: number
+): GameState {
+  let next = state;
+  for (let frame = 0; frame < maxFrames && next.status === "playing"; frame += 1) {
+    const delta = subtractPoints(target.position, next.player.position);
+    const distanceToTarget = Math.hypot(delta.x, delta.y);
+    if (target.kind === "relay" && countRepairedRelays(next) > (repairedBefore ?? -1)) break;
+    if (target.kind !== "relay" && distanceToTarget <= target.radius) break;
+
+    let move = normalizePoint(delta);
+    let repair = false;
+    if (target.kind === "relay" && distanceToTarget < 72) {
+      repair = true;
+      move = distanceToTarget > 26 ? normalizePoint(delta) : { x: 0, y: 0 };
+    }
+
+    next = updateSimulation(
+      next,
+      {
+        boost: distanceToTarget > 190 && frame % 40 === 0,
+        move,
+        pulse: false,
+        repair
+      },
+      1 / 30
+    );
+  }
+  return next;
+}
+
+function countRepairedRelays(state: GameState): number {
+  return state.relays.filter((relay) => relay.repaired).length;
+}
+
+function subtractPoints(a: { x: number; y: number }, b: { x: number; y: number }): { x: number; y: number } {
+  return { x: a.x - b.x, y: a.y - b.y };
+}
+
+function normalizePoint(point: { x: number; y: number }): { x: number; y: number } {
+  const length = Math.hypot(point.x, point.y);
+  if (length <= 0.0001) return { x: 0, y: 0 };
+  return { x: point.x / length, y: point.y / length };
+}
+
+function markQaWaveCleared(state: GameState, status: "completed" | "won"): GameState {
+  state.status = status;
+  state.briefingActive = false;
+  state.endReason = status === "completed" ? "campaignCompleted" : "waveCleared";
+  state.relays.forEach((relay) => {
+    relay.progress = 1;
+    relay.checkpoint = 4;
+    relay.repaired = true;
+  });
+  state.lumen.slice(0, 7).forEach((drop) => {
+    drop.collected = true;
+  });
+  state.gate.open = true;
+  state.player.position = { ...state.gate.position };
+  state.player.charge = Math.max(62, state.player.maxCharge * 0.64);
+  state.player.hull = Math.max(84, state.player.maxHull * 0.82);
+  state.player.lumen = 7;
+  state.elapsed = Math.max(state.elapsed, state.wave * 54);
+  state.combo = 3.1;
+  state.comboTimer = 1.7;
+  state.bestCombo = Math.max(state.bestCombo, 3.8);
+  state.score = Math.max(state.score, state.wave * 4100 + state.player.lumen * 120);
+  state.stats.boostUses += 4;
+  state.stats.contractsCompleted = Math.max(state.stats.contractsCompleted, state.wave);
+  state.stats.lumenCollected += 7;
+  state.stats.relaysRepaired += 4;
+  state.stats.closeCalls += 2;
+  state.stats.repairSeconds += 24;
+  state.stats.distanceTraveled += 1120;
+  state.stats.wavesCleared = Math.max(state.stats.wavesCleared, state.wave);
+  state.contract.status = "completed";
+  state.contract.rewardClaimed = true;
+  state.contract.statusChangedAtElapsed = state.elapsed;
+  state.message =
+    status === "completed"
+      ? `五波光网全部稳定，最终得分 ${state.score.toLocaleString()}。`
+      : `光网稳定，得分 ${state.score.toLocaleString()}。请选择一项升级。`;
+  return state;
+}
+
+function createQaRadarSnapshot(state: GameState): RadarSnapshot {
+  const hint = getObjectiveHint(state);
+  return {
+    arena: { ...state.arena },
+    gate: { open: state.gate.open, position: { ...state.gate.position } },
+    guide: hint.target
+      ? {
+          kind: hint.kind === "gate" ? "gate" : hint.kind === "lumen" ? "lumen" : hint.kind === "repair" ? "repair" : "relay",
+          position: { ...hint.target },
+          title: hint.title,
+          urgent: hint.urgent
+        }
+      : undefined,
+    hazards: state.hazards.map((hazard) => ({
+      id: hazard.id,
+      position: { ...hazard.position },
+      radius: hazard.radius
+    })),
+    lumen: state.lumen.map((drop) => ({
+      collected: drop.collected,
+      id: drop.id,
+      position: { ...drop.position }
+    })),
+    player: { position: { ...state.player.position } },
+    relays: state.relays.map((relay) => ({
+      id: relay.id,
+      position: { ...relay.position },
+      progress: relay.progress,
+      repaired: relay.repaired
+    })),
+    storms: state.storms.map((storm) => ({
+      activeRadius: getStormActiveRadius(storm),
+      id: storm.id,
+      position: { ...storm.position },
+      radius: storm.radius
+    }))
+  };
 }
 
 function buildRouteLink(): string | undefined {
@@ -1909,7 +2859,8 @@ function renderRunRecap(detail: RunEndDetail, newlyUnlocked: AchievementId[]): v
     ["信标", String(detail.stats.relaysRepaired)],
     ["擦险", String(detail.stats.closeCalls)],
     ["受击", String(detail.stats.hitsTaken)],
-    ["风暴", formatSeconds(detail.stats.stormSeconds)]
+    ["风暴", formatSeconds(detail.stats.stormSeconds)],
+    ...(detail.status === "lost" ? [["根因", getLossSourceMetricLabel(detail.lossContext)] as [string, string]] : [])
   ];
   recapMetrics.replaceChildren(
     ...metrics.map(([label, value]) => {
@@ -1987,6 +2938,9 @@ function buildRunEndCopy(detail: RunEndDetail): string {
 }
 
 function buildLossRootCause(detail: RunEndDetail): string {
+  if (detail.lossContext.source !== "none") {
+    return getLossSourceRootCause(detail.lossContext);
+  }
   if (detail.endReason === "chargeDepleted") {
     if (detail.stats.stormSeconds > 2.5) return "在紫色风暴里停留太久，电量被持续吸走";
     if (detail.stats.lumenCollected < Math.max(3, detail.wave * 2)) return "补给路线不足，开局和维修间隔没有吃够流明";
@@ -2005,6 +2959,9 @@ function buildLossRootCause(detail: RunEndDetail): string {
 }
 
 function buildLossNextAction(detail: RunEndDetail): string {
+  if (detail.lossContext.source !== "none") {
+    return getLossSourceNextAction(detail.lossContext);
+  }
   if (detail.endReason === "chargeDepleted") {
     return "下一局先沿虚线补流明，修到节点后低电就撤出来补给。";
   }
@@ -2012,6 +2969,71 @@ function buildLossNextAction(detail: RunEndDetail): string {
     return "下一局把脉冲留给贴脸碎片，受击后先横向拉开再回去维修。";
   }
   return "下一局先完成 4 座信标和北侧撤离，再追合约和连锁。";
+}
+
+function getLossSourceRootCause(context: LossContext): string {
+  switch (context.source) {
+    case "boostDrain":
+      return "低电量时使用短推进，最后电量被推进消耗掉";
+    case "repairDrain":
+      return "低电量时继续硬修信标，维修光束耗尽了最后电量";
+    case "pulseDrain":
+      return "低电量时释放脉冲，技能耗电把电量打空";
+    case "hazardImpact":
+      return context.resource === "hull"
+        ? "粉色碎片连续撞击，机体完整度被打空"
+        : "粉色碎片撞击同时扣电，最后电量被碰撞打空";
+    case "stormDrain":
+      return "紫色风暴内停留太久，风暴吸走了最后电量";
+    case "stormDamage":
+      return "在紫色风暴震荡期停留，机体被持续伤害击穿";
+    case "baseDrain":
+      return "基础航行耗电拖到归零，补给和撤离节奏太慢";
+    default:
+      return context.detail || "主目标节奏中断，补给、维修和撤离顺序没有稳定下来";
+  }
+}
+
+function getLossSourceNextAction(context: LossContext): string {
+  switch (context.source) {
+    case "boostDrain":
+      return "下一局电量低于三分之一时别用推进赶路，先沿导航吃流明再冲刺脱险。";
+    case "repairDrain":
+      return "下一局修到 25% 节点后先看电量，低电就撤出来补流明，再回信标继续修。";
+    case "pulseDrain":
+      return "下一局脉冲留给贴脸碎片；低电时优先走位和推进脱离，不要用 Q 收尾。";
+    case "hazardImpact":
+      return "下一局看到粉色轨迹切进维修圈就先撤，贴脸再用 Q / 脉冲键清场。";
+    case "stormDrain":
+      return "下一局紫色风暴一覆盖就 Space / 推进键穿出，等安全后再回头维修。";
+    case "stormDamage":
+      return "下一局不要在风暴边缘贪修，先进外圈等风暴收缩，再切回信标。";
+    case "baseDrain":
+      return "下一局先把 2-3 个流明当作路线节点，修完一座就规划下一次补给。";
+    default:
+      return "下一局先完成 4 座信标和北侧撤离，再追合约和连锁。";
+  }
+}
+
+function getLossSourceMetricLabel(context: LossContext): string {
+  switch (context.source) {
+    case "boostDrain":
+      return "推进耗电";
+    case "repairDrain":
+      return "维修耗电";
+    case "pulseDrain":
+      return "脉冲耗电";
+    case "hazardImpact":
+      return "碎片撞击";
+    case "stormDrain":
+      return "风暴吸电";
+    case "stormDamage":
+      return "风暴伤害";
+    case "baseDrain":
+      return "基础耗电";
+    default:
+      return "节奏中断";
+  }
 }
 
 function buildRecapActionPlan(detail: RunEndDetail): RecapPlanStep[] {
@@ -2050,7 +3072,8 @@ function buildRecapActionPlan(detail: RunEndDetail): RecapPlanStep[] {
 }
 
 function buildChargeLossRecapPlan(detail: RunEndDetail): RecapPlanStep[] {
-  const lowSupply = detail.stats.lumenCollected < Math.max(3, detail.wave * 3);
+  const expectedSupply = detail.wave >= 4 ? 6 : detail.wave >= 2 ? 5 : 4;
+  const lowSupply = detail.stats.lumenCollected < expectedSupply;
   const stormHeavy = detail.stats.stormSeconds > 2.5;
   return [
     {
@@ -2170,8 +3193,30 @@ function renderContractRecap(contract: ContractSnapshot): void {
   contractRecapTitle.textContent = `战术合约：${contract.name} · ${statusText}`;
   contractRecapDetail.textContent =
     contract.status === "completed"
-      ? `${contract.requirement}，奖励 ${contract.rewardScore.toLocaleString()} 分已结算。`
-      : `${contract.requirement}。${contract.progress}`;
+      ? `${contract.requirement}，奖励 ${contract.scaledRewardScore.toLocaleString()} 分已结算。`
+      : contract.status === "failed"
+        ? `${contract.requirement}。失败原因：${getContractFailureText(contract)}`
+        : `${contract.requirement}。${contract.progress}`;
+}
+
+function getContractFailureText(contract: ContractSnapshot): string {
+  if (contract.failureDetail) return contract.failureDetail;
+  switch (contract.failureReason) {
+    case "waveEnded":
+      return "撤离时目标还没完成。";
+    case "timeExpired":
+      return "限时目标超时。";
+    case "hazardHit":
+      return "本波受击导致合约中断。";
+    case "stormExposure":
+      return "风暴停留超过合约限制。";
+    case "pulseOveruse":
+      return "脉冲使用次数超过合约限制。";
+    case "runLost":
+      return "救援中断时合约尚未完成。";
+    default:
+      return contract.progress;
+  }
 }
 
 function updateAchievementUi(): void {
@@ -2183,7 +3228,11 @@ function updateAchievementUi(): void {
 
   const header = document.createElement("div");
   header.className = "achievement-header";
-  header.innerHTML = `<strong>成就 ${unlockedCount}/${summaries.length}</strong><span>${buildAchievementStatusText(unlockedCount, summaries.length)}</span>`;
+  const headerTitle = document.createElement("strong");
+  headerTitle.textContent = `成就 ${unlockedCount}/${summaries.length}`;
+  const headerDetail = document.createElement("span");
+  headerDetail.textContent = buildAchievementStatusText(unlockedCount, summaries.length);
+  header.append(headerTitle, headerDetail);
 
   achievementStrip.replaceChildren(
     header,
@@ -2191,10 +3240,11 @@ function updateAchievementUi(): void {
       const item = document.createElement("article");
       item.className = "achievement-card";
       item.classList.toggle("unlocked", summary.unlocked);
-      item.innerHTML = `
-        <strong>${summary.unlocked ? "已完成" : "挑战"} · ${summary.name}</strong>
-        <span>${summary.unlocked ? summary.description : summary.requirement}</span>
-      `;
+      const title = document.createElement("strong");
+      title.textContent = `${summary.unlocked ? "已完成" : "挑战"} · ${summary.name}`;
+      const detail = document.createElement("span");
+      detail.textContent = summary.unlocked ? summary.description : summary.requirement;
+      item.append(title, detail);
       return item;
     })
   );
@@ -2279,7 +3329,9 @@ function renderAchievementUnlocks(newlyUnlocked: AchievementId[]): void {
     ...newlyUnlocked.map((id) => {
       const achievement = ACHIEVEMENTS[id];
       const item = document.createElement("span");
-      item.innerHTML = `<b>新成就：${achievement.name}</b>${achievement.description}`;
+      const title = document.createElement("b");
+      title.textContent = `新成就：${achievement.name}`;
+      item.append(title, achievement.description);
       return item;
     })
   );
@@ -2430,11 +3482,15 @@ function createDefaultSave(): SaveData {
     clears: 0,
     dailyBest: undefined,
     largeLabels: false,
-    reducedMotion: false,
+    reducedMotion: prefersReducedMotion(),
     runHistory: [],
     selectedDifficulty: "standard",
     totalContracts: 0
   };
+}
+
+function prefersReducedMotion(): boolean {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 function loadSave(): SaveData {
@@ -2443,24 +3499,21 @@ function loadSave(): SaveData {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return fallback;
     const parsed = JSON.parse(raw) as Partial<SaveData>;
-    const selected =
-      parsed.selectedDifficulty && parsed.selectedDifficulty in DIFFICULTY_SETTINGS
-        ? parsed.selectedDifficulty
-        : fallback.selectedDifficulty;
+    const selected = isDifficultyId(parsed.selectedDifficulty) ? parsed.selectedDifficulty : fallback.selectedDifficulty;
     return {
-      audioEnabled: parsed.audioEnabled ?? fallback.audioEnabled,
+      audioEnabled: parseBoolean(parsed.audioEnabled, fallback.audioEnabled),
       achievements: parseAchievements(parsed.achievements),
-      bestCombo: finiteNumber(parsed.bestCombo, fallback.bestCombo),
-      bestContracts: finiteNumber(parsed.bestContracts, fallback.bestContracts),
-      bestScore: finiteNumber(parsed.bestScore, fallback.bestScore),
-      bestWave: finiteNumber(parsed.bestWave, fallback.bestWave),
-      clears: finiteNumber(parsed.clears, fallback.clears),
+      bestCombo: finiteClampedNumber(parsed.bestCombo, fallback.bestCombo, 1, 9.99),
+      bestContracts: finiteClampedNumber(parsed.bestContracts, fallback.bestContracts, 0, CAMPAIGN_WAVES),
+      bestScore: finiteClampedNumber(parsed.bestScore, fallback.bestScore, 0, 99_999_999),
+      bestWave: finiteClampedNumber(parsed.bestWave, fallback.bestWave, 1, CAMPAIGN_WAVES),
+      clears: finiteClampedNumber(parsed.clears, fallback.clears, 0, 9_999),
       dailyBest: parseDailyBest(parsed.dailyBest),
-      largeLabels: Boolean(parsed.largeLabels ?? fallback.largeLabels),
-      reducedMotion: Boolean(parsed.reducedMotion ?? fallback.reducedMotion),
+      largeLabels: parseBoolean(parsed.largeLabels, fallback.largeLabels),
+      reducedMotion: parseBoolean(parsed.reducedMotion, fallback.reducedMotion),
       runHistory: parseRunHistory(parsed.runHistory),
       selectedDifficulty: selected,
-      totalContracts: finiteNumber(parsed.totalContracts, fallback.totalContracts)
+      totalContracts: finiteClampedNumber(parsed.totalContracts, fallback.totalContracts, 0, 999_999)
     };
   } catch {
     return fallback;
@@ -2480,9 +3533,19 @@ function finiteNumber(value: unknown, fallback: number): number {
   return Number.isFinite(numberValue) ? numberValue : fallback;
 }
 
+function finiteClampedNumber(value: unknown, fallback: number, min: number, max: number): number {
+  const numberValue = finiteNumber(value, fallback);
+  return Math.max(min, Math.min(max, numberValue));
+}
+
+function parseBoolean(value: unknown, fallback: boolean): boolean {
+  if (typeof value === "boolean") return value;
+  return fallback;
+}
+
 function parseAchievements(value: unknown): AchievementId[] {
   if (!Array.isArray(value)) return [];
-  return value.filter((id): id is AchievementId => typeof id === "string" && id in ACHIEVEMENTS);
+  return value.filter(isAchievementId);
 }
 
 function parseRunHistory(value: unknown): RunHistoryEntry[] {
@@ -2496,7 +3559,7 @@ function parseRunHistory(value: unknown): RunHistoryEntry[] {
 function parseDailyBest(value: unknown): DailyBestEntry | undefined {
   if (!value || typeof value !== "object") return undefined;
   const entry = value as Partial<DailyBestEntry>;
-  const difficulty = entry.difficulty && entry.difficulty in DIFFICULTY_SETTINGS ? entry.difficulty : "standard";
+  const difficulty = isDifficultyId(entry.difficulty) ? entry.difficulty : "standard";
   const ratingId = isRatingId(entry.ratingId) ? entry.ratingId : "C";
   const routeSeed = Number(entry.routeSeed);
   if (!Number.isFinite(routeSeed) || routeSeed <= 0 || typeof entry.key !== "string") {
@@ -2509,9 +3572,9 @@ function parseDailyBest(value: unknown): DailyBestEntry | undefined {
     ratingId,
     ratingName: typeof entry.ratingName === "string" ? entry.ratingName.slice(0, 16) : "信号残缺",
     routeName: typeof entry.routeName === "string" ? entry.routeName.slice(0, 24) : getRoutePlan(routeSeed).name,
-    routeSeed,
+    routeSeed: normalizeRouteSeed(routeSeed),
     score: Math.max(0, Math.round(finiteNumber(entry.score, 0))),
-    timestamp: finiteNumber(entry.timestamp, Date.now()),
+    timestamp: finiteClampedNumber(entry.timestamp, Date.now(), 0, Date.now() + 86_400_000),
     wave: Math.max(1, Math.min(5, Math.round(finiteNumber(entry.wave, 1))))
   };
 }
@@ -2519,25 +3582,25 @@ function parseDailyBest(value: unknown): DailyBestEntry | undefined {
 function normalizeRunHistoryEntry(value: unknown): RunHistoryEntry | undefined {
   if (!value || typeof value !== "object") return undefined;
   const entry = value as Partial<RunHistoryEntry>;
-  const difficulty = entry.difficulty && entry.difficulty in DIFFICULTY_SETTINGS ? entry.difficulty : "standard";
+  const difficulty = isDifficultyId(entry.difficulty) ? entry.difficulty : "standard";
   const status = isRunHistoryStatus(entry.status) ? entry.status : "lost";
   const contractStatus = isContractStatus(entry.contractStatus) ? entry.contractStatus : "failed";
   const ratingId = isRatingId(entry.ratingId) ? entry.ratingId : "C";
   const routeSeed = normalizeHistoryRouteSeed(entry.routeSeed, entry.routeName);
   return {
-    id: typeof entry.id === "string" ? entry.id : `legacy-${Date.now()}`,
-    bestCombo: finiteNumber(entry.bestCombo, 1),
+    id: typeof entry.id === "string" ? entry.id.slice(0, 48) : `legacy-${Date.now()}`,
+    bestCombo: finiteClampedNumber(entry.bestCombo, 1, 1, 9.99),
     contractStatus,
     contractsCompleted: Math.max(0, Math.min(5, Math.round(finiteNumber(entry.contractsCompleted, 0)))),
     difficulty,
     elapsed: Math.max(0, finiteNumber(entry.elapsed, 0)),
     ratingId,
-    ratingName: typeof entry.ratingName === "string" ? entry.ratingName : "信号残缺",
+    ratingName: typeof entry.ratingName === "string" ? entry.ratingName.slice(0, 16) : "信号残缺",
     routeSeed,
     routeName: typeof entry.routeName === "string" ? entry.routeName.slice(0, 24) : "星桥-0000",
     score: Math.max(0, Math.round(finiteNumber(entry.score, 0))),
     status,
-    timestamp: finiteNumber(entry.timestamp, Date.now()),
+    timestamp: finiteClampedNumber(entry.timestamp, Date.now(), 0, Date.now() + 86_400_000),
     wave: Math.max(1, Math.min(5, Math.round(finiteNumber(entry.wave, 1))))
   };
 }
@@ -2585,10 +3648,22 @@ function isRatingId(value: unknown): value is RunRating["id"] {
   return value === "S" || value === "A" || value === "B" || value === "C";
 }
 
+function isDifficultyId(value: unknown): value is DifficultyId {
+  return typeof value === "string" && hasOwnKey(DIFFICULTY_SETTINGS, value);
+}
+
+function isAchievementId(value: unknown): value is AchievementId {
+  return typeof value === "string" && hasOwnKey(ACHIEVEMENTS, value);
+}
+
+function hasOwnKey<T extends object>(record: T, key: PropertyKey): key is keyof T {
+  return Object.prototype.hasOwnProperty.call(record, key);
+}
+
 function normalizeHistoryRouteSeed(seed: unknown, routeName: unknown): number {
   const numericSeed = Number(seed);
   if (Number.isFinite(numericSeed) && numericSeed > 0) {
-    return numericSeed;
+    return normalizeRouteSeed(numericSeed);
   }
   return parseRouteSeed(typeof routeName === "string" ? routeName : undefined) ?? 1;
 }
@@ -2668,7 +3743,13 @@ updateDailyChallengeUi();
 updateRecordUi();
 updateAchievementUi();
 updateRunHistoryUi();
+configureOverlayDisclosures("menu");
 updateSessionTools();
 new MutationObserver(syncOverlayState).observe(overlay, { attributeFilter: ["class"], attributes: true });
 syncOverlayState();
 completeBootStatus();
+releaseQaDomReady = true;
+if (releaseQaSceneReady) {
+  initLocalReleaseQaModeOnce();
+}
+window.setTimeout(initLocalReleaseQaModeOnce, 1200);

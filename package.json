@@ -3,17 +3,28 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "packageManager": "npm@11.16.0",
+  "engines": {
+    "node": ">=22 <23"
+  },
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "tsc && vite build",
+    "build": "npm run typecheck && vite build && npm run sync:pages-assets",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "tsx scripts/smoke-simulation.ts && tsx scripts/smoke-ui.ts",
-    "test:dist": "tsx scripts/smoke-dist.ts"
+    "sync:pages-assets": "tsx scripts/sync-pages-assets.ts",
+    "test": "npm run typecheck && tsx scripts/smoke-simulation.ts && tsx scripts/smoke-ui.ts && tsx scripts/waypoint-bot-playtest.ts && npm run qa:release",
+    "playtest:bot": "tsx scripts/waypoint-bot-playtest.ts",
+    "qa:ship": "npm test && npm run build && npm run test:dist && npm run qa:browser-report",
+    "qa:release": "tsx scripts/check-release-qa.ts",
+    "qa:browser-report": "tsx scripts/check-browser-report.ts",
+    "test:dist": "tsx scripts/smoke-dist.ts && tsx scripts/check-budgets.ts",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.scripts.json --noEmit"
   },
   "dependencies": {
     "phaser": "^3.90.0"
   },
   "devDependencies": {
+    "@types/node": "^22.19.20",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3",
     "vite": "^6.3.5"

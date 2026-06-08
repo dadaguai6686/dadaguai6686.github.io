@@ -1,4 +1,4 @@
-import type { InputState } from "./simulation";
+import type { ContractId, DifficultyId, GameStatus, InputState, SectorId, WaveModifierId } from "./simulation";
 
 type VirtualInputState = {
   move: { x: number; y: number };
@@ -17,8 +17,40 @@ type LumenSettingsState = {
   reducedMotion: boolean;
 };
 
+type LumenCanvasSignature = {
+  briefingActive: boolean;
+  colors: number;
+  contract: ContractId;
+  difficulty: DifficultyId;
+  elapsed: number;
+  height: number;
+  palette: string[];
+  player: {
+    position: { x: number; y: number };
+    velocity: { x: number; y: number };
+  };
+  routeSeed: number;
+  samples: number;
+  sceneObjects: {
+    hazards: number;
+    lumen: number;
+    relays: number;
+    repairedRelays: number;
+    storms: number;
+    visibleLumen: number;
+  };
+  sector: SectorId;
+  source: string;
+  status: GameStatus;
+  updatedAt: number;
+  wave: number;
+  waveModifier: WaveModifierId;
+  width: number;
+};
+
 declare global {
   interface Window {
+    __lumenCanvasSignature?: LumenCanvasSignature;
     __lumenSettings?: LumenSettingsState;
     __lumenVirtualInput?: VirtualInputState;
   }
@@ -78,7 +110,7 @@ export class InputMapper {
     const input = {
       move: { x, y },
       boost: this.keys.boost.isDown || virtualInput.boost || this.boostFrames > 0 || virtualTap.boost > 0,
-      repair: this.keys.repair.isDown || virtualInput.repair || this.repairFrames > 0,
+      repair: this.keys.repair.isDown || virtualInput.repair || this.repairFrames > 0 || virtualTap.repair > 0,
       pulse: this.keys.pulse.isDown || virtualInput.pulse || this.pulseFrames > 0 || virtualTap.pulse > 0
     };
     this.consumeBufferedInput(virtualInput);

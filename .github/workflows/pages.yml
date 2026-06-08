@@ -32,6 +32,8 @@ jobs:
         run: npm run build
       - name: Run dist smoke checks
         run: npm run test:dist
+      - name: Verify committed Pages assets
+        run: git diff --exit-code -- assets
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact

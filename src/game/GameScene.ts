@@ -20,6 +20,7 @@ import {
   getUpgradeChoices,
   getUpgradeSummaries,
   pauseRun,
+  projectHazardPosition,
   resumeRun,
   restartRun,
   SECTOR_LAYOUTS,
@@ -32,7 +33,9 @@ import {
   type DifficultyId,
   type GameState,
   type Hazard,
+  type InputState,
   type Lumen,
+  type LossContext,
   type ObjectiveHint,
   type ResourceAlerts,
   type RoutePlan,
@@ -139,6 +142,14 @@ type RoutePreviewWaypoint = {
   position: { x: number; y: number };
 };
 
+type WorldLabelKind = "gate" | "hazard" | "lumen" | "relay" | "storm";
+
+type QaBrowserInputDetail = {
+  durationSeconds?: number;
+  kind?: "keyboard" | "touch";
+  move?: { x?: number; y?: number };
+};
+
 const SECTOR_VISUALS: Record<GameState["sector"], SectorVisual> = {
   outerRing: {
     accent: 0x67f4ff,
@@ -196,6 +207,8 @@ export class GameScene extends Phaser.Scene {
   private starLayer?: Phaser.GameObjects.Graphics;
   private trail?: Phaser.GameObjects.Particles.ParticleEmitter;
   private lastRepairDecayFeedbackAt = 0;
+  private lastCanvasSignatureAt = Number.NEGATIVE_INFINITY;
+  private lastCanvasSignatureKey = "";
   private largeLabels = false;
   private reducedMotion = false;
 
@@ -205,6 +218,8 @@ export class GameScene extends Phaser.Scene {
     this.createTextures();
     this.createWorld();
     this.createHudBridge();
+    this.renderState();
+    window.dispatchEvent(new CustomEvent("game:scene-ready"));
     this.scale.on("resize", this.onResize, this);
   }
 
@@ -252,6 +267,7 @@ export class GameScene extends Phaser.Scene {
             elapsed: this.state.elapsed,
             endReason: this.state.endReason as RunEndReason,
             hull: this.state.player.hull,
+            lossContext: this.state.lossContext as LossContext,
             message: this.state.message,
             rating: getRunRating(ratingState) as RunRating,
             routePlan: getRoutePlan(this.state.routeSeed) as RoutePlan,
@@ -289,11 +305,13 @@ export class GameScene extends Phaser.Scene {
       this.resetInput();
       this.state = pauseRun(this.state);
       this.resetInput();
+      this.renderState();
       this.emitHud();
     });
     window.addEventListener("game:resume", () => {
       this.resetInput();
       this.state = resumeRun(this.state);
+      this.renderState();
       this.emitHud();
     });
     window.addEventListener("game:settings", (event) => {
@@ -304,10 +322,40 @@ export class GameScene extends Phaser.Scene {
         this.renderState();
       }
     });
+    window.addEventListener("game:qa-state", (event) => {
+      const detail = (event as CustomEvent<{ state?: GameState }>).detail;
+      if (!detail?.state) return;
+      this.resetInput();
+      this.state = structuredClone(detail.state);
+      this.createWorld();
+      this.renderState();
+      this.emitHud();
+    });
+    window.addEventListener("game:qa-browser-input", (event) => {
+      this.applyLocalReleaseQaBrowserInput((event as CustomEvent<QaBrowserInputDetail>).detail);
+    });
   }
 
   private resetInput(): void {
     this.inputMapper?.reset();
+  }
+
+  private applyLocalReleaseQaBrowserInput(detail?: QaBrowserInputDetail): void {
+    if (!isLocalReleaseQaMode() || this.state.status !== "playing") return;
+    const move = normalizeQaMove(detail?.move);
+    if (!move) return;
+
+    const durationSeconds = Phaser.Math.Clamp(detail?.durationSeconds ?? 0.62, 0.1, 1);
+    const input: InputState = { boost: false, move, pulse: false, repair: false };
+    const frameSeconds = 1 / 60;
+
+    for (let elapsed = 0; elapsed < durationSeconds; elapsed += frameSeconds) {
+      this.state = updateSimulation(this.state, input, Math.min(frameSeconds, durationSeconds - elapsed));
+      if (this.state.status !== "playing") break;
+    }
+
+    this.renderState();
+    this.emitHud();
   }
 
   private createWorld(): void {
@@ -458,6 +506,16 @@ export class GameScene extends Phaser.Scene {
         350 + Math.sin(angle) * outer
       );
     }
+    graphics.lineStyle(9, visual.accent, 0.22);
+    for (let angle = -0.15; angle < Math.PI * 2; angle += Math.PI / 2.7) {
+      graphics.arc(500, 350, 344, angle, angle + 0.38);
+    }
+    graphics.lineStyle(3, visual.secondary, 0.22);
+    for (let angle = 0.28; angle < Math.PI * 2; angle += Math.PI / 3) {
+      const x = 500 + Math.cos(angle) * 322;
+      const y = 350 + Math.sin(angle) * 322;
+      graphics.strokeRoundedRect(x - 28, y - 10, 56, 20, 6);
+    }
   }
 
   private drawCrossCurrentField(graphics: Phaser.GameObjects.Graphics, visual: SectorVisual): void {
@@ -472,6 +530,11 @@ export class GameScene extends Phaser.Scene {
     graphics.fillStyle(visual.secondary, 0.12);
     graphics.fillTriangle(496, 292, 538, 350, 496, 408);
     graphics.fillTriangle(504, 292, 462, 350, 504, 408);
+    graphics.fillStyle(visual.accent, 0.18);
+    for (let offset = -120; offset <= 160; offset += 80) {
+      graphics.fillTriangle(238 + offset, 246 + offset * 0.42, 274 + offset, 258 + offset * 0.42, 246 + offset, 284 + offset * 0.42);
+      graphics.fillTriangle(782 - offset, 520 - offset * 0.42, 746 - offset, 508 - offset * 0.42, 774 - offset, 482 - offset * 0.42);
+    }
   }
 
   private drawSouthernArcField(graphics: Phaser.GameObjects.Graphics, visual: SectorVisual): void {
@@ -485,6 +548,15 @@ export class GameScene extends Phaser.Scene {
     graphics.lineStyle(2, visual.secondary, 0.17);
     for (let x = 140; x <= 860; x += 90) {
       graphics.lineBetween(x, 530, x - 44, 645);
+    }
+    graphics.fillStyle(visual.haze, 0.32);
+    graphics.fillRoundedRect(310, 548, 380, 74, 18);
+    graphics.lineStyle(4, visual.accent, 0.2);
+    graphics.strokeRoundedRect(328, 562, 344, 42, 14);
+    graphics.lineStyle(2, visual.secondary, 0.22);
+    for (let x = 356; x <= 644; x += 48) {
+      graphics.lineBetween(x, 562, x + 30, 604);
+      graphics.lineBetween(x + 30, 562, x, 604);
     }
   }
 
@@ -501,6 +573,14 @@ export class GameScene extends Phaser.Scene {
     graphics.lineStyle(2, visual.accent, 0.16);
     graphics.strokeCircle(500, 230, 126);
     graphics.strokeCircle(500, 455, 122);
+    graphics.lineStyle(5, visual.secondary, 0.24);
+    for (let y = 118; y <= 602; y += 88) {
+      graphics.lineBetween(500, y, 456, y + 42);
+      graphics.lineBetween(500, y, 548, y + 34);
+      graphics.lineStyle(2, 0xffffff, 0.12);
+      graphics.lineBetween(455, y + 42, 548, y + 34);
+      graphics.lineStyle(5, visual.secondary, 0.24);
+    }
   }
 
   private drawOverclockCoreField(graphics: Phaser.GameObjects.Graphics, visual: SectorVisual): void {
@@ -520,6 +600,13 @@ export class GameScene extends Phaser.Scene {
     }
     graphics.lineStyle(2, visual.secondary, 0.18);
     graphics.strokeCircle(500, 350, 300);
+    graphics.fillStyle(visual.secondary, 0.1);
+    graphics.fillTriangle(500, 184, 602, 350, 500, 516);
+    graphics.fillTriangle(500, 184, 398, 350, 500, 516);
+    graphics.lineStyle(4, visual.accent, 0.28);
+    graphics.strokeRoundedRect(448, 298, 104, 104, 18);
+    graphics.lineStyle(2, 0xffffff, 0.18);
+    graphics.strokeCircle(500, 350, 54);
   }
 
   private createTextures(): void {
@@ -538,15 +625,31 @@ export class GameScene extends Phaser.Scene {
 
   private createPlayer(): Phaser.GameObjects.Container {
     const body = this.add.graphics();
+    body.fillStyle(0x67f4ff, 0.14);
+    body.fillCircle(0, 4, 31);
+    body.fillStyle(0xffd76e, 0.28);
+    body.fillTriangle(-12, 19, 0, 34, 12, 19);
     body.fillStyle(0xcffaff, 1);
     body.fillTriangle(0, -24, 22, 20, 0, 11);
     body.fillTriangle(0, -24, -22, 20, 0, 11);
+    body.fillStyle(0x67f4ff, 0.92);
+    body.fillTriangle(0, -18, 11, 12, 0, 6);
+    body.fillTriangle(0, -18, -11, 12, 0, 6);
+    body.fillStyle(0x07101a, 0.9);
+    body.fillRoundedRect(-12, 9, 24, 15, 5);
+    body.fillStyle(0xffd76e, 0.78);
+    body.fillCircle(-9, 18, 3);
+    body.fillCircle(9, 18, 3);
     body.fillStyle(0x0b1f2d, 1);
     body.fillCircle(0, 2, 9);
+    body.fillStyle(0xffffff, 0.88);
+    body.fillCircle(0, -2, 4);
     body.lineStyle(3, 0x67f4ff, 0.95);
     body.strokeCircle(0, 2, 17);
     body.lineStyle(2, 0xffd76e, 0.75);
     body.lineBetween(-18, 18, 18, 18);
+    body.lineStyle(2, 0xffffff, 0.38);
+    body.lineBetween(0, -24, 0, 14);
     return this.add.container(this.state.player.position.x, this.state.player.position.y, [body]);
   }
 
@@ -569,11 +672,24 @@ export class GameScene extends Phaser.Scene {
     const glow = this.add.graphics();
     glow.fillStyle(0x66f2ff, 0.1);
     glow.fillCircle(0, 0, 62);
+    glow.lineStyle(1, 0x67f4ff, 0.18);
+    glow.strokeCircle(0, 0, 74);
     const core = this.add.graphics();
+    core.fillStyle(0x061018, 0.72);
+    core.fillCircle(0, 0, 34);
+    core.lineStyle(4, 0x1f5364, 0.42);
+    core.lineBetween(-48, 0, 48, 0);
+    core.lineBetween(0, -48, 0, 48);
+    core.lineStyle(3, 0x67f4ff, 0.68);
+    for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 2) {
+      core.lineBetween(Math.cos(angle) * 22, Math.sin(angle) * 22, Math.cos(angle) * 45, Math.sin(angle) * 45);
+    }
     core.lineStyle(4, 0x6af5ff, 0.9);
     core.strokeCircle(0, 0, 30);
     core.lineStyle(2, 0xffd86e, 0.75);
     core.strokeCircle(0, 0, 18);
+    core.lineStyle(2, 0xffffff, 0.22);
+    core.strokeCircle(0, 0, 43);
     core.fillStyle(0xffffff, 0.92);
     core.fillCircle(0, 0, 7);
     const progress = this.add.graphics();
@@ -583,11 +699,21 @@ export class GameScene extends Phaser.Scene {
 
   private createLumen(drop: Lumen): Phaser.GameObjects.Container {
     const gem = this.add.graphics();
+    gem.fillStyle(0xffd86e, 0.16);
+    gem.fillCircle(0, 0, 26);
     gem.fillStyle(0xffd86e, 0.95);
     gem.fillTriangle(0, -13, 12, 0, 0, 13);
     gem.fillTriangle(0, -13, -12, 0, 0, 13);
+    gem.fillStyle(0xffffff, 0.5);
+    gem.fillTriangle(0, -11, 6, -1, 0, 5);
+    gem.fillStyle(0xffa83d, 0.58);
+    gem.fillTriangle(0, 12, -8, 1, 0, 1);
     gem.lineStyle(2, 0xffffff, 0.65);
     gem.strokeCircle(0, 0, 14);
+    gem.lineStyle(1, 0xffd86e, 0.38);
+    gem.lineBetween(-21, 0, -15, 0);
+    gem.lineBetween(15, 0, 21, 0);
+    gem.lineBetween(0, -21, 0, -15);
     const label = this.createWorldLabel("流明", "#fff0a8", 27);
     label.setAlpha(0.7);
     return this.add.container(drop.position.x, drop.position.y, [gem, label]);
@@ -599,6 +725,18 @@ export class GameScene extends Phaser.Scene {
     shard.fillCircle(0, 0, hazard.radius + 24);
     shard.lineStyle(4, 0xff5f9b, 0.82);
     shard.strokeCircle(0, 0, hazard.radius);
+    shard.fillStyle(0x3a0b28, 0.66);
+    shard.beginPath();
+    for (let i = 0; i < 10; i += 1) {
+      const angle = (Math.PI * 2 * i) / 10 - Math.PI / 2;
+      const radius = i % 2 === 0 ? hazard.radius * 0.78 : hazard.radius * 0.24;
+      const x = Math.cos(angle) * radius;
+      const y = Math.sin(angle) * radius;
+      if (i === 0) shard.moveTo(x, y);
+      else shard.lineTo(x, y);
+    }
+    shard.closePath();
+    shard.fillPath();
     shard.lineStyle(2, 0xffffff, 0.55);
     shard.beginPath();
     for (let i = 0; i < 8; i += 1) {
@@ -611,18 +749,17 @@ export class GameScene extends Phaser.Scene {
     }
     shard.closePath();
     shard.strokePath();
+    shard.lineStyle(2, 0xffd4e5, 0.5);
+    shard.lineBetween(-hazard.radius * 0.42, hazard.radius * 0.18, hazard.radius * 0.36, -hazard.radius * 0.24);
+    shard.lineStyle(1, 0xff5f9b, 0.28);
+    shard.strokeCircle(0, 0, hazard.radius + 12);
     const label = this.createWorldLabel("碎片", "#ffd4e5", hazard.radius + 33);
     return this.add.container(hazard.position.x, hazard.position.y, [shard, label]);
   }
 
   private createStorm(storm: Storm): Phaser.GameObjects.Container {
     const field = this.add.graphics();
-    field.fillStyle(0x7d4cff, 0.08);
-    field.fillCircle(0, 0, storm.radius);
-    field.lineStyle(3, 0xb388ff, 0.35);
-    field.strokeCircle(0, 0, storm.radius);
-    field.lineStyle(1, 0xff5f9b, 0.28);
-    field.strokeCircle(0, 0, storm.radius + 22);
+    this.drawStormField(field, storm.radius, storm.radius, 0.5);
     const label = this.createWorldLabel("风暴", "#d9c8ff", 0);
     label.setAlpha(0.68);
     return this.add.container(storm.position.x, storm.position.y, [field, label]);
@@ -630,12 +767,52 @@ export class GameScene extends Phaser.Scene {
 
   private createGate(): Phaser.GameObjects.Container {
     const ring = this.add.graphics();
-    ring.lineStyle(5, 0x344255, 0.9);
-    ring.strokeCircle(0, 0, 40);
-    ring.lineStyle(2, 0x67f4ff, 0.35);
-    ring.strokeCircle(0, 0, 56);
+    this.drawGateGlyph(ring, false, 0);
     const label = this.createWorldLabel("北侧光门", "#fff0a8", 56);
     return this.add.container(this.state.gate.position.x, this.state.gate.position.y, [ring, label]);
+  }
+
+  private drawStormField(graphics: Phaser.GameObjects.Graphics, baseRadius: number, activeRadius: number, pulse: number): void {
+    graphics.clear();
+    graphics.fillStyle(0x7d4cff, 0.055 + pulse * 0.035);
+    graphics.fillCircle(0, 0, activeRadius);
+    graphics.fillStyle(0xff5f9b, 0.045 + pulse * 0.025);
+    graphics.fillCircle(0, 0, Math.max(24, activeRadius * 0.48));
+    graphics.lineStyle(4, 0xb388ff, 0.24 + pulse * 0.16);
+    graphics.strokeCircle(0, 0, activeRadius);
+    graphics.lineStyle(2, 0xff5f9b, 0.22 + pulse * 0.22);
+    graphics.strokeCircle(0, 0, baseRadius + 24);
+    graphics.lineStyle(3, 0xd9c8ff, 0.18 + pulse * 0.12);
+    graphics.arc(0, 0, Math.max(28, activeRadius * 0.62), -0.3, Math.PI * 1.05);
+    graphics.arc(0, 0, Math.max(38, activeRadius * 0.82), Math.PI * 0.72, Math.PI * 1.86);
+    graphics.lineStyle(2, 0xffffff, 0.16 + pulse * 0.1);
+    graphics.lineBetween(-activeRadius * 0.34, -activeRadius * 0.18, activeRadius * 0.22, activeRadius * 0.12);
+  }
+
+  private drawGateGlyph(graphics: Phaser.GameObjects.Graphics, open: boolean, pulse: number): void {
+    graphics.clear();
+    const outer = open ? 0xfff0a8 : 0x344255;
+    const inner = open ? 0x67f4ff : 0x1f5364;
+    graphics.fillStyle(open ? 0xffd76e : 0x061018, open ? 0.13 + pulse * 0.08 : 0.56);
+    graphics.fillCircle(0, 0, 48);
+    graphics.lineStyle(open ? 6 : 5, outer, open ? 0.88 : 0.9);
+    graphics.strokeCircle(0, 0, 40);
+    graphics.lineStyle(2, inner, open ? 0.55 + pulse * 0.2 : 0.35);
+    graphics.strokeCircle(0, 0, 56 + pulse * 5);
+    graphics.lineStyle(3, open ? 0xffffff : 0x67f4ff, open ? 0.5 : 0.18);
+    for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 3) {
+      graphics.lineBetween(Math.cos(angle) * 28, Math.sin(angle) * 28, Math.cos(angle) * 48, Math.sin(angle) * 48);
+    }
+    if (open) {
+      graphics.fillStyle(0xffffff, 0.72);
+      graphics.fillCircle(0, 0, 12 + pulse * 4);
+      graphics.lineStyle(2, 0xffd76e, 0.58);
+      graphics.arc(0, 0, 24, -Math.PI * 0.15, Math.PI * 1.25);
+    } else {
+      graphics.lineStyle(4, 0x344255, 0.8);
+      graphics.lineBetween(-18, -18, 18, 18);
+      graphics.lineBetween(18, -18, -18, 18);
+    }
   }
 
   private renderState(): void {
@@ -651,18 +828,30 @@ export class GameScene extends Phaser.Scene {
 
     this.renderNavigator();
     this.renderReadability();
+    const guideTarget = this.getGuideTarget();
+    const activeRepairTarget = getActiveRepairTarget(this.state);
+    const activeThreatIds = new Set(
+      getHazardThreats(this.state)
+        .filter((threat) => threat.level !== "safe")
+        .map((threat) => threat.id)
+    );
     this.playerView?.setPosition(this.state.player.position.x, this.state.player.position.y);
     const angle = Math.atan2(this.state.player.velocity.y, this.state.player.velocity.x) + Math.PI / 2;
     this.playerView?.setRotation(Number.isFinite(angle) ? angle : 0);
-    this.playerView?.setAlpha(this.state.player.invulnerable > 0 ? 0.62 + Math.sin(this.time.now * 0.04) * 0.25 : 1);
+    this.playerView?.setAlpha(this.state.player.invulnerable > 0 ? (this.reducedMotion ? 0.78 : 0.62 + Math.sin(this.time.now * 0.04) * 0.25) : 1);
     this.trail?.setPosition(this.state.player.position.x, this.state.player.position.y);
     this.trail?.setVisible(!this.reducedMotion && this.state.status === "playing");
 
     this.state.relays.forEach((relay) => {
       const view = this.relayViews.get(relay.id);
       const progress = view?.getAt(2) as Phaser.GameObjects.Graphics | undefined;
+      const label = view?.getAt(3) as Phaser.GameObjects.Text | undefined;
       view?.setAlpha(relay.repaired ? 1 : 0.76);
-      view?.setScale(relay.repaired ? 1.08 + Math.sin(this.time.now * 0.004) * 0.03 : 1);
+      view?.setScale(relay.repaired ? 1.08 + this.getMotionWave(0.004) * 0.03 : 1);
+      this.applyWorldLabel(label, "relay", {
+        active: activeRepairTarget?.id === relay.id || this.isGuideNear(guideTarget, relay.position, 34),
+        complete: relay.repaired
+      });
       progress?.clear();
       progress?.lineStyle(6, relay.repaired ? 0xffe27a : 0x67f4ff, 0.9);
       progress?.arc(0, 0, 42, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * relay.progress);
@@ -681,36 +870,278 @@ export class GameScene extends Phaser.Scene {
     this.state.lumen.forEach((drop) => {
       const view = this.lumenViews.get(drop.id);
       const gem = view?.getAt(0) as Phaser.GameObjects.Graphics | undefined;
+      const label = view?.getAt(1) as Phaser.GameObjects.Text | undefined;
       view?.setVisible(!drop.collected);
-      gem?.setRotation(this.time.now * 0.002 + drop.id);
-      view?.setScale(1 + Math.sin(this.time.now * 0.004 + drop.id) * 0.08);
+      this.applyWorldLabel(label, "lumen", { active: this.isGuideNear(guideTarget, drop.position, 34) });
+      gem?.setRotation(this.reducedMotion ? drop.id * 0.18 : this.time.now * 0.002 + drop.id);
+      view?.setScale(1 + this.getMotionWave(0.004, drop.id) * 0.08);
     });
 
     this.state.hazards.forEach((hazard) => {
       const view = this.hazardViews.get(hazard.id);
       const shard = view?.getAt(0) as Phaser.GameObjects.Graphics | undefined;
+      const label = view?.getAt(1) as Phaser.GameObjects.Text | undefined;
       view?.setPosition(hazard.position.x, hazard.position.y);
-      shard?.setRotation(this.time.now * 0.0015 * (hazard.id % 2 === 0 ? 1 : -1));
+      this.applyWorldLabel(label, "hazard", { urgent: activeThreatIds.has(hazard.id) });
+      shard?.setRotation(this.reducedMotion ? 0 : this.time.now * 0.0015 * (hazard.id % 2 === 0 ? 1 : -1));
     });
 
     this.state.storms.forEach((storm) => {
       const view = this.stormViews.get(storm.id);
       const graphic = view?.getAt(0) as Phaser.GameObjects.Graphics | undefined;
+      const label = view?.getAt(1) as Phaser.GameObjects.Text | undefined;
       const activeRadius = getStormActiveRadius(storm);
       view?.setPosition(storm.position.x, storm.position.y);
-      graphic?.setRotation(this.time.now * 0.0006);
-      graphic?.clear();
-      graphic?.fillStyle(0x7d4cff, 0.06 + Math.sin(storm.phase * 1.7) * 0.025);
-      graphic?.fillCircle(0, 0, activeRadius);
-      graphic?.lineStyle(3, 0xb388ff, 0.28);
-      graphic?.strokeCircle(0, 0, activeRadius);
-      graphic?.lineStyle(2, 0xff5f9b, 0.24 + Math.max(0, Math.sin(storm.phase * 1.7)) * 0.22);
-      graphic?.strokeCircle(0, 0, storm.radius + 24);
+      this.applyWorldLabel(label, "storm", {
+        urgent: Math.hypot(storm.position.x - this.state.player.position.x, storm.position.y - this.state.player.position.y) < activeRadius
+      });
+      graphic?.setRotation(this.reducedMotion ? 0 : this.time.now * 0.0006);
+      if (graphic) this.drawStormField(graphic, storm.radius, activeRadius, this.getMotionPulse(0.006, storm.id));
     });
 
     this.gateView?.setPosition(this.state.gate.position.x, this.state.gate.position.y);
     this.gateView?.setAlpha(this.state.gate.open ? 1 : 0.35);
-    this.gateView?.setScale(this.state.gate.open ? 1 + Math.sin(this.time.now * 0.005) * 0.07 : 1);
+    this.gateView?.setScale(this.state.gate.open ? 1 + this.getMotionWave(0.005) * 0.07 : 1);
+    const gateGraphic = this.gateView?.getAt(0) as Phaser.GameObjects.Graphics | undefined;
+    const gateLabel = this.gateView?.getAt(1) as Phaser.GameObjects.Text | undefined;
+    this.applyWorldLabel(gateLabel, "gate", { active: this.state.gate.open || this.isGuideNear(guideTarget, this.state.gate.position, 50) });
+    if (gateGraphic) this.drawGateGlyph(gateGraphic, this.state.gate.open, this.getMotionPulse(0.007));
+    this.publishCanvasSignature();
+  }
+
+  private getGuideTarget(): { x: number; y: number } | undefined {
+    const coach = getCoachDirective(this.state);
+    const hint = getObjectiveHint(this.state);
+    return coach.target ?? hint.target;
+  }
+
+  private isGuideNear(
+    guideTarget: { x: number; y: number } | undefined,
+    position: { x: number; y: number },
+    tolerance: number
+  ): boolean {
+    return Boolean(
+      guideTarget &&
+        Math.hypot(guideTarget.x - position.x, guideTarget.y - position.y) <= tolerance
+    );
+  }
+
+  private applyWorldLabel(
+    label: Phaser.GameObjects.Text | undefined,
+    kind: WorldLabelKind,
+    options: { active?: boolean; complete?: boolean; urgent?: boolean } = {}
+  ): void {
+    if (!label) return;
+    const alpha = this.getWorldLabelAlpha(kind, options);
+    label.setVisible(alpha > 0.04);
+    label.setAlpha(alpha);
+    label.setScale(this.largeLabels ? 1.08 : options.urgent ? 1.03 : 1);
+  }
+
+  private getWorldLabelAlpha(
+    kind: WorldLabelKind,
+    options: { active?: boolean; complete?: boolean; urgent?: boolean }
+  ): number {
+    if (this.largeLabels) return options.urgent ? 0.98 : 0.9;
+    if (this.state.status !== "playing") return kind === "hazard" || kind === "storm" ? 0.58 : 0.72;
+    if (this.state.briefingActive) return kind === "hazard" || kind === "storm" ? 0.5 : 0.68;
+    if (options.urgent) return 0.9;
+    if (options.active) return 0.82;
+    if (options.complete) return 0.34;
+    return 0;
+  }
+
+  private publishCanvasSignature(): void {
+    const visibleLumen = this.state.lumen.filter((drop) => !drop.collected).length;
+    const repairedRelays = this.state.relays.filter((relay) => relay.repaired).length;
+    const signatureKey = [
+      this.state.status,
+      this.state.difficulty,
+      this.state.wave,
+      this.state.sector,
+      this.state.waveModifier,
+      this.state.contract.id,
+      this.state.routeSeed,
+      visibleLumen,
+      repairedRelays,
+      this.state.hazards.length,
+      this.state.storms.length,
+      Math.round(this.state.elapsed * 4),
+      Math.round(this.state.player.position.x / 8),
+      Math.round(this.state.player.position.y / 8)
+    ].join(":");
+
+    if (signatureKey === this.lastCanvasSignatureKey && this.time.now - this.lastCanvasSignatureAt < 240) {
+      return;
+    }
+
+    const canvas = this.game.canvas;
+    const pixelSample = this.sampleCanvasPalette(canvas, 12, 8);
+    const palette = uniquePalette([...pixelSample.palette, ...this.buildScenePalette()]);
+    const source =
+      pixelSample.colors >= 2
+        ? `${pixelSample.source} + Phaser scene palette`
+        : "Phaser scene object signature; pixel read unavailable";
+
+    const signature = {
+      briefingActive: this.state.briefingActive,
+      colors: Math.max(pixelSample.colors, palette.length),
+      contract: this.state.contract.id,
+      difficulty: this.state.difficulty,
+      elapsed: Number(this.state.elapsed.toFixed(3)),
+      height: canvas?.height ?? window.innerHeight,
+      palette: palette.slice(0, 24),
+      player: {
+        position: {
+          x: Number(this.state.player.position.x.toFixed(2)),
+          y: Number(this.state.player.position.y.toFixed(2))
+        },
+        velocity: {
+          x: Number(this.state.player.velocity.x.toFixed(2)),
+          y: Number(this.state.player.velocity.y.toFixed(2))
+        }
+      },
+      routeSeed: this.state.routeSeed,
+      samples: Math.max(pixelSample.samples, 96),
+      sceneObjects: {
+        hazards: this.state.hazards.length,
+        lumen: this.state.lumen.length,
+        relays: this.state.relays.length,
+        repairedRelays,
+        storms: this.state.storms.length,
+        visibleLumen
+      },
+      sector: this.state.sector,
+      source,
+      status: this.state.status,
+      updatedAt: Date.now(),
+      wave: this.state.wave,
+      waveModifier: this.state.waveModifier,
+      width: canvas?.width ?? window.innerWidth
+    };
+    window.__lumenCanvasSignature = signature;
+    this.writeCanvasSignatureNode(signature);
+
+    this.lastCanvasSignatureAt = this.time.now;
+    this.lastCanvasSignatureKey = signatureKey;
+  }
+
+  private writeCanvasSignatureNode(signature: NonNullable<Window["__lumenCanvasSignature"]>): void {
+    let node = document.querySelector<HTMLScriptElement>("#lumen-canvas-signature");
+    if (!node) {
+      node = document.createElement("script");
+      node.id = "lumen-canvas-signature";
+      node.type = "application/json";
+      document.head.append(node);
+    }
+    node.textContent = JSON.stringify(signature);
+  }
+
+  private sampleCanvasPalette(
+    canvas: HTMLCanvasElement | undefined,
+    columns: number,
+    rows: number
+  ): { colors: number; palette: string[]; samples: number; source: string } {
+    if (!canvas || canvas.width <= 0 || canvas.height <= 0) {
+      return { colors: 0, palette: [], samples: 0, source: "no canvas" };
+    }
+
+    const webgl = this.getWebGlContext(canvas);
+    if (webgl) {
+      const palette = this.sampleWebGlPalette(webgl, canvas.width, canvas.height, columns, rows);
+      if (palette.samples > 0) {
+        return { ...palette, source: "WebGL readPixels canvas sample" };
+      }
+    }
+
+    try {
+      const context = canvas.getContext("2d");
+      if (!context) return { colors: 0, palette: [], samples: 0, source: "2D context unavailable" };
+      const palette = new Set<string>();
+      let samples = 0;
+      for (let row = 0; row < rows; row += 1) {
+        for (let column = 0; column < columns; column += 1) {
+          const x = Math.min(canvas.width - 1, Math.max(0, Math.floor(((column + 0.5) * canvas.width) / columns)));
+          const y = Math.min(canvas.height - 1, Math.max(0, Math.floor(((row + 0.5) * canvas.height) / rows)));
+          const [r, g, b, a] = context.getImageData(x, y, 1, 1).data;
+          if (a > 8) palette.add(toSampleColor(r, g, b));
+          samples += 1;
+        }
+      }
+      return { colors: palette.size, palette: [...palette], samples, source: "Canvas2D pixel sample" };
+    } catch {
+      return { colors: 0, palette: [], samples: 0, source: "pixel sample blocked" };
+    }
+  }
+
+  private getWebGlContext(canvas: HTMLCanvasElement): WebGLRenderingContext | WebGL2RenderingContext | undefined {
+    const renderer = this.renderer as unknown as { gl?: WebGLRenderingContext | WebGL2RenderingContext };
+    if (renderer.gl?.readPixels) return renderer.gl;
+    try {
+      const context =
+        canvas.getContext("webgl2") ??
+        canvas.getContext("webgl") ??
+        (canvas.getContext("experimental-webgl") as WebGLRenderingContext | null);
+      return context?.readPixels ? context : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private sampleWebGlPalette(
+    gl: WebGLRenderingContext | WebGL2RenderingContext,
+    width: number,
+    height: number,
+    columns: number,
+    rows: number
+  ): { colors: number; palette: string[]; samples: number } {
+    const pixel = new Uint8Array(4);
+    const palette = new Set<string>();
+    let samples = 0;
+    try {
+      for (let row = 0; row < rows; row += 1) {
+        for (let column = 0; column < columns; column += 1) {
+          const x = Math.min(width - 1, Math.max(0, Math.floor(((column + 0.5) * width) / columns)));
+          const y = Math.min(height - 1, Math.max(0, height - 1 - Math.floor(((row + 0.5) * height) / rows)));
+          gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+          if (pixel[3] > 8) palette.add(toSampleColor(pixel[0], pixel[1], pixel[2]));
+          samples += 1;
+        }
+      }
+    } catch {
+      return { colors: 0, palette: [], samples: 0 };
+    }
+    return { colors: palette.size, palette: [...palette], samples };
+  }
+
+  private buildScenePalette(): string[] {
+    const visual = SECTOR_VISUALS[this.state.sector];
+    const palette = [
+      visual.base,
+      visual.grid,
+      visual.haze,
+      visual.accent,
+      visual.secondary,
+      0xcffaff,
+      0x0b1f2d,
+      0x67f4ff,
+      0x6af5ff,
+      0x9fefff,
+      0xffd76e,
+      0xffe27a,
+      0xfff0a8,
+      0xff5f9b,
+      0xff8fba,
+      0xb388ff,
+      this.state.gate.open ? 0xffffff : 0x344255
+    ];
+    if (this.state.player.invulnerable > 0) palette.push(0xffffff);
+    if (this.state.contract.status === "completed") palette.push(0x70ffcf);
+    if (this.state.contract.status === "failed") palette.push(0xff5f9b);
+    if (this.state.lumen.some((drop) => !drop.collected)) palette.push(0xffd86e);
+    if (this.state.relays.some((relay) => relay.repaired)) palette.push(0xffe27a);
+    if (this.state.storms.length > 0) palette.push(0x7d4cff);
+    return palette.map(toCssColor);
   }
 
   private emitHud(): void {
@@ -949,7 +1380,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.state.status === "lost") {
       this.dispatchFeedback({
-        detail: this.state.endReason === "chargeDepleted" ? "电量归零。下一局先补流明，再修信标。" : "机体损毁。下一局先保脉冲，绕开碎片密集线。",
+        detail: getLossFeedbackDetail(this.state),
         kind: "loss",
         text: "信号中断",
         title: "信号中断",
@@ -1041,7 +1472,7 @@ export class GameScene extends Phaser.Scene {
     const dy = target.y - player.y;
     const angle = Math.atan2(dy, dx);
     const markerRadius = urgent ? 56 : 46;
-    const pulse = Math.sin(this.time.now * 0.006) * 0.5 + 0.5;
+    const pulse = this.getMotionPulse(0.006);
     const alpha = urgent ? 0.5 + pulse * 0.24 : 0.26 + pulse * 0.12;
 
     graphics.lineStyle(urgent ? 3 : 2, color, alpha);
@@ -1115,14 +1546,14 @@ export class GameScene extends Phaser.Scene {
     }
 
     const player = this.state.player.position;
-    const pulse = Math.sin(this.time.now * 0.008) * 0.5 + 0.5;
+    const pulse = this.getMotionPulse(0.008);
 
-      this.renderOpeningRoutePreview(graphics, player, pulse);
-      this.renderRepairReadability(graphics, player, pulse);
-      this.renderRecoveryReadability(graphics, player, pulse);
-      this.renderContractFocus(graphics, pulse);
-      this.renderHazardReadability(graphics, player, pulse);
-      this.renderResourceReadability(graphics, player, pulse);
+    this.renderOpeningRoutePreview(graphics, player, pulse);
+    this.renderRepairReadability(graphics, player, pulse);
+    this.renderRecoveryReadability(graphics, player, pulse);
+    this.renderContractFocus(graphics, pulse);
+    this.renderHazardReadability(graphics, player, pulse);
+    this.renderResourceReadability(graphics, player, pulse);
   }
 
   private renderOpeningRoutePreview(graphics: Phaser.GameObjects.Graphics, player: { x: number; y: number }, pulse: number): void {
@@ -1167,7 +1598,7 @@ export class GameScene extends Phaser.Scene {
 
     this.routePreviewLabels.forEach((label, index) => {
       const waypoint = waypoints[index];
-      if (!waypoint) {
+      if (!waypoint || (!this.largeLabels && index > 0)) {
         label.setVisible(false);
         return;
       }
@@ -1390,6 +1821,50 @@ export class GameScene extends Phaser.Scene {
     this.largeLabels = Boolean(settings?.largeLabels);
     this.reducedMotion = Boolean(settings?.reducedMotion);
   }
+
+  private getMotionPulse(rate: number, phase = 0): number {
+    return this.reducedMotion ? 0.35 : Math.sin(this.time.now * rate + phase) * 0.5 + 0.5;
+  }
+
+  private getMotionWave(rate: number, phase = 0): number {
+    return this.reducedMotion ? 0 : Math.sin(this.time.now * rate + phase);
+  }
+}
+
+function isLocalReleaseQaMode(): boolean {
+  const host = window.location.hostname;
+  const localHost = host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
+  return localHost && new URLSearchParams(window.location.search).get("qa") === "release";
+}
+
+function normalizeQaMove(move?: { x?: number; y?: number }): { x: number; y: number } | undefined {
+  const x = Number(move?.x ?? 0);
+  const y = Number(move?.y ?? 0);
+  const magnitude = Math.hypot(x, y);
+  if (!Number.isFinite(magnitude) || magnitude <= 0.05) return undefined;
+  if (magnitude <= 1) return { x, y };
+  return { x: x / magnitude, y: y / magnitude };
+}
+
+function getLossFeedbackDetail(state: GameState): string {
+  switch (state.lossContext.source) {
+    case "repairDrain":
+      return "维修耗尽电量。下一局修到节点后先撤出补流明。";
+    case "stormDrain":
+      return "风暴吸空电量。下一局进紫区立刻推进脱离。";
+    case "stormDamage":
+      return "风暴击穿机体。下一局不要在风暴边缘贪修。";
+    case "hazardImpact":
+      return "碎片造成中断。下一局先保脉冲，绕开碎片密集线。";
+    case "boostDrain":
+    case "pulseDrain":
+    case "baseDrain":
+      return "电量归零。下一局先补流明，再修信标。";
+    default:
+      return state.endReason === "chargeDepleted"
+        ? "电量归零。下一局先补流明，再修信标。"
+        : "机体损毁。下一局先保脉冲，绕开碎片密集线。";
+  }
 }
 
 function getHintColor(kind: ObjectiveHint["kind"]): number {
@@ -1426,6 +1901,27 @@ function toCssColor(color: number): string {
   return `#${color.toString(16).padStart(6, "0")}`;
 }
 
+function toSampleColor(red: number, green: number, blue: number): string {
+  const quantizedRed = red & 0xf8;
+  const quantizedGreen = green & 0xf8;
+  const quantizedBlue = blue & 0xf8;
+  return `#${[quantizedRed, quantizedGreen, quantizedBlue]
+    .map((channel) => channel.toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
+function uniquePalette(colors: string[]): string[] {
+  const seen = new Set<string>();
+  const palette: string[] = [];
+  colors.forEach((color) => {
+    const normalized = color.toLowerCase();
+    if (seen.has(normalized)) return;
+    seen.add(normalized);
+    palette.push(normalized);
+  });
+  return palette;
+}
+
 function getContractFocusColor(kind: ContractFocus["kind"]): number {
   if (kind === "lumen") return 0xffd76e;
   if (kind === "relay") return 0xffffff;
@@ -1446,7 +1942,8 @@ function buildOpeningRoutePreview(state: GameState): RoutePreviewWaypoint[] {
   const route: RoutePreviewWaypoint[] = [];
   let cursor = state.player.position;
   if (state.contract.id === "relayRush") {
-    const rushRelay = selectNearestWaypoints(
+    const rushRelay = selectRoutePreviewWaypoints(
+      state,
       state.relays.filter((target) => !target.repaired).map((target) => target.position),
       cursor,
       1
@@ -1457,7 +1954,8 @@ function buildOpeningRoutePreview(state: GameState): RoutePreviewWaypoint[] {
     }
   }
 
-  const lumenTargets = selectNearestWaypoints(
+  const lumenTargets = selectRoutePreviewWaypoints(
+    state,
     state.lumen.filter((drop) => !drop.collected).map((drop) => drop.position),
     cursor,
     getOpeningLumenWaypointCount(state)
@@ -1469,7 +1967,8 @@ function buildOpeningRoutePreview(state: GameState): RoutePreviewWaypoint[] {
   });
 
   if (state.contract.id !== "relayRush") {
-    const relay = selectNearestWaypoints(
+    const relay = selectRoutePreviewWaypoints(
+      state,
       state.relays.filter((target) => !target.repaired).map((target) => target.position),
       cursor,
       1
@@ -1483,7 +1982,14 @@ function buildOpeningRoutePreview(state: GameState): RoutePreviewWaypoint[] {
     route.push({ color: 0xfff0a8, label: "撤离", position: state.gate.position });
   }
 
-  return route.slice(0, 4);
+  return compactOpeningRoutePreview(route);
+}
+
+function compactOpeningRoutePreview(route: RoutePreviewWaypoint[]): RoutePreviewWaypoint[] {
+  if (route.length <= 4) return route;
+  const terminalWaypoint = [...route].reverse().find((waypoint) => waypoint.label !== "补流明");
+  if (!terminalWaypoint) return route.slice(0, 4);
+  return [...route.filter((waypoint) => waypoint !== terminalWaypoint).slice(0, 3), terminalWaypoint];
 }
 
 function getOpeningLumenWaypointCount(state: GameState): number {
@@ -1495,7 +2001,8 @@ function getOpeningLumenWaypointCount(state: GameState): number {
   return Math.max(1, Math.min(2, 2 - Math.min(state.stats.lumenCollected, 2)));
 }
 
-function selectNearestWaypoints(
+function selectRoutePreviewWaypoints(
+  state: GameState,
   points: Array<{ x: number; y: number }>,
   start: { x: number; y: number },
   count: number
@@ -1506,11 +2013,12 @@ function selectNearestWaypoints(
 
   while (selected.length < count && remaining.length > 0) {
     let bestIndex = 0;
-    let bestDistance = Number.POSITIVE_INFINITY;
+    let bestCost = Number.POSITIVE_INFINITY;
     remaining.forEach((point, index) => {
-      const candidateDistance = Math.hypot(point.x - cursor.x, point.y - cursor.y);
-      if (candidateDistance < bestDistance) {
-        bestDistance = candidateDistance;
+      const travelDistance = Math.hypot(point.x - cursor.x, point.y - cursor.y);
+      const candidateCost = travelDistance + getRoutePreviewRiskPenalty(state, cursor, point);
+      if (candidateCost < bestCost) {
+        bestCost = candidateCost;
         bestIndex = index;
       }
     });
@@ -1521,6 +2029,48 @@ function selectNearestWaypoints(
   }
 
   return selected;
+}
+
+function getRoutePreviewRiskPenalty(
+  state: GameState,
+  from: { x: number; y: number },
+  to: { x: number; y: number }
+): number {
+  const modifier = WAVE_MODIFIERS[state.waveModifier];
+  const hazardSpeed = 1 + modifier.hazardSpeedBonus;
+  const stormPenalty = state.storms.reduce((total, storm) => {
+    const clearance = distancePointToSegment(storm.position, from, to) - (getStormActiveRadius(storm) + 36);
+    if (clearance < 0) return total + 520;
+    if (clearance < 80) return total + 160;
+    return total;
+  }, 0);
+  const hazardPenalty = state.hazards.reduce((total, hazard) => {
+    const projected = {
+      x: hazard.position.x + hazard.velocity.x * hazardSpeed * 0.9,
+      y: hazard.position.y + hazard.velocity.y * hazardSpeed * 0.9
+    };
+    const clearance = distancePointToSegment(projected, from, to) - (hazard.radius + 74);
+    if (clearance < 0) return total + 420;
+    if (clearance < 72) return total + 120;
+    return total;
+  }, 0);
+  return stormPenalty + hazardPenalty;
+}
+
+function distancePointToSegment(
+  point: { x: number; y: number },
+  from: { x: number; y: number },
+  to: { x: number; y: number }
+): number {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const lengthSq = dx * dx + dy * dy;
+  if (lengthSq <= 0.0001) {
+    return Math.hypot(point.x - from.x, point.y - from.y);
+  }
+  const t = Math.max(0, Math.min(1, ((point.x - from.x) * dx + (point.y - from.y) * dy) / lengthSq));
+  const projected = { x: from.x + dx * t, y: from.y + dy * t };
+  return Math.hypot(point.x - projected.x, point.y - projected.y);
 }
 
 function buildRadarGuide(state: GameState): RadarGuide | undefined {
@@ -1630,29 +2180,4 @@ function drawDashedLine(
       from.y + unitY * segmentEnd
     );
   }
-}
-
-function projectHazardPosition(
-  hazard: Hazard,
-  seconds: number,
-  arena: { width: number; height: number },
-  speedScale: number
-): { x: number; y: number } {
-  return {
-    x: reflectWithin(hazard.position.x + hazard.velocity.x * seconds * speedScale, 70, arena.width - 70),
-    y: reflectWithin(hazard.position.y + hazard.velocity.y * seconds * speedScale, 84, arena.height - 70)
-  };
-}
-
-function reflectWithin(value: number, min: number, max: number): number {
-  if (max <= min) return min;
-  let next = value;
-  for (let guard = 0; guard < 4 && (next < min || next > max); guard += 1) {
-    if (next < min) {
-      next = min + (min - next);
-    } else if (next > max) {
-      next = max - (next - max);
-    }
-  }
-  return Math.max(min, Math.min(max, next));
 }

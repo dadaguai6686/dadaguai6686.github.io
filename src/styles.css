@@ -691,9 +691,7 @@ button {
 }
 
 #wave-event,
-#contract-panel,
-#coach-panel,
-#pilot-tip {
+#directive-chip {
   margin-top: 10px;
   padding: 9px 10px;
   border: 1px solid rgba(103, 244, 255, 0.18);
@@ -702,34 +700,75 @@ button {
 }
 
 #wave-event[hidden],
+#directive-chip[hidden],
 #contract-panel[hidden],
 #coach-panel[hidden],
 #pilot-tip[hidden] {
   display: none;
 }
 
+#directive-chip {
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(103, 244, 255, 0.13), rgba(255, 226, 122, 0.06)),
+    rgba(8, 15, 25, 0.68);
+}
+
+#directive-chip[data-urgent="true"] {
+  border-color: rgba(255, 95, 155, 0.42);
+  background:
+    linear-gradient(90deg, rgba(255, 95, 155, 0.16), rgba(255, 226, 122, 0.07)),
+    rgba(8, 15, 25, 0.72);
+}
+
+#directive-chip[data-status="completed"] {
+  border-color: rgba(255, 226, 122, 0.38);
+}
+
+#directive-chip[data-status="failed"] {
+  border-color: rgba(255, 95, 155, 0.38);
+}
+
+#contract-panel,
+#coach-panel,
+#pilot-tip {
+  padding: 8px 0;
+  border: 0;
+  background: none;
+}
+
+#directive-chip > :first-child {
+  padding-top: 0;
+}
+
+#directive-chip > :last-child {
+  padding-bottom: 0;
+}
+
+#directive-chip > :not([hidden]) + :not([hidden]) {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 #coach-panel {
-  background: linear-gradient(90deg, rgba(255, 226, 122, 0.1), rgba(103, 244, 255, 0.06));
+  background: none;
 }
 
 #coach-panel[data-urgent="true"] {
-  border-color: rgba(255, 95, 155, 0.42);
-  background: linear-gradient(90deg, rgba(255, 95, 155, 0.14), rgba(255, 226, 122, 0.06));
+  background: none;
 }
 
 #pilot-tip.urgent {
-  border-color: rgba(255, 95, 155, 0.42);
-  background: linear-gradient(90deg, rgba(255, 95, 155, 0.12), rgba(255, 226, 122, 0.07));
+  background: none;
 }
 
 #contract-panel[data-status="completed"] {
-  border-color: rgba(255, 226, 122, 0.38);
-  background: linear-gradient(90deg, rgba(255, 226, 122, 0.14), rgba(103, 244, 255, 0.07));
+  background: none;
 }
 
 #contract-panel[data-status="failed"] {
-  border-color: rgba(255, 95, 155, 0.38);
-  background: linear-gradient(90deg, rgba(255, 95, 155, 0.12), rgba(255, 255, 255, 0.04));
+  background: none;
 }
 
 #pilot-tip strong,
@@ -1127,8 +1166,8 @@ button {
 }
 
 #shell[data-status="playing"] #hud {
-  width: min(320px, calc(100vw - 36px));
-  padding: 10px;
+  width: min(292px, calc(100vw - 36px));
+  padding: 9px;
 }
 
 #shell[data-status="playing"] #record-strip,
@@ -1137,21 +1176,7 @@ button {
 }
 
 #shell[data-status="playing"] .brand {
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-#shell[data-status="playing"] .brand strong {
-  font-size: 13px;
-}
-
-#shell[data-status="playing"] .brand span:last-child {
   display: none;
-}
-
-#shell[data-status="playing"] .mark {
-  width: 22px;
-  height: 22px;
 }
 
 #shell[data-status="playing"] .meter-row {
@@ -1183,6 +1208,11 @@ button {
 #shell[data-status="playing"] #loadout-strip {
   gap: 5px;
   margin-top: 8px;
+}
+
+#shell[data-status="playing"] #loadout-strip,
+#shell[data-status="playing"] #wave-event {
+  display: none;
 }
 
 #shell[data-status="playing"] #ability-bar span {
@@ -1249,10 +1279,36 @@ button {
   margin-top: 5px;
 }
 
+#shell[data-status="playing"] #directive-chip {
+  margin-top: 7px;
+  padding: 7px 8px;
+}
+
+#shell[data-status="playing"] #directive-chip #contract-panel,
+#shell[data-status="playing"] #directive-chip #coach-panel,
+#shell[data-status="playing"] #directive-chip #pilot-tip {
+  margin-top: 0;
+  padding: 5px 0;
+}
+
 #shell[data-status="playing"] #help-button {
   margin-top: 8px;
   padding: 6px 8px;
   font-size: 11px;
+}
+
+@media (max-width: 1080px) and (min-width: 701px) {
+  #shell[data-status="playing"] #objective-strip {
+    right: 18px;
+    left: 330px;
+    width: auto;
+    min-width: 0;
+    transform: none;
+  }
+
+  #shell[data-status="playing"] #radar-panel {
+    display: none;
+  }
 }
 
 #shell[data-status="playing"][data-briefing="true"] #ability-bar,
@@ -1305,16 +1361,16 @@ button {
   right: max(8px, calc(env(safe-area-inset-right) + 8px));
   z-index: 7;
   display: none;
-  min-width: 54px;
-  min-height: 34px;
-  padding: 7px 10px;
+  min-width: 64px;
+  min-height: 44px;
+  padding: 9px 14px;
   border: 1px solid rgba(255, 226, 122, 0.38);
   border-radius: 999px;
   color: #061018;
   background: linear-gradient(135deg, var(--ui-gold), var(--ui-cyan));
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 1000;
 }
 
@@ -1429,6 +1485,68 @@ h1 {
   color: #d8eaf7;
   font-size: 11px;
   line-height: 1.28;
+}
+
+.mission-library {
+  max-width: 660px;
+  margin: 14px auto 16px;
+  text-align: left;
+}
+
+.mission-library summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 42px;
+  padding: 10px 13px;
+  border: 1px solid rgba(126, 239, 255, 0.2);
+  border-radius: 8px;
+  color: #dffcff;
+  background:
+    linear-gradient(135deg, rgba(103, 244, 255, 0.12), rgba(255, 226, 122, 0.07)),
+    rgba(255, 255, 255, 0.035);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  list-style: none;
+}
+
+.mission-library summary::-webkit-details-marker {
+  display: none;
+}
+
+.mission-library summary::after {
+  content: "+";
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1px solid rgba(255, 226, 122, 0.32);
+  border-radius: 50%;
+  color: #fff3ad;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.mission-library[open] summary::after {
+  content: "-";
+}
+
+.mission-library summary:focus-visible {
+  outline: 2px solid rgba(126, 239, 255, 0.72);
+  outline-offset: 3px;
+}
+
+.mission-library.compact {
+  margin-top: 12px;
+}
+
+.meta-library {
+  margin-top: 12px;
+}
+
+.meta-library #next-run-panel {
+  margin-top: 14px;
 }
 
 #game-dossier {
@@ -1877,10 +1995,10 @@ h1 {
 #daily-route-button {
   min-width: 178px;
   padding: 7px 12px;
-  border-color: rgba(103, 244, 255, 0.24);
-  color: #061018;
-  background: linear-gradient(90deg, var(--ui-cyan), var(--ui-gold));
-  box-shadow: 0 8px 24px rgba(103, 244, 255, 0.16);
+  border-color: rgba(103, 244, 255, 0.2);
+  color: #d9f6ff;
+  background: rgba(103, 244, 255, 0.08);
+  box-shadow: none;
 }
 
 #daily-route-button:hover,
@@ -2582,6 +2700,7 @@ h1 {
   position: sticky;
   bottom: 0;
   z-index: 2;
+  margin: 2px 4px 12px;
   box-shadow:
     0 -10px 22px rgba(5, 10, 18, 0.28),
     0 10px 32px rgba(103, 244, 255, 0.25);
@@ -2846,12 +2965,13 @@ h1 {
   align-items: end;
   justify-content: space-between;
   padding: 0 18px;
-  pointer-events: none;
+  pointer-events: auto;
   user-select: none;
   -webkit-user-select: none;
 }
 
 #touch-stick {
+  position: relative;
   width: 118px;
   height: 118px;
   border: 1px solid rgba(126, 239, 255, 0.2);
@@ -2861,6 +2981,29 @@ h1 {
   pointer-events: auto;
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
+}
+
+#touch-stick b {
+  position: absolute;
+  right: 0;
+  bottom: 9px;
+  left: 0;
+  display: block;
+  width: max-content;
+  max-width: calc(100% - 22px);
+  margin: 0 auto;
+  padding: 2px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  color: rgba(226, 247, 255, 0.84);
+  background: rgba(5, 10, 18, 0.42);
+  font-size: 11px;
+  font-weight: 1000;
+  letter-spacing: 0;
+  line-height: 1.1;
+  text-align: center;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.58);
+  pointer-events: none;
 }
 
 #touch-stick span {
@@ -2883,6 +3026,7 @@ h1 {
 
 .touch-actions button {
   min-height: 52px;
+  padding: 4px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 50%;
   color: #061018;
@@ -2890,6 +3034,7 @@ h1 {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
   font-size: 11px;
   font-weight: 900;
+  line-height: 1.12;
   touch-action: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -2939,44 +3084,159 @@ h1 {
 @media (max-height: 480px) and (orientation: landscape), (pointer: coarse) and (orientation: landscape) {
   #shell[data-status="playing"] #hud {
     top: max(8px, env(safe-area-inset-top));
-    left: max(8px, env(safe-area-inset-left));
-    width: min(430px, calc(100vw - 188px));
-    max-height: calc(100vh - 18px - env(safe-area-inset-top));
+    right: max(132px, calc(env(safe-area-inset-right) + 128px));
+    left: max(124px, calc(env(safe-area-inset-left) + 116px));
+    display: grid;
+    width: auto;
+    min-width: 0;
+    max-height: 118px;
+    grid-template-columns: minmax(138px, 0.72fr) minmax(0, 1.28fr);
+    gap: 0 6px;
+    align-content: start;
     overflow: hidden;
-    padding: 7px 9px;
+    padding: 6px 8px;
+  }
+
+  #shell[data-status="playing"] .meter-row,
+  #shell[data-status="playing"] .stats,
+  #shell[data-status="playing"] #ability-bar,
+  #shell[data-status="playing"] #combo-timer,
+  #shell[data-status="playing"] #signal-panel {
+    grid-column: 1;
+    min-width: 0;
+  }
+
+  #shell[data-status="playing"] #contract-panel,
+  #shell[data-status="playing"] #coach-panel,
+  #shell[data-status="playing"] #pilot-tip {
+    grid-column: 2;
+    min-width: 0;
+  }
+
+  #shell[data-status="playing"] #directive-chip {
+    grid-column: 2;
+    min-width: 0;
+  }
+
+  #shell[data-status="playing"] #directive-chip #contract-panel,
+  #shell[data-status="playing"] #directive-chip #coach-panel,
+  #shell[data-status="playing"] #directive-chip #pilot-tip {
+    grid-column: auto;
+  }
+
+  #shell[data-status="playing"] #contract-panel {
+    margin-top: 0;
+  }
+
+  #shell[data-status="playing"] #coach-panel,
+  #shell[data-status="playing"] #pilot-tip {
+    margin-top: 4px;
+  }
+
+  #shell[data-status="playing"] #contract-panel {
+    display: grid;
+    grid-template-columns: minmax(96px, 0.52fr) minmax(0, 1fr);
+    gap: 2px 7px;
+    align-items: center;
+  }
+
+  #shell[data-status="playing"] #contract-panel strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #shell[data-status="playing"] #contract-requirement {
+    grid-column: 2;
+    margin-top: 0;
+  }
+
+  #shell[data-status="playing"] .contract-progress {
+    grid-column: 1 / -1;
+    margin-top: 1px;
+  }
+
+  #shell[data-status="playing"] #coach-panel {
+    display: grid;
+    grid-template-columns: minmax(82px, 0.34fr) minmax(0, 0.66fr);
+    gap: 2px 7px;
+    align-items: center;
+  }
+
+  #shell[data-status="playing"] #coach-panel .coach-head {
+    grid-row: 1 / span 2;
+  }
+
+  #shell[data-status="playing"] #coach-rail {
+    grid-column: 2;
+    margin-top: 0;
+  }
+
+  #shell[data-status="playing"] #coach-detail {
+    grid-column: 2;
+    margin-top: 0;
+  }
+
+  #shell[data-status="playing"] #coach-panel em {
+    display: none;
+  }
+
+  #shell[data-status="playing"] #pilot-tip {
+    display: grid;
+    grid-template-columns: minmax(82px, 0.34fr) minmax(0, 0.66fr);
+    gap: 2px 7px;
+    align-items: center;
+  }
+
+  #shell[data-status="playing"] #pilot-tip strong,
+  #shell[data-status="playing"] #pilot-tip span {
+    margin-top: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   #shell[data-status="playing"] .brand,
   #shell[data-status="playing"] #wave-event,
   #shell[data-status="playing"] #loadout-strip,
   #shell[data-status="playing"] #help-button,
-  #shell[data-status="playing"] #signal-panel em,
+  #shell[data-status="playing"] #signal-panel em {
+    display: none;
+  }
+
   #shell[data-status="playing"] #contract-requirement,
   #shell[data-status="playing"] #coach-detail,
   #shell[data-status="playing"] #pilot-tip-detail {
-    display: none;
+    display: -webkit-box;
+    overflow: hidden;
+    margin-top: 3px;
+    color: #bcd3e6;
+    font-size: 9px;
+    line-height: 1.14;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
   }
 
   #shell[data-status="playing"] .meter-row {
     grid-template-columns: 34px 1fr 30px;
-    gap: 5px;
-    margin-top: 4px;
+    gap: 4px;
+    margin-top: 3px;
     font-size: 10px;
   }
 
   #shell[data-status="playing"] .meter {
-    height: 7px;
+    height: 6px;
   }
 
   #shell[data-status="playing"] .stats {
     grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: 4px;
-    margin-top: 6px;
+    gap: 3px;
+    margin-top: 4px;
   }
 
   #shell[data-status="playing"] .stats div {
-    min-height: 30px;
-    padding: 3px 2px;
+    min-height: 26px;
+    padding: 2px;
   }
 
   #shell[data-status="playing"] .stats dt {
@@ -2985,7 +3245,7 @@ h1 {
 
   #shell[data-status="playing"] .stats dd {
     margin-top: 1px;
-    font-size: 10px;
+    font-size: 9px;
   }
 
   #shell[data-status="playing"] #ability-bar,
@@ -2994,34 +3254,36 @@ h1 {
   #shell[data-status="playing"] #contract-panel,
   #shell[data-status="playing"] #coach-panel,
   #shell[data-status="playing"] #pilot-tip {
-    margin-top: 5px;
-    padding: 5px 6px;
+    margin-top: 4px;
+    padding: 4px 6px;
   }
 
-  #shell[data-status="playing"] #combo-timer[data-state="idle"],
-  #shell[data-status="playing"][data-briefing="true"] #contract-panel {
+  #shell[data-status="playing"] #combo-timer[data-state="idle"] {
     display: none;
   }
 
   #shell[data-status="playing"] #coach-rail {
     gap: 3px;
-    margin-top: 4px;
+    margin-top: 3px;
   }
 
   #shell[data-status="playing"] #coach-rail span {
-    min-height: 15px;
+    min-height: 14px;
     padding: 2px 1px;
     font-size: 8px;
   }
 
   #shell[data-status="playing"] #objective-strip {
+    display: none;
     top: auto;
-    right: max(12px, env(safe-area-inset-right));
-    bottom: max(10px, env(safe-area-inset-bottom));
-    left: auto;
-    width: min(430px, calc(100vw - 210px));
+    right: max(144px, calc(env(safe-area-inset-right) + 140px));
+    bottom: calc(112px + env(safe-area-inset-bottom));
+    left: max(124px, calc(env(safe-area-inset-left) + 116px));
+    width: auto;
     min-width: 0;
-    padding: 8px 10px;
+    max-height: 58px;
+    overflow: hidden;
+    padding: 7px 9px;
     transform: none;
   }
 
@@ -3040,14 +3302,14 @@ h1 {
 
   #shell[data-status="playing"] #wave-intro {
     top: max(8px, env(safe-area-inset-top));
-    right: max(12px, env(safe-area-inset-right));
+    right: max(84px, calc(env(safe-area-inset-right) + 80px));
     bottom: auto;
     left: auto;
-    width: min(374px, calc(100vw - 470px));
-    min-width: 252px;
-    max-height: 68px;
+    width: min(300px, calc(100vw - 560px));
+    min-width: 216px;
+    max-height: 44px;
     overflow: hidden;
-    padding: 7px 9px;
+    padding: 6px 8px;
     transform: translateY(-6px);
   }
 
@@ -3069,18 +3331,18 @@ h1 {
   #shell[data-status="playing"] #wave-intro em {
     display: block;
     overflow: hidden;
-    margin-top: 3px;
-    font-size: 10px;
+    margin-top: 2px;
+    font-size: 9px;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   #shell[data-status="playing"] #mission-toast,
   #shell[data-status="playing"] #combat-log {
-    right: max(12px, env(safe-area-inset-right));
-    bottom: calc(92px + env(safe-area-inset-bottom));
-    left: auto;
-    width: min(420px, calc(100vw - 210px));
+    right: max(144px, calc(env(safe-area-inset-right) + 140px));
+    bottom: calc(112px + env(safe-area-inset-bottom));
+    left: max(124px, calc(env(safe-area-inset-left) + 116px));
+    width: auto;
     padding: 8px 10px;
   }
 
@@ -3093,9 +3355,24 @@ h1 {
     display: none;
   }
 
+  #shell[data-status="playing"] #touch-controls {
+    inset: auto max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    display: flex;
+    padding: 0;
+  }
+
+  #shell[data-status="playing"] #mobile-pause-button {
+    display: block;
+  }
+
   #touch-stick {
     width: 92px;
     height: 92px;
+  }
+
+  #touch-stick b {
+    bottom: 8px;
+    font-size: 10px;
   }
 
   #touch-stick span {
@@ -3120,18 +3397,142 @@ h1 {
 }
 
 @media (pointer: coarse) and (orientation: landscape) {
-  #shell[data-status="playing"] #objective-strip {
+  #shell[data-status="playing"] #hud {
+    top: max(8px, env(safe-area-inset-top));
     right: max(132px, calc(env(safe-area-inset-right) + 128px));
-    bottom: max(10px, env(safe-area-inset-bottom));
+    left: max(124px, calc(env(safe-area-inset-left) + 116px));
+    display: grid;
+    width: auto;
+    min-width: 0;
+    max-height: 118px;
+    grid-template-columns: minmax(138px, 0.72fr) minmax(0, 1.28fr);
+    gap: 0 6px;
+    align-content: start;
+    overflow: hidden;
+    padding: 6px 8px;
+  }
+
+  #shell[data-status="playing"] .meter-row,
+  #shell[data-status="playing"] .stats,
+  #shell[data-status="playing"] #ability-bar,
+  #shell[data-status="playing"] #combo-timer,
+  #shell[data-status="playing"] #signal-panel {
+    grid-column: 1;
+    min-width: 0;
+  }
+
+  #shell[data-status="playing"] #contract-panel,
+  #shell[data-status="playing"] #coach-panel,
+  #shell[data-status="playing"] #pilot-tip {
+    grid-column: 2;
+    min-width: 0;
+  }
+
+  #shell[data-status="playing"] #contract-panel {
+    margin-top: 0;
+  }
+
+  #shell[data-status="playing"] #coach-panel,
+  #shell[data-status="playing"] #pilot-tip {
+    margin-top: 4px;
+  }
+
+  #shell[data-status="playing"] #touch-stick b {
+    bottom: 8px;
+  }
+
+  #shell[data-status="playing"] #objective-strip {
+    display: none;
+    right: max(144px, calc(env(safe-area-inset-right) + 140px));
+    bottom: calc(112px + env(safe-area-inset-bottom));
     left: max(116px, calc(env(safe-area-inset-left) + 108px));
     width: auto;
   }
 
   #shell[data-status="playing"] #mission-toast,
   #shell[data-status="playing"] #combat-log {
-    right: max(132px, calc(env(safe-area-inset-right) + 128px));
+    right: max(144px, calc(env(safe-area-inset-right) + 140px));
+    bottom: calc(112px + env(safe-area-inset-bottom));
     left: max(116px, calc(env(safe-area-inset-left) + 108px));
     width: auto;
+  }
+}
+
+@media (max-height: 480px) and (orientation: landscape), (pointer: coarse) and (orientation: landscape) {
+  #shell[data-status="playing"] #directive-chip {
+    display: grid;
+    max-height: 104px;
+    gap: 1px;
+    overflow: visible;
+    padding: 3px 6px;
+  }
+
+  #shell[data-status="playing"] #directive-chip #contract-panel:not([hidden]),
+  #shell[data-status="playing"] #directive-chip #coach-panel:not([hidden]),
+  #shell[data-status="playing"] #directive-chip #pilot-tip:not([hidden]) {
+    display: grid;
+    min-height: 0;
+    margin-top: 0;
+    padding: 2px 0;
+  }
+
+  #shell[data-status="playing"] #directive-chip #contract-panel {
+    grid-template-columns: minmax(76px, 0.4fr) minmax(0, 0.6fr);
+    gap: 2px 6px;
+  }
+
+  #shell[data-status="playing"] #directive-chip #coach-panel,
+  #shell[data-status="playing"] #directive-chip #pilot-tip {
+    grid-template-columns: minmax(74px, 0.38fr) minmax(0, 0.62fr);
+    gap: 2px 6px;
+  }
+
+  #shell[data-status="playing"] #directive-chip #coach-panel .coach-head {
+    grid-row: auto;
+  }
+
+  #shell[data-status="playing"] #directive-chip .contract-progress,
+  #shell[data-status="playing"] #directive-chip #coach-progress {
+    display: none;
+  }
+
+  #shell[data-status="playing"] #directive-chip #coach-rail {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 3px;
+    margin-top: 1px;
+  }
+
+  #shell[data-status="playing"] #directive-chip #coach-rail span {
+    min-height: 7px;
+    padding: 0;
+    border-radius: 999px;
+    font-size: 0;
+  }
+
+  #shell[data-status="playing"] #directive-chip #contract-title,
+  #shell[data-status="playing"] #directive-chip #pilot-tip-title,
+  #shell[data-status="playing"] #directive-chip .coach-kicker,
+  #shell[data-status="playing"] #directive-chip #coach-title {
+    overflow: hidden;
+    margin-top: 0;
+    font-size: 10.5px;
+    line-height: 1.12;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #shell[data-status="playing"] #directive-chip #contract-requirement,
+  #shell[data-status="playing"] #directive-chip #coach-detail,
+  #shell[data-status="playing"] #directive-chip #pilot-tip-detail {
+    display: -webkit-box;
+    overflow: hidden;
+    margin-top: 0;
+    color: #cfe2ef;
+    font-size: 10px;
+    line-height: 1.12;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
   }
 }
 
@@ -3180,13 +3581,30 @@ h1 {
   transition: none;
 }
 
+#shell[data-reduced-motion="true"] *,
+#shell[data-reduced-motion="true"] *::before,
+#shell[data-reduced-motion="true"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+
   .meter[data-alert="critical"] {
     animation: none;
   }
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1080px) {
   #radar-panel {
     display: none;
   }
@@ -3321,7 +3739,6 @@ h1 {
     line-height: 1.35;
   }
 
-  #quick-brief,
   #launch-commit,
   #daily-detail,
   #next-run-panel,
@@ -3329,6 +3746,27 @@ h1 {
   #run-history,
   #how-to-play {
     display: none;
+  }
+
+  #quick-brief {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+    margin-bottom: 6px;
+  }
+
+  #quick-brief article {
+    min-height: 36px;
+    padding: 5px 6px;
+  }
+
+  #quick-brief b {
+    font-size: 10px;
+  }
+
+  #quick-brief span {
+    font-size: 9px;
+    line-height: 1.2;
   }
 
   #control-primer,
@@ -3406,9 +3844,11 @@ h1 {
   }
 
 #shell[data-status="playing"] #objective-strip {
-  bottom: 140px;
+  bottom: calc(176px + env(safe-area-inset-bottom));
   left: 8px;
   width: calc(100vw - 16px);
+  max-height: 66px;
+  overflow: hidden;
   padding: 8px 10px;
 }
 
@@ -3483,6 +3923,10 @@ h1 {
     transform: translateY(8px);
   }
 
+  #shell[data-status="playing"][data-briefing="true"] #wave-intro {
+    display: none;
+  }
+
   #shell[data-status="playing"] #wave-intro.show {
     transform: translateY(0);
   }
@@ -3499,10 +3943,17 @@ h1 {
   #shell[data-status="playing"] #hud {
     top: 8px;
     left: 8px;
-    width: calc(100vw - 16px);
-    max-height: calc(100vh - 176px);
+    right: auto;
+    width: calc(100vw - 108px);
+    max-height: 184px;
     overflow: hidden;
-    padding: 7px 64px 7px 7px;
+    padding: 5px 6px;
+  }
+
+  #shell[data-status="playing"][data-briefing="true"] #hud {
+    width: calc(100vw - 108px);
+    max-height: 204px;
+    padding: 5px 6px;
   }
 
   #shell[data-status="playing"] .brand,
@@ -3512,11 +3963,20 @@ h1 {
     display: none;
   }
 
+  #shell[data-status="playing"] .stats,
+  #shell[data-status="playing"] #ability-bar,
+  #shell[data-status="playing"] #signal-panel {
+    display: none;
+  }
+
   #shell[data-status="playing"] #signal-panel {
     margin-top: 5px;
     padding: 5px 6px;
   }
 
+  #shell[data-status="playing"][data-briefing="true"] .stats,
+  #shell[data-status="playing"][data-briefing="true"] #ability-bar,
+  #shell[data-status="playing"][data-briefing="true"] #combo-timer,
   #shell[data-status="playing"][data-briefing="true"] #signal-panel {
     display: none;
   }
@@ -3604,13 +4064,100 @@ h1 {
   #shell[data-status="playing"] #coach-panel,
   #shell[data-status="playing"] #pilot-tip {
     margin-top: 5px;
-    padding: 5px 6px;
+    padding: 4px 5px;
   }
 
   #shell[data-status="playing"] #contract-requirement,
   #shell[data-status="playing"] #coach-detail,
   #shell[data-status="playing"] #pilot-tip-detail {
+    display: -webkit-box;
+    overflow: hidden;
+    margin-top: 3px;
+    font-size: 9px;
+    line-height: 1.18;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  #shell[data-status="playing"] #contract-panel,
+  #shell[data-status="playing"][data-briefing="true"] #contract-panel {
+    display: grid;
+    grid-template-columns: minmax(74px, 0.45fr) minmax(0, 1fr);
+    gap: 2px 6px;
+    align-items: center;
+  }
+
+  #shell[data-status="playing"] #contract-panel strong,
+  #shell[data-status="playing"][data-briefing="true"] #contract-panel strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #shell[data-status="playing"] #contract-requirement,
+  #shell[data-status="playing"][data-briefing="true"] #contract-requirement {
+    grid-column: 2;
+    margin-top: 0;
+    -webkit-line-clamp: 1;
+  }
+
+  #shell[data-status="playing"] .contract-progress,
+  #shell[data-status="playing"][data-briefing="true"] .contract-progress {
+    grid-column: 1 / -1;
+    margin-top: 1px;
+  }
+
+  #shell[data-status="playing"] #coach-panel,
+  #shell[data-status="playing"][data-briefing="true"] #coach-panel {
+    display: grid;
+    grid-template-columns: minmax(66px, 0.36fr) minmax(0, 0.64fr);
+    gap: 2px 6px;
+    align-items: center;
+  }
+
+  #shell[data-status="playing"] #coach-panel .coach-head,
+  #shell[data-status="playing"][data-briefing="true"] #coach-panel .coach-head {
+    grid-row: 1 / span 2;
+  }
+
+  #shell[data-status="playing"] #coach-rail,
+  #shell[data-status="playing"][data-briefing="true"] #coach-rail {
+    grid-column: 2;
+    margin-top: 0;
+  }
+
+  #shell[data-status="playing"] #coach-detail,
+  #shell[data-status="playing"][data-briefing="true"] #coach-detail {
+    grid-column: 2;
+    margin-top: 0;
+    -webkit-line-clamp: 1;
+  }
+
+  #shell[data-status="playing"] #coach-panel em,
+  #shell[data-status="playing"][data-briefing="true"] #coach-panel em {
     display: none;
+  }
+
+  #shell[data-status="playing"] #pilot-tip,
+  #shell[data-status="playing"][data-briefing="true"] #pilot-tip {
+    display: grid;
+    grid-template-columns: minmax(66px, 0.36fr) minmax(0, 0.64fr);
+    gap: 2px 6px;
+    align-items: center;
+  }
+
+  #shell[data-status="playing"] #pilot-tip[hidden] {
+    display: none;
+  }
+
+  #shell[data-status="playing"] #pilot-tip strong,
+  #shell[data-status="playing"] #pilot-tip span,
+  #shell[data-status="playing"][data-briefing="true"] #pilot-tip strong,
+  #shell[data-status="playing"][data-briefing="true"] #pilot-tip span {
+    margin-top: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   #shell[data-status="playing"] #contract-panel strong,
@@ -3697,6 +4244,10 @@ h1 {
   #shell[data-status="playing"] #touch-controls {
     inset: auto max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
     padding: 0;
+  }
+
+  #shell[data-status="playing"] #touch-stick b {
+    bottom: 8px;
   }
 
   #shell[data-status="playing"] #mobile-pause-button {
@@ -4048,5 +4599,47 @@ h1 {
 
   .contract-progress em {
     white-space: normal;
+  }
+}
+
+#shell[data-status="playing"] #directive-chip {
+  margin-top: 7px;
+  padding: 7px 8px;
+}
+
+#shell[data-status="playing"] #directive-chip #contract-panel,
+#shell[data-status="playing"] #directive-chip #coach-panel,
+#shell[data-status="playing"] #directive-chip #pilot-tip {
+  margin-top: 0;
+  padding-right: 0;
+  padding-left: 0;
+}
+
+@media (max-height: 480px) and (orientation: landscape), (pointer: coarse) and (orientation: landscape) {
+  #shell[data-status="playing"] #directive-chip {
+    grid-column: 2;
+    min-width: 0;
+    margin-top: 0;
+    padding: 4px 6px;
+  }
+
+  #shell[data-status="playing"] #directive-chip #contract-panel,
+  #shell[data-status="playing"] #directive-chip #coach-panel,
+  #shell[data-status="playing"] #directive-chip #pilot-tip {
+    grid-column: auto;
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+}
+
+@media (max-width: 720px) {
+  #shell[data-status="playing"] #directive-chip {
+    margin-top: 5px;
+    padding: 5px 6px;
+  }
+
+  #shell[data-status="playing"][data-briefing="true"] #directive-chip {
+    margin-top: 4px;
+    padding: 4px 5px;
   }
 }
