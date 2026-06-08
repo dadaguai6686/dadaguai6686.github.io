@@ -1,21 +1,27 @@
 {
-  "name": "lumen-drift",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
+  "name": "atherix-digital-space",
+  "version": "1.0.0",
+  "description": "Atherix Personal Blog and Developer Bento Dashboard",
+  "main": "server.js",
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
-    "build": "tsc && vite build",
-    "preview": "vite preview --host 127.0.0.1",
-    "test": "tsx scripts/smoke-simulation.ts && tsx scripts/smoke-ui.ts",
-    "test:dist": "tsx scripts/smoke-dist.ts"
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "check": "node --check app.js && node --check server.js && node --check db.js && node --check auth.js && node --check sw.js && node --check scripts/cdp-smoke-test.cjs && node --check scripts/api-smoke-test.cjs",
+    "health": "node -e \"fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/api/health').then(r=>r.json()).then(console.log)\"",
+    "smoke:api": "node scripts/api-smoke-test.cjs",
+    "smoke:games": "node scripts/cdp-smoke-test.cjs"
   },
   "dependencies": {
-    "phaser": "^3.90.0"
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
+    "sqlite3": "^6.0.1"
   },
-  "devDependencies": {
-    "tsx": "^4.19.4",
-    "typescript": "^5.8.3",
-    "vite": "^6.3.5"
-  }
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "private": true
 }

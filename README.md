@@ -1,110 +1,98 @@
-# 流明漂航
+# Atherix Digital Space
 
-一个中文浏览器街机轻度肉鸽，使用 Phaser、TypeScript 和 Vite 制作。
+Atherix Digital Space is a polished personal blog, developer toolbox, project showcase, guestbook, and browser arcade built with vanilla HTML, CSS, JavaScript, Express, and SQLite.
 
-你驾驶一台维修无人机进入坍缩的城市光网：修复蓝色信标、收集金色流明、避开紫色风暴和粉色虚空碎片，在电量归零前冲进北侧光门。
+## Highlights
 
-试玩地址：[https://dadaguai6686.github.io/](https://dadaguai6686.github.io/)
+- Blog list and article reader with hash routes such as `#post/post-1`
+- Admin CRUD APIs for posts, projects, comments, and image uploads
+- Developer tools: JSON formatter, Markdown preview, image conversion, Pomodoro, codec/hash tools, and synth piano
+- Premium browser arcade:
+  - Cyber Astro-Runner platform game
+  - Starcore Survivor
+  - Prism Boss Rush
+  - Cyber Heist
+  - Alchemy Chain
+- PWA shell with a conservative Service Worker cache for static assets
+- Production hardening:
+  - strict security headers and CSP
+  - production CORS allow-list
+  - required production `JWT_SECRET`
+  - API input validation
+  - image upload signature checks
+  - source/config file disclosure blocking
+  - rate limits for login, comments, and uploads
 
-## 怎么玩
+## Quick Start
 
 ```bash
-npm install
-npm run dev
+npm ci
+npm run check
+npm run smoke:api
+npm run smoke:games
+npm start
 ```
 
-打开本地 Vite 地址，通常是 `http://127.0.0.1:5173`。
-
-## 操作
-
-- `WASD` 或方向键：漂移移动
-- `Space` / 推进键：短推进
-- `E` / 修复键：靠近蓝色信标时按住修复
-- `Q` / 脉冲键：释放脉冲，推开附近碎片
-- `H`：打开中文玩法说明并暂停
-- 触摸设备会在游玩态显示触控摇杆、修复/推进/脉冲按钮和右上角暂停按钮；平板横屏也不会只剩键盘操作
-
-## 核心循环
+Open:
 
 ```text
-选择难度 -> 生成救援代号 -> 阅读本波事件与战术合约 -> 规划路线 -> 收集流明补电 -> 靠近信标修复 -> 避开风暴和碎片 -> 保持连锁 -> 完成合约或主目标 -> 进光门 -> 选择升级 -> 通关 5 波
+http://127.0.0.1:3000
 ```
 
-首屏会先用“先补给 → 再维修 → 躲危险 → 撤离升级”四个短目标说明这是什么游戏，第一次游玩推荐标准模式；想复盘同一张路线可以用救援代号、航行日志或今日挑战。
-开始按钮保持在详细任务档案、图例和说明之前，方便手机玩家马上开局；按钮之后的出航简报会用小地图和“安全读图、补给起手、按住维修、北侧撤离”四条中文作战令解释首局路线，让玩家不用猜颜色和目标。
+## Environment
 
-## 游戏系统
-
-- 中文主菜单、任务档案和局内玩法说明。
-- 三档难度：练习、标准、硬核。
-- 五波短局目标：连续稳定 5 波光网后完成本轮救援。
-- 救援区域轮换：北环补给、交叉洋流、南弧残站、风暴脊线和核心超频会改变信标、流明、碎片和风暴的空间布局。
-- 区域视觉背景：每个救援区域都有不同的光网纹理、航道和核心结构，帮助玩家从画面上区分当前波次空间。
-- 救援代号：每轮会生成一个中文代号，轻微漂移信标、流明、碎片和风暴位置；地址栏加 `?route=代号` 可以复现同一轮路线。
-- 今日挑战：每天用本地日期生成一个固定救援代号，沿用当前难度，并记录本地今日最佳，方便当天复盘、冲分和比较路线。
-- 波次事件：稳定信号、流明潮汐、碎片回潮、风暴前线、超频光网会改变回电、维修、风暴、碎片速度和分数奖励。
-- 每波战术合约：流明航线、速修信标、无损救援、风暴掠行和脉冲节律会给每波一个可选副目标，完成后立刻加分；完成或失败后 HUD 会弹出路线更新，并把目标明确切回修信标/撤离，避免玩家误以为副目标就是整局终点。
-- 合约目标标记：画布会用低遮挡光环标出当前合约相关的流明、信标、碎片或风暴，让副目标变成可见路线。
-- 波次开场简报：每波开始时短暂显示当前区域、事件和战术合约，帮助玩家先读目标再行动。
-- 启动加载状态：在 Phaser 大包和中文 HUD 完成启动前，页面会先显示中文“正在加载流明漂航”；资源加载失败时会留在启动层并提示刷新，避免首屏像空白卡住。
-- 发布拆包：生产构建会把 Phaser 拆成稳定的 `assets/phaser.js` vendor chunk，主入口只保留游戏逻辑和 HUD 启动代码，降低首次执行压力。
-- 开局读图缓冲：每波开始后，玩家第一次移动/修复/推进/脉冲前不会计时、耗电或受击，方便先看中文说明、路线和合约。
-- 开局路线预览：读图缓冲期间，画布会用虚线和编号标出“补流明 → 修信标”的首段路线，让玩家不只读文字，还能直接看见下一步。
-- 实时评级：局内 HUD 会显示当前 `S/A/B/C` 信号压力、百分制进度和下一步提分目标，让玩家不必等到结算才知道该追什么。
-- 连锁窗口条：拾取、修复和撤离得分后会显示剩余连锁时间，帮助玩家判断是否继续冒险续分。
-- 维修节点锁定：蓝色信标每修到 25%/50%/75% 会锁一个节点，危险靠近或电量低时可以先撤退补流明，回头从节点继续修。
-- 下一局目标看板：菜单和结算会根据当前存档、今日挑战、上一局表现和成就进度给出下一波/下一局目标，告诉玩家为什么要再开一局。
-- 路线教练：局内用 4 步中文引导解释首局路线，HUD 会用短进度轨标出“补流明 → 找信标 → 按住维修 → 撤离”的当前阶段；画布导航会给当前目标加导引线、光环和“导航：流明/信标/维修/光门”短标签，遇到风暴、碎片贴脸、低电量、合约完成或合约失败时会切换成当前最可信的下一步提示。
-- 可信目标提示：低电量贴着信标时，目标条和路线教练会一起改成“先补充流明”，并提醒不要硬修信标，避免玩家被 UI 误导到电量归零。
-- 战术雷达：桌面局内右上角显示信标、流明、危险源、风暴、光门和当前导航线，帮助玩家读图和规划路线。
-- 暂停战术扫描：暂停/玩法说明会用更大的路线图复盘当前信标、补给、危险位置和导航目标，手机端也能安全读图。
-- 战场图例与中文物件标签：首屏解释蓝色信标、金色流明、粉色碎片和紫色风暴；画布内关键对象也带中文标签，降低首次游玩猜测成本。
-- 交互提示双模式：HUD、首屏说明和画布维修信标提示都会同时显示键盘键位与触控动作名，例如 `E / 修复键`。
-- 移动端战斗 HUD：手机游玩态会压缩评级、合约和教练长文案，保留电量、机体、目标、路线教练短进度轨和触控操作，减少信息面板遮挡战场。
-- 移动端任务条：战斗态底部目标条会把长路线详情压成两行，并和触控按钮保持间距；完整路线关系可在暂停战术扫描里查看。
-- 移动端连锁披露：未建立连锁时会收起空闲连锁窗口，开始得分连锁后再显示倒计时条，给开局读图和走位留更多战场视野。
-- 移动端读图缓冲：开局尚未正式计时和碰撞前，会先隐藏实时评级面板；第一次移动、修复、推进或脉冲后再显示评级压力。
-- 触控输入：手机和平板等粗指针设备都会显示摇杆和动作按钮；触控游玩态隐藏常驻右上雷达，改用暂停战术扫描读图，避免暂停按钮和雷达互相遮挡；控件会捕获触摸指针、阻止浏览器默认手势，并在暂停、失焦或指针丢失时清空虚拟输入，避免移动/修复/推进卡住。
-- 短按输入保护：键盘方向/WASD、Space、E、Q 和触控动作按钮都有极短输入缓冲，快速点按也能解除读图缓冲或触发动作；开始新局、重跑路线、暂停和继续时会重置 Phaser 键盘状态与输入缓冲，避免残留旧输入。
-- 游戏面焦点保护：开始、继续、升级进入下一波或点击画布后会把键盘焦点交回游戏面，降低菜单按钮吃掉方向键和技能键的概率。
-- 自动安全暂停：页面失焦、切后台或离开页面时会清空输入并暂停救援，回来会看到“已自动暂停”和战术扫描，避免玩家看不到游戏时继续耗电或受击。
-- 本地成绩存档：最佳分数、最远波次、最佳连锁、单轮最佳合约数和今日挑战最佳。
-- 暂停与本地设置：暂停菜单可复制当前路线链接、按同一救援代号重开，并用二次确认清空本地存档。
-- 可访问性设置：本地保存“精简动效”和“大字标签”，精简动效会关闭抖动与粒子尾迹，大字标签会放大战场中文物件标签和关键信息。
-- 最近航行日志：菜单和结算会保留最近路线、评级、分数、波次和合约表现，并可一键重跑同一救援代号复盘。
-- 本地成就挑战：记录第一座信标、无损撤离、S 级评价、完整通关和硬核通关等长期目标。
-- 当前改装显示：HUD 会显示五条升级线等级，升级卡会展示当前效果和升级后收益。
-- 升级推荐：过波后会根据上一波短板和下一波预报标出系统推荐，例如缺电、风暴停留、受击、清波慢、合约失败或下一波事件压力，并解释每张升级卡的选择理由。
-- 局内即时反馈：拾取流明、修复信标、推进、脉冲、受击、得分变化和撤离都会在画布中显示短暂文字与光环；左下角战斗记录会同步用中文解释发生了什么、为什么连锁/分数变化，以及下一步该补给、维修、撤离还是用脉冲保命，并保留最近几条短事件避免高频反馈一闪而过。
-- 得分变化飘字：得分和扣分会在画布中显示 `+xxx分` 或 `-xxx分`，让玩家知道连锁、合约和碰撞惩罚到底影响了多少。
-- 擦险奖励：贴近粉色碎片危险带后安全脱离会触发“擦险脱离”，奖励分数和连锁，并在战斗记录里解释这是靠走位绕过碎片线得到的技巧收益。
-- 受击恢复窗口：被碎片撞击后无人机会闪烁并出现“恢复窗口”护盾环和倒计时，提示玩家趁短暂无敌时间横移、推进或用脉冲脱离碎片线。
-- 可读性增强：移动碎片会显示短轨迹和方向箭头，靠近信标会显示维修光束，危险碎片靠近会出现警戒圈，低电量和低机体会触发 HUD 与无人机周围的告警效果。
-- 状态化 HUD：菜单显示完整成绩，开局后自动收起长说明和记录条，给移动、躲避和修复留出更多视野。
-- 中文结算复盘：展示分数、波次、用时、最佳连锁、流明、信标、受击和风暴停留，并根据失败原因或胜利状态生成三步“下一局/下一波作战计划”，例如补给路线、锁节点后撤、脉冲保命、下一波预报和升级短板。
-- 结算评级：每局根据通关、连锁、受击、风暴停留、速度、流明收集和剩余电量给出 `S/A/B/C` 中文评价。
-- 局内任务条和导航提示：HUD 会把当前目标写成“当前任务/紧急任务/撤离任务”，提示下一步该补流明、修信标、脱离风暴或撤离；关键转场会用“路线更新”短提示说明为什么目标改变，画布中会给目标加导引线、光环和短中文标签。
-- 底部任务文本：优先显示当前目标和当前危险，避免玩家离开风暴后仍看到过期警报。
-- 可关闭的网页音频合成音效：推进、拾取、修复、受击和胜负反馈。
-- 分数和连锁倍率，鼓励连续收集、修复和撤离。
-- 紫色风暴会吸走电量，迫使玩家移动。
-- 粉色虚空碎片会碰撞扣机体和打断连锁。
-- 五条升级线：矢量引擎、信标织机、深层电容、棱镜脉冲、曜盾机体。
-- 局内 DOM HUD 负责中文信息、暂停说明和升级选择，Phaser canvas 负责游戏画面。
-
-## 项目结构
-
-- `src/game/simulation.ts`：可测试的游戏状态、难度、救援区域、救援代号、波次事件、战术合约、合约焦点、开局读图缓冲、连锁窗口、擦险奖励、路线教练、终局、计分、升级摘要、目标提示、资源告警、危险预警、成就挑战、实时评级、结算评级、复盘统计和暂停逻辑
-- `src/game/GameScene.ts`：Phaser 场景、程序化视觉、中文物件标签、路线教练导航导引、画布导航目标标签、开局路线预览、画布维修按键提示、合约目标标记、碎片轨迹预警、擦险飘字、维修光束、危险警戒、可访问性渲染设置、输入桥接、合约完成反馈和反馈事件
-- `src/game/input.ts`：键盘、方向键、触控虚拟输入和短按缓冲，负责把快速点按稳定传给模拟层，并在暂停/重开时清空
-- `src/main.ts`：中文 HUD、局内任务条、首屏快速目标、任务档案、出航简报、战术合约面板、路线更新提示、战斗记录、战场图例、战术雷达、暂停战术扫描、下一局目标看板、路线教练进度轨、实时评级、资源告警、导航提示、当前改装、菜单成就墙、今日挑战最佳、最近航行日志、触控、暂停/设置工具、可访问性设置、成绩/成就存档、音效、结算评级、复盘和升级推荐 UI
-- `docs/design.md`：Game Studio 设计说明
-- `scripts/smoke-simulation.ts`：核心循环 smoke test
-- `scripts/smoke-ui.ts`：关键 HUD/暂停 UI 结构 smoke test
-
-## 验证
+Copy `.env.example` to `.env` for production-style runs and replace every placeholder:
 
 ```bash
-npm test
-npm run build
+cp .env.example .env
 ```
+
+Required production values:
+
+- `NODE_ENV=production`
+- `PORT`
+- `DB_PATH`
+- `JWT_SECRET`
+- `ADMIN_USERNAME`
+- `ADMIN_PASSWORD`
+- `ALLOWED_ORIGINS`
+
+## Verification
+
+```bash
+npm audit --audit-level=moderate
+npm run check
+npm run smoke:api
+npm run smoke:games
+```
+
+`smoke:api` starts a temporary production server and verifies API health, security headers, CORS behavior, sensitive-file blocking, input validation, admin login, and forged image upload rejection.
+
+`smoke:games` starts a temporary local server and drives a headless browser through blog reading, the main platform game Space/Enter behavior, all premium arcade panels, canvas rendering, and Service Worker registration.
+
+## Docker
+
+```bash
+docker compose up -d --build
+docker compose ps
+```
+
+The Compose setup uses `.env`, stores SQLite data under `./data`, and persists uploads under `./uploads`.
+
+## GitHub
+
+The repository includes:
+
+- CI for npm install, audit, syntax checks, API smoke tests, and Docker build
+- Dependabot for npm packages and GitHub Actions
+
+After adding a remote:
+
+```bash
+git remote add origin https://github.com/<owner>/<repo>.git
+git push -u origin main
+```
+
+## Security Notes
+
+Do not commit `.env`, `blog.db`, `data/`, `node_modules/`, or runtime uploads. See `DEPLOYMENT.md` for production deployment details.

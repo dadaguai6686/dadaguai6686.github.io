@@ -1,496 +1,1392 @@
-<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>流明漂航</title>
-    <link
-      rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23070910'/%3E%3Ccircle cx='32' cy='32' r='21' fill='none' stroke='%2367f4ff' stroke-width='6'/%3E%3Cpath d='M32 10 45 48 32 39 19 48Z' fill='%23ffe27a'/%3E%3C/svg%3E"
-    />
-    <style>
-      html,
-      body {
-        background: #070910;
-        color: #f7fbff;
-      }
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atherix - 个人博客与数字空间</title>
+  <!-- SEO Meta Tags -->
+  <meta name="description" content="Atherix的个人主页与技术博客。集成精美的Bento Dashboard、数字化工具箱（JSON格式化、图片WebP压缩、Markdown编辑器、番茄钟）以及个人项目展示与留言板。">
+  <meta name="keywords" content="个人博客, Bento Layout, 开发者工具, Markdown编辑器, WebP压缩, 番茄钟, 留言板">
+  <meta name="author" content="Atherix">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#0b0b12">
+  <meta name="color-scheme" content="dark light">
+  <meta property="og:title" content="Atherix - 个人博客与数字空间">
+  <meta property="og:description" content="一个集个人博客、开发者工具箱、项目展示与互动游戏于一体的原生 Web 数字空间。">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://dadaguai6686.github.io/">
+  <meta property="og:site_name" content="Atherix Digital Space">
+  <meta property="og:locale" content="zh_CN">
+  <meta property="og:image" content="https://dadaguai6686.github.io/assets/atherix-og-card.png">
+  <meta property="og:image:secure_url" content="https://dadaguai6686.github.io/assets/atherix-og-card.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Atherix Digital Space branded preview card">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Atherix - 个人博客与数字空间">
+  <meta name="twitter:description" content="个人博客、开发者工具箱、项目展示与互动街机游戏组成的原生 Web 数字空间。">
+  <meta name="twitter:image" content="https://dadaguai6686.github.io/assets/atherix-og-card.png">
+  <meta name="twitter:image:alt" content="Atherix Digital Space branded preview card">
+  <link rel="canonical" href="https://dadaguai6686.github.io/">
+  <link rel="alternate" type="application/rss+xml" title="Atherix Digital Space Feed" href="https://dadaguai6686.github.io/feed.xml">
+  <link rel="icon" href="/assets/atherix-icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/assets/atherix-icon-192.png">
+  <link rel="preload" href="/style.css?v=20260608-boss-shield-v1" as="style">
+  <link rel="preload" href="/lucide.min.js" as="script">
+  <link rel="preload" href="/app.js?v=20260608-boss-shield-v1" as="script">
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="/style.css?v=20260608-boss-shield-v1">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <!-- Lucide Icons Local -->
+  <script src="/lucide.min.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">跳到主要内容</a>
 
-      #boot-status {
-        position: fixed;
-        inset: 0;
-        z-index: 1000;
-        display: grid;
-        place-items: center;
-        padding: 24px;
-        background: #070910;
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        transition:
-          opacity 180ms ease,
-          visibility 180ms ease;
-      }
+  <!-- Global Scroll Progress & Loader -->
+  <div class="scroll-progress" id="scroll-progress"></div>
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="loader-spinner"></div>
+    <div class="loader-text">Atherix Digital Space Loading...</div>
+  </div>
 
-      body[data-game-ready="true"] #boot-status,
-      #boot-status[hidden] {
-        visibility: hidden;
-        opacity: 0;
-        pointer-events: none;
-      }
+  <!-- Dynamic Moving Backgrounds -->
+  <div class="mesh-bg">
+    <div class="mesh-glow-1"></div>
+    <div class="mesh-glow-2"></div>
+    <div class="mesh-glow-3"></div>
+  </div>
+  <div class="noise-overlay"></div>
 
-      .boot-card {
-        width: min(360px, calc(100vw - 48px));
-        padding: 18px;
-        border: 1px solid rgba(103, 244, 255, 0.28);
-        border-radius: 8px;
-        background: rgba(8, 14, 24, 0.92);
-        box-shadow: 0 18px 70px rgba(0, 0, 0, 0.45);
-      }
+  <!-- Floating Navigation Dock -->
+  <header>
+    <nav class="navbar-dock">
+      <div class="nav-logo">
+        <i data-lucide="sparkles">✨</i>
+        <span>Atherix</span>
+      </div>
+      <div class="nav-links">
+        <button type="button" class="nav-item active" data-target="home">
+          <i data-lucide="layout-grid">🏠</i>
+          <span>首页</span>
+        </button>
+        <button type="button" class="nav-item" data-target="blog">
+          <i data-lucide="book-open">📚</i>
+          <span>博客</span>
+        </button>
+        <button type="button" class="nav-item" data-target="toolbox">
+          <i data-lucide="wrench">🛠️</i>
+          <span>工具箱</span>
+        </button>
+        <button type="button" class="nav-item" data-target="game">
+          <i data-lucide="gamepad-2">🎮</i>
+          <span>街机游戏</span>
+        </button>
+        <button type="button" class="nav-item" data-target="projects">
+          <i data-lucide="folder-git-2">💻</i>
+          <span>项目</span>
+        </button>
+        <button type="button" class="nav-item" data-target="guestbook">
+          <i data-lucide="message-square">💬</i>
+          <span>留言</span>
+        </button>
+      </div>
+      <button type="button" class="theme-toggle-btn command-toggle-btn" id="command-palette-trigger" title="全站搜索" aria-label="打开全站搜索">
+        <i data-lucide="search" style="font-style: normal;">🔎</i>
+      </button>
+      <button type="button" class="theme-toggle-btn" id="theme-toggle" title="切换主题" aria-label="切换主题">
+        <i data-lucide="sun" id="theme-icon" style="font-style: normal;">☀️</i>
+      </button>
+      <button type="button" class="theme-toggle-btn" id="admin-login-trigger" title="管理员登录" aria-label="管理员登录或退出">
+        <i data-lucide="lock" id="admin-lock-icon" style="font-style: normal;">🔒</i>
+      </button>
+    </nav>
+  </header>
 
-      .boot-card strong,
-      .boot-card span {
-        display: block;
-      }
+  <!-- Main Content Areas -->
+  <main id="main-content" tabindex="-1">
+    
+    <!-- SECTION 1: HOME (Bento Dashboard) -->
+    <section class="view-section active" id="home">
+      <div class="bento-grid">
+        
+        <!-- Profile Card (col-span-2, row-span-2) -->
+        <div class="glass-card col-span-2 row-span-2 profile-card">
+          <div class="profile-header">
+            <div class="avatar-wrapper">
+              <img src="/assets/atherix-profile-avatar.png" alt="Avatar" class="avatar-img" id="profile-avatar" loading="eager" decoding="async" fetchpriority="high">
+              <div class="status-dot"></div>
+            </div>
+            <div class="profile-info">
+              <h1>你好，我是 Atherix</h1>
+              <p>全栈开发工程师 / 数字化工匠</p>
+            </div>
+          </div>
+          <div class="profile-bio">
+            我热衷于将优雅的设计与强劲的工程架构相结合。这里是我的数字空间，记录着我的技术思考、实验项目以及开发的一些便捷小工具。
+          </div>
+          <div class="profile-actions">
+            <button type="button" class="action-btn action-btn-primary" data-target="blog">
+              <i data-lucide="book-open"></i> 阅读博客
+            </button>
+            <button type="button" class="action-btn" data-target="toolbox">
+              <i data-lucide="wrench"></i> 打开工具箱
+            </button>
+          </div>
+          <div class="profile-socials">
+            <a href="https://github.com" target="_blank" class="social-btn" title="GitHub">
+              <i data-lucide="code-2"></i>
+            </a>
+            <a href="mailto:example@domain.com" class="social-btn" title="Email">
+              <i data-lucide="mail"></i>
+            </a>
+            <a href="#" class="social-btn" title="WeChat" id="wechat-btn">
+              <i data-lucide="message-circle"></i>
+            </a>
+            <a href="#" class="social-btn" title="Resume">
+              <i data-lucide="file-text"></i>
+            </a>
+          </div>
+        </div>
 
-      .boot-card strong {
-        color: #fff3ad;
-        font-size: 16px;
-        font-weight: 1000;
-      }
+        <div class="glass-card col-span-2 quick-blog-card" id="quick-blog-card">
+          <div class="quick-card-kicker">
+            <i data-lucide="sparkles"></i>
+            推荐阅读
+          </div>
+          <h2 id="featured-post-title">正在载入精选文章...</h2>
+          <p id="featured-post-excerpt">稍等一下，系统正在挑选最值得打开的一篇技术札记。</p>
+          <span class="post-read-more">进入阅读 <i data-lucide="chevron-right" style="width: 14px; height: 14px;"></i></span>
+        </div>
 
-      .boot-card span {
-        margin-top: 8px;
-        color: #cce8f6;
-        font-size: 13px;
-        line-height: 1.5;
-      }
+        <!-- Clock & Weather Card (col-span-1, row-span-1) -->
+        <div class="glass-card weather-clock-card">
+          <div>
+            <div class="clock-display" id="live-clock">12:00:00</div>
+            <div class="date-display" id="live-date">2026年5月19日 星期二</div>
+          </div>
+          <div class="weather-row">
+            <div class="weather-info">
+              <span class="weather-temp" id="weather-temp">24°C</span>
+              <span class="weather-status" id="weather-status">晴朗</span>
+            </div>
+            <i data-lucide="sun" class="weather-icon" id="weather-icon"></i>
+          </div>
+        </div>
 
-      .boot-card i {
-        display: block;
-        height: 4px;
-        margin-top: 16px;
-        overflow: hidden;
-        border-radius: 999px;
-        background: rgba(103, 244, 255, 0.16);
-      }
+        <!-- System Monitor Card (col-span-1, row-span-1) -->
+        <div class="glass-card system-card">
+          <div class="card-title">
+            <i data-lucide="cpu" style="width: 14px; height: 14px;"></i>
+            系统监视器
+          </div>
+          <div class="sys-stats">
+            <div class="sys-stat-item">
+              <div class="stat-label">CPU负载</div>
+              <div class="stat-value" id="cpu-load">12%</div>
+            </div>
+            <div class="sys-stat-item">
+              <div class="stat-label">内存占用</div>
+              <div class="stat-value" id="ram-load">48%</div>
+            </div>
+          </div>
+          <div class="chart-container">
+            <svg class="chart-svg" viewBox="0 0 200 60">
+              <defs>
+                <linearGradient id="chart-gradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.25"/>
+                  <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/>
+                </linearGradient>
+                <filter id="neon-glow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feGaussianBlur stdDeviation="2.5" result="blur" />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
+              <path class="chart-fill" id="cpu-chart-fill" d="M 0 60 L 0 60 L 200 60 Z"></path>
+              <path class="chart-path" id="cpu-chart-path" filter="url(#neon-glow)" d="M 0 60 L 200 60"></path>
+            </svg>
+          </div>
+        </div>
 
-      .boot-card i::before {
-        display: block;
-        width: 38%;
-        height: 100%;
-        border-radius: inherit;
-        background: #67f4ff;
-        content: "";
-        animation: boot-scan 900ms ease-in-out infinite alternate;
-      }
+        <!-- Music Player Card (col-span-1, row-span-2) -->
+        <div class="glass-card row-span-2 music-card">
+          <div class="music-title-row">
+            <div class="disc-wrapper">
+              <div class="disc" id="music-disc">
+                <div class="disc-center"></div>
+              </div>
+            </div>
+            <div class="track-details">
+              <div class="track-name" id="track-title">Forest Rain</div>
+              <div class="track-artist" id="track-artist">Ambient Therapy</div>
+            </div>
+          </div>
+          
+          <div class="waveform-viz" id="waveform-visualizer">
+            <!-- Bars will be generated via JS -->
+          </div>
 
-      #boot-status[data-state="error"] .boot-card {
-        border-color: rgba(255, 95, 155, 0.48);
-      }
+          <div class="music-controls">
+            <button class="control-btn" id="prev-track-btn" title="上一首">
+              <i data-lucide="skip-back"></i>
+            </button>
+            <button class="control-btn play-pause-btn" id="play-pause-btn" title="播放/暂停">
+              <i data-lucide="play" id="play-icon"></i>
+            </button>
+            <button class="control-btn" id="next-track-btn" title="下一首">
+              <i data-lucide="skip-forward"></i>
+            </button>
+          </div>
+          <!-- Hidden Audio Tag -->
+          <audio id="ambient-audio" loop></audio>
+        </div>
 
-      #boot-status[data-state="error"] .boot-card i::before {
-        width: 100%;
-        background: #ff5f9b;
-        animation: none;
-      }
+        <!-- Tech Stack Card (col-span-2, row-span-1) -->
+        <div class="glass-card col-span-2 skills-card">
+          <div class="card-title">
+            <i data-lucide="code-2" style="width: 14px; height: 14px;"></i>
+            技术栈 / 工具链
+          </div>
+          <div class="skills-container">
+            <span class="skill-tag"><i data-lucide="chevron-right" style="width: 12px; height: 12px; color: var(--accent);"></i>JavaScript</span>
+            <span class="skill-tag"><i data-lucide="chevron-right" style="width: 12px; height: 12px; color: var(--accent);"></i>HTML5 / CSS3</span>
+            <span class="skill-tag"><i data-lucide="chevron-right" style="width: 12px; height: 12px; color: var(--accent);"></i>Node.js</span>
+            <span class="skill-tag"><i data-lucide="chevron-right" style="width: 12px; height: 12px; color: var(--accent);"></i>React / Vue</span>
+            <span class="skill-tag"><i data-lucide="chevron-right" style="width: 12px; height: 12px; color: var(--accent);"></i>FastAPI / Python</span>
+            <span class="skill-tag"><i data-lucide="chevron-right" style="width: 12px; height: 12px; color: var(--accent);"></i>SQLite / PostgreSQL</span>
+            <span class="skill-tag"><i data-lucide="chevron-right" style="width: 12px; height: 12px; color: var(--accent);"></i>Git / Docker</span>
+          </div>
+        </div>
 
-      @keyframes boot-scan {
-        from {
-          transform: translateX(0);
-        }
+        <!-- Scratchpad & Todo Card (col-span-1, row-span-1) -->
+        <div class="glass-card scratchpad-card" id="todo-scratchpad-card">
+          <div class="todo-scratchpad-header">
+            <div class="todo-tab-btn active" id="note-tab-btn">
+              <i data-lucide="sticky-note" style="width: 14px; height: 14px;"></i>
+              <span>灵感便签</span>
+            </div>
+            <div class="todo-tab-btn" id="todo-tab-btn">
+              <i data-lucide="list-todo" style="width: 14px; height: 14px;"></i>
+              <span>待办清单</span>
+            </div>
+          </div>
+          
+          <!-- Tab 1: Note Area -->
+          <div class="todo-tab-content active" id="tab-note-content">
+            <textarea class="scratchpad-textarea" id="scratchpad" placeholder="随时在此记录想法，自动保存..." style="min-height: 98px;"></textarea>
+            <div class="scratchpad-footer">
+              <span>字符数: <span id="scratchpad-count">0</span></span>
+              <span>本地自动保存</span>
+            </div>
+          </div>
+          
+          <!-- Tab 2: Todo Area -->
+          <div class="todo-tab-content" id="tab-todo-content" style="display: none;">
+            <div class="todo-input-row" style="display: flex; gap: 0.4rem; margin-bottom: 0.5rem;">
+              <input type="text" id="todo-input" class="form-input" placeholder="添加新任务..." style="padding: 0.25rem 0.5rem; font-size: 0.75rem; height: 26px; flex: 1;">
+              <button class="action-btn action-btn-primary" id="todo-add-btn" style="height: 26px; padding: 0 0.5rem; justify-content: center;"><i data-lucide="plus" style="width: 14px; height: 14px;"></i></button>
+            </div>
+            <ul class="todo-list" id="todo-list-container" style="list-style: none; padding: 0; margin: 0; max-height: 90px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.3rem;">
+              <!-- Dynamically populated by JS -->
+            </ul>
+          </div>
+        </div>
 
-        to {
-          transform: translateX(164%);
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <div id="boot-status" role="status" aria-live="polite">
-      <div class="boot-card">
-        <strong id="boot-status-title">正在加载流明漂航</strong>
-        <span id="boot-status-detail">正在启动游戏场景、中文界面和本地存档。</span>
-        <i aria-hidden="true"></i>
+        <!-- Arcade Game Card (col-span-1, row-span-1) -->
+        <div class="glass-card game-launcher-card" id="game-launcher-card" style="cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; min-height: 180px; position: relative; overflow: hidden; background: linear-gradient(135deg, rgba(88, 28, 135, 0.15) 0%, rgba(30, 27, 75, 0.25) 100%);">
+          <div class="game-card-mesh-bg" style="position: absolute; top:0; left:0; right:0; bottom:0; background: radial-gradient(circle at 80% 20%, rgba(139, 92, 246, 0.18) 0%, transparent 50%); z-index:1; pointer-events:none;"></div>
+          <div class="card-title" style="z-index: 2; position: relative;">
+            <i data-lucide="gamepad-2" style="width: 14px; height: 14px; color: var(--accent);"></i>
+            Atherix 高级街机
+          </div>
+          <div class="game-launcher-body" style="z-index: 2; margin: 0.3rem 0; position: relative;">
+            <h4 style="font-size: 0.95rem; font-weight: 700; color: #fff; margin-bottom: 0.1rem; text-shadow: 0 0 10px rgba(139, 92, 246, 0.4);">Premium Arcade Suite</h4>
+            <p style="font-size: 0.72rem; color: var(--text-secondary); line-height: 1.3;">主线跑酷 + 6 个高级模式，带街机生涯、奖牌、联赛、契约和战术芯片。</p>
+          </div>
+          <div class="game-launcher-footer" style="z-index: 2; font-size: 0.78rem; color: var(--accent); font-weight: 600; display: flex; align-items: center; gap: 0.2rem; position: relative;">
+            立即挑战 <i data-lucide="play-circle" style="width: 14px; height: 14px;"></i>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- SECTION 2: BLOG & DIGITAL GARDEN -->
+    <section class="view-section" id="blog">
+      <!-- Blog Admin Actions Bar -->
+      <div class="admin-actions-bar" id="blog-admin-actions" style="display: none; margin-bottom: 1.5rem;">
+        <button class="action-btn action-btn-primary" id="add-post-btn">
+          <i data-lucide="plus"></i> 撰写新文章
+        </button>
+        <button class="action-btn" id="logout-btn" style="background: rgba(248, 113, 113, 0.12); border-color: rgba(248, 113, 113, 0.2); color: var(--danger);">
+          <i data-lucide="log-out"></i> 退出管理模式
+        </button>
+      </div>
+
+      <div class="blog-layout">
+        
+        <!-- Blog Main Content (Post list) -->
+        <div class="blog-main">
+          <div class="blog-search-bar">
+            <i data-lucide="search" style="color: var(--text-muted);"></i>
+            <input type="text" class="blog-search-input" id="blog-search" placeholder="搜索文章标题、简介或内容...">
+          </div>
+
+          <div class="blog-insight-panel" id="blog-insight-panel" aria-label="阅读中心">
+            <div class="blog-insight-stats">
+              <div class="blog-insight-stat">
+                <span>文章</span>
+                <strong id="blog-total-count">0</strong>
+              </div>
+              <div class="blog-insight-stat">
+                <span>稍后读</span>
+                <strong id="blog-bookmark-count">0</strong>
+              </div>
+              <div class="blog-insight-stat">
+                <span>继续读</span>
+                <strong id="blog-progress-count">0</strong>
+              </div>
+              <div class="blog-insight-stat">
+                <span>平均进度</span>
+                <strong id="blog-average-progress">0%</strong>
+              </div>
+            </div>
+            <div class="blog-reader-filters" role="tablist" aria-label="阅读筛选">
+              <button type="button" class="blog-reader-filter active" data-reader-filter="all" aria-pressed="true">全部</button>
+              <button type="button" class="blog-reader-filter" data-reader-filter="bookmarked" aria-pressed="false">稍后读</button>
+              <button type="button" class="blog-reader-filter" data-reader-filter="in-progress" aria-pressed="false">继续读</button>
+            </div>
+          </div>
+
+          <div class="blog-posts-grid" id="blog-posts-container">
+            <!-- Generated dynamically by app.js -->
+          </div>
+        </div>
+
+        <!-- Blog Sidebar Widgets -->
+        <aside class="blog-sidebar">
+          <div class="glass-card">
+            <div class="sidebar-widget-title">文章分类标签</div>
+            <div class="tag-cloud" id="blog-tag-cloud">
+              <!-- Generated dynamically by app.js -->
+            </div>
+          </div>
+
+          <div class="glass-card">
+            <div class="sidebar-widget-title">置顶文章</div>
+            <div class="pinned-list" id="pinned-posts-container">
+              <!-- Generated dynamically by app.js -->
+            </div>
+          </div>
+        </aside>
+
+      </div>
+    </section>
+
+    <!-- SECTION 2.5: BLOG READER VIEW -->
+    <section class="view-section" id="blog-reader">
+      <div class="glass-card blog-reader-view" id="blog-reader-card">
+        <div class="reader-header">
+          <button class="reader-back-btn" id="reader-back-btn">
+            <i data-lucide="arrow-left" style="width: 16px; height: 16px;"></i>
+            返回博客列表
+          </button>
+          <div class="post-meta" style="margin-top: 1rem;">
+            <span class="post-tag" id="reader-post-tag">Tag</span>
+            <span id="reader-post-date">Date</span>
+            <span>&bull;</span>
+            <span id="reader-post-readtime">5 mins read</span>
+          </div>
+          <h1 class="reader-title" id="reader-post-title">Article Title</h1>
+          <div class="reader-toolbar" aria-label="阅读工具">
+            <div class="reader-progress-pill">
+              <span>阅读进度</span>
+              <strong id="reader-progress-percent">0%</strong>
+            </div>
+            <button type="button" class="reader-tool-btn" id="reader-copy-link-btn">
+              <i data-lucide="link-2"></i>
+              复制链接
+            </button>
+            <button type="button" class="reader-tool-btn" id="reader-share-btn">
+              <i data-lucide="share-2"></i>
+              分享
+            </button>
+            <button type="button" class="reader-tool-btn" id="reader-bookmark-btn" aria-pressed="false">
+              <i data-lucide="bookmark"></i>
+              稍后读
+            </button>
+            <button type="button" class="reader-tool-btn" id="reader-mark-read-btn" aria-pressed="false">
+              <i data-lucide="check-circle-2"></i>
+              标记读完
+            </button>
+            <button type="button" class="reader-tool-btn" id="reader-mode-btn" aria-pressed="false">
+              <i data-lucide="maximize-2"></i>
+              沉浸阅读
+            </button>
+            <button type="button" class="reader-tool-btn" id="reader-export-md-btn">
+              <i data-lucide="file-down"></i>
+              导出 MD
+            </button>
+          </div>
+          <nav class="reader-toc" id="reader-toc" aria-label="文章目录"></nav>
+        </div>
+        <article class="reader-content font-rich" id="reader-post-content">
+          <!-- Populated by app.js -->
+        </article>
+        <section class="reader-next-panel" id="reader-next-panel" aria-label="继续阅读"></section>
+      </div>
+    </section>
+
+    <!-- SECTION 3: WEB TOOLBOX -->
+    <section class="view-section" id="toolbox">
+      <div class="toolbox-layout">
+        
+        <!-- Toolbox Left Sidebar Nav -->
+        <aside class="toolbox-sidebar">
+          <button class="tool-nav-btn active" data-tool="json">
+            <i data-lucide="file-json"></i>
+            <span>JSON 格式化树</span>
+          </button>
+          <button class="tool-nav-btn" data-tool="markdown">
+            <i data-lucide="edit-3"></i>
+            <span>Markdown 预览</span>
+          </button>
+          <button class="tool-nav-btn" data-tool="image">
+            <i data-lucide="image"></i>
+            <span>图片转换压缩</span>
+          </button>
+          <button class="tool-nav-btn" data-tool="pomodoro">
+            <i data-lucide="timer"></i>
+            <span>番茄工作钟</span>
+          </button>
+          <button class="tool-nav-btn" data-tool="codec">
+            <i data-lucide="hash"></i>
+            <span>哈希与编解码</span>
+          </button>
+          <button class="tool-nav-btn" data-tool="devkit">
+            <i data-lucide="square-terminal"></i>
+            <span>开发速查工具</span>
+          </button>
+          <button class="tool-nav-btn" data-tool="piano">
+            <i data-lucide="music-4"></i>
+            <span>极客合成器琴</span>
+          </button>
+          <button class="tool-nav-btn" data-tool="vault">
+            <i data-lucide="database-backup"></i>
+            <span>数据保险库</span>
+          </button>
+        </aside>
+
+        <!-- Toolbox Right Active Tool Panel -->
+        <div class="glass-card tool-content-wrapper">
+          
+          <!-- Tool 1: JSON Formatter -->
+          <div class="tool-panel active" id="tool-json">
+            <div class="tool-header">
+              <h2>JSON 格式化与层级语法树</h2>
+              <p>在客户端校验、格式化、折叠和美化 JSON 数据，安全无后门。</p>
+            </div>
+            <div class="json-tool">
+              <div class="json-actions">
+                <button class="action-btn action-btn-primary" id="json-fmt-btn">
+                  <i data-lucide="check"></i> 格式化树
+                </button>
+                <button class="action-btn" id="json-minify-btn">
+                  <i data-lucide="minimize-2"></i> 压缩一行
+                </button>
+                <button class="action-btn" id="json-copy-btn">
+                  <i data-lucide="copy"></i> 复制结果
+                </button>
+                <button class="action-btn" id="json-clear-btn">
+                  <i data-lucide="trash-2"></i> 清空
+                </button>
+              </div>
+              <div class="json-error" id="json-error-msg">解析错误: Invalid JSON</div>
+              <div class="json-io-container">
+                <textarea class="json-input-area" id="json-input" placeholder="请在此处粘贴待处理的原始 JSON 数据..."></textarea>
+                <!-- Render Interactive HTML Tree Nodes here -->
+                <div class="json-output-area" id="json-output" placeholder="树形层级高亮 JSON 将显示在这里..."></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tool 2: Markdown Editor -->
+          <div class="tool-panel" id="tool-markdown">
+            <div class="tool-header">
+              <h2>Markdown 实时编辑器</h2>
+              <p>双栏同步渲染，支持字数统计，一键复制网页 HTML 与导出文件。</p>
+            </div>
+            <div class="markdown-tool">
+              <div class="editor-pane">
+                <div class="pane-header">
+                  <span>MARKDOWN 编辑区 (<span id="md-words-count">0</span> 字)</span>
+                  <div style="display:flex; gap:0.4rem;">
+                    <button class="action-btn" id="md-copy-html-btn" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">复制HTML</button>
+                    <button class="action-btn" id="md-export-btn" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">导出MD</button>
+                    <button class="action-btn" id="md-clear-btn" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">清空</button>
+                  </div>
+                </div>
+                <textarea class="pane-textarea" id="markdown-input" placeholder="# 欢迎使用 Markdown 编辑器&#10;&#10;在这里输入 Markdown 代码，右侧会实时渲染。&#10;&#10;## 功能列表：&#10;- 实时渲染&#10;- 代码高亮：`const a = 1;`&#10;- 极速响应"></textarea>
+              </div>
+              <div class="preview-pane">
+                <div class="pane-header">实时渲染预览</div>
+                <div class="pane-preview reader-content" id="markdown-preview"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tool 3: Image WebP Compressor -->
+          <div class="tool-panel" id="tool-image">
+            <div class="tool-header">
+              <h2>图片大小压缩与格式转换</h2>
+              <p>纯浏览器端处理，保证隐私。支持自定义图片分辨率以及导出格式（WebP / JPEG / PNG）。</p>
+            </div>
+            <div class="compressor-tool">
+              <label class="drag-drop-zone" id="drop-zone">
+                <i data-lucide="cloud-upload"></i>
+                <h3>拖拽文件至此 或 点击上传</h3>
+                <p>支持 JPG, PNG, WebP 格式图片，最大支持 10MB</p>
+                <input type="file" id="file-input" accept="image/png, image/jpeg, image/webp">
+              </label>
+
+              <div class="compressor-controls" style="display: none;" id="compressor-controls">
+                <div class="control-group">
+                  <label for="quality-slider">目标压缩质量: <span class="slider-val" id="quality-val">80%</span></label>
+                  <div class="slider-row">
+                    <input type="range" id="quality-slider" min="10" max="100" value="80">
+                  </div>
+                </div>
+                <div class="control-group">
+                  <label for="compress-format">输出格式</label>
+                  <select class="pomo-sound-select" id="compress-format" style="width: 100%; height: 36px; padding: 0.3rem 0.5rem;">
+                    <option value="image/webp">WebP (推荐，超轻量级)</option>
+                    <option value="image/jpeg">JPEG (经典照片格式)</option>
+                    <option value="image/png">PNG (高清保留透明)</option>
+                  </select>
+                </div>
+                <div class="control-group">
+                  <label for="resize-width">缩放宽度 (像素, 0为原始大小)</label>
+                  <input type="number" id="resize-width" class="form-input" value="0" min="0" placeholder="原始宽度" style="padding: 0.4rem 0.8rem;">
+                </div>
+                <div class="control-group" style="justify-content: flex-end; align-items: flex-end;">
+                  <button class="action-btn action-btn-primary" id="download-webp-btn" style="width: 100%; justify-content: center; height: 36px;">
+                    <i data-lucide="download"></i> 下载压缩文件
+                  </button>
+                </div>
+              </div>
+
+              <div class="image-preview-panel" style="display: none;" id="image-preview-panel">
+                <div class="image-card">
+                  <div class="stat-label">原始图片</div>
+                  <img id="orig-img-preview" src="" alt="Original Preview" loading="lazy" decoding="async">
+                  <div class="image-details" id="orig-img-details">文件大小: <span>-</span></div>
+                </div>
+                <div class="image-card">
+                  <div class="stat-label">压缩转换后</div>
+                  <img id="comp-img-preview" src="" alt="Compressed Preview" loading="lazy" decoding="async">
+                  <div class="image-details" id="comp-img-details">预计大小: <span>-</span> (节约: <span>-</span>)</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tool 4: Pomodoro Clock -->
+          <div class="tool-panel" id="tool-pomodoro">
+            <div class="tool-header">
+              <h2>番茄工作钟与自定义计时器</h2>
+              <p>采用番茄工作法帮助您专注，内置优美雨声、森林白噪音、炉火白噪音等。</p>
+            </div>
+            <div class="pomodoro-tool">
+              <div class="pomodoro-modes">
+                <button class="mode-btn active" data-mode="focus">专注 (25m)</button>
+                <button class="mode-btn" data-mode="short">短休 (5m)</button>
+                <button class="mode-btn" data-mode="long">长休 (15m)</button>
+              </div>
+
+              <div class="timer-circle">
+                <svg class="timer-svg">
+                  <circle class="timer-bg-circle" cx="110" cy="110" r="100"></circle>
+                  <circle class="timer-progress-circle" id="timer-progress" cx="110" cy="110" r="100"></circle>
+                </svg>
+                <div class="timer-text-container">
+                  <div class="timer-clock" id="timer-time">25:00</div>
+                  <div class="timer-status-text" id="timer-status-label">正在专注</div>
+                </div>
+              </div>
+
+              <div class="pomodoro-controls">
+                <button class="pomo-btn" id="pomo-reset" title="重置">
+                  <i data-lucide="rotate-ccw"></i>
+                </button>
+                <button class="pomo-btn pomo-btn-main" id="pomo-start-pause" title="开始">
+                  <i data-lucide="play" id="pomo-play-icon"></i>
+                </button>
+                <button class="pomo-btn" id="pomo-skip" title="跳过">
+                  <i data-lucide="skip-forward"></i>
+                </button>
+              </div>
+
+              <div class="pomo-sound-controls">
+                <i data-lucide="music" style="width: 16px; height: 16px; color: var(--text-secondary);"></i>
+                <label for="pomo-noise-select">专注背景音: </label>
+                <select class="pomo-sound-select" id="pomo-noise-select">
+                  <option value="none">无伴奏</option>
+                  <option value="rain">窗外雨声</option>
+                  <option value="forest">森林鸟叫</option>
+                  <option value="lofi">Lofi 节拍</option>
+                  <option value="fireplace">壁炉柴火</option>
+                  <option value="ocean">深海海浪</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tool 5: Codec & Hash Generator -->
+          <div class="tool-panel" id="tool-codec">
+            <div class="tool-header">
+              <h2>编码、解码与哈希校验工具</h2>
+              <p>在本地直接进行 Base64、URL 编解码以及 MD5, SHA-256 哈希值计算，安全隐私无遗漏。</p>
+            </div>
+            <div class="codec-tool">
+              <div class="codec-actions">
+                <button class="action-btn action-btn-primary" id="codec-b64-enc-btn">Base64 编码</button>
+                <button class="action-btn action-btn-primary" id="codec-b64-dec-btn">Base64 解码</button>
+                <button class="action-btn" id="codec-url-enc-btn">URL 编码</button>
+                <button class="action-btn" id="codec-url-dec-btn">URL 解码</button>
+                <button class="action-btn" id="codec-sha256-btn">SHA-256 Hash</button>
+                <button class="action-btn" id="codec-md5-btn">MD5 Hash</button>
+                <button class="action-btn" id="codec-clear-btn" style="margin-left: auto;">
+                  <i data-lucide="trash-2"></i>
+                </button>
+              </div>
+              <div class="json-io-container" style="margin-top: 1rem;">
+                <textarea class="json-input-area" id="codec-input" placeholder="在此输入需要转换或加密的原始文本..."></textarea>
+                <textarea class="json-output-area" id="codec-output" readonly placeholder="转换计算后的结果会实时在这里显示..." style="background: rgba(0,0,0,0.12); border-color: var(--border-color);"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tool 6: Developer Quick Kit -->
+          <div class="tool-panel" id="tool-devkit">
+            <div class="tool-header">
+              <h2>开发速查工具</h2>
+              <p>常用时间戳、UUID 与 JWT 解析集中处理，全部在浏览器本地完成。</p>
+            </div>
+            <div class="devkit-tool">
+              <div class="devkit-grid">
+                <section class="devkit-card">
+                  <div class="devkit-card-header">
+                    <i data-lucide="clock-3"></i>
+                    <h3>时间戳转换</h3>
+                  </div>
+                  <input class="form-input" id="devkit-timestamp-input" placeholder="输入秒/毫秒时间戳，或日期文本">
+                  <div class="codec-actions">
+                    <button class="action-btn action-btn-primary" id="devkit-ts-now-btn">当前时间</button>
+                    <button class="action-btn" id="devkit-ts-parse-btn">解析转换</button>
+                    <button class="action-btn" id="devkit-ts-copy-btn"><i data-lucide="copy"></i></button>
+                  </div>
+                  <textarea class="json-output-area devkit-output" id="devkit-timestamp-output" readonly placeholder="转换结果将在这里显示..."></textarea>
+                </section>
+
+                <section class="devkit-card">
+                  <div class="devkit-card-header">
+                    <i data-lucide="fingerprint"></i>
+                    <h3>UUID 生成器</h3>
+                  </div>
+                  <div class="devkit-inline">
+                    <input class="form-input" id="devkit-uuid-count" type="number" min="1" max="50" value="5">
+                    <button class="action-btn action-btn-primary" id="devkit-uuid-generate-btn">生成</button>
+                    <button class="action-btn" id="devkit-uuid-copy-btn"><i data-lucide="copy"></i></button>
+                  </div>
+                  <textarea class="json-output-area devkit-output" id="devkit-uuid-output" readonly placeholder="生成的 UUID 将显示在这里..."></textarea>
+                </section>
+
+                <section class="devkit-card devkit-card-wide">
+                  <div class="devkit-card-header">
+                    <i data-lucide="badge-check"></i>
+                    <h3>JWT 解码器</h3>
+                  </div>
+                  <textarea class="json-input-area devkit-jwt-input" id="devkit-jwt-input" placeholder="粘贴 JWT Token，仅解码 Header / Payload，不验证签名..."></textarea>
+                  <div class="codec-actions">
+                    <button class="action-btn action-btn-primary" id="devkit-jwt-decode-btn">解码 JWT</button>
+                    <button class="action-btn" id="devkit-jwt-copy-btn"><i data-lucide="copy"></i> 复制结果</button>
+                    <button class="action-btn" id="devkit-jwt-clear-btn"><i data-lucide="trash-2"></i></button>
+                  </div>
+                  <textarea class="json-output-area devkit-output devkit-jwt-output" id="devkit-jwt-output" readonly placeholder="解码后的 Header 和 Payload 将显示在这里..."></textarea>
+                </section>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tool 7: Synthesizer Keyboard -->
+          <div class="tool-panel" id="tool-piano">
+            <div class="tool-header">
+              <h2>极客合成器钢琴 (Web Audio API)</h2>
+              <p>利用自定义正弦/方波振荡器实时合成，支持 ADSR 音量包络衰减与空间混响延时特效。</p>
+            </div>
+            <div class="piano-tool">
+              <!-- Mode Tabs -->
+              <div class="piano-mode-selector" style="display: flex; gap: 0.8rem; margin-bottom: 1.2rem;">
+                <button class="action-btn action-btn-primary" id="piano-mode-free" style="padding: 0.4rem 1rem; font-size: 0.8rem; height: 32px;">🎹 自由弹奏模式</button>
+                <button class="action-btn" id="piano-mode-game" style="padding: 0.4rem 1rem; font-size: 0.8rem; height: 32px;">🎮 节奏挑战模式</button>
+              </div>
+
+              <!-- Rhythm Game Controls (Hidden by default) -->
+              <div id="rhythm-game-bar" style="display: none; align-items: center; gap: 1rem; margin-bottom: 1.2rem; flex-wrap: wrap; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); padding: 0.8rem 1rem; border-radius: 8px; max-width: 520px; width: 100%;">
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                  <label for="rhythm-song-select" style="font-size: 0.8rem; color: var(--text-secondary);">选择曲目:</label>
+                  <select class="pomo-sound-select" id="rhythm-song-select" style="width: 140px; height: 28px; padding: 0 0.4rem; font-size: 0.78rem;">
+                    <option value="twinkle">小星星 (简单)</option>
+                    <option value="canon">卡农简编 (中等)</option>
+                    <option value="ode">欢乐颂 (困难)</option>
+                  </select>
+                </div>
+                <button class="action-btn action-btn-primary" id="rhythm-play-btn" style="height: 28px; font-size: 0.78rem; padding: 0 1rem;">开始挑战</button>
+                <div style="display: flex; gap: 1rem; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; margin-left: auto; color: #fff;">
+                  <span>得分: <span id="rhythm-score-val" style="color: var(--accent); font-weight:700;">0</span></span>
+                  <span>连击: <span id="rhythm-combo-val" style="color: #10B981; font-weight:700;">0</span></span>
+                </div>
+              </div>
+
+              <div class="piano-controls" id="piano-freestyle-controls" style="display: flex; gap: 1.5rem; align-items: center; margin-bottom: 1.2rem; flex-wrap: wrap;">
+                <div class="control-group" style="display: flex; align-items: center; gap: 0.5rem;">
+                  <label for="piano-wave-select" style="font-size: 0.85rem; color: var(--text-secondary);">波形类型:</label>
+                  <select class="pomo-sound-select" id="piano-wave-select" style="width: 140px; height: 32px; padding: 0 0.5rem; font-size: 0.8rem;">
+                    <option value="sine">正弦波 (柔和圆润)</option>
+                    <option value="triangle">三角波 (复古风琴)</option>
+                    <option value="sawtooth">锯齿波 (小提琴感)</option>
+                    <option value="square">方波 (FC街机感)</option>
+                  </select>
+                </div>
+                <div class="control-group" style="display: flex; align-items: center; gap: 0.4rem;">
+                  <input type="checkbox" id="piano-delay-toggle" checked style="width: 16px; height: 16px; cursor: pointer;">
+                  <label for="piano-delay-toggle" style="font-size: 0.85rem; color: var(--text-secondary); cursor: pointer; user-select: none;">空间混响延时特效</label>
+                </div>
+              </div>
+              
+              <div class="piano-keyboard-wrapper" id="piano-wrapper" style="position: relative; height: 200px; width: 100%; max-width: 520px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; margin-bottom: 1rem; transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column;">
+                <canvas id="rhythm-canvas" width="520" height="160" style="display: none; width: 100%; height: 160px; background: rgba(10, 8, 20, 0.95); border-bottom: 1px solid var(--border-color); box-shadow: inset 0 -10px 20px rgba(0,0,0,0.5);"></canvas>
+                <div class="piano-keyboard" id="piano-keyboard-container" style="position: relative; display: flex; width: 100%; height: 100%; transition: height 0.3s ease;">
+                  <!-- White Keys -->
+                  <div class="piano-key white-key" data-note="C4" data-key="A" style="width: 12.5%; height: 100%; border-right: 1px solid var(--border-color); cursor: pointer; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 1rem; color: var(--text-muted); font-size: 0.75rem; transition: background 0.1s, box-shadow 0.1s; background: rgba(255,255,255,0.9); user-select: none;"><span>C4<br>(A)</span></div>
+                  <div class="piano-key white-key" data-note="D4" data-key="S" style="width: 12.5%; height: 100%; border-right: 1px solid var(--border-color); cursor: pointer; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 1rem; color: var(--text-muted); font-size: 0.75rem; transition: background 0.1s, box-shadow 0.1s; background: rgba(255,255,255,0.9); user-select: none;"><span>D4<br>(S)</span></div>
+                  <div class="piano-key white-key" data-note="E4" data-key="D" style="width: 12.5%; height: 100%; border-right: 1px solid var(--border-color); cursor: pointer; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 1rem; color: var(--text-muted); font-size: 0.75rem; transition: background 0.1s, box-shadow 0.1s; background: rgba(255,255,255,0.9); user-select: none;"><span>E4<br>(D)</span></div>
+                  <div class="piano-key white-key" data-note="F4" data-key="F" style="width: 12.5%; height: 100%; border-right: 1px solid var(--border-color); cursor: pointer; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 1rem; color: var(--text-muted); font-size: 0.75rem; transition: background 0.1s, box-shadow 0.1s; background: rgba(255,255,255,0.9); user-select: none;"><span>F4<br>(F)</span></div>
+                  <div class="piano-key white-key" data-note="G4" data-key="G" style="width: 12.5%; height: 100%; border-right: 1px solid var(--border-color); cursor: pointer; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 1rem; color: var(--text-muted); font-size: 0.75rem; transition: background 0.1s, box-shadow 0.1s; background: rgba(255,255,255,0.9); user-select: none;"><span>G4<br>(G)</span></div>
+                  <div class="piano-key white-key" data-note="A4" data-key="H" style="width: 12.5%; height: 100%; border-right: 1px solid var(--border-color); cursor: pointer; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 1rem; color: var(--text-muted); font-size: 0.75rem; transition: background 0.1s, box-shadow 0.1s; background: rgba(255,255,255,0.9); user-select: none;"><span>A4<br>(H)</span></div>
+                  <div class="piano-key white-key" data-note="B4" data-key="J" style="width: 12.5%; height: 100%; border-right: 1px solid var(--border-color); cursor: pointer; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 1rem; color: var(--text-muted); font-size: 0.75rem; transition: background 0.1s, box-shadow 0.1s; background: rgba(255,255,255,0.9); user-select: none;"><span>B4<br>(J)</span></div>
+                  <div class="piano-key white-key" data-note="C5" data-key="K" style="width: 12.5%; height: 100%; cursor: pointer; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 1rem; color: var(--text-muted); font-size: 0.75rem; transition: background 0.1s, box-shadow 0.1s; background: rgba(255,255,255,0.9); user-select: none;"><span>C5<br>(K)</span></div>
+                  
+                  <!-- Black Keys -->
+                  <div class="piano-key black-key" data-note="C#4" data-key="W" style="position: absolute; left: 8.5%; width: 8%; height: 60%; background: #111; z-index: 10; border-radius: 0 0 3px 3px; cursor: pointer; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 0.5rem; color: #aaa; font-size: 0.6rem; transition: background 0.1s, box-shadow 0.1s; user-select: none;"><span>W</span></div>
+                  <div class="piano-key black-key" data-note="D#4" data-key="E" style="position: absolute; left: 21%; width: 8%; height: 60%; background: #111; z-index: 10; border-radius: 0 0 3px 3px; cursor: pointer; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 0.5rem; color: #aaa; font-size: 0.6rem; transition: background 0.1s, box-shadow 0.1s; user-select: none;"><span>E</span></div>
+                  <div class="piano-key black-key" data-note="F#4" data-key="T" style="position: absolute; left: 46%; width: 8%; height: 60%; background: #111; z-index: 10; border-radius: 0 0 3px 3px; cursor: pointer; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 0.5rem; color: #aaa; font-size: 0.6rem; transition: background 0.1s, box-shadow 0.1s; user-select: none;"><span>T</span></div>
+                  <div class="piano-key black-key" data-note="G#4" data-key="Y" style="position: absolute; left: 58.5%; width: 8%; height: 60%; background: #111; z-index: 10; border-radius: 0 0 3px 3px; cursor: pointer; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 0.5rem; color: #aaa; font-size: 0.6rem; transition: background 0.1s, box-shadow 0.1s; user-select: none;"><span>Y</span></div>
+                  <div class="piano-key black-key" data-note="A#4" data-key="U" style="position: absolute; left: 71%; width: 8%; height: 60%; background: #111; z-index: 10; border-radius: 0 0 3px 3px; cursor: pointer; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 0.5rem; color: #aaa; font-size: 0.6rem; transition: background 0.1s, box-shadow 0.1s; user-select: none;"><span>U</span></div>
+                </div>
+              </div>
+              <div class="piano-tips" style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--text-secondary); background: rgba(139,92,246,0.06); padding: 0.5rem; border-radius: 6px; border: 1px dashed rgba(139,92,246,0.2);">
+                <i data-lucide="info" style="width:14px; height:14px; color: var(--accent); flex-shrink: 0;"></i>
+                <span id="piano-tips-text">物理键盘映射已激活！按住键盘 <strong>A、W、S、E、D、F、T、G、Y、H、U、J、K</strong> 即可快速弹奏对应的琴键。</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tool 8: Local Data Vault -->
+          <div class="tool-panel" id="tool-vault">
+            <div class="tool-header">
+              <h2>Atherix 数据保险库</h2>
+              <p>导出、导入与清点本地站点状态。阅读进度、收藏、工具草稿、待办和街机档案都留在你的浏览器里。</p>
+            </div>
+            <div class="vault-tool">
+              <div class="vault-stats-grid" aria-label="本地状态摘要">
+                <article class="vault-stat-card">
+                  <span>可备份项目</span>
+                  <strong id="vault-key-count">0</strong>
+                  <small>白名单 localStorage 条目</small>
+                </article>
+                <article class="vault-stat-card">
+                  <span>数据体积</span>
+                  <strong id="vault-byte-size">0 KB</strong>
+                  <small>导出 JSON 估算大小</small>
+                </article>
+                <article class="vault-stat-card">
+                  <span>阅读记录</span>
+                  <strong id="vault-reader-count">0</strong>
+                  <small>进度与稍后读收藏</small>
+                </article>
+                <article class="vault-stat-card">
+                  <span>街机档案</span>
+                  <strong id="vault-arcade-count">0</strong>
+                  <small>生涯、奖牌与最佳成绩</small>
+                </article>
+              </div>
+
+              <div class="vault-action-row">
+                <button class="action-btn action-btn-primary" id="vault-export-btn">
+                  <i data-lucide="download"></i> 导出站点存档
+                </button>
+                <button class="action-btn" id="vault-import-trigger">
+                  <i data-lucide="upload"></i> 导入存档
+                </button>
+                <input type="file" id="vault-import-file" accept="application/json,.json" hidden>
+                <button class="action-btn" id="vault-refresh-btn">
+                  <i data-lucide="refresh-cw"></i> 重新扫描
+                </button>
+                <button class="action-btn vault-danger-btn" id="vault-clear-btn">
+                  <i data-lucide="trash-2"></i> 清空本地状态
+                </button>
+              </div>
+
+              <div class="vault-notice">
+                <i data-lucide="shield-check"></i>
+                <span>保险库不会导出管理员登录令牌，也不会上传任何数据；导入时只接受 Atherix 白名单字段。</span>
+              </div>
+
+              <div class="vault-preview-panel">
+                <div class="vault-preview-header">
+                  <strong>本地状态清单</strong>
+                  <span id="vault-last-updated">尚未扫描</span>
+                </div>
+                <div class="vault-preview-list" id="vault-preview-list" aria-live="polite"></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 4: PROJECTS -->
+    <section class="view-section" id="projects">
+      <!-- Projects Tabs & Admin Actions -->
+      <div class="projects-header-row" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;">
+        <div class="project-tabs" id="project-tabs">
+          <button class="project-tab-btn active" data-tab="all">全部项目</button>
+          <button class="project-tab-btn" data-tab="UI/UX设计">UI/UX设计</button>
+          <button class="project-tab-btn" data-tab="前端开发">前端开发</button>
+          <button class="project-tab-btn" data-tab="黑客技术">极客开发</button>
+        </div>
+        <div class="admin-actions-bar" id="project-admin-actions" style="display: none; margin: 0; padding: 0;">
+          <button class="action-btn action-btn-primary" id="add-project-btn">
+            <i data-lucide="plus"></i> 添加新项目
+          </button>
+        </div>
+      </div>
+
+      <div class="projects-grid" id="projects-container">
+        <!-- Populated dynamically by app.js -->
+      </div>
+    </section>
+
+    <!-- SECTION 5: GUESTBOOK -->
+    <section class="view-section" id="guestbook">
+      <div class="glass-card guestbook-layout">
+        <div class="tool-header">
+          <h2>留言板 / 动态交互墙</h2>
+          <p>留下您的足迹，欢迎交换友情链接，分享生活趣事或给予反馈。</p>
+        </div>
+
+        <form class="guestbook-form" id="guestbook-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="gb-nickname">昵称 *</label>
+              <input type="text" class="form-input" id="gb-nickname" placeholder="如何称呼您" maxlength="60" required>
+            </div>
+            <div class="form-group">
+              <label for="gb-website">个人网站 (选填)</label>
+              <input type="url" class="form-input" id="gb-website" placeholder="https://example.com" maxlength="2048">
+            </div>
+          </div>
+          <div class="form-group honeypot-field" aria-hidden="true">
+            <label for="gb-company">公司</label>
+            <input type="text" class="form-input" id="gb-company" name="company" tabindex="-1" autocomplete="off">
+          </div>
+          <!-- Avatar Selector Grid -->
+          <div class="form-group">
+            <label>选择个性表情头像</label>
+            <div class="avatar-select-grid" id="avatar-select-grid">
+              <button type="button" class="avatar-option active" data-avatar="👨‍💻" aria-pressed="true" aria-label="选择头像 程序员">👨‍💻</button>
+              <button type="button" class="avatar-option" data-avatar="👩‍💻" aria-pressed="false" aria-label="选择头像 开发者">👩‍💻</button>
+              <button type="button" class="avatar-option" data-avatar="🚀" aria-pressed="false" aria-label="选择头像 火箭">🚀</button>
+              <button type="button" class="avatar-option" data-avatar="🐱" aria-pressed="false" aria-label="选择头像 猫">🐱</button>
+              <button type="button" class="avatar-option" data-avatar="🦊" aria-pressed="false" aria-label="选择头像 狐狸">🦊</button>
+              <button type="button" class="avatar-option" data-avatar="🦄" aria-pressed="false" aria-label="选择头像 独角兽">🦄</button>
+              <button type="button" class="avatar-option" data-avatar="🤖" aria-pressed="false" aria-label="选择头像 机器人">🤖</button>
+              <button type="button" class="avatar-option" data-avatar="🎨" aria-pressed="false" aria-label="选择头像 调色板">🎨</button>
+              <button type="button" class="avatar-option" data-avatar="☕" aria-pressed="false" aria-label="选择头像 咖啡">☕</button>
+              <button type="button" class="avatar-option" data-avatar="🐼" aria-pressed="false" aria-label="选择头像 熊猫">🐼</button>
+            </div>
+            <input type="hidden" id="gb-avatar-val" value="👨‍💻">
+          </div>
+          <div class="form-group">
+            <label for="gb-content">留言内容 *</label>
+            <textarea class="form-input form-textarea" id="gb-content" placeholder="输入你想留言的内容..." maxlength="1000" required></textarea>
+            <div class="guestbook-helper-row">
+              <span class="guestbook-status" id="guestbook-status" role="status">支持友链、建议和反馈；请避免一次塞太多链接。</span>
+              <span class="guestbook-counter" id="guestbook-counter">0 / 1000</span>
+            </div>
+          </div>
+          <div class="form-actions-row">
+            <div class="emoji-selector-trigger">
+              <button type="button" class="emoji-btn" id="emoji-trigger" title="插入表情">😀</button>
+              <div class="emoji-popover" id="emoji-popover" role="menu" aria-label="留言表情">
+                <button type="button" class="emoji-item" role="menuitem" aria-label="插入表情 笑脸">😀</button>
+                <button type="button" class="emoji-item" role="menuitem" aria-label="插入表情 大笑">😂</button>
+                <button type="button" class="emoji-item" role="menuitem" aria-label="插入表情 火焰">🔥</button>
+                <button type="button" class="emoji-item" role="menuitem" aria-label="插入表情 点赞">👍</button>
+                <button type="button" class="emoji-item" role="menuitem" aria-label="插入表情 庆祝">🎉</button>
+                <button type="button" class="emoji-item" role="menuitem" aria-label="插入表情 爱心">❤️</button>
+                <button type="button" class="emoji-item" role="menuitem" aria-label="插入表情 惊讶">😮</button>
+                <button type="button" class="emoji-item" role="menuitem" aria-label="插入表情 思考">🤔</button>
+                <button type="button" class="emoji-item" role="menuitem" aria-label="插入表情 关注">👀</button>
+                <button type="button" class="emoji-item" role="menuitem" aria-label="插入表情 火箭">🚀</button>
+                <button type="button" class="emoji-item" role="menuitem" aria-label="插入表情 调色板">🎨</button>
+                <button type="button" class="emoji-item" role="menuitem" aria-label="插入表情 灵感">💡</button>
+              </div>
+            </div>
+            <button type="submit" class="action-btn action-btn-primary" id="guestbook-submit-btn">
+              <i data-lucide="send"></i> 发送留言
+            </button>
+          </div>
+        </form>
+
+        <div class="comments-list" id="guestbook-comments">
+          <!-- Populated dynamically by app.js -->
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 6: RETRO ARCADE GAME -->
+    <section class="view-section" id="game" style="display: none;">
+      <div class="arcade-page-container" style="max-width: 900px; margin: 0 auto; padding: 1rem 0;">
+        
+        <!-- Arcade Cabinet Container -->
+        <div class="arcade-cabinet-bezel glass-card" style="border: 2px solid var(--accent); box-shadow: 0 0 25px rgba(139, 92, 246, 0.35); background: rgba(15, 12, 30, 0.95); padding: 1.5rem; border-radius: 12px; position: relative;">
+          
+          <!-- Cabinet Banner -->
+          <div class="arcade-title-banner" style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid rgba(139, 92, 246, 0.3); padding-bottom: 0.8rem; margin-bottom: 1.2rem;">
+            <div style="display: flex; align-items: center; gap: 0.6rem; font-size: 1.3rem; font-weight: 800; color: #fff; text-shadow: 0 0 10px var(--accent);">
+              <i data-lucide="gamepad-2" style="color: var(--accent); width: 22px; height: 22px;"></i>
+              <span>CYBER ASTRO-RUNNER 街机太空人</span>
+            </div>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; letter-spacing: 2px; color: var(--accent); background: rgba(139, 92, 246, 0.1); padding: 0.2rem 0.6rem; border-radius: 4px; border: 1px solid rgba(139, 92, 246, 0.2);">
+              CABINET MODEL V4 · 8-STAGE CAMPAIGN
+            </div>
+          </div>
+          
+          <!-- Arcade Dashboard -->
+          <div class="arcade-stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.8rem; margin-bottom: 1.2rem; background: rgba(255,255,255,0.02); padding: 0.8rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+            <div class="stat-box" style="display: flex; flex-direction: column; gap: 0.2rem; text-align: center; border-right: 1px solid rgba(255,255,255,0.05); padding: 0 0.4rem;">
+              <span class="stat-label" style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;">当前关卡</span>
+              <span id="display-level-name" class="stat-value" style="font-size: 0.95rem; font-weight: 800; color: #06B6D4; text-shadow: 0 0 5px rgba(6,182,212,0.4);">宇宙轨道</span>
+            </div>
+            <div class="stat-box" style="display: flex; flex-direction: column; gap: 0.2rem; text-align: center; border-right: 1px solid rgba(255,255,255,0.05); padding: 0 0.4rem;">
+              <span class="stat-label" style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;">难度级别</span>
+              <span id="display-level-difficulty" class="stat-value" style="font-size: 0.95rem; font-weight: 800; color: #10B981;">EASY</span>
+            </div>
+            <div class="stat-box" style="display: flex; flex-direction: column; gap: 0.2rem; text-align: center; border-right: 1px solid rgba(255,255,255,0.05); padding: 0 0.4rem;">
+              <span class="stat-label" style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;">收集水晶</span>
+              <span class="stat-value" style="font-size: 0.95rem; font-weight: 800; color: #FBBF24; font-family: 'JetBrains Mono', monospace;"><span id="game-coins">0</span>/<span id="target-coins">5</span></span>
+            </div>
+            <div class="stat-box" style="display: flex; flex-direction: column; gap: 0.2rem; text-align: center; border-right: 1px solid rgba(255,255,255,0.05); padding: 0 0.4rem;">
+              <span class="stat-label" style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;">航线评分</span>
+              <span id="game-score" class="stat-value" style="font-size: 0.95rem; font-weight: 800; color: #BAE6FD; font-family: 'JetBrains Mono', monospace;">0</span>
+            </div>
+            <div class="stat-box" style="display: flex; flex-direction: column; gap: 0.2rem; text-align: center; border-right: 1px solid rgba(255,255,255,0.05); padding: 0 0.4rem;">
+              <span class="stat-label" style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;">连段流速</span>
+              <span id="game-combo" class="stat-value" style="font-size: 0.95rem; font-weight: 800; color: #A7F3D0; font-family: 'JetBrains Mono', monospace;">0x</span>
+            </div>
+            <div class="stat-box" style="display: flex; flex-direction: column; gap: 0.2rem; text-align: center; border-right: 1px solid rgba(255,255,255,0.05); padding: 0 0.4rem;">
+              <span class="stat-label" style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;">护盾能量</span>
+              <span id="game-shield" class="stat-value" style="font-size: 0.95rem; font-weight: 800; color: #34D399; font-family: 'JetBrains Mono', monospace;">0</span>
+            </div>
+            <div class="stat-box" style="display: flex; flex-direction: column; gap: 0.2rem; text-align: center; border-right: 1px solid rgba(255,255,255,0.05); padding: 0 0.4rem;">
+              <span class="stat-label" style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;">航线合约</span>
+              <span id="game-contract" class="stat-value" style="font-size: 0.78rem; font-weight: 800; color: #FDE68A; font-family: 'JetBrains Mono', monospace;">CRYSTAL 0/3</span>
+            </div>
+            <div class="stat-box" style="display: flex; flex-direction: column; gap: 0.2rem; text-align: center; border-right: 1px solid rgba(255,255,255,0.05); padding: 0 0.4rem;">
+              <span class="stat-label" style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;">状态提示</span>
+              <span id="game-status" class="stat-value" style="font-size: 0.8rem; font-weight: 800; color: #8B5CF6; font-family: 'JetBrains Mono', monospace;">READY</span>
+            </div>
+            <div class="stat-box" style="display: flex; flex-direction: column; gap: 0.2rem; text-align: center; border-right: 1px solid rgba(255,255,255,0.05); padding: 0 0.4rem;">
+              <span class="stat-label" style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;">关卡用时</span>
+              <span class="stat-value" style="font-size: 0.95rem; font-weight: 800; color: #EC4899; font-family: 'JetBrains Mono', monospace;"><span id="game-timer">0.0</span>s</span>
+            </div>
+            <div class="stat-box" style="display: flex; flex-direction: column; gap: 0.2rem; text-align: center; padding: 0 0.4rem;">
+              <span class="stat-label" style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;">本关记录</span>
+              <span id="game-best-time" class="stat-value" style="font-size: 0.95rem; font-weight: 800; color: #F59E0B; font-family: 'JetBrains Mono', monospace;">--</span>
+            </div>
+          </div>
+          
+          <!-- Bezel Screen Container -->
+          <div class="arcade-bezel-screen" style="position: relative; width: 100%; border: 3px solid #1e1b4b; border-radius: 8px; overflow: hidden; background: #000; aspect-ratio: 2/1; display: flex; justify-content: center; align-items: center; box-shadow: inset 0 0 20px rgba(0,0,0,0.8), 0 0 10px rgba(139,92,246,0.15);">
+            <canvas id="arcade-canvas" width="800" height="400" style="display: block; width: 100%; height: 100%; image-rendering: pixelated;"></canvas>
+            
+            <!-- Dynamic Overlay Screen (Start/GameOver/Win) -->
+            <div class="arcade-screen-overlay" id="game-overlay-screen" style="position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(10,8,20,0.92); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 1.5rem; z-index: 10;">
+              <h2 id="game-overlay-title" style="color: #fff; font-size: 2.3rem; font-weight: 800; margin-bottom: 0.6rem; letter-spacing: 2px; text-shadow: 0 0 15px var(--accent); animation: pulse 2.5s infinite;">CYBER ASTRO-RUNNER</h2>
+              <p id="game-overlay-subtitle" style="color: var(--accent); font-size: 0.95rem; font-weight: 600; margin-bottom: 1.2rem;">按 [Enter] 或 点击此处 开始挑战关卡；Space 仅用于跳跃</p>
+              
+              <div class="game-instructions-box" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 0.8rem 1.2rem; border-radius: 8px; font-size: 0.76rem; color: var(--text-secondary); line-height: 1.4; text-align: left; max-width: 460px; width: 90%;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;"><span style="color: #fff;">左右移动:</span> <span><strong>A / D</strong> 或 <strong>&larr; / &rarr;</strong></span></div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;"><span style="color: #fff;">跳跃 / 二段跳:</span> <span><strong>Space</strong> 或 <strong>W</strong></span></div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;"><span style="color: #fff;">短距冲刺:</span> <span><strong>Shift</strong> 或 <strong>K</strong></span></div>
+                <div style="border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 0.4rem; margin-top: 0.4rem; color: var(--text-muted); font-size: 0.7rem; line-height: 1.3;">操作技巧：踩踏红色机器人的头顶可击败它们并获取反弹跳。绿色胶囊提供护盾，蓝色电池刷新冲刺，菱形信标会保存检查点。连续收集、踩怪与穿越信标会提高航线评分；收集齐目标水晶后触碰最右端绿色传送门即可进入下一关！</div>
+              </div>
+            </div>
+
+            <div class="game-pause-overlay" id="game-pause-screen" aria-hidden="true">
+              <div class="game-pause-panel" role="dialog" aria-modal="true" aria-labelledby="game-pause-title">
+                <span class="game-pause-kicker">MISSION HOLD</span>
+                <h2 id="game-pause-title">PAUSED</h2>
+                <p>计时器、敌人、平台和冷却全部冻结。按 <strong>P</strong> / <strong>Esc</strong> 继续，Space 仍只负责跳跃。</p>
+                <div class="game-pause-actions">
+                  <button type="button" id="game-pause-resume" class="game-pause-action game-pause-primary">
+                    <i data-lucide="play"></i>
+                    <span>继续任务</span>
+                  </button>
+                  <button type="button" id="game-pause-restart" class="game-pause-action">
+                    <i data-lucide="rotate-ccw"></i>
+                    <span>重开关卡</span>
+                  </button>
+                  <button type="button" id="game-pause-mute" class="game-pause-action">
+                    <i data-lucide="volume-2"></i>
+                    <span>静音 BGM</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Arcade Cabinet Control Panel -->
+          <div class="arcade-control-panel" style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; border-top: 2px solid rgba(139, 92, 246, 0.3); padding-top: 1rem; margin-top: 1.2rem; flex-wrap: wrap;">
+            
+            <!-- Selectors -->
+            <div style="display: flex; gap: 0.8rem; flex-wrap: wrap;">
+              <div style="display: flex; flex-direction: column; gap: 0.2rem;">
+                <label for="game-level-select" style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 600;"><i data-lucide="map" style="width:12px; height:12px; display:inline; vertical-align:middle;"></i> 选择挑战关卡</label>
+                <select id="game-level-select" style="background: #111; color: #fff; border: 1px solid var(--border-color); padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.8rem; cursor: pointer; outline: none; transition: border 0.2s;">
+                  <option value="0">第一关: 宇宙轨道 (Easy)</option>
+                </select>
+              </div>
+              
+              <div style="display: flex; flex-direction: column; gap: 0.2rem;">
+                <label for="game-music-select" style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 600;"><i data-lucide="music" style="width:12px; height:12px; display:inline; vertical-align:middle;"></i> 选择 8-bit BGM</label>
+                <select id="game-music-select" style="background: #111; color: #fff; border: 1px solid var(--border-color); padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.8rem; cursor: pointer; outline: none; transition: border 0.2s;">
+                  <option value="0">Track 1: 宇宙轨道 (轻快五声)</option>
+                  <option value="1">Track 2: 霓虹大都市 (赛博滑音)</option>
+                  <option value="2">Track 3: 重力核心 (硬核高速)</option>
+                  <option value="3">Track 4: 量子裂谷 (脉冲低音)</option>
+                  <option value="mute">🔇 静音播放</option>
+                </select>
+              </div>
+            </div>
+            
+            <!-- Joystick simulation -->
+            <div class="joystick-simulation" style="display: flex; align-items: center; gap: 0.6rem; background: rgba(255,255,255,0.02); padding: 0.4rem 0.8rem; border-radius: 20px; border: 1px solid rgba(255,255,255,0.05);">
+              <div style="width: 28px; height: 28px; background: #222; border-radius: 50%; display: flex; justify-content: center; align-items: center; border: 2px solid #555; position: relative;">
+                <div id="joystick-shaft" style="width: 12px; height: 12px; background: #EF4444; border-radius: 50%; box-shadow: 0 0 8px #EF4444; transition: transform 0.1s ease; transform: translate(0, 0);"></div>
+              </div>
+              <span style="font-size: 0.72rem; color: var(--text-secondary); font-family: monospace;">STICK CONTROL</span>
+            </div>
+            
+            <!-- Action buttons -->
+            <div class="runner-touch-pad" id="runner-touch-controls" aria-label="主线游戏触控控制器">
+              <span class="runner-gamepad-status" id="runner-gamepad-status" data-tone="idle">PAD 待机</span>
+              <button type="button" class="action-btn" id="game-restart-btn" style="height: 32px; font-size: 0.8rem; padding: 0 1rem; border-radius: 4px; border: 1px solid rgba(139,92,246,0.3); background: rgba(139,92,246,0.1); color: #fff; cursor: pointer; display: flex; align-items: center; gap: 0.3rem;">
+                <i data-lucide="rotate-ccw" style="width: 14px; height: 14px;"></i> 重新加载关卡
+              </button>
+              
+              <div class="runner-dpad" aria-label="移动方向">
+                <button type="button" id="btn-left-led" data-runner-control="left" aria-label="向左移动">◀</button>
+                <button type="button" id="btn-right-led" data-runner-control="right" aria-label="向右移动">▶</button>
+              </div>
+
+              <div class="runner-action-cluster">
+                <button type="button" id="btn-start-led" data-runner-control="start" aria-label="开始或继续">START</button>
+                <button type="button" id="btn-pause-led" data-runner-control="pause" aria-label="暂停或继续">PAUSE</button>
+                <button type="button" id="btn-jump-led" data-runner-control="jump" aria-label="跳跃">JUMP</button>
+                <button type="button" id="btn-dash-led" data-runner-control="dash" aria-label="冲刺">DASH</button>
+                <button type="button" id="btn-bgm-led" data-runner-control="bgm" aria-label="切换音乐">BGM</button>
+              </div>
+            </div>
+            
+          </div>
+          
+        </div>
+
+        <div class="arcade-library glass-card">
+          <div class="arcade-library-header">
+            <div>
+              <span class="quick-card-kicker"><i data-lucide="sparkles"></i> PREMIUM ARCADE</span>
+              <h2>高级街机生涯实验室</h2>
+              <p>主线跑酷 + 六个高级模式：生存构筑、Boss 弹幕、霓虹漂移、潜行劫取、连锁解谜、回合战术。脚本接管后会载入奖牌路线、每日契约、挑战联赛、战术芯片和个人名人堂。</p>
+            </div>
+            <div class="mini-game-scoreboard">
+              <span>街机套件</span>
+              <strong>Atherix Premium Arcade Suite</strong>
+            </div>
+          </div>
+
+          <div class="mini-game-tabs arcade-shell-tabs" role="list" aria-label="高级街机模式预览">
+            <span class="mini-game-tab active">主线跑酷</span>
+            <span class="mini-game-tab">星核幸存者</span>
+            <span class="mini-game-tab">棱镜 Boss</span>
+            <span class="mini-game-tab">霓虹漂移</span>
+            <span class="mini-game-tab">赛博潜入</span>
+            <span class="mini-game-tab">连锁炼金</span>
+            <span class="mini-game-tab">裂隙战术</span>
+          </div>
+
+          <div class="mini-game-stage arcade-shell-stage" aria-label="高级街机首屏预览">
+            <div class="arcade-shell-hero">
+              <div>
+                <span>ARCADE CAREER READY</span>
+                <h3>7 条玩法线合并成一个长期街机档案</h3>
+                <p>首次绘制时先展示完整套件；加载完成后会切换为可玩的 Canvas 街机、触控/键盘/手柄输入、赛季进度、赛后教练和跨模式联赛。</p>
+              </div>
+              <div class="arcade-shell-metrics" aria-label="街机系统概览">
+                <span><strong>7</strong>玩法线</span>
+                <span><strong>26</strong>成就</span>
+                <span><strong>3</strong>联赛阶段</span>
+                <span><strong>4</strong>战术芯片</span>
+              </div>
+            </div>
+            <div class="arcade-shell-mode-grid" aria-label="高级街机模式">
+              <article class="arcade-shell-mode-card">
+                <span>01</span>
+                <strong>Cyber Astro-Runner</strong>
+                <p>8 关主线平台远征，跳跃、冲刺、护盾和关卡目标全部结算进生涯档案。</p>
+              </article>
+              <article class="arcade-shell-mode-card">
+                <span>02</span>
+                <strong>Starcore Survivor</strong>
+                <p>自动射击、生存构筑、星核升级、精英赏金和 90 秒深空事件。</p>
+              </article>
+              <article class="arcade-shell-mode-card">
+                <span>03</span>
+                <strong>Prism Boss Rush</strong>
+                <p>三阶段 Boss 弹幕、弱点破招、闪避窗口和反击倍率。</p>
+              </article>
+              <article class="arcade-shell-mode-card">
+                <span>04</span>
+                <strong>Neon Drift</strong>
+                <p>检查点漂移、量子加速、赞助合约、赛道热度和无人机追逐。</p>
+              </article>
+              <article class="arcade-shell-mode-card">
+                <span>05</span>
+                <strong>Cyber Heist</strong>
+                <p>潜入金库、隐身冷却、巡逻视野、终端破解和撤离路线。</p>
+              </article>
+              <article class="arcade-shell-mode-card">
+                <span>06</span>
+                <strong>Alchemy Chain</strong>
+                <p>大连锁消除、特殊核心、倍率爆发和限步高分挑战。</p>
+              </article>
+              <article class="arcade-shell-mode-card">
+                <span>07</span>
+                <strong>Rift Tactics</strong>
+                <p>行动点、敌人 AI、核心撤离、动量路线和回合战术决策。</p>
+              </article>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ========================================== -->
+  <!-- DIALOG MODALS OVERLAYS                    -->
+  <!-- ========================================== -->
+
+  <!-- Project Details Modal (Popup Card) -->
+  <div class="project-modal" id="project-modal" role="dialog" aria-modal="true" aria-labelledby="modal-project-title" aria-hidden="true">
+    <div class="glass-card modal-content">
+      <button type="button" class="modal-close" id="modal-close-btn" aria-label="关闭项目详情">
+        <i data-lucide="x"></i>
+      </button>
+      <div class="post-meta" style="margin-bottom: 0.5rem;">
+        <span class="post-tag" id="modal-project-tag">前端开发</span>
+      </div>
+      <h2 class="modal-title" id="modal-project-title">项目名称</h2>
+      <div class="modal-banner">
+        <img id="modal-project-img" src="" alt="Project Banner" loading="lazy" decoding="async">
+      </div>
+      <div class="modal-text">
+        <div class="modal-section">
+          <h4>项目简介</h4>
+          <p id="modal-project-desc">详细的项目简介...</p>
+        </div>
+        <div class="modal-section">
+          <h4>痛点与核心挑战</h4>
+          <p id="modal-project-pain">核心挑战说明...</p>
+        </div>
+        <div class="modal-section">
+          <h4>解决方案 & 技术细节</h4>
+          <p id="modal-project-solution">解决方案细节...</p>
+        </div>
+      </div>
+      <div class="project-actions" style="margin-top: 1.5rem;">
+        <a href="#" target="_blank" class="project-btn" id="modal-github-link"><i data-lucide="code-2"></i> 代码仓库</a>
+        <a href="#" target="_blank" class="project-btn project-btn-primary" id="modal-live-link"><i data-lucide="external-link"></i> 在线演示</a>
       </div>
     </div>
-    <main id="shell">
-      <section id="game-wrap" tabindex="-1" aria-label="流明漂航游戏画布"></section>
-      <div id="objective-strip">
-        <strong id="objective-title">目标：修复 4 座信标</strong>
-        <span id="objective-detail">收集金色流明补充电量，避开紫色风暴和粉色虚空碎片。</span>
+  </div>
+
+  <!-- Admin Login Modal -->
+  <div class="project-modal" id="admin-login-modal" role="dialog" aria-modal="true" aria-labelledby="admin-login-title" aria-hidden="true">
+    <div class="glass-card modal-content" style="max-width: 400px;">
+      <button type="button" class="modal-close" id="admin-login-close" aria-label="关闭管理员登录">
+        <i data-lucide="x"></i>
+      </button>
+      <h2 class="modal-title" id="admin-login-title" style="text-align: center; margin-bottom: 1.5rem;">管理员登录</h2>
+      <form id="admin-login-form" style="display: flex; flex-direction: column; gap: 1.2rem;">
+        <div class="form-group">
+          <label for="admin-username">用户名</label>
+          <input type="text" id="admin-username" class="form-input" required autocomplete="username" placeholder="输入管理员账号" style="padding: 0.6rem 0.8rem;">
+        </div>
+        <div class="form-group">
+          <label for="admin-password">密码</label>
+          <input type="password" id="admin-password" class="form-input" required autocomplete="current-password" placeholder="输入登录密码" style="padding: 0.6rem 0.8rem;">
+        </div>
+        <div id="login-error-msg" class="json-error" style="text-align: center; font-size: 0.8rem; color: var(--danger); display: none;"></div>
+        <button type="submit" class="action-btn action-btn-primary" style="justify-content: center; height: 38px;">
+          <i data-lucide="log-in"></i> 安全登录
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Blog Write/Edit Modal -->
+  <div class="project-modal" id="blog-edit-modal" role="dialog" aria-modal="true" aria-labelledby="blog-editor-modal-title" aria-hidden="true">
+    <div class="glass-card modal-content" style="max-width: 800px; max-height: 90vh;">
+      <button type="button" class="modal-close" id="blog-edit-close" aria-label="关闭博客编辑器">
+        <i data-lucide="x"></i>
+      </button>
+      <h2 class="modal-title" id="blog-editor-modal-title">编辑博客文章</h2>
+      <form id="blog-edit-form" style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem;">
+        <input type="hidden" id="blog-id-input">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="blog-title-input">文章标题 *</label>
+            <input type="text" id="blog-title-input" class="form-input" required placeholder="文章标题...">
+          </div>
+          <div class="form-group">
+            <label for="blog-tag-input">分类标签</label>
+            <input type="text" id="blog-tag-input" class="form-input" placeholder="前端开发 / 黑客技术 / UI/UX设计">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="blog-readtime-input">阅读时间 (如：6 分钟阅读)</label>
+            <input type="text" id="blog-readtime-input" class="form-input" placeholder="自动根据字数生成或自定义">
+          </div>
+          <div class="form-group" style="flex-direction: row; align-items: center; gap: 0.5rem; margin-top: 1.5rem;">
+            <input type="checkbox" id="blog-pinned-input" style="width: 18px; height: 18px; cursor: pointer;">
+            <label for="blog-pinned-input" style="cursor: pointer; user-select: none; font-size: 0.85rem;">将此文章置顶推荐</label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="blog-excerpt-input">文章简介摘要 *</label>
+          <input type="text" id="blog-excerpt-input" class="form-input" required placeholder="简述文章要点，将展示在列表页中...">
+        </div>
+        <div class="form-group">
+          <label for="blog-content-input">文章正文内容 (Markdown格式) *</label>
+          <textarea id="blog-content-input" class="form-input form-textarea" style="min-height: 260px; font-family: 'JetBrains Mono', monospace;" required placeholder="编写正文内容..."></textarea>
+        </div>
+        <button type="submit" class="action-btn action-btn-primary" style="justify-content: center; align-self: flex-end; padding: 0.8rem 2rem;">
+          <i data-lucide="save"></i> 发布保存
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Project Edit/Add Modal -->
+  <div class="project-modal" id="project-edit-modal" role="dialog" aria-modal="true" aria-labelledby="project-editor-modal-title" aria-hidden="true">
+    <div class="glass-card modal-content" style="max-width: 650px;">
+      <button type="button" class="modal-close" id="project-edit-close" aria-label="关闭项目编辑器">
+        <i data-lucide="x"></i>
+      </button>
+      <h2 class="modal-title" id="project-editor-modal-title">管理项目展示卡片</h2>
+      <form id="project-edit-form" style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem;">
+        <input type="hidden" id="proj-id-input">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="proj-title-input">项目名称 *</label>
+            <input type="text" id="proj-title-input" class="form-input" required placeholder="项目名称...">
+          </div>
+          <div class="form-group">
+            <label for="proj-tag-input">分类名称 *</label>
+            <input type="text" id="proj-tag-input" class="form-input" required placeholder="如：前端开发 / UI/UX设计 / 黑客技术">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="proj-tags-input">技术栈标签 (英文逗号分隔)</label>
+            <input type="text" id="proj-tags-input" class="form-input" placeholder="Vanilla JS, Express, SQLite">
+          </div>
+          <div class="form-group">
+            <label for="proj-img-input">封面图网址 (选填)</label>
+            <input type="text" id="proj-img-input" class="form-input" placeholder="可使用 /assets/...、/uploads/... 或 https://...">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="proj-desc-input">简短摘要介绍 *</label>
+          <input type="text" id="proj-desc-input" class="form-input" required placeholder="一句话对项目的描述...">
+        </div>
+        <div class="form-group">
+          <label for="proj-pain-input">产品痛点与开发背景</label>
+          <textarea id="proj-pain-input" class="form-input form-textarea" style="min-height: 60px;" placeholder="描述此项目解决的难点或出发点..."></textarea>
+        </div>
+        <div class="form-group">
+          <label for="proj-solution-input">核心解决方案 & 技术亮点</label>
+          <textarea id="proj-solution-input" class="form-input form-textarea" style="min-height: 60px;" placeholder="写明技术实现方案与最终结果..."></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="proj-github-input">GitHub 链接</label>
+            <input type="url" id="proj-github-input" class="form-input" placeholder="https://github.com/... (选填)">
+          </div>
+          <div class="form-group">
+            <label for="proj-live-input">Demo 在线预览</label>
+            <input type="text" id="proj-live-input" class="form-input" placeholder="https://... 或 # (选填)">
+          </div>
+        </div>
+        <button type="submit" class="action-btn action-btn-primary" style="justify-content: center; align-self: flex-end; padding: 0.8rem 2rem;">
+          <i data-lucide="save"></i> 提交保存
+        </button>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- Command Palette -->
+  <div class="command-palette" id="command-palette" aria-hidden="true">
+    <div class="command-panel" role="dialog" aria-modal="true" aria-labelledby="command-palette-title">
+      <div class="command-search-row">
+        <i data-lucide="search"></i>
+        <input type="search" id="command-search-input" autocomplete="off" placeholder="搜索文章、项目、工具、游戏..." aria-label="搜索站点内容">
+        <button type="button" class="command-close-btn" id="command-palette-close" aria-label="关闭">
+          <i data-lucide="x"></i>
+        </button>
       </div>
-      <div id="wave-intro" hidden aria-live="polite">
-        <strong id="wave-intro-title">第 1/5 波 · 北环补给</strong>
-        <span id="wave-intro-detail">稳定信号：外环路线清楚，先建立补给节奏。</span>
-        <em id="wave-intro-contract">战术合约：流明航线 · 本波回收 4 个流明</em>
+      <div class="command-meta-row">
+        <h2 id="command-palette-title">Atherix Command Center</h2>
+        <span id="command-result-count">0 项结果</span>
       </div>
-      <div id="mission-toast" hidden aria-live="polite" data-tone="primary">
-        <strong id="mission-toast-title">路线更新</strong>
-        <span id="mission-toast-detail">合约完成后会提示下一步主目标。</span>
-      </div>
-      <div id="combat-log" hidden aria-live="polite" data-tone="primary">
-        <strong id="combat-log-title">战斗记录</strong>
-        <span id="combat-log-detail">拾取、受击和技能反馈会显示在这里。</span>
-        <ol id="combat-log-history" aria-label="最近战斗记录"></ol>
-      </div>
-      <aside id="hud" aria-live="polite">
-        <div class="brand">
-          <span class="mark"></span>
-          <div>
-            <strong>流明漂航</strong>
-            <span>五波救援街机</span>
-          </div>
-        </div>
-        <div id="record-strip">
-          <span>最佳分数 <b id="record-score">0</b></span>
-          <span>最远波次 <b id="record-wave">1/5</b></span>
-          <span>最佳连锁 <b id="record-combo">1.0x</b></span>
-          <span>最佳合约 <b id="record-contracts">0/5</b></span>
-        </div>
-        <div class="meter-row">
-          <label>电量</label>
-          <div class="meter"><i id="charge-fill"></i></div>
-          <b id="charge-value">100</b>
-        </div>
-        <div class="meter-row">
-          <label>机体</label>
-          <div class="meter hull"><i id="hull-fill"></i></div>
-          <b id="hull-value">100</b>
-        </div>
-        <dl class="stats">
-          <div><dt>信标</dt><dd id="relay-value">0/4</dd></div>
-          <div><dt>流明</dt><dd id="lumen-value">0</dd></div>
-          <div><dt>波次</dt><dd id="wave-value">1</dd></div>
-          <div><dt>分数</dt><dd id="score-value">0</dd></div>
-          <div><dt>连锁</dt><dd id="combo-value">1.0x</dd></div>
-          <div><dt>最佳</dt><dd id="best-combo-value">1.0x</dd></div>
-        </dl>
-        <div id="ability-bar">
-          <span id="boost-pill">推进就绪</span>
-          <span id="pulse-pill">脉冲就绪</span>
-        </div>
-        <div id="combo-timer" data-state="idle" aria-label="连锁窗口">
-          <div class="combo-head">
-            <strong>连锁窗口</strong>
-            <span id="combo-timer-value">待建立</span>
-          </div>
-          <div class="combo-meter"><i id="combo-timer-fill"></i></div>
-        </div>
-        <div id="signal-panel" hidden data-grade="B" aria-label="实时评级">
-          <div class="signal-head">
-            <strong>实时评级 <b id="signal-grade">B</b></strong>
-            <span id="signal-points">0/100</span>
-          </div>
-          <div class="signal-meter"><i id="signal-fill"></i></div>
-          <em id="signal-detail">开始后会显示当前评级压力。</em>
-        </div>
-        <div id="loadout-strip" hidden aria-label="当前改装等级"></div>
-        <div id="wave-event" hidden>
-          <strong id="wave-event-title">本波事件：稳定信号</strong>
-          <span id="wave-event-detail">基础战场，没有额外异常。</span>
-        </div>
-        <div id="contract-panel" hidden data-status="active">
-          <strong id="contract-title">战术合约：流明航线</strong>
-          <span id="contract-requirement">本波回收 4 个流明</span>
-          <div class="contract-progress">
-            <b id="contract-progress">0/4 流明</b>
-            <em id="contract-reward">奖励 360 分</em>
-          </div>
-        </div>
-        <div id="coach-panel" hidden data-urgent="false">
-          <div class="coach-head">
-            <strong class="coach-title-stack">
-              <span class="coach-kicker">路线教练</span>
-              <span id="coach-title">开局读图缓冲</span>
-            </strong>
-            <b id="coach-step">1/4</b>
-          </div>
-          <div id="coach-rail" role="list" aria-label="路线教练四步进度"></div>
-          <span id="coach-detail">先回收金色流明，再靠近蓝色信标维修。</span>
-          <em id="coach-progress">准备开始</em>
-        </div>
-        <div id="pilot-tip" hidden>
-          <strong id="pilot-tip-title">导航提示</strong>
-          <span id="pilot-tip-detail">前往最近信标，靠近后按住 E / 修复键。</span>
-        </div>
-        <p id="mission-text">修复全部信标，收集流明，最后从北侧光门撤离。</p>
-        <button id="help-button" type="button">玩法说明 / 暂停</button>
-      </aside>
-      <div id="radar-panel" hidden aria-label="战术雷达">
-        <div class="radar-head">
-          <strong>战术雷达</strong>
-          <span id="radar-summary">准备读图</span>
-        </div>
-        <svg id="radar-map" viewBox="0 0 1000 700" role="img" aria-label="战场目标与危险位置"></svg>
-        <div id="radar-legend">
-          <span data-kind="relay">信标</span>
-          <span data-kind="lumen">流明</span>
-          <span data-kind="hazard">碎片</span>
-          <span data-kind="storm">风暴</span>
-          <span data-kind="gate">光门</span>
-          <span data-kind="guide">导航</span>
-        </div>
-      </div>
-      <div id="overlay" class="show">
-        <div class="panel" tabindex="-1">
-          <span class="eyebrow">中文二维太空救援轻度肉鸽</span>
-          <h1>流明漂航</h1>
-          <p>
-            你是一台维修无人机。城市光网正在坍缩：修复蓝色信标、收集金色流明、
-            避开紫色风暴和粉色碎片，在电量耗尽前冲进北侧光门。
-          </p>
-          <div id="quick-brief" aria-label="首屏快速目标">
-            <article data-kind="lumen">
-              <b>先移动补给</b>
-              <span>方向键/摇杆吃流明</span>
-            </article>
-            <article data-kind="relay">
-              <b>再维修</b>
-              <span>按住 E / 修复键</span>
-            </article>
-            <article data-kind="danger">
-              <b>躲危险</b>
-              <span>避开风暴和碎片</span>
-            </article>
-            <article data-kind="gate">
-              <b>撤离升级</b>
-              <span>进北侧光门</span>
-            </article>
-          </div>
-          <div id="tactical-scan" hidden aria-label="暂停战术扫描">
-            <div class="tactical-scan-head">
-              <strong>战术扫描</strong>
-              <span id="tactical-scan-summary">准备扫描</span>
-            </div>
-            <svg id="tactical-scan-map" viewBox="0 0 1000 700" role="img" aria-label="暂停时的战场目标与危险位置"></svg>
-            <div class="tactical-scan-legend">
-              <span data-kind="relay">信标</span>
-              <span data-kind="lumen">流明</span>
-              <span data-kind="hazard">碎片</span>
-              <span data-kind="storm">风暴</span>
-              <span data-kind="gate">光门</span>
-              <span data-kind="guide">导航</span>
-            </div>
-          </div>
-          <div id="menu-options">
-            <div id="difficulty-picker" role="group" aria-label="选择难度">
-              <button type="button" data-difficulty="training">练习</button>
-              <button type="button" data-difficulty="standard">标准</button>
-              <button type="button" data-difficulty="hardcore">硬核</button>
-            </div>
-            <button id="audio-toggle" type="button" aria-pressed="true">音效 开</button>
-            <button id="daily-route-button" type="button">今日挑战</button>
-          </div>
-          <p id="difficulty-detail">标准模式：推荐第一次游玩，完整体验风险、连锁和升级。</p>
-          <p id="daily-detail">今日挑战会使用当天固定救援代号。</p>
-          <div id="control-primer" aria-label="首屏操作条">
-            <span><b>移动</b>方向键 / 字母键 / 左摇杆</span>
-            <span><b>修复</b>按住 E / 修复键</span>
-            <span><b>脱险</b>空格推进 / Q 脉冲</span>
-          </div>
-          <div id="loop-primer" aria-label="继续游玩目标">
-            <span>五波救援</span>
-            <span>过波选升级</span>
-            <span>今日挑战与路线复盘</span>
-          </div>
-          <div id="launch-commit" aria-label="出发任务板">
-            <strong>出发后第一步</strong>
-            <span>安全读图缓冲中，先沿虚线完成 4 个金色流明合约，再按导航靠近蓝色信标维修。</span>
-          </div>
-          <button id="start-button" type="button">开始标准救援</button>
-          <button id="resume-button" type="button" hidden>继续游戏</button>
-          <div id="game-dossier" aria-label="任务档案">
-            <article>
-              <strong>玩法类型</strong>
-              <span>单局五波的漂移维修街机</span>
-            </article>
-            <article>
-              <strong>胜利条件</strong>
-              <span>修好 4 座信标后进北侧光门</span>
-            </article>
-            <article>
-              <strong>失败条件</strong>
-              <span>电量归零或机体被碎片击毁</span>
-            </article>
-            <article>
-              <strong>成长循环</strong>
-              <span>过波选升级，代号路线可复盘</span>
-            </article>
-          </div>
-          <div id="launch-brief" aria-label="出航简报">
-            <svg id="launch-map" viewBox="0 0 360 210" role="img" aria-label="首局路线示意图">
-              <defs>
-                <linearGradient id="launch-route-gradient" x1="0" x2="1" y1="0" y2="1">
-                  <stop offset="0" stop-color="#67f4ff" />
-                  <stop offset="1" stop-color="#ffe27a" />
-                </linearGradient>
-              </defs>
-              <rect x="8" y="8" width="344" height="194" rx="14" class="launch-map-bg" />
-              <path d="M60 164 C96 106 126 142 156 92 S234 58 292 38" class="launch-route-line" />
-              <circle cx="60" cy="164" r="13" class="launch-player" />
-              <rect x="114" y="124" width="17" height="17" rx="4" class="launch-lumen" />
-              <rect x="149" y="84" width="17" height="17" rx="4" class="launch-lumen" />
-              <circle cx="220" cy="66" r="22" class="launch-relay" />
-              <circle cx="286" cy="40" r="18" class="launch-gate" />
-              <circle cx="248" cy="136" r="38" class="launch-storm" />
-              <circle cx="95" cy="74" r="16" class="launch-hazard" />
-              <text x="60" y="188">你</text>
-              <text x="116" y="113">流明</text>
-              <text x="202" y="48">信标</text>
-              <text x="270" y="24">光门</text>
-              <text x="222" y="170">避开风暴</text>
-            </svg>
-            <div class="launch-orders">
-              <strong>首局作战令</strong>
-              <ol>
-                <li><b>安全读图</b><span>开局不耗电，先看路线和合约。</span></li>
-                <li><b>补给起手</b><span>先完成 4 个金色流明合约，再进维修圈。</span></li>
-                <li><b>按住维修</b><span>蓝色信标旁按住 E / 修复键。</span></li>
-                <li><b>北侧撤离</b><span>4 座信标亮起后冲进光门选升级。</span></li>
-              </ol>
-            </div>
-          </div>
-          <div id="first-minute-route" aria-label="第一分钟路线">
-            <article>
-              <b>1</b>
-              <strong>读图补电</strong>
-              <span>开局安全缓冲中，先沿虚线回收 4 个金色流明。</span>
-            </article>
-            <article>
-              <b>2</b>
-              <strong>贴近维修</strong>
-              <span>靠近蓝色信标按住 E / 修复键；电量低就先撤出来补给。</span>
-            </article>
-            <article>
-              <b>3</b>
-              <strong>保命续分</strong>
-              <span>Space / 推进键穿出风暴，Q / 脉冲键把贴脸碎片推开。</span>
-            </article>
-            <article>
-              <b>4</b>
-              <strong>撤离升级</strong>
-              <span>4 座信标全亮后，从北侧光门离开并选择升级。</span>
-            </article>
-          </div>
-          <div id="mission-brief" aria-label="核心循环">
-            <strong>核心循环：补流明 → 修信标 → 撤离升级</strong>
-            <span>开局先捡金色流明补电，靠近蓝色信标按住 E / 修复键；全部信标亮起后，从北侧光门撤离并选择升级。想冲高评级，就完成战术合约、少受击、保留电量和连锁。</span>
-          </div>
-          <div id="field-guide" aria-label="战场图例">
-            <article data-kind="relay">
-              <i></i>
-              <strong>蓝色信标</strong>
-              <span>靠近后按住 E / 修复键</span>
-            </article>
-            <article data-kind="lumen">
-              <i></i>
-              <strong>金色流明</strong>
-              <span>补电并提高连锁</span>
-            </article>
-            <article data-kind="hazard">
-              <i></i>
-              <strong>粉色碎片</strong>
-              <span>碰撞会掉机体和连锁</span>
-            </article>
-            <article data-kind="storm">
-              <i></i>
-              <strong>紫色风暴</strong>
-              <span>停留会快速耗电</span>
-            </article>
-          </div>
-          <div id="next-run-panel" aria-label="下一局目标">
-            <div class="next-run-head">
-              <strong id="next-run-title">下一局目标</strong>
-              <span id="next-run-focus">先补流明，再修信标，最后撤离升级。</span>
-            </div>
-            <div id="next-run-goals"></div>
-          </div>
-          <div id="run-recap" hidden aria-live="polite">
-            <div id="recap-rating" data-grade="B" aria-label="本局评级">
-              <strong id="recap-rating-grade">B</strong>
-              <span id="recap-rating-name">稳定完成</span>
-              <em id="recap-rating-detail">0/100 · 完成救援后显示表现评价。</em>
-            </div>
-            <div id="contract-recap" hidden data-status="active">
-              <strong id="contract-recap-title">战术合约</strong>
-              <span id="contract-recap-detail">完成本波副目标会显示在这里。</span>
-            </div>
-            <div id="recap-metrics"></div>
-            <div id="recap-action-plan" aria-label="下一局作战计划"></div>
-            <div id="achievement-unlocks" hidden></div>
-            <p id="recap-advice"></p>
-          </div>
-          <div id="session-tools" hidden>
-            <button id="copy-route-button" type="button" hidden>复制路线链接</button>
-            <button id="restart-route-button" type="button" hidden>重开当前代号</button>
-            <button id="motion-toggle" type="button" aria-pressed="false">精简动效 关</button>
-            <button id="label-toggle" type="button" aria-pressed="false">大字标签 关</button>
-            <button id="reset-save-button" type="button">清空本地存档</button>
-            <span id="session-feedback">本地设置</span>
-          </div>
-          <div id="achievement-strip" aria-label="成就与挑战"></div>
-          <div id="upgrade-choices" hidden></div>
-          <div id="run-history" aria-label="最近航行日志"></div>
-          <div id="how-to-play">
-            <article>
-              <strong>第一步：补流明</strong>
-              <span>首波先回收 4 个金色流明，补电并完成合约。</span>
-            </article>
-            <article>
-              <strong>第二步：修信标</strong>
-              <span>靠近蓝色信标按住 E；修一半离开会慢慢掉进度。</span>
-            </article>
-            <article>
-              <strong>第三步：躲危险</strong>
-              <span>Space / 推进键冲出危险，Q / 脉冲键推开粉色碎片；不要站在紫色风暴里。</span>
-            </article>
-            <article>
-              <strong>第四步：撤离升级</strong>
-              <span>信标全修好后进北侧光门，过波后选择一项升级。</span>
-            </article>
-          </div>
-          <div class="keys">
-            <span>WASD / 方向键 移动</span>
-            <span>Space / 推进键</span>
-            <span>E / 修复键</span>
-            <span>Q / 脉冲键</span>
-            <span>H 暂停说明</span>
-          </div>
-        </div>
-      </div>
-      <div id="touch-controls" aria-label="触控操作">
-        <div id="touch-stick" aria-hidden="true">
-          <span></span>
-        </div>
-        <div class="touch-actions">
-          <button type="button" data-touch-action="repair" aria-label="按住修复">修复</button>
-          <button type="button" data-touch-action="boost" aria-label="推进">推进</button>
-          <button type="button" data-touch-action="pulse" aria-label="释放脉冲">脉冲</button>
-        </div>
-      </div>
-      <button id="mobile-pause-button" type="button" aria-label="暂停说明">暂停</button>
-    </main>
-    <script type="module">
-      const bootStatus = document.querySelector("#boot-status");
-      const bootTitle = document.querySelector("#boot-status-title");
-      const bootDetail = document.querySelector("#boot-status-detail");
-      const markBootError = (error) => {
-        console.error(error);
-        if (bootStatus && bootTitle && bootDetail) {
-          bootStatus.dataset.state = "error";
-          bootTitle.textContent = "加载失败";
-          bootDetail.textContent = "游戏资源没有成功启动。请刷新页面；如果仍失败，稍后再打开 GitHub Pages。";
-        }
-      };
-      const isPagesBuild = location.hostname.endsWith("github.io");
-      if (isPagesBuild) {
-        const stylesheet = document.createElement("link");
-        stylesheet.rel = "stylesheet";
-        stylesheet.href = "/assets/main.css";
-        document.head.append(stylesheet);
-        const productionEntry = "/assets/main.js";
-        import(/* @vite-ignore */ productionEntry).catch(markBootError);
-      } else {
-        import("/src/main.ts").catch(markBootError);
-      }
-    </script>
-  </body>
+      <div class="command-results" id="command-results" role="listbox" aria-label="全站搜索结果"></div>
+    </div>
+  </div>
+
+  <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="false"></div>
+
+  <!-- Main JavaScript File -->
+  <script src="/app.js?v=20260608-boss-shield-v1"></script>
+</body>
 </html>

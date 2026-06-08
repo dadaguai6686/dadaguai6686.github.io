@@ -1,0 +1,17 @@
+services:
+  blog-space:
+    build: .
+    container_name: atherix-digital-space
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount SQLite DB and uploads folder to persist user posts, projects, and uploaded images
+      - ./data:/usr/src/app/data
+      - ./uploads:/usr/src/app/uploads
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DB_PATH=/usr/src/app/data/blog.db
