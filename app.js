@@ -7683,7 +7683,7 @@ function init() {
     }
 
     function premiumRealtimeState() {
-      if (premiumActive === 'survivor') return { running: survivor.running, paused: survivor.paused, realtime: true };
+      if (premiumActive === 'survivor') return { running: survivor.running, paused: survivor.paused, realtime: true, draft: survivor.draftOpen };
       if (premiumActive === 'boss') return { running: bossMode.running, paused: bossMode.paused, realtime: true };
       if (premiumActive === 'drift') return { running: drift.running, paused: drift.paused, realtime: true };
       return { running: false, paused: false, realtime: false };
@@ -7699,9 +7699,10 @@ function init() {
         startBtn.setAttribute('aria-label', `${state.running ? '重开' : '开始'} ${activeLabel}`);
       }
       if (pauseBtn) {
-        pauseBtn.textContent = state.paused ? '继续' : '暂停';
-        pauseBtn.disabled = !state.realtime || !state.running;
-        pauseBtn.setAttribute('aria-label', `${state.paused ? '继续' : '暂停'} ${activeLabel}`);
+        const pauseLabel = state.draft ? '选择中' : state.paused ? '继续' : '暂停';
+        pauseBtn.textContent = pauseLabel;
+        pauseBtn.disabled = state.draft || !state.realtime || !state.running;
+        pauseBtn.setAttribute('aria-label', `${state.draft ? '升级选择中' : pauseLabel} ${activeLabel}`);
       }
       updatePremiumInputReadout();
     }
@@ -7718,20 +7719,20 @@ function init() {
       const startEl = document.getElementById('premium-input-start');
       const stateEl = document.getElementById('premium-input-state');
       const stateText = state.realtime
-        ? state.paused ? '暂停' : state.running ? '运行' : '待机'
+        ? state.draft ? '升级' : state.paused ? '暂停' : state.running ? '运行' : '待机'
         : ['heist', 'chain', 'tactics'].includes(premiumActive) ? '策略' : '待机';
       readout.dataset.mode = premiumActive;
       readout.dataset.state = state.realtime
-        ? state.paused ? 'paused' : state.running ? 'running' : 'idle'
+        ? state.draft ? 'draft' : state.paused ? 'paused' : state.running ? 'running' : 'idle'
         : 'turn';
       if (modeEl) modeEl.textContent = premiumTabLabels[premiumActive] || titles[premiumActive] || premiumActive;
       if (moveEl) moveEl.textContent = config.move || '方向';
-      if (actionEl) actionEl.textContent = config.action || 'ACT';
+      if (actionEl) actionEl.textContent = state.draft ? '选升级' : config.action || 'ACT';
       if (toolEl) {
         toolEl.textContent = config.tool || '--';
         toolEl.closest('span')?.classList.toggle('is-disabled', !premiumControlAvailable('tool'));
       }
-      if (startEl) startEl.textContent = state.running ? 'Enter 重开' : 'Enter 开始';
+      if (startEl) startEl.textContent = state.draft ? '1/2/3 选择' : state.running ? 'Enter 重开' : 'Enter 开始';
       if (stateEl) stateEl.textContent = stateText;
     }
 
@@ -8918,6 +8919,8 @@ function init() {
       survivorBurst(p.x, p.y, '#34D399', 42);
       renderSurvivorDraft();
       setSurvivorUi();
+      updatePremiumMetaControls();
+      updatePremiumTouchLabels();
     }
 
     function selectSurvivorUpgrade(id) {
@@ -8935,6 +8938,8 @@ function init() {
       survivor.last = performance.now();
       survivorBurst(p.x, p.y, '#BAE6FD', 34);
       setSurvivorUi();
+      updatePremiumMetaControls();
+      updatePremiumTouchLabels();
       drawSurvivor();
       focusStage();
       return true;

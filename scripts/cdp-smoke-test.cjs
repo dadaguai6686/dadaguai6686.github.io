@@ -2474,7 +2474,14 @@ async function run() {
       beforeScore,
       running: !!window.__atherixDebug?.premium?.survivorRunning?.(),
       paused: !!window.__atherixDebug?.premium?.survivorPaused?.(),
-      title: document.querySelector('#premium-survivor-draft-title')?.textContent || ''
+      title: document.querySelector('#premium-survivor-draft-title')?.textContent || '',
+      readoutState: document.querySelector('#premium-input-readout')?.dataset.state || '',
+      readoutStateText: document.querySelector('#premium-input-state')?.textContent || '',
+      readoutAction: document.querySelector('#premium-input-action')?.textContent || '',
+      readoutStart: document.querySelector('#premium-input-start')?.textContent || '',
+      touchPause: document.querySelector('#premium-touch-pause')?.textContent || '',
+      touchPauseDisabled: !!document.querySelector('#premium-touch-pause')?.disabled,
+      touchPauseLabel: document.querySelector('#premium-touch-pause')?.getAttribute('aria-label') || ''
     };
   })()`);
   await wait(320);
@@ -2494,7 +2501,14 @@ async function run() {
     build: window.__atherixDebug?.premium?.survivorBuild?.() || '',
     buildText: document.querySelector('#premium-survivor-build')?.textContent || '',
     level: document.querySelector('#premium-survivor-level')?.textContent || '',
-    score: Number(window.__atherixDebug?.premium?.survivorScore?.() || 0)
+    score: Number(window.__atherixDebug?.premium?.survivorScore?.() || 0),
+    readoutState: document.querySelector('#premium-input-readout')?.dataset.state || '',
+    readoutStateText: document.querySelector('#premium-input-state')?.textContent || '',
+    readoutAction: document.querySelector('#premium-input-action')?.textContent || '',
+    readoutStart: document.querySelector('#premium-input-start')?.textContent || '',
+    touchPause: document.querySelector('#premium-touch-pause')?.textContent || '',
+    touchPauseDisabled: !!document.querySelector('#premium-touch-pause')?.disabled,
+    touchPauseLabel: document.querySelector('#premium-touch-pause')?.getAttribute('aria-label') || ''
   }))()`);
   const survivorOverdriveState = await evaluate(`(() => window.__atherixDebug?.premium?.forceSurvivorOverdrive?.() || {})()`);
   const survivorAnomalyState = await evaluate(`(() => {
@@ -2913,7 +2927,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v52-quality') && swText.includes('/style.css?v=20260608-quality-v7') && swText.includes('/app.js?v=20260608-quality-v11'),
+      swHasQualityVersion: swText.includes('atherix-static-v53-quality') && swText.includes('/style.css?v=20260608-quality-v7') && swText.includes('/app.js?v=20260608-quality-v12'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
@@ -3617,9 +3631,9 @@ async function run() {
   assert(survivorState.nonBlank && survivorState.threat && /\dx$/.test(survivorState.chain) && survivorState.overdrive && survivorState.bounty && survivorState.debug?.hud?.chain === survivorState.chain && survivorState.debug?.hud?.bounty === survivorState.bounty, `survivor canvas should render active state with chain, overdrive, and bounty HUD: ${JSON.stringify(survivorState)}`);
   assert(survivorState.feedback?.tones?.action >= 1 && survivorState.feedback?.visualTriggers >= 1 && survivorState.feedbackTone === 'action' && /ACTION|NOVA/.test(survivorState.feedbackLabel), `premium arcade feedback should treat Space as an action signal, not restart: ${JSON.stringify(survivorState)}`);
   assert(feedbackMuteState.muted?.muted === true && feedbackMuteState.muted?.togglePressed === 'false' && feedbackMuteState.afterSuppressed?.suppressed > feedbackMuteState.muted?.suppressed && feedbackMuteState.afterSuppressed?.total === feedbackMuteState.muted?.total && feedbackMuteState.unmuted?.muted === false && feedbackMuteState.unmuted?.togglePressed === 'true' && feedbackMuteState.panelMuted === 'false', `premium arcade feedback mute should suppress events and restore cleanly: ${JSON.stringify(feedbackMuteState)}`);
-  assert(survivorDraftOpenState.open && survivorDraftOpenState.ariaHidden === 'false' && survivorDraftOpenState.optionCards === 3 && survivorDraftOpenState.choices.length === 3 && survivorDraftOpenState.running && !survivorDraftOpenState.paused, `survivor roguelite draft should open three upgrade choices without using pause state: ${JSON.stringify(survivorDraftOpenState)}`);
+  assert(survivorDraftOpenState.open && survivorDraftOpenState.ariaHidden === 'false' && survivorDraftOpenState.optionCards === 3 && survivorDraftOpenState.choices.length === 3 && survivorDraftOpenState.running && !survivorDraftOpenState.paused && survivorDraftOpenState.readoutState === 'draft' && survivorDraftOpenState.readoutStateText === '升级' && survivorDraftOpenState.readoutAction === '选升级' && survivorDraftOpenState.readoutStart === '1/2/3 选择' && survivorDraftOpenState.touchPause === '选择中' && survivorDraftOpenState.touchPauseDisabled && /升级选择中/.test(survivorDraftOpenState.touchPauseLabel), `survivor roguelite draft should open three upgrade choices with clear draft-state controls and without using pause state: ${JSON.stringify(survivorDraftOpenState)}`);
   assert(survivorDraftFreezeState.open && Math.abs(survivorDraftFreezeState.elapsedAfter - survivorDraftOpenState.beforeElapsed) < 1 && Math.abs(survivorDraftFreezeState.scoreAfter - survivorDraftOpenState.beforeScore) < 1, `survivor roguelite draft should freeze the run clock and score until a choice is made: ${JSON.stringify({ survivorDraftOpenState, survivorDraftFreezeState })}`);
-  assert(!survivorDraftChosenState.open && survivorDraftChosenState.ariaHidden === 'true' && survivorDraftChosenState.optionCards === 0 && survivorDraftChosenState.running && Number(survivorDraftChosenState.level) >= 2 && survivorDraftChosenState.score > survivorDraftOpenState.beforeScore && survivorDraftChosenState.buildText.length > 2, `survivor roguelite draft should apply a chosen upgrade and resume the run: ${JSON.stringify(survivorDraftChosenState)}`);
+  assert(!survivorDraftChosenState.open && survivorDraftChosenState.ariaHidden === 'true' && survivorDraftChosenState.optionCards === 0 && survivorDraftChosenState.running && Number(survivorDraftChosenState.level) >= 2 && survivorDraftChosenState.score > survivorDraftOpenState.beforeScore && survivorDraftChosenState.buildText.length > 2 && survivorDraftChosenState.readoutState === 'running' && survivorDraftChosenState.readoutStateText === '运行' && survivorDraftChosenState.readoutAction === '星爆' && survivorDraftChosenState.readoutStart === 'Enter 重开' && survivorDraftChosenState.touchPause === '暂停' && !survivorDraftChosenState.touchPauseDisabled && /暂停/.test(survivorDraftChosenState.touchPauseLabel), `survivor roguelite draft should apply a chosen upgrade and restore running controls: ${JSON.stringify(survivorDraftChosenState)}`);
   assert(survivorOverdriveState.before?.overdrive >= 100 && survivorOverdriveState.before?.hud?.overdrive === 'READY' && survivorOverdriveState.after?.overdrive === 0 && survivorOverdriveState.after?.overdriveFlash > 0 && survivorOverdriveState.after?.score > survivorOverdriveState.before?.score && survivorOverdriveState.after?.slowed >= 1 && survivorOverdriveState.after?.enemies < survivorOverdriveState.before?.enemies && survivorOverdriveState.after?.chain >= survivorOverdriveState.before?.chain, `survivor overdrive should consume a full meter, slow enemies, kill targets, and score: ${JSON.stringify(survivorOverdriveState)}`);
   assert(survivorAnomalyState.started && survivorAnomalyState.nonBlank && survivorAnomalyState.state?.anomaly?.type === 'meteor' && survivorAnomalyState.state?.hazards?.length >= 3 && survivorAnomalyState.state?.hud?.event === 'METEOR' && survivorAnomalyState.eventText === 'METEOR' && survivorAnomalyState.achieved, `survivor anomaly events should create a readable deep-space crisis with hazards and achievement credit: ${JSON.stringify(survivorAnomalyState)}`);
   assert(survivorBountyState.nonBlank && survivorBountyState.after?.bounty?.completed > survivorBountyState.before?.bounty?.completed && survivorBountyState.after?.score > survivorBountyState.before?.score && survivorBountyState.after?.bounty?.last === 'ELITE CLEAR' && survivorBountyState.after?.bounty?.flash > 0 && survivorBountyState.after?.hud?.bounty === survivorBountyState.bountyText && survivorBountyState.achieved, `survivor elite bounty should complete deterministically, reward score, sync HUD, and unlock achievement: ${JSON.stringify(survivorBountyState)}`);
