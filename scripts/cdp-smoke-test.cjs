@@ -3158,6 +3158,15 @@ async function run() {
     touchPauseLabel: document.querySelector('#premium-touch-pause')?.getAttribute('aria-label') || ''
   }))()`);
   const survivorOverdriveState = await evaluate(`(() => window.__atherixDebug?.premium?.forceSurvivorOverdrive?.() || {})()`);
+  const survivorDroneState = await evaluate(`(() => {
+    const result = window.__atherixDebug?.premium?.forceSurvivorDroneVolley?.() || {};
+    const pixels = window.__atherixSmokeCountCanvasPixels?.('#premium-survivor-canvas') || {};
+    return {
+      ...result,
+      nonBlank: !!pixels.nonBlank,
+      buildHud: document.querySelector('#premium-survivor-build')?.textContent || ''
+    };
+  })()`);
   const survivorAnomalyState = await evaluate(`(() => {
     const result = window.__atherixDebug?.premium?.forceSurvivorAnomaly?.('meteor') || {};
     const pixels = window.__atherixSmokeCountCanvasPixels?.('#premium-survivor-canvas') || {};
@@ -4444,6 +4453,17 @@ async function run() {
   assert(survivorDraftStartGuardState.before?.open && survivorDraftStartGuardState.after?.open && survivorDraftStartGuardState.after?.running && !survivorDraftStartGuardState.after?.paused && survivorDraftStartGuardState.after?.level === survivorDraftStartGuardState.before?.level && survivorDraftStartGuardState.after?.choices?.join('|') === survivorDraftStartGuardState.before?.choices?.join('|') && Math.abs(survivorDraftStartGuardState.after?.elapsed - survivorDraftStartGuardState.before?.elapsed) < 1 && survivorDraftStartGuardState.after?.startDisabled && survivorDraftStartGuardState.after?.startText === '选择' && survivorDraftStartGuardState.after?.readoutStart === '1/2/3 选择' && survivorDraftStartGuardState.after?.feedback?.lastLabel === 'CHOOSE UPGRADE', `survivor draft should block touch/gamepad/panel Start from restarting before an upgrade is chosen: ${JSON.stringify(survivorDraftStartGuardState)}`);
   assert(!survivorDraftChosenState.open && survivorDraftChosenState.ariaHidden === 'true' && survivorDraftChosenState.optionCards === 0 && survivorDraftChosenState.running && !survivorDraftChosenState.paused && Number(survivorDraftChosenState.level) >= 2 && survivorDraftChosenState.score > survivorDraftOpenState.beforeScore && survivorDraftChosenState.buildText.length > 2 && survivorDraftChosenState.readoutState === 'running' && survivorDraftChosenState.readoutStateText === '运行' && survivorDraftChosenState.readoutAction === '星爆' && survivorDraftChosenState.readoutStart === 'Enter 请求重开' && survivorDraftChosenState.touchPause === '暂停' && !survivorDraftChosenState.touchPauseDisabled && /暂停/.test(survivorDraftChosenState.touchPauseLabel), `survivor roguelite draft should apply a chosen upgrade and restore running controls: ${JSON.stringify(survivorDraftChosenState)}`);
   assert(survivorOverdriveState.before?.overdrive >= 100 && survivorOverdriveState.before?.hud?.overdrive === 'READY' && survivorOverdriveState.after?.overdrive === 0 && survivorOverdriveState.after?.overdriveFlash > 0 && survivorOverdriveState.after?.score > survivorOverdriveState.before?.score && survivorOverdriveState.after?.slowed >= 1 && survivorOverdriveState.after?.enemies < survivorOverdriveState.before?.enemies && survivorOverdriveState.after?.chain >= survivorOverdriveState.before?.chain, `survivor overdrive should consume a full meter, slow enemies, kill targets, and score: ${JSON.stringify(survivorOverdriveState)}`);
+  assert(
+    survivorDroneState.nonBlank &&
+      survivorDroneState.after?.player?.drones >= 3 &&
+      survivorDroneState.fired?.droneShots >= 3 &&
+      survivorDroneState.after?.droneShots >= 3 &&
+      survivorDroneState.droneBullets?.length >= 3 &&
+      survivorDroneState.droneBullets.every(bullet => bullet.source === 'drone' && bullet.color === '#FDE68A' && bullet.speed > 250 && bullet.damage >= 20) &&
+      survivorDroneState.dronePods?.length >= 3 &&
+      /Drone/.test(survivorDroneState.buildHud || survivorDroneState.buildText || ''),
+    `survivor drone build should render orbiting pods and fire targeted drone shots: ${JSON.stringify(survivorDroneState)}`
+  );
   assert(survivorAnomalyState.started && survivorAnomalyState.nonBlank && survivorAnomalyState.state?.anomaly?.type === 'meteor' && survivorAnomalyState.state?.hazards?.length >= 3 && survivorAnomalyState.state?.hud?.event === 'METEOR' && survivorAnomalyState.eventText === 'METEOR' && survivorAnomalyState.achieved, `survivor anomaly events should create a readable deep-space crisis with hazards and achievement credit: ${JSON.stringify(survivorAnomalyState)}`);
   assert(survivorBountyState.nonBlank && survivorBountyState.after?.bounty?.completed > survivorBountyState.before?.bounty?.completed && survivorBountyState.after?.score > survivorBountyState.before?.score && survivorBountyState.after?.bounty?.last === 'ELITE CLEAR' && survivorBountyState.after?.bounty?.flash > 0 && survivorBountyState.after?.hud?.bounty === survivorBountyState.bountyText && survivorBountyState.achieved, `survivor elite bounty should complete deterministically, reward score, sync HUD, and unlock achievement: ${JSON.stringify(survivorBountyState)}`);
   assert(bossState.nonBlank && bossState.dash && bossState.weak && /^(I|II|III|OPEN|SHATTER|DOWN)/.test(bossState.shield || '') && bossState.breaks === 0 && bossState.counter === '0x' && bossState.lives >= 4, `boss canvas should render active state, shield HUD, and equipped loadout: ${JSON.stringify(bossState)}`);
@@ -4765,6 +4785,7 @@ async function run() {
     survivorDraftStartGuardState,
     survivorDraftChosenState,
     survivorOverdriveState,
+    survivorDroneState,
     survivorAnomalyState,
     survivorBountyState,
     bossState,
@@ -4887,6 +4908,7 @@ function summarizeSmokeResult(result) {
         rendered: result.survivorState?.nonBlank,
         hitFeedback: result.survivorHitState?.after?.lastHitLabel,
         overdriveScoreGain: Number(result.survivorOverdriveState?.after?.score || 0) - Number(result.survivorOverdriveState?.before?.score || 0),
+        droneShots: result.survivorDroneState?.after?.droneShots,
         draftReroll: result.survivorDraftRerollState?.after?.choices?.join('|') !== result.survivorDraftRerollState?.before?.choices?.join('|'),
         anomaly: result.survivorAnomalyState?.state?.anomaly?.type
       },

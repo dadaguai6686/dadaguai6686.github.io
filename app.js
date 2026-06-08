@@ -6968,7 +6968,7 @@ function init() {
     function runDetailHighlights(game, details = {}) {
       const spec = {
         runner: [['level', '关卡'], ['finishTime', '用时', 's'], ['bestCombo', '连段', 'x'], ['contractsCompleted', '合约']],
-        survivor: [['level', '等级'], ['bestChain', '连锁', 'x'], ['overdrive', '超载'], ['anomalies', '异常'], ['bounties', '赏金']],
+        survivor: [['level', '等级'], ['bestChain', '连锁', 'x'], ['overdrive', '超载'], ['drones', '无人机'], ['bounties', '赏金']],
         boss: [['phase', '阶段'], ['graze', '擦弹'], ['bestGrazeStreak', '连擦'], ['focusSurges', '专注'], ['shieldShatters', '碎盾']],
         drift: [['gates', '弯道'], ['bestCombo', '连段', 'x'], ['overtakes', '超车'], ['heatPeak', '热度', '%'], ['phaseUses', '相位']],
         heist: [['steps', '步数'], ['bestChain', '潜行链'], ['loot', '缓存'], ['security', '警戒', '%'], ['hacksCompleted', '破解']],
@@ -9077,11 +9077,12 @@ function init() {
         id: 'drone',
         tone: 'drone',
         title: '伴飞无人机',
-        desc: '增加一台环绕火力无人机。',
+        desc: '增加一台可见环绕无人机，自动锁定附近敌人开火。',
         tag: 'Drone',
         available: p => p.drones < 4,
         apply: p => {
           p.drones = Math.min(4, p.drones + 1);
+          p.droneDamage = Math.min(32, Number(p.droneDamage || 12) + 3);
         }
       },
       {
@@ -9300,6 +9301,7 @@ function init() {
         novaDamage: 95,
         novaFlash: 0,
         drones: 0,
+        droneDamage: 12,
         pierce: 0,
         upgrades: []
       };
@@ -9750,9 +9752,58 @@ function init() {
       return true;
     }
 
+    function survivorDronePosition(p, index, total = Math.max(1, p?.drones || 1), time = survivor.elapsed) {
+      const radius = 30 + Math.min(18, total * 3.5);
+      const spin = time / 410 + index * Math.PI * 2 / Math.max(1, total);
+      return {
+        x: p.x + Math.cos(spin) * radius,
+        y: p.y + Math.sin(spin) * radius,
+        angle: spin
+      };
+    }
+
+    function nearestSurvivorEnemyFrom(x, y) {
+      if (!survivor.enemies.length) return null;
+      return survivor.enemies.reduce((best, enemy) => {
+        const dist = Math.hypot(enemy.x - x, enemy.y - y);
+        const bestDist = Math.hypot(best.x - x, best.y - y);
+        return dist < bestDist ? enemy : best;
+      }, survivor.enemies[0]);
+    }
+
+    function fireSurvivorDroneVolley(primaryTarget = null) {
+      const p = survivor.player;
+      const count = Math.max(0, Math.floor(Number(p?.drones || 0)));
+      if (!p || count <= 0 || !survivor.enemies.length) return { droneShots: 0 };
+      const droneDamage = Math.max(8, Number(p.droneDamage || 12) + count * 1.5);
+      let droneShots = 0;
+      for (let i = 0; i < count; i++) {
+        const pod = survivorDronePosition(p, i, count);
+        const target = nearestSurvivorEnemyFrom(pod.x, pod.y) || primaryTarget;
+        if (!target) continue;
+        const angle = Math.atan2(target.y - pod.y, target.x - pod.x);
+        survivor.bullets.push({
+          x: pod.x,
+          y: pod.y,
+          vx: Math.cos(angle) * (p.bulletSpeed * 0.94),
+          vy: Math.sin(angle) * (p.bulletSpeed * 0.94),
+          r: 4.5,
+          life: 820,
+          damage: droneDamage,
+          pierce: count >= 3 ? 1 : 0,
+          source: 'drone',
+          color: '#FDE68A',
+          targetType: target.type || ''
+        });
+        droneShots++;
+      }
+      if (droneShots > 0) survivorBurst(p.x, p.y, '#FDE68A', Math.min(18, 4 + count * 3));
+      return { droneShots };
+    }
+
     function fireSurvivorVolley() {
       const p = survivor.player;
-      if (!survivor.enemies.length) return;
+      if (!survivor.enemies.length) return { mainShots: 0, droneShots: 0 };
       const target = survivor.enemies.reduce((best, enemy) => Math.hypot(enemy.x - p.x, enemy.y - p.y) < Math.hypot(best.x - p.x, best.y - p.y) ? enemy : best, survivor.enemies[0]);
       const angle = Math.atan2(target.y - p.y, target.x - p.x);
       const spread = p.level >= 7 ? [-0.26, -0.1, 0.1, 0.26] : p.level >= 4 ? [-0.18, 0, 0.18] : (p.level >= 2 ? [-0.08, 0.08] : [0]);
@@ -9764,21 +9815,16 @@ function init() {
         r: p.pierce > 0 ? 5 : 4,
         life: 980,
         damage: p.damage,
-        pierce: p.pierce
+        pierce: p.pierce,
+        source: 'core',
+        color: '#BAE6FD'
       }));
-      for (let i = 0; i < p.drones; i++) {
-        const spin = survivor.elapsed / 420 + i * Math.PI * 2 / Math.max(1, p.drones);
-        survivor.bullets.push({
-          x: p.x + Math.cos(spin) * 30,
-          y: p.y + Math.sin(spin) * 30,
-          vx: Math.cos(spin) * (p.bulletSpeed * 0.86),
-          vy: Math.sin(spin) * (p.bulletSpeed * 0.86),
-          r: 4,
-          life: 720,
-          damage: p.damage * 0.7,
-          pierce: 1
-        });
-      }
+      const droneResult = fireSurvivorDroneVolley(target);
+      return {
+        mainShots: spread.length,
+        droneShots: droneResult.droneShots || 0,
+        targetType: target.type || ''
+      };
     }
 
     function triggerSurvivorNova() {
@@ -9826,7 +9872,7 @@ function init() {
       const finalScore = Math.floor(survivor.score + survivor.elapsed / 120 + survivor.bestChain * 42 + survivor.overdrive * 3 + survivor.anomalyCount * 95 + survivor.bountiesCompleted * 150);
       localStorage.setItem(survivor.bestKey, String(Math.max(Number(localStorage.getItem(survivor.bestKey) || 0), finalScore)));
       if (survivor.elapsed >= 90000) unlockAchievement('survivor_90');
-      recordPremiumResult('survivor', finalScore, { elapsed: survivor.elapsed, level: survivor.player?.level || 1, bestChain: survivor.bestChain, overdrive: Math.floor(survivor.overdrive), anomalies: survivor.anomalyCount, bounties: survivor.bountiesCompleted, runVariant: survivor.variant });
+      recordPremiumResult('survivor', finalScore, { elapsed: survivor.elapsed, level: survivor.player?.level || 1, bestChain: survivor.bestChain, overdrive: Math.floor(survivor.overdrive), anomalies: survivor.anomalyCount, bounties: survivor.bountiesCompleted, drones: Math.floor(Number(survivor.player?.drones || 0)), runVariant: survivor.variant });
       setSurvivorUi();
       drawSurvivor();
       overlay(survivor.ctx, survivor.canvas.width, survivor.canvas.height, text, `Score ${finalScore} · 点击部署再来一局`);
@@ -9992,7 +10038,24 @@ function init() {
         ctx.closePath();
         ctx.fill();
       });
-      survivor.bullets.forEach(b => { ctx.fillStyle = '#BAE6FD'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill(); });
+      survivor.bullets.forEach(b => {
+        ctx.save();
+        ctx.fillStyle = b.color || '#BAE6FD';
+        ctx.shadowColor = b.source === 'drone' ? '#FDE68A' : '#BAE6FD';
+        ctx.shadowBlur = b.source === 'drone' ? 12 : 7;
+        ctx.beginPath();
+        if (b.source === 'drone') {
+          ctx.moveTo(b.x, b.y - b.r - 1);
+          ctx.lineTo(b.x + b.r + 1, b.y);
+          ctx.lineTo(b.x, b.y + b.r + 1);
+          ctx.lineTo(b.x - b.r - 1, b.y);
+          ctx.closePath();
+        } else {
+          ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+        }
+        ctx.fill();
+        ctx.restore();
+      });
       const activeBounty = currentSurvivorBounty();
       survivor.enemies.forEach(e => {
         ctx.fillStyle = e.color;
@@ -10045,6 +10108,43 @@ function init() {
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.r + 14 + Math.sin(survivor.elapsed / 120) * 2, 0, Math.PI * 2);
         ctx.stroke();
+      }
+      const droneCount = Math.max(0, Math.floor(Number(p.drones || 0)));
+      if (droneCount > 0) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(253, 230, 138, 0.18)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 6]);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 30 + Math.min(18, droneCount * 3.5), 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        for (let i = 0; i < droneCount; i++) {
+          const pod = survivorDronePosition(p, i, droneCount);
+          const target = nearestSurvivorEnemyFrom(pod.x, pod.y);
+          ctx.strokeStyle = 'rgba(253, 230, 138, 0.22)';
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(pod.x, pod.y);
+          ctx.stroke();
+          if (target && Math.hypot(target.x - pod.x, target.y - pod.y) < 185) {
+            ctx.strokeStyle = 'rgba(253, 230, 138, 0.18)';
+            ctx.beginPath();
+            ctx.moveTo(pod.x, pod.y);
+            ctx.lineTo(target.x, target.y);
+            ctx.stroke();
+          }
+          ctx.fillStyle = '#FDE68A';
+          ctx.shadowColor = '#FDE68A';
+          ctx.shadowBlur = 14;
+          ctx.beginPath();
+          ctx.arc(pod.x, pod.y, 5.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = '#111827';
+          ctx.fillRect(pod.x - 2, pod.y - 2, 4, 4);
+        }
+        ctx.restore();
       }
       ctx.shadowColor = '#34D399';
       ctx.shadowBlur = 16;
@@ -10184,8 +10284,12 @@ function init() {
           level: p.level || 1,
           novaCooldown: Math.ceil(p.novaCooldown || 0),
           novaRadius: Math.ceil(p.novaRadius || 0),
-          novaDamage: Math.ceil(p.novaDamage || 0)
+          novaDamage: Math.ceil(p.novaDamage || 0),
+          drones: Math.floor(Number(p.drones || 0)),
+          droneDamage: Number(Number(p.droneDamage || 0).toFixed(1))
         },
+        bullets: survivor.bullets.length,
+        droneShots: survivor.bullets.filter(bullet => bullet.source === 'drone').length,
         enemies: survivor.enemies.length,
         slowed: survivor.enemies.filter(enemy => enemy.slow > 0).length,
         pickups: survivor.pickups.map(item => item.type),
@@ -10248,6 +10352,53 @@ function init() {
       return {
         before,
         after: survivorDebugState()
+      };
+    }
+
+    function forceSurvivorDroneVolley() {
+      switchPremiumGame('survivor');
+      startSurvivor();
+      stopSurvivorLoop();
+      survivor.paused = false;
+      survivor.draftOpen = false;
+      hideSurvivorDraft();
+      const p = survivor.player;
+      p.drones = 3;
+      p.droneDamage = 21;
+      p.upgrades = ['drone', 'drone', 'drone'];
+      p.build = survivorBuildSummary();
+      survivor.bullets = [];
+      survivor.enemies = [
+        { x: p.x + 118, y: p.y - 12, r: 12, hp: 120, maxHp: 120, speed: 84, value: 38, color: '#06B6D4', type: 'charger', elite: false, pulse: 0, slow: 0 },
+        { x: p.x - 96, y: p.y + 48, r: 18, hp: 260, maxHp: 260, speed: 62, value: 88, color: '#F97316', type: 'brute', elite: true, pulse: 1.2, slow: 0 }
+      ];
+      setSurvivorUi();
+      drawSurvivor();
+      const before = survivorDebugState();
+      const fired = fireSurvivorVolley();
+      setSurvivorUi();
+      drawSurvivor();
+      const droneBullets = survivor.bullets
+        .filter(bullet => bullet.source === 'drone')
+        .map(bullet => ({
+          source: bullet.source,
+          color: bullet.color,
+          speed: Math.round(Math.hypot(bullet.vx, bullet.vy)),
+          damage: Number(Number(bullet.damage || 0).toFixed(1)),
+          targetType: bullet.targetType || '',
+          pierce: bullet.pierce || 0
+        }));
+      const dronePods = Array.from({ length: p.drones }, (_, index) => {
+        const pod = survivorDronePosition(p, index, p.drones);
+        return { x: Math.round(pod.x), y: Math.round(pod.y) };
+      });
+      return {
+        fired,
+        before,
+        after: survivorDebugState(),
+        droneBullets,
+        dronePods,
+        buildText: document.getElementById('premium-survivor-build')?.textContent || ''
       };
     }
 
@@ -15392,6 +15543,7 @@ function init() {
           survivorState: () => survivorDebugState(),
           forceSurvivorAnomaly: (type = 'meteor') => forceSurvivorAnomaly(type),
           forceSurvivorOverdrive: () => forceSurvivorOverdrive(),
+          forceSurvivorDroneVolley: () => forceSurvivorDroneVolley(),
           forceSurvivorBounty: () => forceSurvivorBounty(),
           forceSurvivorHit: (source = 'HIT', amount = 22) => forceSurvivorHit(source, amount),
           forceSurvivorHpZero: () => forceSurvivorHpZero(),
