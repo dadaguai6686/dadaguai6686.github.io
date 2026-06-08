@@ -8,6 +8,7 @@ const managedAppPort = Number(process.env.SMOKE_PORT || (4300 + Math.floor(Math.
 const appUrl = requestedAppUrl || `http://127.0.0.1:${managedAppPort}`;
 const usesExternalCdp = Boolean(process.env.CDP_PORT);
 const cdpPort = Number(process.env.CDP_PORT || (9400 + Math.floor(Math.random() * 900)));
+const smokeVerbose = /^(1|true|yes|full)$/i.test(process.env.SMOKE_VERBOSE || '');
 const edgePath = process.env.EDGE_PATH || 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 let activeAppServer = null;
 let activeAppTempDir = '';
@@ -2094,11 +2095,14 @@ async function run() {
       ap: document.querySelector('#premium-tactics-ap')?.textContent,
       turn: document.querySelector('#premium-tactics-turn')?.textContent,
       hp: document.querySelector('#premium-tactics-hp')?.textContent,
+      shield: document.querySelector('#premium-tactics-shield')?.textContent,
       threat: document.querySelector('#premium-tactics-threat')?.textContent,
       intel: document.querySelector('#premium-tactics-intel')?.textContent,
       danger: document.querySelector('#premium-tactics-danger')?.textContent,
       cover: document.querySelector('#premium-tactics-cover')?.textContent,
       momentum: document.querySelector('#premium-tactics-momentum')?.textContent,
+      combo: document.querySelector('#premium-tactics-combo')?.textContent,
+      surge: document.querySelector('#premium-tactics-surge')?.textContent,
       route: document.querySelector('#premium-tactics-route')?.textContent,
       action: document.querySelector('#premium-tactics-action')?.textContent,
       debug: window.__atherixDebug?.premium?.tacticsState?.() || {}
@@ -2121,7 +2125,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasHeistProtocolVersion: swText.includes('atherix-static-v38-heist-protocol') && swText.includes('/style.css?v=20260608-heist-protocol-v3') && swText.includes('/app.js?v=20260608-heist-protocol-v3'),
+      swHasTacticsSurgeVersion: swText.includes('atherix-static-v39-tactics-surge') && swText.includes('/style.css?v=20260608-tactics-surge-v1') && swText.includes('/app.js?v=20260608-tactics-surge-v1'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
   })()`, 10000);
@@ -2524,14 +2528,15 @@ async function run() {
   const tacticsJammedAfterBlast = tacticsBlastAfterEnemies.some(enemy => Number(enemy.disrupted || 0) > 0);
   const tacticsKilledDuringBlast = Number(tacticsBlastState.after?.kills || 0) > Number(tacticsBlastState.before?.kills || 0)
     || tacticsBlastAfterEnemies.length < (tacticsBlastState.before?.enemies || []).length;
+  const tacticsSurgedDuringBlast = Number(tacticsBlastState.after?.surges || 0) > Number(tacticsBlastState.before?.surges || 0);
   const tacticsJammedIntent = (tacticsForecastAfterAction.intents || []).some(intent => intent.label === 'JAM' || intent.mode === 'disrupted');
-  assert(tacticsForecastStart.dangerCount > 0 && tacticsForecastStart.intents?.length >= 4 && tacticsForecastStart.blastTargets?.length >= 1 && /目标/.test(tacticsForecastStart.action) && tacticsForecastStart.route?.route?.length > 0 && tacticsForecastStart.routeHud === tacticsForecastStart.route?.label && tacticsForecastStart.coverHud && tacticsForecastStart.momentumHud !== undefined, `tactics mode should forecast enemy intent, blast windows, cover, momentum, and route intel: ${JSON.stringify(tacticsForecastStart)}`);
-  assert(tacticsRouteNext && tacticsRouteState.after?.player?.x === tacticsRouteNext.x && tacticsRouteState.after?.player?.y === tacticsRouteNext.y && Number(tacticsRouteState.after?.momentum || 0) > Number(tacticsRouteState.before?.momentum || 0) && tacticsRouteState.after?.route?.label && tacticsRouteState.after?.hud?.route === tacticsRouteState.after?.route?.label, `tactics route debug should move along the recommended path and reward momentum: ${JSON.stringify(tacticsRouteState)}`);
-  assert(tacticsBlastBeforeTargets.length >= 2 && Number(tacticsBlastState.after?.player?.ap || 0) >= Number(tacticsBlastState.before?.player?.ap || 0) && Number(tacticsBlastState.after?.momentum || 0) > Number(tacticsBlastState.before?.momentum || 0) && Number(tacticsBlastState.after?.combo || 0) >= 1 && tacticsJammedAfterBlast && tacticsKilledDuringBlast, `tactics phase blast should pierce targets, refund AP, build combo/momentum, kill, and jam survivors: ${JSON.stringify(tacticsBlastState)}`);
-  assert(tacticsForecastAfterAction.dangerCount > 0 && tacticsForecastAfterAction.coverHud && tacticsForecastAfterAction.momentumHud !== undefined && tacticsForecastAfterAction.routeHud && tacticsJammedIntent, `tactics mode should expose post-action JAM, cover, momentum, and route forecast: ${JSON.stringify(tacticsForecastAfterAction)}`);
-  assert(tacticsState.nonBlank && Number(tacticsState.ap) >= 0 && tacticsState.action && tacticsState.cover && tacticsState.momentum !== undefined && tacticsState.route && tacticsState.debug?.route?.length > 0, `tactics mode should render and accept enhanced actions: ${JSON.stringify(tacticsState)}`);
-  assert(Number(tacticsState.danger) > 0 && tacticsState.intel && tacticsState.debug?.hud?.route === tacticsState.route && tacticsState.debug?.hud?.cover === tacticsState.cover && tacticsState.debug?.hud?.momentum === tacticsState.momentum, `tactics HUD should stay in sync with enhanced debug state: ${JSON.stringify(tacticsState)}`);
-  assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /heist-protocol/.test(key)) && pwaState.swHasHeistProtocolVersion, `service worker should register and cache the latest app shell: ${JSON.stringify(pwaState)}`);
+  assert(tacticsForecastStart.dangerCount > 0 && tacticsForecastStart.intents?.length >= 4 && tacticsForecastStart.blastTargets?.length >= 1 && /目标/.test(tacticsForecastStart.action) && tacticsForecastStart.route?.route?.length > 0 && tacticsForecastStart.routeHud === tacticsForecastStart.route?.label && tacticsForecastStart.coverHud && tacticsForecastStart.momentumHud !== undefined && /^\d+%/.test(tacticsForecastStart.surgeHud || ''), `tactics mode should forecast enemy intent, blast windows, cover, momentum, surge, and route intel: ${JSON.stringify(tacticsForecastStart)}`);
+  assert(tacticsRouteNext && tacticsRouteState.after?.player?.x === tacticsRouteNext.x && tacticsRouteState.after?.player?.y === tacticsRouteNext.y && Number(tacticsRouteState.after?.momentum || 0) > Number(tacticsRouteState.before?.momentum || 0) && Number(tacticsRouteState.after?.surge || 0) > Number(tacticsRouteState.before?.surge || 0) && tacticsRouteState.after?.route?.label && tacticsRouteState.after?.hud?.route === tacticsRouteState.after?.route?.label, `tactics route debug should move along the recommended path and reward momentum/surge: ${JSON.stringify(tacticsRouteState)}`);
+  assert(tacticsBlastBeforeTargets.length >= 2 && Number(tacticsBlastState.after?.player?.ap || 0) >= Number(tacticsBlastState.before?.player?.ap || 0) && Number(tacticsBlastState.after?.momentum || 0) > Number(tacticsBlastState.before?.momentum || 0) && Number(tacticsBlastState.after?.combo || 0) >= 1 && tacticsSurgedDuringBlast && tacticsBlastState.after?.hud?.surge === tacticsState.surge && tacticsJammedAfterBlast && tacticsKilledDuringBlast, `tactics phase blast should pierce targets, refund AP, trigger surge, build combo/momentum, kill, and jam survivors: ${JSON.stringify(tacticsBlastState)}`);
+  assert(tacticsForecastAfterAction.dangerCount > 0 && tacticsForecastAfterAction.coverHud && tacticsForecastAfterAction.momentumHud !== undefined && tacticsForecastAfterAction.comboHud && tacticsForecastAfterAction.surgeHud && tacticsForecastAfterAction.routeHud && tacticsJammedIntent, `tactics mode should expose post-action JAM, cover, momentum, combo, surge, and route forecast: ${JSON.stringify(tacticsForecastAfterAction)}`);
+  assert(tacticsState.nonBlank && Number(tacticsState.ap) >= 0 && tacticsState.action && tacticsState.cover && tacticsState.momentum !== undefined && tacticsState.combo && tacticsState.surge && tacticsState.route && tacticsState.debug?.route?.length > 0, `tactics mode should render and accept enhanced actions: ${JSON.stringify(tacticsState)}`);
+  assert(Number(tacticsState.danger) > 0 && tacticsState.intel && tacticsState.debug?.hud?.route === tacticsState.route && tacticsState.debug?.hud?.cover === tacticsState.cover && tacticsState.debug?.hud?.momentum === tacticsState.momentum && tacticsState.debug?.hud?.combo === tacticsState.combo && tacticsState.debug?.hud?.surge === tacticsState.surge && tacticsState.debug?.hud?.shield === tacticsState.shield, `tactics HUD should stay in sync with enhanced debug state: ${JSON.stringify(tacticsState)}`);
+  assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /tactics-surge/.test(key)) && pwaState.swHasTacticsSurgeVersion, `service worker should register and cache the latest app shell: ${JSON.stringify(pwaState)}`);
   assert(pwaState.swHasLocalProjectAssets, `service worker should precache local portfolio assets: ${JSON.stringify(pwaState)}`);
   assert(pwaState.swHasNavigationPreload && pwaState.swHasOfflineShellHeader && pwaState.swHasFallbackUrl, `service worker should include robust offline navigation fallback: ${JSON.stringify(pwaState)}`);
   const diagnosticText = JSON.stringify(diagnostics);
@@ -2634,10 +2639,87 @@ async function run() {
   };
 }
 
+function summarizeSmokeResult(result) {
+  return {
+    ok: true,
+    launched: result.launched,
+    managedServer: result.managedServer,
+    cdpPort: result.cdpPort,
+    appUrl: result.appUrl,
+    hint: 'Set SMOKE_VERBOSE=1 for the full state dump.',
+    blog: {
+      hubCards: result.blogHubBefore?.cards,
+      readerOpened: result.blogState?.visibleArticle,
+      articleChars: result.blogState?.articleChars,
+      nextOpened: result.readerNextOpenState?.visibleArticle,
+      markdownExportBytes: result.readerExportState?.blobInfo?.size,
+      horizontalOverflow: result.readerNextOpenState?.horizontalOverflow
+    },
+    arcade: {
+      activeMode: result.arcadeInitial?.cockpitMode,
+      profileAchievements: result.arcadeInitial?.profileAchievements,
+      profileCompletion: result.arcadeInitial?.profileCompletion,
+      mobileOverflow: result.premiumMobileState?.horizontalOverflow,
+      touchControls: result.premiumMobileState?.controlsCount,
+      runnerMobileOverflow: result.runnerMobileState?.horizontalOverflow
+    },
+    runner: {
+      spaceKeyDoesNotRestart: result.mainSpaceState?.overlayAfter === result.mainSpaceState?.overlayBefore,
+      jumpButtonDoesNotRestart: result.jumpButtonIdleState?.overlayAfter === result.jumpButtonIdleState?.overlayBefore,
+      runningAfterResume: result.runnerTouchState?.runningAfterResume,
+      gamepadStatus: result.runnerGamepadState?.statusText
+    },
+    games: {
+      survivor: {
+        rendered: result.survivorState?.nonBlank,
+        overdriveScoreGain: Number(result.survivorOverdriveState?.after?.score || 0) - Number(result.survivorOverdriveState?.before?.score || 0),
+        anomaly: result.survivorAnomalyState?.state?.anomaly?.type
+      },
+      boss: {
+        rendered: result.bossState?.nonBlank,
+        weakpointHud: result.bossTelegraphState?.weakHud,
+        pauseFreezes: result.bossPauseFreezeState?.timerAfter === result.bossPauseFreezeState?.timerBefore
+      },
+      drift: {
+        rendered: result.driftState?.nonBlank,
+        phaseBrake: result.driftPhaseState?.after?.phaseHud,
+        sponsorAchieved: result.driftSponsorState?.achieved
+      },
+      heist: {
+        route: result.heistState?.route,
+        hackHud: result.heistState?.hack,
+        protocolHud: result.heistState?.protocol,
+        protocolAchieved: result.heistState?.hackState?.achieved
+      },
+      chain: {
+        cells: result.chainState?.cells,
+        comboAfterForce: result.chainState?.forced?.after?.combo,
+        catalystReady: result.chainState?.catalystReady
+      },
+      tactics: {
+        rendered: result.tacticsState?.nonBlank,
+        shield: result.tacticsState?.shield,
+        combo: result.tacticsState?.combo,
+        surge: result.tacticsState?.surge,
+        route: result.tacticsState?.route,
+        surgeTriggered: Number(result.tacticsBlastState?.after?.surges || 0) > Number(result.tacticsBlastState?.before?.surges || 0),
+        routeSurgeGain: Number(result.tacticsRouteState?.after?.surge || 0) - Number(result.tacticsRouteState?.before?.surge || 0)
+      }
+    },
+    pwa: {
+      registered: result.pwaState?.registered,
+      shellCached: result.pwaState?.shellCached,
+      cacheKeys: result.pwaState?.cacheKeys,
+      latestVersion: result.pwaState?.swHasTacticsSurgeVersion
+    },
+    diagnostics: result.diagnostics
+  };
+}
+
 run().then(async result => {
   await cleanupAppServer();
   await cleanupBrowserProcess();
-  console.log(JSON.stringify(result, null, 2));
+  console.log(JSON.stringify(smokeVerbose ? result : summarizeSmokeResult(result), null, 2));
 }).catch(async error => {
   await cleanupAppServer();
   await cleanupBrowserProcess();

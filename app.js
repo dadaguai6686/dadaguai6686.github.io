@@ -137,7 +137,7 @@ function init() {
     {
       id: 'proj-4',
       title: 'Atherix Premium Arcade Suite',
-      desc: '六款精品浏览器小游戏，带生涯成长、每日挑战、奖牌路线、触控/键盘/手柄输入和沉浸反馈系统。',
+      desc: '七款精品浏览器小游戏，带生涯成长、每日挑战、奖牌路线、触控/键盘/手柄输入和沉浸反馈系统。',
       tag: '前端开发',
       tags: ['Canvas Games', 'Gamepad Input', 'PWA Ready', 'Arcade UX'],
       img: '/assets/project-arcade-suite.webp',
@@ -4864,7 +4864,7 @@ function init() {
         <div class="arcade-profile-grid">
           <span>完成度 <strong id="premium-profile-completion">0%</strong></span>
           <span>奖牌 <strong id="premium-profile-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-profile-achievements">0/28</strong></span>
+          <span>成就 <strong id="premium-profile-achievements">0/29</strong></span>
           <span>最近 <strong id="premium-profile-latest">--</strong></span>
         </div>
         <button type="button" class="arcade-profile-action" id="premium-profile-target" data-profile-target-game="survivor">
@@ -4964,7 +4964,7 @@ function init() {
         </div>
         <div class="arcade-director-meters" aria-label="街机完成度">
           <span>奖牌 <strong id="premium-director-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-director-achievements">0/28</strong></span>
+          <span>成就 <strong id="premium-director-achievements">0/29</strong></span>
           <span>完成度 <strong id="premium-director-completion">0%</strong></span>
         </div>
         <button type="button" class="arcade-director-action" id="premium-director-start" data-target-game="survivor">
@@ -5202,6 +5202,7 @@ function init() {
             <div class="mini-stats">
               <span>核心 <strong id="premium-tactics-cores">0</strong>/3</span>
               <span>装甲 <strong id="premium-tactics-hp">100</strong></span>
+              <span>护盾 <strong id="premium-tactics-shield">0</strong></span>
               <span>行动 <strong id="premium-tactics-ap">3</strong></span>
               <span>回合 <strong id="premium-tactics-turn">1</strong></span>
               <span>威胁 <strong id="premium-tactics-threat">LOW</strong></span>
@@ -5209,6 +5210,8 @@ function init() {
               <span>危险 <strong id="premium-tactics-danger">0</strong></span>
               <span>掩体 <strong id="premium-tactics-cover">OPEN</strong></span>
               <span>动量 <strong id="premium-tactics-momentum">0</strong></span>
+              <span>连击 <strong id="premium-tactics-combo">0x</strong></span>
+              <span>脉冲 <strong id="premium-tactics-surge">0%</strong></span>
               <span>路线 <strong id="premium-tactics-route">SCAN</strong></span>
               <span>最佳 <strong id="premium-tactics-best">0</strong></span>
             </div>
@@ -5419,6 +5422,7 @@ function init() {
       { id: 'tactics_clear', label: '裂隙撤离', desc: '完成裂隙战术撤离' },
       { id: 'tactics_sweep', label: '战术清场', desc: '裂隙战术中击破全部敌人' },
       { id: 'tactics_clean', label: '无损机甲', desc: '高装甲完成裂隙战术' },
+      { id: 'tactics_surge', label: '相位超载', desc: '裂隙战术中触发一次战术脉冲返还' },
       { id: 'runner_contract', label: '航线承包', desc: '主线远征完成一张航线合约' },
       { id: 'runner_final', label: '星门远征', desc: '通关主线最终关' },
       { id: 'contract_clear', label: '契约猎手', desc: '完成任意街机契约' },
@@ -12042,6 +12046,8 @@ function init() {
       kills: 0,
       momentum: 0,
       combo: 0,
+      surge: 0,
+      surges: 0,
       lastAction: '',
       won: false,
       lost: false,
@@ -12095,6 +12101,8 @@ function init() {
       tactics.kills = 0;
       tactics.momentum = 0;
       tactics.combo = 0;
+      tactics.surge = 0;
+      tactics.surges = 0;
       tactics.lastAction = '';
       tactics.won = false;
       tactics.lost = false;
@@ -12213,12 +12221,35 @@ function init() {
       return plans[0] || { target: null, route: [], risk: 0, score: 0, next: null, label: 'NO ROUTE' };
     }
 
+    function awardTacticsSurge(amount = 0, reason = '') {
+      const gain = Math.max(0, Number(amount || 0));
+      if (!gain || tactics.won || tactics.lost) return false;
+      const nextSurge = Number(tactics.surge || 0) + gain;
+      if (nextSurge < 100) {
+        tactics.surge = clamp(nextSurge, 0, 99);
+        return false;
+      }
+      tactics.surge = clamp(nextSurge - 100, 0, 99);
+      tactics.surges++;
+      tactics.player.ap = Math.min((tactics.player.baseAp || 3) + 1, tactics.player.ap + 1);
+      tactics.player.charge = Math.min(3, tactics.player.charge + 1);
+      tactics.player.shield = Math.min(42, tactics.player.shield + 10);
+      tactics.combo = Math.max(1, Number(tactics.combo || 0) + 1);
+      tactics.flash = Math.max(tactics.flash, 12);
+      tactics.lastAction = 'surge';
+      tactics.message = `${reason ? `${reason} · ` : ''}战术脉冲超载：返还行动`;
+      unlockAchievement('tactics_surge');
+      triggerPremiumFeedback('special', { label: 'TACTICAL SURGE' });
+      return true;
+    }
+
     function awardTacticsMomentum(amount = 1, reason = '') {
       tactics.momentum = clamp(tactics.momentum + amount, 0, 9);
       tactics.lastAction = reason || tactics.lastAction;
       if (tactics.momentum >= 3) {
         tactics.player.shield = Math.min(42, tactics.player.shield + 3);
       }
+      if (amount > 0) awardTacticsSurge(amount * 8, reason);
     }
 
     function addTacticsDanger(map, x, y, tone = 'danger') {
@@ -12374,6 +12405,11 @@ function init() {
       const cover = forecast.cover || tacticsCoverProfile();
       document.getElementById('premium-tactics-cores').textContent = p.cores;
       document.getElementById('premium-tactics-hp').textContent = Math.max(0, Math.ceil(p.hp));
+      const shieldEl = document.getElementById('premium-tactics-shield');
+      if (shieldEl) {
+        shieldEl.textContent = Math.max(0, Math.ceil(p.shield));
+        shieldEl.style.color = p.shield > 0 ? '#34D399' : '#94A3B8';
+      }
       document.getElementById('premium-tactics-ap').textContent = p.ap;
       document.getElementById('premium-tactics-turn').textContent = tactics.turn;
       document.getElementById('premium-tactics-best').textContent = localStorage.getItem(tactics.bestKey) || '0';
@@ -12401,6 +12437,17 @@ function init() {
       if (momentumEl) {
         momentumEl.textContent = tactics.momentum;
         momentumEl.style.color = tactics.momentum >= 5 ? '#A7F3D0' : tactics.momentum >= 2 ? '#FDE68A' : '#94A3B8';
+      }
+      const comboEl = document.getElementById('premium-tactics-combo');
+      if (comboEl) {
+        comboEl.textContent = `${Math.max(0, tactics.combo)}x`;
+        comboEl.style.color = tactics.combo >= 3 ? '#FDE68A' : tactics.combo >= 1 ? '#A7F3D0' : '#94A3B8';
+      }
+      const surgeEl = document.getElementById('premium-tactics-surge');
+      if (surgeEl) {
+        const surgeValue = Math.floor(Number(tactics.surge || 0));
+        surgeEl.textContent = tactics.surges > 0 ? `${surgeValue}%/${tactics.surges}` : `${surgeValue}%`;
+        surgeEl.style.color = surgeValue >= 72 ? '#FDE68A' : tactics.surges > 0 ? '#A7F3D0' : '#94A3B8';
       }
       const routeEl = document.getElementById('premium-tactics-route');
       if (routeEl) {
@@ -12460,12 +12507,12 @@ function init() {
     function finishTacticsWin() {
       if (tactics.won) return;
       tactics.won = true;
-      const score = Math.max(250, 800 + tactics.player.hp * 8 + tactics.kills * 180 + tactics.player.cores * 260 + tactics.momentum * 45 + tactics.combo * 80 - tactics.turn * 22);
+      const score = Math.max(250, 800 + tactics.player.hp * 8 + tactics.kills * 180 + tactics.player.cores * 260 + tactics.momentum * 45 + tactics.combo * 80 + tactics.surges * 120 + Math.floor(tactics.surge) - tactics.turn * 22);
       localStorage.setItem(tactics.bestKey, String(Math.max(Number(localStorage.getItem(tactics.bestKey) || 0), Math.floor(score))));
       unlockAchievement('tactics_clear');
       if (tactics.player.hp >= 80) unlockAchievement('tactics_clean');
       if (livingTacticsEnemies().length === 0) unlockAchievement('tactics_sweep');
-      recordPremiumResult('tactics', score, { turns: tactics.turn, hp: tactics.player.hp, kills: tactics.kills });
+      recordPremiumResult('tactics', score, { turns: tactics.turn, hp: tactics.player.hp, kills: tactics.kills, combo: tactics.combo, surges: tactics.surges });
       tactics.message = `撤离成功 · 评分 ${Math.floor(score)}`;
     }
 
@@ -12791,10 +12838,17 @@ function init() {
 
       ctx.fillStyle = '#fff';
       ctx.font = '800 12px JetBrains Mono, monospace';
-      ctx.fillText(`SHIELD ${Math.round(p.shield)} · CHARGE ${p.charge} · MOM ${tactics.momentum}`, 18, 24);
+      ctx.fillText(`SHIELD ${Math.round(p.shield)} · CHARGE ${p.charge} · MOM ${tactics.momentum} · COMBO ${tactics.combo}x`, 18, 24);
       ctx.fillStyle = forecast.tone === 'danger' ? '#FCA5A5' : forecast.tone === 'warn' ? '#FDE68A' : forecast.tone === 'attack' ? '#DDD6FE' : '#A7F3D0';
       ctx.font = '800 11px JetBrains Mono, monospace';
       ctx.fillText(`INTEL ${forecast.label} · ${forecast.dangerCells.length} ZONES · ${routePlan.label}`, 18, 42);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
+      ctx.fillRect(18, 52, 118, 5);
+      ctx.fillStyle = tactics.surges > 0 ? '#A7F3D0' : '#A78BFA';
+      ctx.fillRect(18, 52, 118 * clamp(Number(tactics.surge || 0) / 100, 0, 1), 5);
+      ctx.fillStyle = tactics.surges > 0 ? '#A7F3D0' : '#CBD5E1';
+      ctx.font = '800 9px JetBrains Mono, monospace';
+      ctx.fillText(`SURGE ${Math.floor(Number(tactics.surge || 0))}% · +${tactics.surges}`, 144, 57);
       ctx.fillStyle = '#A78BFA';
       ctx.font = '700 12px Plus Jakarta Sans, sans-serif';
       ctx.fillText(tactics.message, 18, 344);
@@ -12824,6 +12878,8 @@ function init() {
         kills: tactics.kills,
         momentum: tactics.momentum,
         combo: tactics.combo,
+        surge: Math.floor(Number(tactics.surge || 0)),
+        surges: tactics.surges,
         lastAction: tactics.lastAction,
         message: tactics.message,
         cover,
@@ -12856,6 +12912,9 @@ function init() {
         hud: {
           cover: document.getElementById('premium-tactics-cover')?.textContent || '',
           momentum: document.getElementById('premium-tactics-momentum')?.textContent || '',
+          shield: document.getElementById('premium-tactics-shield')?.textContent || '',
+          combo: document.getElementById('premium-tactics-combo')?.textContent || '',
+          surge: document.getElementById('premium-tactics-surge')?.textContent || '',
           route: document.getElementById('premium-tactics-route')?.textContent || '',
           intel: document.getElementById('premium-tactics-intel')?.textContent || '',
           danger: document.getElementById('premium-tactics-danger')?.textContent || '',
@@ -13206,10 +13265,15 @@ function init() {
               cover,
               momentum: tactics.momentum,
               combo: tactics.combo,
+              surge: Math.floor(Number(tactics.surge || 0)),
+              surges: tactics.surges,
               intelHud: document.getElementById('premium-tactics-intel')?.textContent || '',
               dangerHud: document.getElementById('premium-tactics-danger')?.textContent || '',
               coverHud: document.getElementById('premium-tactics-cover')?.textContent || '',
               momentumHud: document.getElementById('premium-tactics-momentum')?.textContent || '',
+              shieldHud: document.getElementById('premium-tactics-shield')?.textContent || '',
+              comboHud: document.getElementById('premium-tactics-combo')?.textContent || '',
+              surgeHud: document.getElementById('premium-tactics-surge')?.textContent || '',
               routeHud: document.getElementById('premium-tactics-route')?.textContent || '',
               action: document.getElementById('premium-tactics-action')?.textContent || ''
             };
@@ -13231,6 +13295,8 @@ function init() {
             tactics.player = { ...tactics.player, x: 4, y: 3, hp: 110, shield: 0, ap: 2, baseAp: 3, charge: 2, cores: 0 };
             tactics.momentum = 3;
             tactics.combo = 0;
+            tactics.surge = 84;
+            tactics.surges = 0;
             tactics.enemies = [
               { id: 'drone-a', type: 'drone', x: 4, y: 1, hp: 30, maxHp: 45, disrupted: 0 },
               { id: 'turret-a', type: 'turret', x: 4, y: 0, hp: 90, maxHp: 90, disrupted: 0 },

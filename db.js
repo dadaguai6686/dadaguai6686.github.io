@@ -177,7 +177,7 @@ db.serialize(() => {
         {
           id: 'proj-4',
           title: 'Atherix Premium Arcade Suite',
-          desc: '六款精品浏览器小游戏，带生涯成长、每日挑战、奖牌路线、触控/键盘/手柄输入和沉浸反馈系统。',
+          desc: '七款精品浏览器小游戏，带生涯成长、每日挑战、奖牌路线、触控/键盘/手柄输入和沉浸反馈系统。',
           tag: '前端开发',
           tags: JSON.stringify(['Canvas Games', 'Gamepad Input', 'PWA Ready', 'Arcade UX']),
           img: '/assets/project-arcade-suite.webp',
@@ -226,7 +226,7 @@ db.serialize(() => {
         [
           'proj-4',
           'Atherix Premium Arcade Suite',
-          '六款精品浏览器小游戏，带生涯成长、每日挑战、奖牌路线、触控/键盘/手柄输入和沉浸反馈系统。',
+          '七款精品浏览器小游戏，带生涯成长、每日挑战、奖牌路线、触控/键盘/手柄输入和沉浸反馈系统。',
           '前端开发',
           JSON.stringify(['Canvas Games', 'Gamepad Input', 'PWA Ready', 'Arcade UX']),
           '/assets/project-arcade-suite.webp',

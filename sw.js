@@ -1,10 +1,10 @@
-const CACHE_VERSION = 'atherix-static-v38-heist-protocol';
+const CACHE_VERSION = 'atherix-static-v39-tactics-surge';
 const NAVIGATION_FALLBACK_URL = '/index.html';
 const STATIC_ASSETS = [
   '/',
   NAVIGATION_FALLBACK_URL,
-  '/style.css?v=20260608-heist-protocol-v3',
-  '/app.js?v=20260608-heist-protocol-v3',
+  '/style.css?v=20260608-tactics-surge-v1',
+  '/app.js?v=20260608-tactics-surge-v1',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',
