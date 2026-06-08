@@ -4248,18 +4248,19 @@ body.command-open {
     display: flex;
     flex-direction: column;
     gap: 1rem;
-    padding-top: 3.2rem !important;
-  }
-
-  .arcade-library {
-    order: 1;
-    margin-top: 0;
+    padding-top: 1.2rem !important;
   }
 
   .arcade-cabinet-bezel {
-    order: 2;
-    padding: 0.9rem !important;
+    order: 1;
+    padding: 0.75rem !important;
     border-radius: 10px !important;
+    margin-top: 0;
+  }
+
+  .arcade-library {
+    order: 2;
+    margin-top: 0;
   }
 
   .arcade-title-banner,
@@ -4275,37 +4276,61 @@ body.command-open {
   }
 
   .arcade-stats-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    gap: 0.55rem !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 0.34rem !important;
+    margin-bottom: 0.72rem !important;
+    padding: 0.48rem !important;
   }
 
   .arcade-stats-grid .stat-box {
     border-right: 0 !important;
     min-width: 0;
+    padding: 0 0.16rem !important;
+  }
+
+  .arcade-stats-grid .stat-label {
+    font-size: 0.52rem !important;
+    line-height: 1.12;
+    overflow-wrap: anywhere;
   }
 
   .arcade-stats-grid .stat-value {
-    font-size: 0.78rem !important;
+    font-size: 0.66rem !important;
+    line-height: 1.18;
     overflow-wrap: anywhere;
   }
 
   .arcade-bezel-screen {
-    min-height: 220px;
+    min-height: clamp(190px, 52vw, 220px);
   }
 
   .arcade-screen-overlay {
-    padding: 0.9rem !important;
+    padding: 0.72rem !important;
   }
 
   .arcade-screen-overlay h2 {
-    font-size: 1.35rem !important;
+    font-size: 1.16rem !important;
+    margin-bottom: 0.42rem !important;
   }
+
+  .arcade-screen-overlay p {
+    margin-bottom: 0.62rem !important;
+    font-size: 0.78rem !important;
+  }
+
   .runner-overlay-action {
     width: min(100%, 240px);
     min-height: 40px;
     margin-bottom: 0.7rem;
     padding: 0.52rem 0.75rem;
     font-size: 0.82rem;
+  }
+
+  .game-instructions-box {
+    max-height: 96px;
+    overflow-y: auto;
+    padding: 0.58rem 0.72rem !important;
+    font-size: 0.68rem !important;
   }
 }
 

@@ -2696,7 +2696,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v44-quality') && swText.includes('/style.css?v=20260608-quality-v3') && swText.includes('/app.js?v=20260608-quality-v3'),
+      swHasQualityVersion: swText.includes('atherix-static-v45-quality') && swText.includes('/style.css?v=20260608-quality-v4') && swText.includes('/app.js?v=20260608-quality-v4'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
@@ -2710,6 +2710,55 @@ async function run() {
   await navigate(`${appUrl}/#game`);
   await waitFor('#runner-touch-controls', 12000);
   await wait(700);
+  const runnerMobileState = await evaluate(`(() => {
+    const rectFor = selector => {
+      const el = document.querySelector(selector);
+      const rect = el?.getBoundingClientRect();
+      return rect ? {
+        top: Math.round(rect.top),
+        bottom: Math.round(rect.bottom),
+        height: Math.round(rect.height),
+        width: Math.round(rect.width),
+        visible: rect.bottom > 0 && rect.top < window.innerHeight
+      } : null;
+    };
+    const visibleRatio = rect => {
+      if (!rect || rect.height <= 0) return 0;
+      const visibleHeight = Math.max(0, Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0));
+      return Number((visibleHeight / rect.height).toFixed(2));
+    };
+    const cabinet = rectFor('.arcade-cabinet-bezel');
+    const library = rectFor('.arcade-library');
+    const screen = rectFor('.arcade-bezel-screen');
+    const overlay = rectFor('#game-overlay-screen');
+    const canvas = rectFor('#arcade-canvas');
+    const padBefore = rectFor('#runner-touch-controls');
+    document.querySelector('#runner-touch-controls')?.scrollIntoView({ block: 'center' });
+    const padAfter = rectFor('#runner-touch-controls');
+    return {
+      width: document.documentElement.clientWidth,
+      height: window.innerHeight,
+      scrollWidth: document.documentElement.scrollWidth,
+      controls: document.querySelectorAll('[data-runner-control]').length,
+      cabinet,
+      library,
+      screen,
+      overlay,
+      canvas,
+      screenVisibleRatio: visibleRatio(screen),
+      overlayVisibleRatio: visibleRatio(overlay),
+      canvasVisibleRatio: visibleRatio(canvas),
+      cabinetBeforeLibrary: !!cabinet && !!library && cabinet.top <= library.top - 8,
+      playfieldVisibleFirst: visibleRatio(screen) >= 0.35 && !!overlay?.visible,
+      padBefore,
+      padAfter,
+      visibleAfterScroll: !!padAfter && padAfter.top < window.innerHeight && padAfter.bottom > 0,
+      horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+    };
+  })()`);
+  await waitFor('#premium-cockpit-panel', 12000);
+  await evaluate(`document.querySelector('#premium-cockpit-panel')?.scrollIntoView({ block: 'start' })`);
+  await wait(320);
   const premiumMobileState = await evaluate(`(() => {
     const cockpit = document.querySelector('#premium-cockpit-panel');
     const tabs = document.querySelector('.arcade-library .mini-game-tabs');
@@ -2851,20 +2900,6 @@ async function run() {
       horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
     };
   })()`, 6000);
-  const runnerMobileState = await evaluate(`(() => {
-    const pad = document.querySelector('#runner-touch-controls');
-    pad?.scrollIntoView({ block: 'center' });
-    const rect = pad?.getBoundingClientRect();
-    return {
-      width: document.documentElement.clientWidth,
-      scrollWidth: document.documentElement.scrollWidth,
-      controls: document.querySelectorAll('[data-runner-control]').length,
-      padTop: rect ? Math.round(rect.top) : null,
-      padBottom: rect ? Math.round(rect.bottom) : null,
-      visibleAfterScroll: !!rect && rect.top < window.innerHeight && rect.bottom > 0,
-      horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
-    };
-  })()`);
   await send('Emulation.clearDeviceMetricsOverride');
 
   assert(blogState.visibleArticle && blogState.articleChars > 100, 'blog reader should open a populated article');
@@ -3086,7 +3121,7 @@ async function run() {
       runnerOverlayMachineState.afterFinal?.levelBeforeFinalRetry === runnerOverlayMachineState.afterFinal?.levelAfterFinalRetry,
     `runner overlay state machine should route by data-state even when titles disagree: ${JSON.stringify(runnerOverlayMachineState)}`
   );
-  assert(runnerMobileState.controls >= 7 && runnerMobileState.visibleAfterScroll && !runnerMobileState.horizontalOverflow, `runner touch controls should remain reachable on mobile after premium-first layout: ${JSON.stringify(runnerMobileState)}`);
+  assert(runnerMobileState.controls >= 7 && runnerMobileState.cabinetBeforeLibrary && runnerMobileState.playfieldVisibleFirst && runnerMobileState.visibleAfterScroll && !runnerMobileState.horizontalOverflow, `runner cabinet and playable screen should come first on mobile while touch controls remain reachable: ${JSON.stringify(runnerMobileState)}`);
   assert(premiumMobileState.cockpit?.visible && premiumMobileState.tabs?.top >= premiumMobileState.cockpit?.bottom - 8 && premiumMobileState.stage?.top >= premiumMobileState.tabs?.bottom - 8 && premiumMobileState.career?.top >= premiumMobileState.stage?.bottom - 8 && !premiumMobileState.horizontalOverflow, `premium arcade cockpit, tabs, and stage should be prioritized before meta panels on mobile: ${JSON.stringify(premiumMobileState)}`);
   assert(premiumMobileState.controls?.visible && premiumMobileState.controlsPosition === 'sticky' && premiumMobileState.controls.bottom <= premiumMobileState.height && premiumMobileState.controlsCount >= 5 && premiumMobileState.minControlWidth >= 44 && premiumMobileState.minControlHeight >= 44 && premiumMobileState.metaControls === 2 && premiumMobileState.metaVisible === 2 && premiumMobileState.minMetaHeight >= 34 && premiumMobileState.metaLabels.includes('开始') && premiumMobileState.actionText && premiumMobileState.toolText, `premium arcade touch controls should stay visible and tappable on mobile with meta controls: ${JSON.stringify(premiumMobileState)}`);
   assert(
@@ -3568,6 +3603,7 @@ function summarizeSmokeResult(result) {
       mobileOverflow: result.premiumMobileState?.horizontalOverflow,
       touchControls: result.premiumMobileState?.controlsCount,
       runnerMobileOverflow: result.runnerMobileState?.horizontalOverflow,
+      runnerFirstScreen: result.runnerMobileState?.playfieldVisibleFirst,
       mobileMetaControls: {
         start: result.premiumMobileMetaState?.labelStarted?.start,
         pause: result.premiumMobileMetaState?.labelPaused?.pause,

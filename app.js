@@ -14159,6 +14159,8 @@ function init() {
   let runnerLastContract = '';
   let runnerLastAction = '';
   let runnerLastScoreGain = 0;
+  let runnerScorePulseUntil = 0;
+  let runnerLandingBurstUntil = 0;
   const runnerContractDefs = [
     { id: 'crystal', label: 'CRYSTAL', target: 3, reward: 420, events: ['crystal'], color: '#FDE68A' },
     { id: 'stomp', label: 'STOMP', target: 2, reward: 560, events: ['stomp'], color: '#FCA5A5' },
@@ -14202,6 +14204,24 @@ function init() {
         color: color
       });
     }
+  }
+
+  function runnerRoundRect(ctx, x, y, w, h, r = 4) {
+    const radius = Math.max(0, Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2));
+    ctx.beginPath();
+    if (typeof ctx.roundRect === 'function') {
+      ctx.roundRect(x, y, w, h, radius);
+      return;
+    }
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + w - radius, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+    ctx.lineTo(x + w, y + h - radius);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+    ctx.lineTo(x + radius, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
   }
 
   function rectsOverlap(a, b) {
@@ -14272,6 +14292,7 @@ function init() {
     runnerLastContract = '';
     runnerLastAction = 'READY';
     runnerLastScoreGain = 0;
+    runnerScorePulseUntil = 0;
     setRunnerMetaUi();
   }
 
@@ -14290,6 +14311,7 @@ function init() {
     runnerScore = Math.max(0, runnerScore + gain);
     runnerLastAction = reason || runnerLastAction || 'SCORE';
     runnerLastScoreGain = gain;
+    runnerScorePulseUntil = now + 420;
     setRunnerMetaUi();
     return gain;
   }
@@ -15592,6 +15614,7 @@ function init() {
     player.dashCooldownUntil = 0;
     player.dashBurstUntil = 0;
     player.invulnerableUntil = 0;
+    runnerLandingBurstUntil = 0;
 
     particles = [];
     resetRunnerMeta();
@@ -16122,6 +16145,9 @@ function init() {
       return;
     }
 
+    const wasGrounded = player.isGrounded;
+    const fallSpeedBeforeCollision = player.vy;
+    let landedThisFrame = false;
     player.isGrounded = false;
     for (const plat of platforms) {
       if (rectsOverlap(playerRect(), plat)) {
@@ -16136,6 +16162,9 @@ function init() {
             player.isGrounded = true;
             player.doubleJumpAvailable = true;
             player.x += plat.x - plat.prevX;
+            if (!wasGrounded && fallSpeedBeforeCollision > 2.2) {
+              landedThisFrame = true;
+            }
           } else if (player.vy < 0) {
             player.y += overlapY;
             player.vy = 0;
@@ -16144,6 +16173,23 @@ function init() {
           if (player.vx > 0) player.x -= overlapX;
           else if (player.vx < 0) player.x += overlapX;
         }
+      }
+    }
+
+    if (landedThisFrame && now > runnerLandingBurstUntil) {
+      runnerLandingBurstUntil = now + 140;
+      const dustColor = runnerCombo >= 2 ? '#A7F3D0' : 'rgba(226, 232, 240, 0.62)';
+      for (let i = 0; i < 10; i++) {
+        particles.push({
+          x: player.x + player.width / 2 + (Math.random() - 0.5) * 18,
+          y: player.y + player.height + 1,
+          vx: (Math.random() - 0.5) * 2.6,
+          vy: -Math.random() * 1.7,
+          radius: Math.random() * 1.8 + 0.8,
+          alpha: 0.76,
+          decay: Math.random() * 0.04 + 0.025,
+          color: dustColor
+        });
       }
     }
 
@@ -16444,20 +16490,79 @@ function init() {
     for (const enemy of enemies) {
       if (enemy.isDead) continue;
       gameCtx.save();
+      const ex = enemy.x - cameraX;
+      const ey = enemy.y;
+      const eyeShift = enemy.vx > 0 ? 1 : -1;
+      gameCtx.shadowColor = '#EF4444';
+      gameCtx.shadowBlur = 10;
+      gameCtx.fillStyle = '#7F1D1D';
+      runnerRoundRect(gameCtx, ex, ey, enemy.w, enemy.h, 5);
+      gameCtx.fill();
       gameCtx.fillStyle = '#EF4444';
-      gameCtx.fillRect(enemy.x - cameraX, enemy.y, enemy.w, enemy.h);
+      runnerRoundRect(gameCtx, ex + 2, ey + 2, enemy.w - 4, enemy.h - 6, 4);
+      gameCtx.fill();
+      gameCtx.strokeStyle = 'rgba(254, 202, 202, 0.6)';
+      gameCtx.lineWidth = 1.2;
+      gameCtx.beginPath();
+      gameCtx.moveTo(ex + enemy.w / 2, ey + 2);
+      gameCtx.lineTo(ex + enemy.w / 2 + eyeShift * 7, ey - 5);
+      gameCtx.stroke();
 
       gameCtx.fillStyle = '#FFF';
-      gameCtx.fillRect(enemy.x + 3 - cameraX, enemy.y + 5, 4, 4);
-      gameCtx.fillRect(enemy.x + 13 - cameraX, enemy.y + 5, 4, 4);
+      runnerRoundRect(gameCtx, ex + 4, ey + 6, 5, 5, 2);
+      gameCtx.fill();
+      runnerRoundRect(gameCtx, ex + enemy.w - 9, ey + 6, 5, 5, 2);
+      gameCtx.fill();
       
-      gameCtx.fillStyle = '#FF0000';
-      gameCtx.fillRect(enemy.x + (enemy.vx > 0 ? 5 : 2) - cameraX, enemy.y + 6, 2, 2);
-      gameCtx.fillRect(enemy.x + (enemy.vx > 0 ? 15 : 12) - cameraX, enemy.y + 6, 2, 2);
+      gameCtx.fillStyle = '#7F0000';
+      gameCtx.fillRect(ex + 5 + eyeShift, ey + 7, 2, 2);
+      gameCtx.fillRect(ex + enemy.w - 8 + eyeShift, ey + 7, 2, 2);
+      gameCtx.fillStyle = 'rgba(15, 23, 42, 0.72)';
+      gameCtx.fillRect(ex + 4, ey + enemy.h - 5, enemy.w - 8, 3);
       gameCtx.restore();
     }
 
     gameCtx.save();
+    const drawNow = Date.now();
+    const isFacingRight = player.vx >= 0;
+    const px = player.x - cameraX;
+    const py = player.y;
+    const dashActive = drawNow < player.dashBurstUntil;
+    if (dashActive) {
+      for (let i = 4; i >= 1; i--) {
+        const trailAlpha = 0.12 + i * 0.07;
+        gameCtx.globalAlpha = trailAlpha;
+        gameCtx.fillStyle = i % 2 === 0 ? '#60A5FA' : '#A78BFA';
+        runnerRoundRect(
+          gameCtx,
+          px - player.vx * i * 1.2,
+          py + i * 0.6,
+          player.width,
+          player.height,
+          6
+        );
+        gameCtx.fill();
+      }
+      gameCtx.globalAlpha = 1;
+    }
+    if (runnerCombo >= 2 || drawNow < runnerScorePulseUntil) {
+      const comboLevel = Math.min(6, Math.max(1, runnerCombo));
+      const pulse = Math.sin(drawNow / 90) * 2;
+      const activeGain = drawNow < runnerScorePulseUntil;
+      gameCtx.globalAlpha = activeGain ? 0.72 : 0.36;
+      gameCtx.strokeStyle = activeGain ? '#FDE68A' : '#A7F3D0';
+      gameCtx.lineWidth = activeGain ? 2.4 : 1.4;
+      gameCtx.beginPath();
+      gameCtx.arc(
+        player.x + player.width / 2 - cameraX,
+        player.y + player.height / 2,
+        24 + comboLevel + pulse,
+        0,
+        Math.PI * 2
+      );
+      gameCtx.stroke();
+      gameCtx.globalAlpha = 1;
+    }
     if (player.shield > 0 || Date.now() < player.invulnerableUntil) {
       gameCtx.globalAlpha = Date.now() < player.invulnerableUntil ? 0.72 : 1;
       gameCtx.shadowColor = '#34D399';
@@ -16469,13 +16574,37 @@ function init() {
       gameCtx.stroke();
     }
     gameCtx.shadowColor = '#06B6D4';
-    gameCtx.shadowBlur = 8;
-    gameCtx.fillStyle = '#06B6D4';
-    gameCtx.fillRect(player.x - cameraX, player.y, player.width, player.height);
+    gameCtx.shadowBlur = dashActive ? 18 : 10;
+    const groundedSquash = player.isGrounded ? Math.min(4, Math.abs(player.vx) * 0.18) : 0;
+    const bodyX = px - groundedSquash * 0.5;
+    const bodyY = py + groundedSquash * 0.25;
+    const bodyW = player.width + groundedSquash;
+    const bodyH = player.height - groundedSquash * 0.35;
+    const bodyGradient = gameCtx.createLinearGradient(bodyX, bodyY, bodyX, bodyY + bodyH);
+    bodyGradient.addColorStop(0, dashActive ? '#BAE6FD' : '#22D3EE');
+    bodyGradient.addColorStop(0.55, '#06B6D4');
+    bodyGradient.addColorStop(1, '#0E7490');
+    gameCtx.fillStyle = bodyGradient;
+    runnerRoundRect(gameCtx, bodyX, bodyY, bodyW, bodyH, 6);
+    gameCtx.fill();
+    gameCtx.strokeStyle = 'rgba(186, 230, 253, 0.72)';
+    gameCtx.lineWidth = 1.2;
+    runnerRoundRect(gameCtx, bodyX + 1, bodyY + 1, bodyW - 2, bodyH - 2, 5);
+    gameCtx.stroke();
 
-    gameCtx.fillStyle = '#EC4899';
-    const isFacingRight = player.vx >= 0;
-    gameCtx.fillRect(player.x + (isFacingRight ? 11 : 1) - cameraX, player.y + 5, 8, 7);
+    const visorX = px + (isFacingRight ? 10 : 2);
+    gameCtx.shadowColor = '#EC4899';
+    gameCtx.shadowBlur = 8;
+    gameCtx.fillStyle = '#F9A8D4';
+    runnerRoundRect(gameCtx, visorX, py + 6, 9, 7, 3);
+    gameCtx.fill();
+    gameCtx.fillStyle = '#BE185D';
+    gameCtx.fillRect(visorX + (isFacingRight ? 5 : 1), py + 8, 3, 2);
+    gameCtx.fillStyle = dashActive ? '#FDE68A' : '#67E8F9';
+    gameCtx.fillRect(px + (isFacingRight ? -4 : player.width), py + 18, 5, 7);
+    gameCtx.fillStyle = 'rgba(15, 23, 42, 0.74)';
+    gameCtx.fillRect(px + 4, py + player.height - 3, 5, 4);
+    gameCtx.fillRect(px + player.width - 9, py + player.height - 3, 5, 4);
     gameCtx.restore();
 
     for (let i = particles.length - 1; i >= 0; i--) {
