@@ -3432,6 +3432,18 @@ async function run() {
       rating: document.querySelector('#premium-career-rating')?.textContent
     };
   })()`);
+  const heistBlockedState = await evaluate(`(() => {
+    const result = window.__atherixDebug?.premium?.forceHeistBlocked?.() || {};
+    const pixels = window.__atherixSmokeCountCanvasPixels?.('#premium-heist-canvas') || {};
+    return {
+      ...result,
+      nonBlank: !!pixels.nonBlank,
+      routeText: document.querySelector('#premium-heist-route')?.textContent || '',
+      alertText: document.querySelector('#premium-heist-alert')?.textContent || '',
+      feedbackTone: document.querySelector('#premium-game-stage')?.dataset.feedbackTone || '',
+      feedbackLabel: document.querySelector('#premium-game-stage')?.dataset.feedback || ''
+    };
+  })()`);
   const heistLockdownState = await evaluate(`(() => window.__atherixDebug?.premium?.forceHeistLockdown?.() || {})()`);
   await click('#premium-career-open');
   await wait(220);
@@ -3583,7 +3595,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v69-quality') && swText.includes('/style.css?v=20260608-quality-v12') && swText.includes('/app.js?v=20260608-quality-v26'),
+      swHasQualityVersion: swText.includes('atherix-static-v70-quality') && swText.includes('/style.css?v=20260608-quality-v12') && swText.includes('/app.js?v=20260608-quality-v27'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp'),
       swHasLocalFonts: swText.includes('/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2') && swText.includes('/assets/fonts/outfit-latin-wght-normal.woff2') && swText.includes('/assets/fonts/jetbrains-mono-latin-wght-normal.woff2')
@@ -4472,6 +4484,7 @@ async function run() {
   assert(heistState.hackState.opened?.hack?.active && /^HACK\s+\d+\/\d+$/.test(heistState.hackState.opened?.label || '') && Array.isArray(heistState.hackState.sequence) && heistState.hackState.sequence.length >= 3, `heist terminal should open a readable protocol hack sequence: ${JSON.stringify(heistState.hackState)}`);
   assert(heistState.hackState.after?.hacksCompleted > heistState.hackState.before?.hacksCompleted && heistState.hackState.after?.hack === null && heistState.hackState.after?.terminals?.some(terminal => terminal.used) && heistState.hackState.after?.cameras?.some(camera => camera.disabled) && heistState.hackState.after?.loot > heistState.hackState.before?.loot && heistState.hackState.after?.chain > heistState.hackState.before?.chain && heistState.hackState.after?.hackHud === heistState.hack && heistState.hackState.after?.protocolHud === heistState.protocol && heistState.hackState.achieved, `heist protocol hack should complete, change security systems, reward loot/chain, sync HUD, and unlock achievement: ${JSON.stringify(heistState.hackState)}`);
   assert(/^\d+x$/.test(heistState.chain) && /^\d+%$/.test(heistState.security) && /^\d+$/.test(heistState.loot) && /^DONE\s+\d+$/.test(heistState.hack) && heistState.protocol === '--' && heistState.debug.chainHud === heistState.chain && heistState.debug.routeHud === heistState.route && heistState.debug.securityHud === heistState.security && heistState.debug.lootHud === heistState.loot && heistState.debug.hackHud === heistState.hack && heistState.debug.protocolHud === heistState.protocol, `heist HUD should stay in sync with debug state: ${JSON.stringify(heistState)}`);
+  assert(heistBlockedState.nonBlank && heistBlockedState.result?.blocked && heistBlockedState.after?.player?.x === heistBlockedState.before?.player?.x && heistBlockedState.after?.player?.y === heistBlockedState.before?.player?.y && heistBlockedState.after?.steps === heistBlockedState.before?.steps && heistBlockedState.after?.blocked?.flash > 0 && /BLOCKED/.test(heistBlockedState.after?.blocked?.label || '') && /BLOCKED/.test(heistBlockedState.after?.routeHud || '') && heistBlockedState.alertText === 'BLOCK' && heistBlockedState.feedback?.lastTone === 'danger' && heistBlockedState.feedbackTone === 'danger' && /BLOCKED/.test(heistBlockedState.feedbackLabel || ''), `heist blocked movement should keep position/turn state and surface readable feedback: ${JSON.stringify(heistBlockedState)}`);
   assert(
     heistLockdownState.after?.locked &&
       heistLockdownState.after?.recorded &&
@@ -4696,6 +4709,7 @@ async function run() {
     driftResumeState,
     driftFinishState,
     heistState,
+    heistBlockedState,
     heistLockdownState,
     careerDialogState,
     careerDialogClosed,
@@ -4806,6 +4820,7 @@ function summarizeSmokeResult(result) {
       },
       heist: {
         route: result.heistState?.route,
+        blocked: result.heistBlockedState?.after?.blocked?.label,
         hackHud: result.heistState?.hack,
         protocolHud: result.heistState?.protocol,
         protocolAchieved: result.heistState?.hackState?.achieved,

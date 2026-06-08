@@ -12094,7 +12094,11 @@ function init() {
       won: false,
       locked: false,
       recorded: false,
-      lockdownReason: ''
+      lockdownReason: '',
+      blockedFlash: 0,
+      blockedCell: null,
+      blockedReason: '',
+      blockedLabel: ''
     };
     const heistHackGlyphs = { up: 'U', down: 'D', left: 'L', right: 'R' };
 
@@ -12117,8 +12121,9 @@ function init() {
       heist.routeCells = intel.route;
       const routeEl = document.getElementById('premium-heist-route');
       if (routeEl) {
-        routeEl.textContent = intel.label;
-        routeEl.style.color = intel.risk >= 3 ? '#EF4444' : intel.risk > 0 ? '#FBBF24' : '#34D399';
+        const blockedActive = Number(heist.blockedFlash || 0) > 0 && heist.blockedLabel;
+        routeEl.textContent = blockedActive ? heist.blockedLabel : intel.label;
+        routeEl.style.color = blockedActive ? '#F97316' : intel.risk >= 3 ? '#EF4444' : intel.risk > 0 ? '#FBBF24' : '#34D399';
       }
       const chainEl = document.getElementById('premium-heist-chain');
       if (chainEl) {
@@ -12139,7 +12144,7 @@ function init() {
       }
       const alertEl = document.getElementById('premium-heist-alert');
       alertEl.textContent = heist.alert;
-      alertEl.style.color = ['HIGH', 'LOCK', 'LOCKDOWN', 'CAM'].includes(heist.alert)
+      alertEl.style.color = ['HIGH', 'LOCK', 'LOCKDOWN', 'CAM', 'BLOCK'].includes(heist.alert)
         ? '#EF4444'
         : (['MID', 'GHOST'].includes(heist.alert) ? '#FBBF24' : '#34D399');
       if (premiumActive === 'heist') updatePremiumMetaControls();
@@ -12206,6 +12211,10 @@ function init() {
       heist.locked = false;
       heist.recorded = false;
       heist.lockdownReason = '';
+      heist.blockedFlash = 0;
+      heist.blockedCell = null;
+      heist.blockedReason = '';
+      heist.blockedLabel = '';
       setHeistUi();
       if (shouldFocus) focusStage();
       drawHeist();
@@ -12216,6 +12225,39 @@ function init() {
         typeof heist.grid[y][x] === 'undefined' ||
         heist.grid[y][x] === 1 ||
         heist.doors.some(door => !door.open && door.x === x && door.y === y);
+    }
+
+    function heistBlockReason(x, y) {
+      if (!heist.grid[y] || typeof heist.grid[y][x] === 'undefined') return 'EDGE';
+      if (heist.grid[y][x] === 1) return 'WALL';
+      if (heist.doors.some(door => !door.open && door.x === x && door.y === y)) return 'LOCKED DOOR';
+      return 'BLOCKED';
+    }
+
+    function markHeistBlocked(x, y) {
+      const reason = heistBlockReason(x, y);
+      const inBounds = !!heist.grid[y] && typeof heist.grid[y][x] !== 'undefined';
+      heist.blockedFlash = 6;
+      heist.blockedCell = {
+        x: inBounds ? x : clamp(x, 0, (heist.grid[0]?.length || 1) - 1),
+        y: inBounds ? y : clamp(y, 0, heist.grid.length - 1),
+        attemptedX: x,
+        attemptedY: y
+      };
+      heist.blockedReason = reason;
+      heist.blockedLabel = reason === 'LOCKED DOOR' ? 'LOCKED DOOR' : `BLOCKED ${reason}`;
+      heist.alert = reason === 'LOCKED DOOR' ? 'LOCK' : 'BLOCK';
+      heist.lastTactic = heist.blockedLabel;
+      heist.alarmFlash = Math.max(heist.alarmFlash || 0, 2);
+      setHeistUi();
+      drawHeist();
+      triggerPremiumFeedback('danger', { label: heist.blockedLabel, throttleMs: 120 });
+      return {
+        blocked: true,
+        reason,
+        label: heist.blockedLabel,
+        cell: { ...heist.blockedCell }
+      };
     }
 
     function heistKey(x, y) {
@@ -12420,6 +12462,7 @@ function init() {
         if (heist.decoy.timer <= 0) heist.decoy = null;
       }
       heist.alarmFlash = Math.max(0, heist.alarmFlash - 1);
+      heist.blockedFlash = Math.max(0, Number(heist.blockedFlash || 0) - 1);
     }
 
     function heistHeatMap() {
@@ -12608,6 +12651,12 @@ function init() {
         decoyHud: document.getElementById('premium-heist-decoys')?.textContent || '',
         lootHud: document.getElementById('premium-heist-loot')?.textContent || '',
         alert: heist.alert,
+        blocked: {
+          flash: Number(heist.blockedFlash || 0),
+          reason: heist.blockedReason || '',
+          label: heist.blockedLabel || '',
+          cell: heist.blockedCell ? { ...heist.blockedCell } : null
+        },
         steps: heist.steps,
         tools: document.getElementById('premium-heist-tools')?.textContent || '',
         player: { ...heist.player },
@@ -12752,7 +12801,11 @@ function init() {
       if (premiumActive !== 'heist' || heist.won || heist.locked) return;
       const nx = heist.player.x + dx;
       const ny = heist.player.y + dy;
-      if (heistTileBlocked(nx, ny)) return;
+      if (heistTileBlocked(nx, ny)) return markHeistBlocked(nx, ny);
+      heist.blockedFlash = 0;
+      heist.blockedCell = null;
+      heist.blockedReason = '';
+      heist.blockedLabel = '';
       heist.player = { x: nx, y: ny };
       heist.steps++;
       heist.cloakTurns = Math.max(0, heist.cloakTurns - 1);
@@ -12852,6 +12905,28 @@ function init() {
         ctx.fillStyle = door.open ? 'rgba(52, 211, 153, 0.22)' : '#7f1d1d';
         ctx.fillRect(door.x * tile + 3, door.y * tile + 3, tile - 6, tile - 6);
       });
+      if (heist.blockedFlash > 0 && heist.blockedCell) {
+        ctx.save();
+        const bx = heist.blockedCell.x * tile;
+        const by = heist.blockedCell.y * tile;
+        const pulse = Math.max(0.28, heist.blockedFlash / 6);
+        ctx.fillStyle = `rgba(249, 115, 22, ${0.1 + pulse * 0.18})`;
+        ctx.fillRect(bx + 2, by + 2, tile - 5, tile - 5);
+        ctx.strokeStyle = `rgba(252, 165, 165, ${0.42 + pulse * 0.48})`;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(bx + 3, by + 3, tile - 7, tile - 7);
+        ctx.beginPath();
+        ctx.moveTo(bx + 8, by + 8);
+        ctx.lineTo(bx + tile - 8, by + tile - 8);
+        ctx.moveTo(bx + tile - 8, by + 8);
+        ctx.lineTo(bx + 8, by + tile - 8);
+        ctx.stroke();
+        ctx.fillStyle = '#FCA5A5';
+        ctx.font = '900 8px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(heist.blockedReason || 'BLOCK', bx + tile / 2, Math.max(10, by - 4));
+        ctx.restore();
+      }
       heist.terminals.forEach(t => {
         const activeHack = heist.hack?.active && heist.hack.terminal === t;
         ctx.save();
@@ -15228,6 +15303,29 @@ function init() {
           heistSteps: () => heist.steps,
           heistIntel: () => heistDebugState(),
           stepHeistRoute: () => stepHeistRoute(),
+          forceHeistBlocked: () => {
+            switchPremiumGame('heist');
+            newHeist();
+            heist.player = { x: 1, y: 1 };
+            heist.steps = 3;
+            heist.chain = 2;
+            heist.alert = 'LOW';
+            setHeistUi();
+            drawHeist();
+            const before = heistDebugState();
+            const result = moveHeist(-1, 0);
+            return {
+              before,
+              result,
+              after: heistDebugState(),
+              feedback: {
+                lastTone: premiumFeedback.lastTone,
+                lastLabel: premiumFeedback.lastLabel,
+                tones: { ...premiumFeedback.tones },
+                visualTriggers: premiumFeedback.visualTriggers
+              }
+            };
+          },
           forceHeistDecoy: () => {
             switchPremiumGame('heist');
             if (!heist.grid.length) newHeist();
