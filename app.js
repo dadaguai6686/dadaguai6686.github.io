@@ -5324,7 +5324,7 @@ function init() {
         <div class="arcade-profile-grid">
           <span>完成度 <strong id="premium-profile-completion">0%</strong></span>
           <span>奖牌 <strong id="premium-profile-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-profile-achievements">0/29</strong></span>
+          <span>成就 <strong id="premium-profile-achievements">0/30</strong></span>
           <span>最近 <strong id="premium-profile-latest">--</strong></span>
         </div>
         <button type="button" class="arcade-profile-action" id="premium-profile-target" data-profile-target-game="survivor">
@@ -5424,7 +5424,7 @@ function init() {
         </div>
         <div class="arcade-director-meters" aria-label="街机完成度">
           <span>奖牌 <strong id="premium-director-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-director-achievements">0/29</strong></span>
+          <span>成就 <strong id="premium-director-achievements">0/30</strong></span>
           <span>完成度 <strong id="premium-director-completion">0%</strong></span>
         </div>
         <button type="button" class="arcade-director-action" id="premium-director-start" data-target-game="survivor">
@@ -5937,6 +5937,7 @@ function init() {
       { id: 'drift_clean', label: '零损漂移', desc: '高护盾完成 Neon Drift' },
       { id: 'drift_combo', label: '量子倍率', desc: 'Neon Drift 倍率达到 x3.0' },
       { id: 'drift_sponsor', label: '赞助制霸', desc: 'Neon Drift 完成一张赞助合约' },
+      { id: 'drift_near_miss', label: '贴边穿线', desc: 'Neon Drift 高速擦过障碍或无人机' },
       { id: 'heist_ghost', label: '幽影协议', desc: '成功启动隐身装置' },
       { id: 'heist_clean', label: '无声撤离', desc: '低步数完成潜入' },
       { id: 'heist_cache', label: '金库猎手', desc: '赛博潜入中取得高价值缓存' },
@@ -6970,7 +6971,7 @@ function init() {
         runner: [['level', '关卡'], ['finishTime', '用时', 's'], ['bestCombo', '连段', 'x'], ['contractsCompleted', '合约']],
         survivor: [['level', '等级'], ['bestChain', '连锁', 'x'], ['overdrive', '超载'], ['drones', '无人机'], ['bounties', '赏金']],
         boss: [['phase', '阶段'], ['graze', '擦弹'], ['perfectDodges', '精准闪避'], ['focusSurges', '专注'], ['shieldShatters', '碎盾']],
-        drift: [['gates', '弯道'], ['bestCombo', '连段', 'x'], ['overtakes', '超车'], ['heatPeak', '热度', '%'], ['phaseUses', '相位']],
+        drift: [['gates', '弯道'], ['bestCombo', '连段', 'x'], ['overtakes', '超车'], ['nearMisses', '擦车'], ['phaseUses', '相位']],
         heist: [['steps', '步数'], ['bestChain', '潜行链'], ['loot', '缓存'], ['security', '警戒', '%'], ['hacksCompleted', '破解']],
         chain: [['movesLeft', '余步'], ['combo', '连锁'], ['mult', '倍率', 'x'], ['phase', '阶段'], ['recipes', '配方']],
         tactics: [['turns', '回合'], ['hp', '装甲'], ['kills', '击破'], ['combo', '连段', 'x'], ['surges', '脉冲']]
@@ -11557,6 +11558,13 @@ function init() {
       draft: 0,
       draftBank: 0,
       overtakes: 0,
+      nearMisses: 0,
+      nearMissStreak: 0,
+      bestNearMissStreak: 0,
+      nearMissFlash: 0,
+      nearMissCooldown: 0,
+      nearMissPoint: null,
+      lastNearMiss: '',
       heat: 0,
       heatPeak: 0,
       phaseCharge: 100,
@@ -11769,6 +11777,13 @@ function init() {
       drift.draft = 0;
       drift.draftBank = 0;
       drift.overtakes = 0;
+      drift.nearMisses = 0;
+      drift.nearMissStreak = 0;
+      drift.bestNearMissStreak = 0;
+      drift.nearMissFlash = 0;
+      drift.nearMissCooldown = 0;
+      drift.nearMissPoint = null;
+      drift.lastNearMiss = '';
       drift.heat = 16;
       drift.heatPeak = 16;
       drift.phaseCharge = 100;
@@ -11864,6 +11879,7 @@ function init() {
       drift.lastTactic = phaseGuard ? '相位擦碰：损伤降低' : `碰撞热度 +${Math.round(heatGain)}`;
       drift.multiplier = Math.max(1, drift.multiplier * (phaseGuard ? 0.88 : 0.72));
       drift.combo = 0;
+      drift.nearMissStreak = 0;
       drift.impactLabel = driftImpactLabel(source, phaseGuard);
       drift.impactSource = String(source || 'impact');
       drift.impactDamage = Number(finalDamage.toFixed(1));
@@ -11890,11 +11906,79 @@ function init() {
       };
     }
 
-    function driftRectCollision(rect) {
+    function driftRectContact(rect) {
       const p = drift.player;
-      const nearestX = clamp(p.x, rect.x, rect.x + rect.w);
-      const nearestY = clamp(p.y, rect.y, rect.y + rect.h);
-      return Math.hypot(p.x - nearestX, p.y - nearestY) < p.r + 2;
+      const x = clamp(p.x, rect.x, rect.x + rect.w);
+      const y = clamp(p.y, rect.y, rect.y + rect.h);
+      return {
+        x,
+        y,
+        distance: Math.hypot(p.x - x, p.y - y)
+      };
+    }
+
+    function driftRectCollision(rect) {
+      return driftRectContact(rect).distance < drift.player.r + 2;
+    }
+
+    function triggerDriftNearMiss(point, source = 'barrier', speed = 0, clearance = 99) {
+      const p = drift.player;
+      const cleanClearance = Number(clearance || 0);
+      const fastEnough = Number(speed || 0) >= 148;
+      const closeEnough = cleanClearance >= 0 && cleanClearance <= 18;
+      if (!drift.running || drift.paused || drift.hitCooldown > 0 || drift.nearMissCooldown > 0 || !fastEnough || !closeEnough) {
+        return { triggered: false, reason: !fastEnough ? 'slow' : !closeEnough ? 'far' : drift.nearMissCooldown > 0 ? 'cooldown' : 'blocked' };
+      }
+      const phaseActive = Number(drift.phaseBrake || 0) > 0;
+      const tightness = clamp(1 - cleanClearance / 18, 0, 1);
+      const speedFactor = clamp((speed - 148) / 170, 0, 1);
+      drift.nearMisses = Number(drift.nearMisses || 0) + 1;
+      drift.nearMissStreak = Number(drift.nearMissStreak || 0) + 1;
+      drift.bestNearMissStreak = Math.max(Number(drift.bestNearMissStreak || 0), drift.nearMissStreak);
+      const quality = Math.min(99, Math.round(58 + tightness * 24 + speedFactor * 13 + Math.min(8, drift.nearMissStreak * 2) + (phaseActive ? 5 : 0)));
+      const label = quality >= 86 ? 'THREAD' : 'NEAR MISS';
+      const bonus = Math.floor((96 + quality * 2.2 + speed * 0.34 + drift.nearMissStreak * 24) * drift.multiplier);
+      drift.score += bonus;
+      drift.lineBank += 34 + drift.nearMissStreak * 10 + Math.max(0, quality - 70);
+      drift.boost = Math.min(drift.maxBoost, drift.boost + 8 + tightness * 8 + drift.nearMissStreak);
+      drift.multiplier = Math.min(4.6, drift.multiplier + 0.05 + tightness * 0.07 + (phaseActive ? 0.03 : 0));
+      chargeDriftPhase(8 + tightness * 10 + drift.nearMissStreak * 1.2 + (phaseActive ? 4 : 0));
+      addDriftHeat(phaseActive ? -3 : 1.6 + tightness * 2.4);
+      drift.lineLabel = label;
+      drift.lineTone = quality >= 86 ? 'perfect' : 'clean';
+      drift.lineQuality = quality;
+      drift.lineFlash = 760;
+      drift.nearMissFlash = 820;
+      drift.nearMissCooldown = phaseActive ? 240 : 330;
+      drift.nearMissPoint = { x: point?.x ?? p.x, y: point?.y ?? p.y };
+      drift.lastNearMiss = `${label} +${bonus}`;
+      drift.lastTactic = `${label} 擦车 +${bonus}`;
+      drift.splits.unshift({
+        gate: drift.gateIndex + 1,
+        label,
+        quality,
+        score: bonus,
+        overtakeBonus: 0,
+        sponsor: '',
+        heat: Math.floor(drift.heat),
+        combo: drift.combo,
+        nearMiss: true,
+        age: 1400
+      });
+      drift.splits = drift.splits.slice(0, 4);
+      driftSpark(drift.nearMissPoint.x, drift.nearMissPoint.y, quality >= 86 ? '#FDE68A' : '#BAE6FD', quality >= 86 ? 30 : 20);
+      unlockAchievement('drift_near_miss');
+      triggerPremiumFeedback('special', { label, throttleMs: 80 });
+      return {
+        triggered: true,
+        label,
+        quality,
+        bonus,
+        clearance: Number(cleanClearance.toFixed(1)),
+        speed: Math.round(speed),
+        count: Number(drift.nearMisses || 0),
+        streak: Number(drift.nearMissStreak || 0)
+      };
     }
 
     function driftAngleDelta(a, b) {
@@ -12065,6 +12149,8 @@ function init() {
         bestCombo: drift.bestCombo,
         line: drift.lineLabel,
         overtakes: drift.overtakes,
+        nearMisses: Number(drift.nearMisses || 0),
+        bestNearMissStreak: Number(drift.bestNearMissStreak || 0),
         draft: Math.floor(drift.draftBank),
         contractsCompleted: drift.contractsCompleted,
         heatPeak: Math.floor(drift.heatPeak),
@@ -12120,6 +12206,8 @@ function init() {
       drift.hitCooldown = Math.max(0, drift.hitCooldown - dt);
       drift.lineFlash = Math.max(0, drift.lineFlash - dt);
       drift.impactFlash = Math.max(0, Number(drift.impactFlash || 0) - dt);
+      drift.nearMissFlash = Math.max(0, Number(drift.nearMissFlash || 0) - dt);
+      drift.nearMissCooldown = Math.max(0, Number(drift.nearMissCooldown || 0) - dt);
       const drag = Math.pow(phaseActive ? 0.946 : premiumKeys.down ? 0.955 : 0.982, dt / 16.67);
       p.vx *= drag;
       p.vy *= drag;
@@ -12161,13 +12249,23 @@ function init() {
         damageDrift(6, p.x, p.y, 'wall');
       }
       drift.barriers.forEach(rect => {
-        if (driftRectCollision(rect)) damageDrift(8, p.x, p.y, 'barrier');
+        const contact = driftRectContact(rect);
+        if (contact.distance < p.r + 2) {
+          damageDrift(8, p.x, p.y, 'barrier');
+        } else {
+          triggerDriftNearMiss(contact, 'barrier', speed, contact.distance - p.r);
+        }
       });
 
       drift.drones.forEach(drone => {
         drone.x = drone.baseX + Math.sin(drift.elapsed * drone.speed + drone.phase) * drone.ampX;
         drone.y = drone.baseY + Math.cos(drift.elapsed * drone.speed * 0.86 + drone.phase) * drone.ampY;
-        if (Math.hypot(drone.x - p.x, drone.y - p.y) < drone.r + p.r) damageDrift(12, drone.x, drone.y, 'drone');
+        const distance = Math.hypot(drone.x - p.x, drone.y - p.y);
+        if (distance < drone.r + p.r) {
+          damageDrift(12, drone.x, drone.y, 'drone');
+        } else {
+          triggerDriftNearMiss({ x: drone.x, y: drone.y }, 'drone', speed, distance - drone.r - p.r);
+        }
       });
       updateDriftRival(dt);
 
@@ -12376,6 +12474,31 @@ function init() {
         ctx.stroke();
         ctx.restore();
       }
+      const nearMissAlpha = clamp(Number(drift.nearMissFlash || 0) / 820, 0, 1);
+      if (nearMissAlpha > 0) {
+        const point = drift.nearMissPoint || { x: p.x, y: p.y };
+        const color = drift.lineTone === 'perfect' ? '#FDE68A' : '#BAE6FD';
+        ctx.save();
+        ctx.globalAlpha = 0.22 + nearMissAlpha * 0.58;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2 + nearMissAlpha * 3;
+        ctx.setLineDash([6, 5]);
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(point.x, point.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 14 + (1 - nearMissAlpha) * 26, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.font = '900 10px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 12;
+        ctx.fillText(drift.lastNearMiss || 'NEAR MISS', (point.x + p.x) / 2, Math.max(16, (point.y + p.y) / 2 - 14));
+        ctx.restore();
+      }
       const impactAlpha = clamp(Number(drift.impactFlash || 0) / 840, 0, 1);
       if (impactAlpha > 0) {
         const point = drift.impactPoint || { x: p.x, y: p.y };
@@ -12424,12 +12547,13 @@ function init() {
         const alpha = clamp(split.age / 1800, 0, 1);
         ctx.save();
         ctx.globalAlpha = 0.42 + alpha * 0.58;
-        ctx.fillStyle = driftToneColor(split.label === 'PERFECT' ? 'perfect' : split.label === 'APEX' ? 'apex' : split.label === 'CLEAN' ? 'clean' : 'danger');
+        ctx.fillStyle = driftToneColor(split.label === 'PERFECT' || split.label === 'THREAD' ? 'perfect' : split.label === 'APEX' ? 'apex' : split.label === 'CLEAN' || split.label === 'NEAR MISS' ? 'clean' : 'danger');
         ctx.font = '800 10px JetBrains Mono, monospace';
         ctx.textAlign = 'right';
         const overtakeText = split.overtakeBonus > 0 ? ` OVERTAKE +${split.overtakeBonus}` : '';
         const sponsorText = split.sponsor ? ` ${split.sponsor} CONTRACT` : '';
-        ctx.fillText(`#${split.gate} ${split.label} ${split.quality} +${split.score} ${split.combo}x H${split.heat}${overtakeText}${sponsorText}`, c.width - 16, 24 + index * 15);
+        const riskText = split.nearMiss ? ' RISK' : '';
+        ctx.fillText(`#${split.gate} ${split.label} ${split.quality} +${split.score} ${split.combo}x H${split.heat}${riskText}${overtakeText}${sponsorText}`, c.width - 16, 24 + index * 15);
         ctx.restore();
       });
     }
@@ -15938,6 +16062,15 @@ function init() {
             draft: Number(drift.draft.toFixed(2)),
             draftBank: Math.floor(drift.draftBank),
             overtakes: drift.overtakes,
+            nearMiss: {
+              count: Number(drift.nearMisses || 0),
+              streak: Number(drift.nearMissStreak || 0),
+              best: Number(drift.bestNearMissStreak || 0),
+              flash: Math.ceil(Number(drift.nearMissFlash || 0)),
+              cooldown: Math.ceil(Number(drift.nearMissCooldown || 0)),
+              last: drift.lastNearMiss || '',
+              point: drift.nearMissPoint ? { ...drift.nearMissPoint } : null
+            },
             heat: Math.floor(drift.heat),
             heatPeak: Math.floor(drift.heatPeak),
             phaseCharge: Math.floor(drift.phaseCharge),
@@ -16016,6 +16149,50 @@ function init() {
                 tones: { ...premiumFeedback.tones },
                 visualTriggers: premiumFeedback.visualTriggers
               }
+            };
+          },
+          forceDriftNearMiss: () => {
+            if (!drift.running) startDrift();
+            drift.paused = false;
+            drift.hitCooldown = 0;
+            drift.nearMissCooldown = 0;
+            drift.nearMisses = 0;
+            drift.nearMissStreak = 0;
+            drift.bestNearMissStreak = 0;
+            drift.nearMissFlash = 0;
+            drift.nearMissPoint = null;
+            drift.lastNearMiss = '';
+            drift.phaseBrake = 0;
+            drift.phaseCharge = 36;
+            drift.heat = 32;
+            drift.heatPeak = Math.max(drift.heatPeak, drift.heat);
+            drift.boost = 42;
+            drift.lineBank = 0;
+            drift.player.x = 174;
+            drift.player.y = 198;
+            drift.player.angle = 0;
+            drift.player.vx = 246;
+            drift.player.vy = 0;
+            setDriftUi();
+            const before = window.__atherixDebug.premium.driftLineState();
+            const contact = driftRectContact(drift.barriers[0]);
+            const speed = Math.hypot(drift.player.vx, drift.player.vy);
+            const result = triggerDriftNearMiss(contact, 'barrier', speed, contact.distance - drift.player.r);
+            setDriftUi();
+            drawDrift();
+            return {
+              before,
+              result,
+              after: window.__atherixDebug.premium.driftLineState(),
+              feedback: {
+                lastTone: premiumFeedback.lastTone,
+                lastLabel: premiumFeedback.lastLabel,
+                tones: { ...premiumFeedback.tones },
+                visualTriggers: premiumFeedback.visualTriggers
+              },
+              stageTone: document.getElementById('premium-game-stage')?.dataset.feedbackTone || '',
+              stageLabel: document.getElementById('premium-game-stage')?.dataset.feedback || '',
+              achieved: (career.achievements || []).includes('drift_near_miss')
             };
           },
           forceDriftApex: () => {
