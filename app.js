@@ -12096,6 +12096,8 @@ function init() {
       recipesCompleted: 0,
       overcharge: 0,
       catalystUsed: 0,
+      reshuffles: 0,
+      lastReshuffle: '',
       finished: false,
       recorded: false
     };
@@ -12240,7 +12242,8 @@ function init() {
     }
 
     function setChainCursorToBest() {
-      const best = chain.bestMove || bestChainMove();
+      const best = bestChainMove();
+      chain.bestMove = best;
       if (best) {
         chain.cursor = { r: best.r, c: best.c };
       } else {
@@ -12309,6 +12312,8 @@ function init() {
       chain.variant = variant;
       chain.runPressure = runPressure;
       resetChainLedger();
+      chain.reshuffles = 0;
+      chain.lastReshuffle = '';
       chain.finished = false;
       chain.recorded = false;
       chain.grid = Array.from({ length: 7 }, () => Array.from({ length: 7 }, randomChainCell));
@@ -12524,6 +12529,58 @@ function init() {
       }
     }
 
+    function shuffledChainTokens(tokens) {
+      const mixed = tokens.slice();
+      for (let i = mixed.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [mixed[i], mixed[j]] = [mixed[j], mixed[i]];
+      }
+      return mixed;
+    }
+
+    function writeChainTokens(tokens) {
+      for (let r = 0; r < 7; r++) {
+        for (let c = 0; c < 7; c++) {
+          chain.grid[r][c] = tokens[r * 7 + c] || randomChainCell();
+        }
+      }
+    }
+
+    function seedGuaranteedChainMove() {
+      const color = pick(chain.colors);
+      chain.grid[3][2] = color;
+      chain.grid[3][3] = color;
+      chain.grid[3][4] = color;
+    }
+
+    function ensureChainMoveAvailable(reason = 'auto') {
+      if (chain.finished || chain.moves <= 0 || chain.score >= chain.target) return false;
+      const existing = bestChainMove();
+      if (existing) {
+        chain.bestMove = existing;
+        return false;
+      }
+      const tokens = chain.grid.flat().filter(Boolean);
+      let recovered = null;
+      for (let attempt = 0; attempt < 12 && !recovered; attempt++) {
+        writeChainTokens(shuffledChainTokens(tokens));
+        recovered = bestChainMove();
+      }
+      if (!recovered) {
+        seedGuaranteedChainMove();
+        recovered = bestChainMove();
+      }
+      chain.reshuffles = Number(chain.reshuffles || 0) + 1;
+      chain.lastReshuffle = reason;
+      chain.feedback = reason === 'debug'
+        ? '矩阵已重洗 · 恢复可用连锁'
+        : '无可用连锁 · 自动重洗';
+      chain.bestMove = recovered || bestChainMove();
+      setChainCursorToBest();
+      if (reason !== 'debug') triggerPremiumFeedback('special', { label: 'RESHUFFLE', throttleMs: 240 });
+      return true;
+    }
+
     function finishChainIfNeeded() {
       if (chain.finished) return;
       if (chain.moves <= 0 || chain.score >= chain.target) {
@@ -12542,6 +12599,10 @@ function init() {
       chain.cursor = { r: Math.floor(clamp(Number(r || 0), 0, 6)), c: Math.floor(clamp(Number(c || 0), 0, 6)) };
       const result = evaluateChainMove(r, c);
       if (!result.valid) {
+        if (!bestChainMove() && ensureChainMoveAvailable('manual')) {
+          renderChain();
+          return;
+        }
         chain.combo = 0;
         chain.streak = 0;
         chain.mult = 1;
@@ -12557,6 +12618,7 @@ function init() {
       applyChainResult(result);
       settleChain();
       finishChainIfNeeded();
+      ensureChainMoveAvailable('auto');
       renderChain();
     }
 
@@ -12569,6 +12631,10 @@ function init() {
       }
       const result = evaluateChainCatalyst();
       if (!result.valid) {
+        if (ensureChainMoveAvailable('catalyst')) {
+          renderChain();
+          return;
+        }
         chain.feedback = '催化失败：没有可炼成能量';
         renderChain();
         return;
@@ -12578,6 +12644,7 @@ function init() {
       applyChainResult(result, { catalyst: true });
       settleChain();
       finishChainIfNeeded();
+      ensureChainMoveAvailable('catalyst');
       renderChain();
       triggerPremiumFeedback('special', { label: 'CATALYST' });
     }
@@ -12617,6 +12684,9 @@ function init() {
         recipesCompleted: chain.recipesCompleted,
         overcharge: Math.floor(chain.overcharge),
         catalystUsed: chain.catalystUsed,
+        reshuffles: Number(chain.reshuffles || 0),
+        lastReshuffle: chain.lastReshuffle || '',
+        hasBestMove: !!best,
         achieved: (career.achievements || []).includes('chain_recipe'),
         finished: chain.finished,
         cursor: {
@@ -12739,6 +12809,46 @@ function init() {
       renderChain();
       const before = chainDebugState();
       triggerChainCatalyst();
+      return { before, after: chainDebugState() };
+    }
+
+    function seedChainNoMoveBoard() {
+      switchPremiumGame('chain');
+      chain.score = 0;
+      chain.moves = 12;
+      chain.combo = 0;
+      chain.streak = 0;
+      chain.mult = 1;
+      chain.phaseIndex = 0;
+      chain.feedback = '无步调试矩阵已装载';
+      chain.lastGain = 0;
+      chain.lastClear = 0;
+      chain.lastSpecial = '';
+      chain.specialsTriggered = 0;
+      chain.reshuffles = 0;
+      chain.lastReshuffle = '';
+      resetChainLedger();
+      chain.finished = false;
+      chain.recorded = false;
+      chain.grid = [
+        ['cyan', 'violet', 'pink', 'gold', 'green', 'cyan', 'violet'],
+        ['pink', 'gold', 'green', 'cyan', 'violet', 'pink', 'gold'],
+        ['green', 'cyan', 'violet', 'pink', 'gold', 'green', 'cyan'],
+        ['violet', 'pink', 'gold', 'green', 'cyan', 'violet', 'pink'],
+        ['gold', 'green', 'cyan', 'violet', 'pink', 'gold', 'green'],
+        ['cyan', 'violet', 'pink', 'gold', 'green', 'cyan', 'violet'],
+        ['pink', 'gold', 'green', 'cyan', 'violet', 'pink', 'gold']
+      ];
+      chain.bestMove = bestChainMove();
+      normalizeChainCursor();
+      renderChain();
+      return chainDebugState();
+    }
+
+    function forceChainNoMove() {
+      const before = seedChainNoMoveBoard();
+      ensureChainMoveAvailable('debug');
+      renderChain();
       return { before, after: chainDebugState() };
     }
 
@@ -14115,6 +14225,7 @@ function init() {
           forceChainCombo: () => forceChainCombo(),
           forceChainRecipe: () => forceChainRecipe(),
           forceChainCatalyst: () => forceChainCatalyst(),
+          forceChainNoMove: () => forceChainNoMove(),
           tacticsTurn: () => tactics.turn,
           tacticsState: () => tacticsDebugState(),
           tacticsForecast: () => {
