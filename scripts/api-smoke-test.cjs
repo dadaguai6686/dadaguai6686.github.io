@@ -1,5 +1,6 @@
 const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
+const http = require('http');
 const jwt = require('jsonwebtoken');
 const net = require('net');
 const os = require('os');
@@ -55,6 +56,26 @@ function collectChildOutput(child) {
   child.stdout?.on('data', append);
   child.stderr?.on('data', append);
   return () => output.trim();
+}
+
+function rawHttpGet(pathname, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const req = http.get(`${baseUrl}${pathname}`, { headers }, (res) => {
+      const chunks = [];
+      res.on('data', chunk => chunks.push(chunk));
+      res.on('end', () => {
+        resolve({
+          status: res.statusCode,
+          headers: res.headers,
+          body: Buffer.concat(chunks)
+        });
+      });
+    });
+    req.setTimeout(5000, () => {
+      req.destroy(new Error(`Timed out fetching ${pathname}`));
+    });
+    req.on('error', reject);
+  });
 }
 
 async function waitForServer() {
@@ -327,6 +348,12 @@ async function run() {
     assert(appScriptText.includes('id="premium-tab-survivor" role="tab"') && appScriptText.includes('role="tabpanel" aria-labelledby="premium-tab-tactics"') && appScriptText.includes('window.__atherixSwitchPremiumGame') && appScriptText.includes('focusPremiumGameTabByOffset'), 'premium arcade tabs should expose semantic tabpanel markup and roving keyboard activation');
     assert(appScriptText.includes('premiumRestartConfirmMs') && appScriptText.includes('CONFIRM RESTART') && appScriptText.includes('restartRequest: () =>'), 'premium arcade realtime restarts should require an explicit confirmation step');
     assert(appScriptText.includes('normalizeCareerState') && appScriptText.includes('normalizeCareerRuns') && appScriptText.includes('persistNormalizedCareer'), 'premium arcade career imports should be normalized before use');
+    const compressedStyleSheet = await rawHttpGet('/style.css?v=20260608-quality-v11', { 'Accept-Encoding': 'gzip' });
+    assert(compressedStyleSheet.status === 200 && compressedStyleSheet.headers['content-encoding'] === 'gzip', `versioned stylesheet should be gzip-compressed for repeat visits: ${JSON.stringify(compressedStyleSheet.headers)}`);
+    assert(compressedStyleSheet.body.length < Buffer.byteLength(styleText, 'utf8') * 0.75, 'compressed stylesheet should be materially smaller than the source CSS');
+    const compressedAppScript = await rawHttpGet('/app.js?v=20260608-quality-v24', { 'Accept-Encoding': 'gzip' });
+    assert(compressedAppScript.status === 200 && compressedAppScript.headers['content-encoding'] === 'gzip', `versioned app script should be gzip-compressed for repeat visits: ${JSON.stringify(compressedAppScript.headers)}`);
+    assert(compressedAppScript.body.length < Buffer.byteLength(appScriptText, 'utf8') * 0.75, 'compressed app script should be materially smaller than the source JS');
 
     const articleShell = await fetch(`${baseUrl}/?post=post-1`);
     const articleShellText = await articleShell.text();
@@ -795,6 +822,8 @@ async function run() {
       oversizedJsonStatus: oversizedJson.status,
       versionedAppCacheControl: appScript.headers.get('cache-control'),
       versionedStyleCacheControl: styleSheet.headers.get('cache-control'),
+      compressedAppScriptBytes: compressedAppScript.body.length,
+      compressedStyleBytes: compressedStyleSheet.body.length,
       longUsernameLoginStatus: longUsernameLogin.status,
       longPasswordLoginStatus: longPasswordLogin.status,
       seededProjectCount: projectRows.length,

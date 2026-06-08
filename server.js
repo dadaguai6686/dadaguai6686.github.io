@@ -2,6 +2,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const compression = require('compression');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -504,6 +505,7 @@ app.use((req, res, next) => {
   }
   next();
 });
+app.use(compression({ threshold: 1024 }));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use((err, req, res, next) => {
