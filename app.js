@@ -5457,6 +5457,13 @@ function init() {
           </div>
           <canvas class="mini-canvas mini-canvas-wide" id="premium-tactics-canvas" width="560" height="360" aria-label="裂隙战术棋盘"></canvas>
         </div>
+        <div class="premium-input-readout" id="premium-input-readout" role="status" aria-live="polite">
+          <span><small>MODE</small><strong id="premium-input-mode">星核幸存者</strong></span>
+          <span><small>MOVE</small><strong id="premium-input-move">方向</strong></span>
+          <span><small>ACT</small><strong id="premium-input-action">星爆</strong></span>
+          <span><small>TOOL</small><strong id="premium-input-tool">--</strong></span>
+          <span><small>STATE</small><strong id="premium-input-state">待机</strong></span>
+        </div>
         <div class="premium-touch-controls" aria-label="触控街机控制器">
           <span class="premium-gamepad-status" id="premium-gamepad-status" data-tone="idle">PAD 待机</span>
           <div class="premium-meta-controls" aria-label="局内控制">
@@ -5557,6 +5564,30 @@ function init() {
       chain: '连锁炼金',
       tactics: '裂隙战术'
     };
+    const premiumControlReadouts = {
+      survivor: { move: '方向', action: '星爆', tool: '--', actionLabel: '释放星爆', toolLabel: '' },
+      boss: { move: '方向', action: '闪避', tool: '--', actionLabel: '闪避冲刺', toolLabel: '' },
+      drift: { move: '转向', action: '加速', tool: '相位', actionLabel: '量子加速', toolLabel: '相位刹车' },
+      heist: { move: '潜行', action: '隐身', tool: '诱饵', actionLabel: '启动隐身', toolLabel: '部署诱饵' },
+      chain: { move: '光标', action: '炼成', tool: '催化', actionLabel: '炼成当前选中的能量团', toolLabel: '触发催化' },
+      tactics: { move: '推进', action: '爆破', tool: '--', actionLabel: '相位爆破或架盾', toolLabel: '' }
+    };
+
+    function premiumControlConfig(mode = premiumActive) {
+      return premiumControlReadouts[mode] || premiumControlReadouts.survivor;
+    }
+
+    function hasPremiumControlValue(value) {
+      return !!value && value !== '--';
+    }
+
+    function premiumControlAvailable(control, mode = premiumActive) {
+      if (['up', 'down', 'left', 'right'].includes(control)) return true;
+      const config = premiumControlConfig(mode);
+      if (control === 'action') return hasPremiumControlValue(config.action);
+      if (control === 'tool') return hasPremiumControlValue(config.tool);
+      return false;
+    }
     const premiumBriefings = {
       survivor: {
         title: '星核幸存者作战简报',
@@ -7660,6 +7691,34 @@ function init() {
         pauseBtn.disabled = !state.realtime || !state.running;
         pauseBtn.setAttribute('aria-label', `${state.paused ? '继续' : '暂停'} ${activeLabel}`);
       }
+      updatePremiumInputReadout();
+    }
+
+    function updatePremiumInputReadout() {
+      const readout = document.getElementById('premium-input-readout');
+      if (!readout) return;
+      const config = premiumControlConfig();
+      const state = premiumRealtimeState();
+      const modeEl = document.getElementById('premium-input-mode');
+      const moveEl = document.getElementById('premium-input-move');
+      const actionEl = document.getElementById('premium-input-action');
+      const toolEl = document.getElementById('premium-input-tool');
+      const stateEl = document.getElementById('premium-input-state');
+      const stateText = state.realtime
+        ? state.paused ? '暂停' : state.running ? '运行' : '待机'
+        : ['heist', 'chain', 'tactics'].includes(premiumActive) ? '策略' : '待机';
+      readout.dataset.mode = premiumActive;
+      readout.dataset.state = state.realtime
+        ? state.paused ? 'paused' : state.running ? 'running' : 'idle'
+        : 'turn';
+      if (modeEl) modeEl.textContent = premiumTabLabels[premiumActive] || titles[premiumActive] || premiumActive;
+      if (moveEl) moveEl.textContent = config.move || '方向';
+      if (actionEl) actionEl.textContent = config.action || 'ACT';
+      if (toolEl) {
+        toolEl.textContent = config.tool || '--';
+        toolEl.closest('span')?.classList.toggle('is-disabled', !premiumControlAvailable('tool'));
+      }
+      if (stateEl) stateEl.textContent = stateText;
     }
 
     function startPremiumActiveGame() {
@@ -7692,27 +7751,20 @@ function init() {
     }
 
     function updatePremiumTouchLabels() {
-      const labels = {
-        survivor: { action: '星爆', tool: '', actionLabel: '释放星爆', toolLabel: '' },
-        boss: { action: '闪避', tool: '', actionLabel: '闪避冲刺', toolLabel: '' },
-        drift: { action: '加速', tool: '相位', actionLabel: '量子加速', toolLabel: '相位刹车' },
-        heist: { action: '隐身', tool: '诱饵', actionLabel: '启动隐身', toolLabel: '部署诱饵' },
-        chain: { action: '炼成', tool: '催化', actionLabel: '炼成当前选中的能量团', toolLabel: '触发催化' },
-        tactics: { action: '爆破', tool: '', actionLabel: '相位爆破或架盾', toolLabel: '' }
-      };
-      const config = labels[premiumActive] || labels.survivor;
+      const config = premiumControlConfig();
       const actionBtn = library.querySelector('[data-premium-control="action"]');
       const toolBtn = library.querySelector('[data-premium-control="tool"]');
       if (actionBtn) {
         actionBtn.textContent = config.action || 'ACT';
-        actionBtn.disabled = !config.action;
+        actionBtn.disabled = !premiumControlAvailable('action');
         actionBtn.setAttribute('aria-label', config.actionLabel || '当前模式无主要动作');
       }
       if (toolBtn) {
-        toolBtn.textContent = config.tool || 'TOOL';
-        toolBtn.disabled = !config.tool;
+        toolBtn.textContent = config.tool || '--';
+        toolBtn.disabled = !premiumControlAvailable('tool');
         toolBtn.setAttribute('aria-label', config.toolLabel || '当前模式无工具动作');
       }
+      updatePremiumInputReadout();
     }
 
     function switchPremiumGame(name) {
@@ -7864,6 +7916,7 @@ function init() {
         selectSurvivorUpgrade(survivor.draftChoices[0]?.id);
         return;
       }
+      if (!premiumControlAvailable(control)) return;
       const changed = setPremiumSourceControl(source, control, pressed);
       if (options.edgeOnly && !changed) return;
       if (pressed && changed) {

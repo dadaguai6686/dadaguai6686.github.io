@@ -1791,6 +1791,17 @@ async function run() {
       oldPrototypeCount: document.querySelectorAll('#snake-canvas,#breakout-canvas,#tile-board,#memory-board').length,
       touchControls: document.querySelectorAll('[data-premium-control]').length,
       gamepadStatus: document.querySelector('#premium-gamepad-status')?.textContent || '',
+      inputReadout: {
+        exists: !!document.querySelector('#premium-input-readout'),
+        mode: document.querySelector('#premium-input-readout')?.dataset.mode || '',
+        state: document.querySelector('#premium-input-readout')?.dataset.state || '',
+        modeText: document.querySelector('#premium-input-mode')?.textContent || '',
+        moveText: document.querySelector('#premium-input-move')?.textContent || '',
+        actionText: document.querySelector('#premium-input-action')?.textContent || '',
+        toolText: document.querySelector('#premium-input-tool')?.textContent || '',
+        stateText: document.querySelector('#premium-input-state')?.textContent || '',
+        disabledTools: document.querySelectorAll('#premium-input-readout span.is-disabled').length
+      },
       chainCells: document.querySelectorAll('#premium-chain-board .chain-cell').length,
       chainTarget: document.querySelector('#premium-chain-target')?.textContent,
       feedbackPanel: !!document.querySelector('#premium-feedback-console'),
@@ -1804,6 +1815,7 @@ async function run() {
         tabs: rectFor('#premium-game-tabs'),
         stage: rectFor('#premium-game-stage'),
         briefing: rectFor('#premium-mission-briefing'),
+        inputReadout: rectFor('#premium-input-readout'),
         feedback: rectFor('#premium-feedback-console'),
         career: rectFor('.arcade-career-panel'),
         profile: rectFor('#premium-profile-panel'),
@@ -1830,6 +1842,13 @@ async function run() {
       variant: document.querySelector('#premium-briefing-variant')?.textContent.trim() || '',
       variantTone: document.querySelector('#premium-briefing-variant')?.dataset.tone || '',
       debugVariant: window.__atherixDebug?.premium?.runVariant?.(mode) || {},
+      inputMode: document.querySelector('#premium-input-readout')?.dataset.mode || '',
+      inputState: document.querySelector('#premium-input-readout')?.dataset.state || '',
+      inputModeText: document.querySelector('#premium-input-mode')?.textContent.trim() || '',
+      inputMove: document.querySelector('#premium-input-move')?.textContent.trim() || '',
+      inputAction: document.querySelector('#premium-input-action')?.textContent.trim() || '',
+      inputTool: document.querySelector('#premium-input-tool')?.textContent.trim() || '',
+      toolDisabled: !!document.querySelector('[data-premium-control="tool"]')?.disabled,
       startTarget: document.querySelector('#premium-briefing-start')?.dataset.briefingGame || '',
       startLabel: document.querySelector('#premium-briefing-start')?.textContent.trim() || ''
     });
@@ -1935,6 +1954,14 @@ async function run() {
       startLabel: btn?.textContent.trim() || '',
       actionLabel: document.querySelector('[data-premium-control="action"]')?.textContent || '',
       toolDisabled: !!document.querySelector('[data-premium-control="tool"]')?.disabled,
+      inputReadout: {
+        mode: document.querySelector('#premium-input-readout')?.dataset.mode || '',
+        state: document.querySelector('#premium-input-readout')?.dataset.state || '',
+        modeText: document.querySelector('#premium-input-mode')?.textContent.trim() || '',
+        action: document.querySelector('#premium-input-action')?.textContent.trim() || '',
+        tool: document.querySelector('#premium-input-tool')?.textContent.trim() || '',
+        stateText: document.querySelector('#premium-input-state')?.textContent.trim() || ''
+      },
       toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || '',
       feedback: window.__atherixDebug?.premium?.feedback?.() || {},
       horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
@@ -2706,7 +2733,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v46-quality') && swText.includes('/style.css?v=20260608-quality-v5') && swText.includes('/app.js?v=20260608-quality-v5'),
+      swHasQualityVersion: swText.includes('atherix-static-v47-quality') && swText.includes('/style.css?v=20260608-quality-v6') && swText.includes('/app.js?v=20260608-quality-v6'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
@@ -3168,6 +3195,7 @@ async function run() {
       && arcadeInitial.playfieldLayout?.tabs
       && arcadeInitial.playfieldLayout?.stage
       && arcadeInitial.playfieldLayout?.briefing
+      && arcadeInitial.playfieldLayout?.inputReadout
       && arcadeInitial.playfieldLayout?.career
       && arcadeInitial.playfieldLayout?.director
       && arcadeInitial.playfieldLayout?.mastery
@@ -3175,6 +3203,8 @@ async function run() {
       && arcadeInitial.playfieldLayout.stage.top >= arcadeInitial.playfieldLayout.tabs.bottom - 8
       && arcadeInitial.playfieldLayout.briefing.top >= arcadeInitial.playfieldLayout.stage.top - 8
       && arcadeInitial.playfieldLayout.briefing.bottom <= arcadeInitial.playfieldLayout.stage.bottom + 8
+      && arcadeInitial.playfieldLayout.inputReadout.top >= arcadeInitial.playfieldLayout.stage.top - 8
+      && arcadeInitial.playfieldLayout.inputReadout.bottom <= arcadeInitial.playfieldLayout.stage.bottom + 8
       && arcadeInitial.playfieldLayout.career.top >= arcadeInitial.playfieldLayout.stage.bottom - 8
       && arcadeInitial.playfieldLayout.director.top >= arcadeInitial.playfieldLayout.stage.bottom - 8
       && arcadeInitial.playfieldLayout.mastery.top >= arcadeInitial.playfieldLayout.stage.bottom - 8,
@@ -3195,6 +3225,16 @@ async function run() {
     `premium arcade mission briefing should explain the currently active run: ${JSON.stringify(arcadeInitial)}`
   );
   assert(
+    arcadeInitial.inputReadout?.exists &&
+      arcadeInitial.inputReadout.mode === arcadeInitial.briefingMode &&
+      ['idle', 'running', 'paused', 'turn'].includes(arcadeInitial.inputReadout.state) &&
+      arcadeInitial.inputReadout.modeText.length >= 2 &&
+      arcadeInitial.inputReadout.moveText &&
+      arcadeInitial.inputReadout.actionText.length >= 2 &&
+      arcadeInitial.inputReadout.toolText.length >= 2,
+    `premium arcade input readout should expose the current mode and control roles: ${JSON.stringify(arcadeInitial.inputReadout)}`
+  );
+  assert(
     briefingModeState.snapshots?.length === 6
       && briefingModeState.restoredMode === 'survivor'
       && !briefingModeState.horizontalOverflow
@@ -3212,9 +3252,24 @@ async function run() {
         && snapshot.variant.length > 1
         && snapshot.variantTone
         && (!snapshot.debugVariant?.active || (snapshot.variant === snapshot.debugVariant.short && snapshot.variantTone === snapshot.debugVariant.tone))
+        && snapshot.inputMode === snapshot.mode
+        && snapshot.inputModeText.length >= 2
+        && snapshot.inputMove.length >= 2
+        && snapshot.inputAction.length >= 2
+        && snapshot.inputTool.length >= 2
+        && (snapshot.inputTool === '--' ? snapshot.toolDisabled : !snapshot.toolDisabled)
         && snapshot.startLabel.length > 3
       )),
     `premium arcade mission briefing should update for every premium mode: ${JSON.stringify(briefingModeState)}`
+  );
+  assert(
+    briefingModeState.snapshots?.some(snapshot => snapshot.mode === 'drift' && snapshot.inputAction === '加速' && snapshot.inputTool === '相位') &&
+      briefingModeState.snapshots?.some(snapshot => snapshot.mode === 'heist' && snapshot.inputAction === '隐身' && snapshot.inputTool === '诱饵') &&
+      briefingModeState.snapshots?.some(snapshot => snapshot.mode === 'chain' && snapshot.inputAction === '炼成' && snapshot.inputTool === '催化') &&
+      briefingModeState.snapshots?.some(snapshot => snapshot.mode === 'survivor' && snapshot.inputAction === '星爆' && snapshot.inputTool === '--' && snapshot.toolDisabled) &&
+      briefingModeState.snapshots?.some(snapshot => snapshot.mode === 'boss' && snapshot.inputAction === '闪避' && snapshot.inputTool === '--' && snapshot.toolDisabled) &&
+      briefingModeState.snapshots?.some(snapshot => snapshot.mode === 'tactics' && snapshot.inputAction === '爆破' && snapshot.inputTool === '--' && snapshot.toolDisabled),
+    `premium arcade input readout should synchronize ACT/TOOL labels across modes: ${JSON.stringify(briefingModeState.snapshots)}`
   );
   assert(arcadeInitial.briefingVariant && arcadeInitial.briefingVariantTone && arcadeInitial.debugVariant?.short === arcadeInitial.briefingVariant, `premium arcade briefing should expose the current event variant: ${JSON.stringify(arcadeInitial)}`);
   assert(
@@ -3263,6 +3318,10 @@ async function run() {
       && !briefingStartState.paused
       && /星爆/.test(briefingStartState.actionLabel)
       && briefingStartState.toolDisabled
+      && briefingStartState.inputReadout?.mode === 'survivor'
+      && briefingStartState.inputReadout?.state === 'running'
+      && briefingStartState.inputReadout?.stateText === '运行'
+      && briefingStartState.inputReadout?.action === '星爆'
       && /作战简报执行/.test(briefingStartState.toast)
       && briefingStartState.feedback?.tones?.start >= 1
       && !briefingStartState.horizontalOverflow,

@@ -782,7 +782,7 @@ main {
   align-items: center;
   gap: 0.4rem;
   padding: 0.4rem 0.8rem;
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   font-size: 0.85rem;
@@ -893,7 +893,7 @@ main {
   transform: translateY(12px);
   opacity: 0;
   padding: 0.85rem 1rem;
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid var(--glass-border);
   background: rgba(15, 23, 42, 0.94);
   color: var(--text-primary);
@@ -7766,6 +7766,63 @@ body.command-open {
   outline-offset: 3px;
 }
 
+.premium-input-readout {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+  padding: 0.58rem;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, 0.08), rgba(139, 92, 246, 0.07)),
+    rgba(3, 7, 18, 0.46);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.premium-input-readout span {
+  min-width: 0;
+  min-height: 42px;
+  display: grid;
+  align-content: center;
+  gap: 0.14rem;
+  padding: 0.36rem 0.48rem;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.premium-input-readout small {
+  color: rgba(186, 230, 253, 0.78);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.56rem;
+  font-weight: 900;
+  letter-spacing: 0.04rem;
+}
+
+.premium-input-readout strong {
+  min-width: 0;
+  color: #fff;
+  font-size: 0.76rem;
+  font-weight: 900;
+  line-height: 1.16;
+  overflow-wrap: anywhere;
+}
+
+.premium-input-readout[data-state="running"] span:last-child {
+  border-color: rgba(52, 211, 153, 0.28);
+  background: rgba(20, 184, 166, 0.12);
+}
+
+.premium-input-readout[data-state="paused"] span:last-child {
+  border-color: rgba(253, 230, 138, 0.32);
+  background: rgba(180, 83, 9, 0.12);
+}
+
+.premium-input-readout span.is-disabled {
+  opacity: 0.58;
+}
+
 .premium-touch-controls {
   display: flex;
   align-items: center;
@@ -8005,6 +8062,25 @@ body.command-open {
     min-width: 0;
     min-height: 38px;
     padding: 0.42rem 0.55rem;
+  }
+  .premium-input-readout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.36rem;
+    margin-top: 0.58rem;
+    padding: 0.42rem;
+  }
+  .premium-input-readout span {
+    min-height: 38px;
+    padding: 0.3rem 0.38rem;
+  }
+  .premium-input-readout span:first-child {
+    grid-column: 1 / -1;
+  }
+  .premium-input-readout small {
+    font-size: 0.52rem;
+  }
+  .premium-input-readout strong {
+    font-size: 0.68rem;
   }
   #premium-game-stage {
     order: 2;
