@@ -1277,6 +1277,27 @@ async function run() {
       sectionVisible: !!rect && rect.bottom > 0 && rect.top < window.innerHeight
     };
   })()`);
+  const runnerOverlayCtaState = await evaluate(`(() => ({
+    overlay: window.__atherixDebug?.runnerOverlay?.() || {},
+    overlayAriaHidden: document.querySelector('#game-overlay-screen')?.getAttribute('aria-hidden') || '',
+    overlayStateAttr: document.querySelector('#game-overlay-screen')?.dataset.runnerOverlayState || '',
+    overlayToneAttr: document.querySelector('#game-overlay-screen')?.dataset.runnerOverlayTone || '',
+    actionButton: !!document.querySelector('#game-overlay-action'),
+    actionType: document.querySelector('#game-overlay-action')?.getAttribute('type') || '',
+    actionShortcut: document.querySelector('#game-overlay-action')?.getAttribute('aria-keyshortcuts') || '',
+    actionDescribedBy: document.querySelector('#game-overlay-action')?.getAttribute('aria-describedby') || '',
+    actionTarget: document.querySelector('#game-overlay-action')?.dataset.runnerOverlayAction || '',
+    actionButtonInsideOverlayCount: document.querySelectorAll('#game-overlay-screen button#game-overlay-action').length
+  }))()`);
+  await evaluate(`document.querySelector('#game-overlay-action')?.focus()`);
+  await key('keyDown', ' ', 'Space');
+  await key('keyUp', ' ', 'Space');
+  await wait(180);
+  const runnerOverlayFocusedSpaceState = await evaluate(`(() => ({
+    running: !!window.__atherixDebug?.gameRunning?.(),
+    overlay: window.__atherixDebug?.runnerOverlay?.() || {},
+    focusId: document.activeElement?.id || ''
+  }))()`);
   const mainOverlayBeforeSpace = await evaluate(`document.querySelector('#game-overlay-screen')?.style.display || ''`);
   await key('keyDown', ' ', 'Space');
   await key('keyUp', ' ', 'Space');
@@ -1284,6 +1305,8 @@ async function run() {
   const mainSpaceState = await evaluate(`(() => ({
     overlayBefore: ${JSON.stringify(mainOverlayBeforeSpace)},
     overlayAfter: document.querySelector('#game-overlay-screen')?.style.display || '',
+    running: !!window.__atherixDebug?.gameRunning?.(),
+    overlay: window.__atherixDebug?.runnerOverlay?.() || {},
     timer: document.querySelector('#game-timer')?.textContent,
     title: document.querySelector('#game-overlay-title')?.textContent
   }))()`);
@@ -1310,6 +1333,38 @@ async function run() {
       running: !!window.__atherixDebug?.gameRunning?.()
     };
   })()`, 3000);
+  await click('#game-overlay-action');
+  await wait(220);
+  const runnerOverlayCtaStartState = await evaluate(`(() => ({
+    running: !!window.__atherixDebug?.gameRunning?.(),
+    paused: !!window.__atherixDebug?.gamePaused?.(),
+    overlay: window.__atherixDebug?.runnerOverlay?.() || {},
+    focusId: document.activeElement?.id || '',
+    timer: document.querySelector('#game-timer')?.textContent || '',
+    horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+  }))()`);
+  const runnerOverlayCtaSpaceJumpBefore = await evaluate(`(() => ({
+    beforePlayer: window.__atherixDebug?.player || {},
+    focusBeforeSpace: document.activeElement?.id || ''
+  }))()`);
+  await key('keyDown', ' ', 'Space');
+  const runnerOverlayCtaSpaceJumpDuring = await evaluate(`(() => ({
+    duringPlayer: window.__atherixDebug?.player || {},
+    focusDuringSpace: document.activeElement?.id || '',
+    running: !!window.__atherixDebug?.gameRunning?.()
+  }))()`);
+  await key('keyUp', ' ', 'Space');
+  await wait(120);
+  const runnerOverlayCtaSpaceJumpAfter = await evaluate(`(() => ({
+    afterPlayer: window.__atherixDebug?.player || {},
+    focusAfterSpace: document.activeElement?.id || '',
+    running: !!window.__atherixDebug?.gameRunning?.()
+  }))()`);
+  const runnerOverlayCtaSpaceJumpState = {
+    ...runnerOverlayCtaSpaceJumpBefore,
+    ...runnerOverlayCtaSpaceJumpDuring,
+    ...runnerOverlayCtaSpaceJumpAfter
+  };
   const runnerTouchState = await evaluate(`(async () => {
     const firePointer = (selector, type) => {
       const el = document.querySelector(selector);
@@ -1479,6 +1534,66 @@ async function run() {
     overlay: document.querySelector('#game-overlay-screen')?.style.display || '',
     debug: window.__atherixDebug?.runnerState?.() || {}
   }))()`);
+  const runnerOverlayMachineState = await evaluate(`(async () => {
+    const api = window.__atherixDebug;
+    const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const action = document.querySelector('#game-overlay-action');
+    const selectLevel = async index => {
+      const levelSelect = document.querySelector('#game-level-select');
+      if (!levelSelect) return '';
+      levelSelect.value = String(index);
+      levelSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      await pause(180);
+      return levelSelect.value || '';
+    };
+
+    const gameover = api?.forceRunnerGameOver?.({ checkpoint: false }) || {};
+    document.querySelector('#game-overlay-title').textContent = '本地化失败标题';
+    action?.click();
+    await pause(220);
+    const afterRetry = {
+      running: !!api?.gameRunning?.(),
+      overlay: api?.runnerOverlay?.() || {},
+      level: document.querySelector('#game-level-select')?.value || ''
+    };
+
+    const checkpoint = api?.forceRunnerGameOver?.({ checkpoint: true }) || {};
+    document.querySelector('#game-overlay-title').textContent = '本地化检查点标题';
+    action?.click();
+    await pause(220);
+    const afterCheckpoint = {
+      running: !!api?.gameRunning?.(),
+      overlay: api?.runnerOverlay?.() || {},
+      player: api?.player || {}
+    };
+
+    await selectLevel(0);
+    const victory = api?.forceRunnerWin?.({ final: false }) || {};
+    document.querySelector('#game-overlay-title').textContent = '本地化胜利标题';
+    const levelBeforeNext = document.querySelector('#game-level-select')?.value || '';
+    action?.click();
+    await pause(220);
+    const afterVictory = {
+      running: !!api?.gameRunning?.(),
+      overlay: api?.runnerOverlay?.() || {},
+      levelBeforeNext,
+      levelAfterNext: document.querySelector('#game-level-select')?.value || ''
+    };
+
+    const final = api?.forceRunnerWin?.({ final: true }) || {};
+    document.querySelector('#game-overlay-title').textContent = '本地化最终标题';
+    const levelBeforeFinalRetry = document.querySelector('#game-level-select')?.value || '';
+    action?.click();
+    await pause(220);
+    const afterFinal = {
+      running: !!api?.gameRunning?.(),
+      overlay: api?.runnerOverlay?.() || {},
+      levelBeforeFinalRetry,
+      levelAfterFinalRetry: document.querySelector('#game-level-select')?.value || ''
+    };
+
+    return { gameover, afterRetry, checkpoint, afterCheckpoint, victory, afterVictory, final, afterFinal };
+  })()`, 5000, { retryOnTimeout: false });
   await evaluate(`window.__atherixDebug?.premium?.resetFeedback?.(false)`);
   const arcadeInitial = await evaluate(`(() => {
     const rectFor = selector => {
@@ -2745,8 +2860,54 @@ async function run() {
     gameViewportState.scrollY <= 80 && gameViewportState.sectionVisible,
     `game navigation should reset scroll into visible content: ${JSON.stringify(gameViewportState)}`
   );
-  assert(mainSpaceState.overlayBefore === 'flex' && mainSpaceState.overlayAfter === 'flex', 'Space should not start/retry the main game overlay');
+  assert(
+    runnerOverlayCtaState.actionButton &&
+      runnerOverlayCtaState.actionButtonInsideOverlayCount === 1 &&
+      runnerOverlayCtaState.actionType === 'button' &&
+      /Enter/.test(runnerOverlayCtaState.actionShortcut) &&
+      runnerOverlayCtaState.actionDescribedBy === 'game-overlay-subtitle' &&
+      runnerOverlayCtaState.overlayAriaHidden === 'false' &&
+      runnerOverlayCtaState.overlayStateAttr === 'start' &&
+      runnerOverlayCtaState.overlayToneAttr === 'start' &&
+      runnerOverlayCtaState.actionTarget === 'start' &&
+      runnerOverlayCtaState.overlay?.state === 'start' &&
+      runnerOverlayCtaState.overlay?.display === 'flex',
+    `runner start overlay should expose a real Enter-only CTA state: ${JSON.stringify(runnerOverlayCtaState)}`
+  );
+  assert(
+    !runnerOverlayFocusedSpaceState.running &&
+      runnerOverlayFocusedSpaceState.focusId === 'game-overlay-action' &&
+      runnerOverlayFocusedSpaceState.overlay?.state === 'start' &&
+      runnerOverlayFocusedSpaceState.overlay?.actionTarget === 'start' &&
+      runnerOverlayFocusedSpaceState.overlay?.display === 'flex',
+    `Space on the focused runner CTA should remain inert before play starts: ${JSON.stringify(runnerOverlayFocusedSpaceState)}`
+  );
+  assert(
+    mainSpaceState.overlayBefore === 'flex' &&
+      mainSpaceState.overlayAfter === 'flex' &&
+      !mainSpaceState.running &&
+      mainSpaceState.overlay?.state === 'start' &&
+      mainSpaceState.overlay?.actionTarget === 'start',
+    `Space should not start/retry the main game overlay: ${JSON.stringify(mainSpaceState)}`
+  );
   assert(jumpButtonIdleState.overlayBefore === 'flex' && jumpButtonIdleState.overlayAfter === 'flex' && !jumpButtonIdleState.running, 'JUMP touch button should not start the main game overlay');
+  assert(
+    runnerOverlayCtaStartState.running &&
+      !runnerOverlayCtaStartState.paused &&
+      runnerOverlayCtaStartState.overlay?.state === 'hidden' &&
+      runnerOverlayCtaStartState.overlay?.display === 'none' &&
+      runnerOverlayCtaStartState.overlay?.actionTarget === 'hidden' &&
+      runnerOverlayCtaStartState.focusId !== 'game-overlay-action' &&
+      !runnerOverlayCtaStartState.horizontalOverflow,
+    `runner CTA click should start play, hide overlay, and release button focus: ${JSON.stringify(runnerOverlayCtaStartState)}`
+  );
+  assert(
+    runnerOverlayCtaSpaceJumpState.running &&
+      runnerOverlayCtaSpaceJumpState.focusBeforeSpace !== 'game-overlay-action' &&
+      runnerOverlayCtaSpaceJumpState.focusDuringSpace !== 'game-overlay-action' &&
+      Number(runnerOverlayCtaSpaceJumpState.duringPlayer?.vy || 0) < -1,
+    `Space immediately after CTA start should trigger a jump instead of being swallowed by the hidden CTA: ${JSON.stringify(runnerOverlayCtaSpaceJumpState)}`
+  );
   assert(runnerTouchState.controls >= 7 && runnerTouchState.overlayAfterStart === 'none', 'runner touch controls should start the main game');
   assert(runnerTouchState.running && runnerTouchState.afterX > runnerTouchState.beforeX, 'runner touch controls should move the player horizontally');
   assert(!runnerTouchState.dashReady && runnerTouchState.dashCooldownUntil > 0, 'runner touch controls should trigger dash cooldown');
@@ -2763,6 +2924,23 @@ async function run() {
   assert(runnerLifecycleState.beforeSameNav.running && runnerLifecycleState.afterSameNav.running && !runnerLifecycleState.afterSameNav.paused && runnerLifecycleState.afterSameNav.debug?.elapsedMs >= runnerLifecycleState.beforeSameNav.debug?.elapsedMs && runnerLifecycleState.afterSameNav.overlay === 'none', `runner same-page game navigation should not reset an active run: ${JSON.stringify(runnerLifecycleState)}`);
   assert(runnerLifecycleState.paused.paused && runnerLifecycleState.paused.overlay === 'flex' && runnerLifecycleState.paused.activeElement === 'game-pause-resume' && runnerLifecycleState.frozen.timer === runnerLifecycleState.paused.timer && Math.abs((runnerLifecycleState.frozen.player?.x || 0) - (runnerLifecycleState.paused.player?.x || 0)) < 0.01, `runner should auto-pause and freeze on blur: ${JSON.stringify(runnerLifecycleState)}`);
   assert(runnerLifecycleState.returned.gameActive && !runnerLifecycleState.returned.running && !runnerLifecycleState.returned.paused && runnerLifecycleState.returned.overlay === 'flex' && runnerReturnEnterState.running && !runnerReturnEnterState.paused && runnerReturnEnterState.overlay === 'none', `runner should restore an Enter-startable idle overlay after leaving and returning to the game page: ${JSON.stringify({ runnerLifecycleState, runnerReturnEnterState })}`);
+  assert(
+    runnerOverlayMachineState.gameover?.state === 'gameover' &&
+      runnerOverlayMachineState.afterRetry?.running &&
+      runnerOverlayMachineState.afterRetry?.overlay?.state === 'hidden' &&
+      runnerOverlayMachineState.checkpoint?.state === 'checkpoint' &&
+      runnerOverlayMachineState.afterCheckpoint?.running &&
+      runnerOverlayMachineState.afterCheckpoint?.overlay?.state === 'hidden' &&
+      runnerOverlayMachineState.victory?.state === 'victory' &&
+      runnerOverlayMachineState.afterVictory?.running &&
+      runnerOverlayMachineState.afterVictory?.overlay?.state === 'hidden' &&
+      Number(runnerOverlayMachineState.afterVictory?.levelAfterNext) === Number(runnerOverlayMachineState.afterVictory?.levelBeforeNext) + 1 &&
+      runnerOverlayMachineState.final?.state === 'final' &&
+      runnerOverlayMachineState.afterFinal?.running &&
+      runnerOverlayMachineState.afterFinal?.overlay?.state === 'hidden' &&
+      runnerOverlayMachineState.afterFinal?.levelBeforeFinalRetry === runnerOverlayMachineState.afterFinal?.levelAfterFinalRetry,
+    `runner overlay state machine should route by data-state even when titles disagree: ${JSON.stringify(runnerOverlayMachineState)}`
+  );
   assert(runnerMobileState.controls >= 7 && runnerMobileState.visibleAfterScroll && !runnerMobileState.horizontalOverflow, `runner touch controls should remain reachable on mobile after premium-first layout: ${JSON.stringify(runnerMobileState)}`);
   assert(premiumMobileState.cockpit?.visible && premiumMobileState.tabs?.top >= premiumMobileState.cockpit?.bottom - 8 && premiumMobileState.stage?.top >= premiumMobileState.tabs?.bottom - 8 && premiumMobileState.career?.top >= premiumMobileState.stage?.bottom - 8 && !premiumMobileState.horizontalOverflow, `premium arcade cockpit, tabs, and stage should be prioritized before meta panels on mobile: ${JSON.stringify(premiumMobileState)}`);
   assert(premiumMobileState.controls?.visible && premiumMobileState.controlsPosition === 'sticky' && premiumMobileState.controls.bottom <= premiumMobileState.height && premiumMobileState.controlsCount >= 5 && premiumMobileState.minControlWidth >= 44 && premiumMobileState.minControlHeight >= 44 && premiumMobileState.metaControls === 2 && premiumMobileState.metaVisible === 2 && premiumMobileState.minMetaHeight >= 34 && premiumMobileState.metaLabels.includes('开始') && premiumMobileState.actionText && premiumMobileState.toolText, `premium arcade touch controls should stay visible and tappable on mobile with meta controls: ${JSON.stringify(premiumMobileState)}`);
@@ -3116,11 +3294,17 @@ async function run() {
     projectState,
     projectModalClosedState,
     gameViewportState,
+    runnerOverlayCtaState,
+    runnerOverlayFocusedSpaceState,
     mainSpaceState,
+    jumpButtonIdleState,
+    runnerOverlayCtaStartState,
+    runnerOverlayCtaSpaceJumpState,
     runnerTouchState,
     runnerGamepadState,
     runnerLifecycleState,
     runnerReturnEnterState,
+    runnerOverlayMachineState,
     runnerMobileState,
     premiumMobileState,
     arcadeInitial,
@@ -3225,6 +3409,11 @@ function summarizeSmokeResult(result) {
       }
     },
     runner: {
+      overlayCta: result.runnerOverlayCtaState?.overlay?.state,
+      focusedSpaceInert: !result.runnerOverlayFocusedSpaceState?.running && result.runnerOverlayFocusedSpaceState?.overlay?.state === 'start',
+      ctaStartReleasedFocus: result.runnerOverlayCtaStartState?.focusId !== 'game-overlay-action',
+      ctaStartSpaceJumpVy: result.runnerOverlayCtaSpaceJumpState?.duringPlayer?.vy,
+      overlayMachineFinal: result.runnerOverlayMachineState?.final?.state,
       spaceKeyDoesNotRestart: result.mainSpaceState?.overlayAfter === result.mainSpaceState?.overlayBefore,
       jumpButtonDoesNotRestart: result.jumpButtonIdleState?.overlayAfter === result.jumpButtonIdleState?.overlayBefore,
       runningAfterResume: result.runnerTouchState?.runningAfterResume,

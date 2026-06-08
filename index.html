@@ -1028,9 +1028,13 @@
             <canvas id="arcade-canvas" width="800" height="400" style="display: block; width: 100%; height: 100%; image-rendering: pixelated;"></canvas>
             
             <!-- Dynamic Overlay Screen (Start/GameOver/Win) -->
-            <div class="arcade-screen-overlay" id="game-overlay-screen" style="position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(10,8,20,0.92); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 1.5rem; z-index: 10;">
+            <div class="arcade-screen-overlay" id="game-overlay-screen" data-runner-overlay-state="start" data-runner-overlay-tone="start" aria-hidden="false" style="position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(10,8,20,0.92); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 1.5rem; z-index: 10;">
               <h2 id="game-overlay-title" style="color: #fff; font-size: 2.3rem; font-weight: 800; margin-bottom: 0.6rem; letter-spacing: 2px; text-shadow: 0 0 15px var(--accent); animation: pulse 2.5s infinite;">CYBER ASTRO-RUNNER</h2>
-              <p id="game-overlay-subtitle" style="color: var(--accent); font-size: 0.95rem; font-weight: 600; margin-bottom: 1.2rem;">按 [Enter] 或 点击此处 开始挑战关卡；Space 仅用于跳跃</p>
+              <p id="game-overlay-subtitle" style="color: var(--accent); font-size: 0.95rem; font-weight: 600; margin-bottom: 1.2rem;">按 [Enter] 或点击按钮开始挑战关卡；Space 仅用于跳跃</p>
+              <button type="button" class="runner-overlay-action" id="game-overlay-action" data-runner-overlay-action="start" aria-describedby="game-overlay-subtitle" aria-keyshortcuts="Enter">
+                <i data-lucide="play"></i>
+                <span>开始任务</span>
+              </button>
               
               <div class="game-instructions-box" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 0.8rem 1.2rem; border-radius: 8px; font-size: 0.76rem; color: var(--text-secondary); line-height: 1.4; text-align: left; max-width: 460px; width: 90%;">
                 <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;"><span style="color: #fff;">左右移动:</span> <span><strong>A / D</strong> 或 <strong>&larr; / &rarr;</strong></span></div>

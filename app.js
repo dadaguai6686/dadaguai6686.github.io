@@ -13948,6 +13948,7 @@ function init() {
   const gameLauncherCard = document.getElementById('game-launcher-card');
   const arcadeCanvas = document.getElementById('arcade-canvas');
   const gameOverlay = document.getElementById('game-overlay-screen');
+  const gameOverlayAction = document.getElementById('game-overlay-action');
   const gamePauseOverlay = document.getElementById('game-pause-screen');
   const gamePauseResumeBtn = document.getElementById('game-pause-resume');
   const gamePauseRestartBtn = document.getElementById('game-pause-restart');
@@ -14306,17 +14307,100 @@ function init() {
     gamePauseOverlay.setAttribute('aria-hidden', visible ? 'false' : 'true');
   }
 
-  function showRunnerStartOverlay() {
+  function runnerOverlayDebugState() {
+    return {
+      state: gameOverlay?.dataset.runnerOverlayState || '',
+      tone: gameOverlay?.dataset.runnerOverlayTone || '',
+      display: gameOverlay?.style.display || '',
+      title: document.getElementById('game-overlay-title')?.textContent || '',
+      subtitle: document.getElementById('game-overlay-subtitle')?.textContent || '',
+      action: gameOverlayAction?.textContent?.trim() || '',
+      actionTarget: gameOverlayAction?.dataset.runnerOverlayAction || '',
+      actionType: gameOverlayAction?.getAttribute('type') || ''
+    };
+  }
+
+  function setRunnerOverlay({
+    state = 'start',
+    tone = state,
+    title = runnerStartTitle,
+    subtitle = runnerStartSubtitle,
+    subtitleHtml = '',
+    actionLabel = '开始任务',
+    focusAction = false
+  } = {}) {
     if (!gameOverlay) return;
-    const title = document.getElementById('game-overlay-title');
-    const subtitle = document.getElementById('game-overlay-subtitle');
-    if (title) {
-      title.textContent = runnerStartTitle;
-      title.style.color = '#fff';
-      title.style.textShadow = '0 0 15px var(--accent)';
+    const titleEl = document.getElementById('game-overlay-title');
+    const subtitleEl = document.getElementById('game-overlay-subtitle');
+    const toneConfig = {
+      start: { color: '#fff', shadow: '0 0 15px var(--accent)' },
+      gameover: { color: '#EF4444', shadow: '0 0 15px rgba(239, 68, 68, 0.6)' },
+      checkpoint: { color: '#A78BFA', shadow: '0 0 15px rgba(167, 139, 250, 0.62)' },
+      victory: { color: '#10B981', shadow: '0 0 15px rgba(16, 185, 129, 0.6)' },
+      final: { color: '#FACC15', shadow: '0 0 18px rgba(250, 204, 21, 0.62)' }
+    }[tone] || { color: '#fff', shadow: '0 0 15px var(--accent)' };
+
+    gameOverlay.dataset.runnerOverlayState = state;
+    gameOverlay.dataset.runnerOverlayTone = tone;
+    gameOverlay.setAttribute('aria-hidden', 'false');
+    if (titleEl) {
+      titleEl.textContent = title;
+      titleEl.style.color = toneConfig.color;
+      titleEl.style.textShadow = toneConfig.shadow;
     }
-    if (subtitle) subtitle.textContent = runnerStartSubtitle;
+    if (subtitleEl) {
+      if (subtitleHtml) {
+        subtitleEl.innerHTML = subtitleHtml;
+      } else {
+        subtitleEl.textContent = subtitle;
+      }
+    }
+    if (gameOverlayAction) {
+      gameOverlayAction.dataset.runnerOverlayAction = state;
+      gameOverlayAction.setAttribute('aria-label', `${actionLabel}，Enter 触发，Space 仅用于跳跃`);
+      const label = gameOverlayAction.querySelector('span');
+      const icon = gameOverlayAction.querySelector('i');
+      if (label) label.textContent = actionLabel;
+      if (icon) {
+        const iconName = {
+          start: 'play',
+          checkpoint: 'map-pin',
+          gameover: 'rotate-ccw',
+          victory: 'skip-forward',
+          final: 'star'
+        }[state] || 'play';
+        icon.setAttribute('data-lucide', iconName);
+      }
+      gameOverlayAction.disabled = false;
+    }
     gameOverlay.style.display = 'flex';
+    safeCreateIcons(gameOverlay);
+    if (focusAction && gameOverlayAction) {
+      setTimeout(() => gameOverlayAction.focus({ preventScroll: true }), 0);
+    }
+  }
+
+  function hideRunnerOverlay() {
+    if (!gameOverlay) return;
+    if (gameOverlay.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
+    gameOverlay.style.display = 'none';
+    gameOverlay.setAttribute('aria-hidden', 'true');
+    gameOverlay.dataset.runnerOverlayState = 'hidden';
+    gameOverlay.dataset.runnerOverlayTone = 'hidden';
+    if (gameOverlayAction) gameOverlayAction.dataset.runnerOverlayAction = 'hidden';
+  }
+
+  function showRunnerStartOverlay({ focusAction = false } = {}) {
+    setRunnerOverlay({
+      state: 'start',
+      tone: 'start',
+      title: runnerStartTitle,
+      subtitle: runnerStartSubtitle,
+      actionLabel: '开始任务',
+      focusAction
+    });
   }
 
   function prepareRunnerIdleScreen() {
@@ -15283,7 +15367,25 @@ function init() {
         status: runnerGamepadStatus?.textContent || ''
       }),
       simulateRunnerGamepad: (snapshot = {}, holdMs = 650) => applyRunnerGamepadSnapshot({ connected: true, name: 'Smoke Pad', ...snapshot }, { force: true, holdMs }),
-      forceRunnerContract: () => forceRunnerContract()
+      forceRunnerContract: () => forceRunnerContract(),
+      runnerOverlay: () => runnerOverlayDebugState(),
+      forceRunnerGameOver: ({ checkpoint = false } = {}) => {
+        if (!gameRunning) startLevel();
+        if (checkpoint) player.checkpoint = { x: player.x + 24, y: Math.max(60, player.y - 18) };
+        triggerDeath();
+        return runnerOverlayDebugState();
+      },
+      forceRunnerWin: ({ final = false, recordCareer = false } = {}) => {
+        if (!gameRunning) startLevel();
+        if (final) {
+          currentLevelIndex = gameLevels.length - 1;
+          if (levelSelect) levelSelect.value = String(currentLevelIndex);
+          initLevelData();
+        }
+        player.coinsCollected = targetCoins;
+        triggerWin({ recordCareer });
+        return runnerOverlayDebugState();
+      }
     };
   }
 
@@ -15350,7 +15452,7 @@ function init() {
   const gameKeys = {};
   const overlayActionCodes = ['Enter'];
   const runnerStartTitle = 'CYBER ASTRO-RUNNER';
-  const runnerStartSubtitle = '按 [Enter] 或 点击此处 开始挑战关卡；Space 仅用于跳跃';
+  const runnerStartSubtitle = '按 [Enter] 或点击按钮开始挑战关卡；Space 仅用于跳跃';
   const neutralRunnerGamepadPrevious = () => ({ left: false, right: false, jump: false, dash: false, start: false, pause: false, bgm: false });
   const runnerGamepadPreviousFromSnapshot = (snapshot = {}) => ({
     left: !!snapshot.left,
@@ -15397,12 +15499,12 @@ function init() {
 
   function runOverlayAction() {
     if (!gameOverlay || gameOverlay.style.display === 'none') return false;
-    const titleText = document.getElementById('game-overlay-title').textContent;
-    if (titleText === 'VICTORY!' && currentLevelIndex < gameLevels.length - 1) {
+    const state = gameOverlay.dataset.runnerOverlayState || 'start';
+    if (state === 'victory' && currentLevelIndex < gameLevels.length - 1) {
       currentLevelIndex++;
       if (levelSelect) levelSelect.value = String(currentLevelIndex);
       startLevel();
-    } else if (titleText === 'GAME OVER' && hasActiveCheckpoint()) {
+    } else if (state === 'checkpoint') {
       respawnAtCheckpoint();
     } else {
       startLevel();
@@ -15670,14 +15772,14 @@ function init() {
     }
     drawDeathAnimation();
 
-    if (gameOverlay) {
-      document.getElementById('game-overlay-title').textContent = 'GAME OVER';
-      document.getElementById('game-overlay-title').style.color = '#EF4444';
-      document.getElementById('game-overlay-title').style.textShadow = '0 0 15px rgba(239, 68, 68, 0.6)';
-      const canRespawn = hasActiveCheckpoint();
-      document.getElementById('game-overlay-subtitle').textContent = canRespawn ? '检查点已保存，点击此处或按 [Enter] 从信标继续' : '点击此处或按 [Enter] 重新挑战本关';
-      gameOverlay.style.display = 'flex';
-    }
+    const canRespawn = hasActiveCheckpoint();
+    setRunnerOverlay({
+      state: canRespawn ? 'checkpoint' : 'gameover',
+      tone: canRespawn ? 'checkpoint' : 'gameover',
+      title: canRespawn ? 'CHECKPOINT LINK' : 'GAME OVER',
+      subtitle: canRespawn ? '检查点已保存。按 Enter 或点击按钮从信标继续；Space 仍只用于跳跃。' : '任务失败。按 Enter 或点击按钮重新挑战本关；Space 仍只用于跳跃。',
+      actionLabel: canRespawn ? '从信标继续' : '重试本关'
+    });
   }
 
   function respawnAtCheckpoint() {
@@ -15685,6 +15787,7 @@ function init() {
       startLevel();
       return;
     }
+    resetGameKeyState();
     player.x = player.checkpoint.x;
     player.y = player.checkpoint.y;
     player.vx = 0;
@@ -15695,7 +15798,7 @@ function init() {
     player.dashBurstUntil = 0;
     player.dashCooldownUntil = 0;
     player.invulnerableUntil = Date.now() + 1300;
-    if (gameOverlay) gameOverlay.style.display = 'none';
+    hideRunnerOverlay();
     cancelAnimationFrame(deathAnimationId);
     clearRunnerPauseState();
     gameRunning = true;
@@ -15704,7 +15807,7 @@ function init() {
     updateGame();
   }
 
-  function triggerWin() {
+  function triggerWin({ recordCareer = true } = {}) {
     const finishTime = (getRunnerElapsedMs() / 1000).toFixed(1);
     gameRunning = false;
     clearRunnerPauseState();
@@ -15712,22 +15815,24 @@ function init() {
     cancelAnimationFrame(gameLoopId);
     stopMusic();
 
-    const bestLvlTime = localStorage.getItem(`atherix_astro_runner_best_lvl_${currentLevelIndex}`);
-    if (!bestLvlTime || parseFloat(finishTime) < parseFloat(bestLvlTime)) {
-      localStorage.setItem(`atherix_astro_runner_best_lvl_${currentLevelIndex}`, finishTime);
-      if (gameBestTimeSpan) gameBestTimeSpan.textContent = `${finishTime}s`;
+    if (recordCareer) {
+      const bestLvlTime = localStorage.getItem(`atherix_astro_runner_best_lvl_${currentLevelIndex}`);
+      if (!bestLvlTime || parseFloat(finishTime) < parseFloat(bestLvlTime)) {
+        localStorage.setItem(`atherix_astro_runner_best_lvl_${currentLevelIndex}`, finishTime);
+        if (gameBestTimeSpan) gameBestTimeSpan.textContent = `${finishTime}s`;
+      }
     }
     addRunnerScore(350 + currentLevelIndex * 120 + player.coinsCollected * 35, 'ROUTE CLEAR', { combo: false });
-    const campaignScore = Math.max(120, Math.round(
-      2200 -
-      parseFloat(finishTime) * 24 +
-      currentLevelIndex * 260 +
-      player.shield * 80 +
-      runnerScore +
-      runnerBestCombo * 45 +
-      runnerContractsCompleted * 520
-    ));
-    if (window.atherixArcadeCareer) {
+    if (recordCareer && window.atherixArcadeCareer) {
+      const campaignScore = Math.max(120, Math.round(
+        2200 -
+        parseFloat(finishTime) * 24 +
+        currentLevelIndex * 260 +
+        player.shield * 80 +
+        runnerScore +
+        runnerBestCombo * 45 +
+        runnerContractsCompleted * 520
+      ));
       window.atherixArcadeCareer.recordResult('runner', campaignScore, {
         level: currentLevelIndex + 1,
         finishTime: parseFloat(finishTime),
@@ -15745,22 +15850,19 @@ function init() {
 
     createParticleExplosion(exitPortal.x + exitPortal.w/2, exitPortal.y + exitPortal.h/2, '#10B981', 40);
 
-    if (gameOverlay) {
-      document.getElementById('game-overlay-title').textContent = 'VICTORY!';
-      document.getElementById('game-overlay-title').style.color = '#10B981';
-      document.getElementById('game-overlay-title').style.textShadow = '0 0 15px rgba(16, 185, 129, 0.6)';
-      
-      const nextLevelAvail = currentLevelIndex < gameLevels.length - 1;
-      let victoryMsg = `通关用时: <strong style="color:#FFF; font-size:1.4rem;">${finishTime}s</strong><br>`;
-      victoryMsg += `航线评分: <strong style="color:#BAE6FD;">${Math.floor(runnerScore)}</strong> · 最佳连段 <strong style="color:#A7F3D0;">${runnerBestCombo}x</strong> · 合约 <strong style="color:#FDE68A;">${runnerContractsCompleted}</strong><br>`;
-      if (nextLevelAvail) {
-        victoryMsg += `点击此处或按 [Enter] 开启下一关卡挑战！`;
-      } else {
-        victoryMsg += `恭喜你通关了全部关卡！再次点击以重新挑战。`;
-      }
-      document.getElementById('game-overlay-subtitle').innerHTML = victoryMsg;
-      gameOverlay.style.display = 'flex';
-    }
+    const nextLevelAvail = currentLevelIndex < gameLevels.length - 1;
+    let victoryMsg = `通关用时: <strong style="color:#FFF; font-size:1.4rem;">${finishTime}s</strong><br>`;
+    victoryMsg += `航线评分: <strong style="color:#BAE6FD;">${Math.floor(runnerScore)}</strong> · 最佳连段 <strong style="color:#A7F3D0;">${runnerBestCombo}x</strong> · 合约 <strong style="color:#FDE68A;">${runnerContractsCompleted}</strong><br>`;
+    victoryMsg += nextLevelAvail
+      ? `按 Enter 或点击按钮开启下一关；Space 仍只用于跳跃。`
+      : `全部关卡已通关。按 Enter 或点击按钮重试最终关；Space 仍只用于跳跃。`;
+    setRunnerOverlay({
+      state: nextLevelAvail ? 'victory' : 'final',
+      tone: nextLevelAvail ? 'victory' : 'final',
+      title: nextLevelAvail ? 'VICTORY!' : 'STAR GATE CLEARED',
+      subtitleHtml: victoryMsg,
+      actionLabel: nextLevelAvail ? '下一关' : '重试最终关'
+    });
   }
 
   // Core Game loop
@@ -16263,7 +16365,7 @@ function init() {
     clearRunnerPauseState();
 
     initLevelData();
-    if (gameOverlay) gameOverlay.style.display = 'none';
+    hideRunnerOverlay();
     gameRunning = true;
     gameStartTime = Date.now();
     
@@ -16309,9 +16411,23 @@ function init() {
     });
   }
 
-  if (gameOverlay) {
-    gameOverlay.addEventListener('click', () => {
+  if (gameOverlayAction) {
+    gameOverlayAction.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
       runOverlayAction();
+    });
+    gameOverlayAction.addEventListener('keydown', (event) => {
+      if (event.code === 'Space') {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      if (event.code === 'Enter') {
+        event.preventDefault();
+        event.stopPropagation();
+        runOverlayAction();
+      }
     });
   }
 
