@@ -5324,7 +5324,7 @@ function init() {
         <div class="arcade-profile-grid">
           <span>完成度 <strong id="premium-profile-completion">0%</strong></span>
           <span>奖牌 <strong id="premium-profile-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-profile-achievements">0/34</strong></span>
+          <span>成就 <strong id="premium-profile-achievements">0/35</strong></span>
           <span>最近 <strong id="premium-profile-latest">--</strong></span>
         </div>
         <button type="button" class="arcade-profile-action" id="premium-profile-target" data-profile-target-game="survivor">
@@ -5424,7 +5424,7 @@ function init() {
         </div>
         <div class="arcade-director-meters" aria-label="街机完成度">
           <span>奖牌 <strong id="premium-director-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-director-achievements">0/34</strong></span>
+          <span>成就 <strong id="premium-director-achievements">0/35</strong></span>
           <span>完成度 <strong id="premium-director-completion">0%</strong></span>
         </div>
         <button type="button" class="arcade-director-action" id="premium-director-start" data-target-game="survivor">
@@ -5576,6 +5576,7 @@ function init() {
               <span>破招 <strong id="premium-boss-break">0</strong></span>
               <span>反击 <strong id="premium-boss-counter">0x</strong></span>
               <span>专注 <strong id="premium-boss-focus">0%</strong></span>
+              <span>处决 <strong id="premium-boss-overbreak">0%</strong></span>
               <span>闪避 <strong id="premium-boss-dash">READY</strong></span>
             </div>
             <div class="mini-actions">
@@ -5934,6 +5935,7 @@ function init() {
       { id: 'boss_focus_surge', label: '擦弹专注', desc: 'Boss 战触发专注爆发' },
       { id: 'boss_counter_chain', label: '连锁破招', desc: 'Boss 战连续破招达到 x2' },
       { id: 'boss_prism_shatter', label: '棱镜碎盾', desc: 'Boss 战击碎一层棱镜护盾' },
+      { id: 'boss_overbreak', label: '棱镜处决', desc: 'Boss 战在处决窗口命中棱镜核心' },
       { id: 'drift_clear', label: '霓虹完赛', desc: 'Neon Drift 穿越全部检查点' },
       { id: 'drift_clean', label: '零损漂移', desc: '高护盾完成 Neon Drift' },
       { id: 'drift_combo', label: '量子倍率', desc: 'Neon Drift 倍率达到 x3.0' },
@@ -6976,7 +6978,7 @@ function init() {
       const spec = {
         runner: [['level', '关卡'], ['finishTime', '用时', 's'], ['bestCombo', '连段', 'x'], ['contractsCompleted', '合约']],
         survivor: [['level', '等级'], ['bestChain', '连锁', 'x'], ['overdrive', '超载'], ['drones', '无人机'], ['bounties', '赏金']],
-        boss: [['phase', '阶段'], ['graze', '擦弹'], ['perfectDodges', '精准闪避'], ['focusSurges', '专注'], ['shieldShatters', '碎盾']],
+        boss: [['phase', '阶段'], ['graze', '擦弹'], ['perfectDodges', '精准闪避'], ['focusSurges', '专注'], ['shieldShatters', '碎盾'], ['overbreaks', '处决']],
         drift: [['gates', '弯道'], ['bestCombo', '连段', 'x'], ['overtakes', '超车'], ['nearMisses', '擦车'], ['phaseUses', '相位']],
         heist: [['steps', '步数'], ['bestChain', '潜行链'], ['takedowns', '制服'], ['loot', '缓存'], ['security', '警戒', '%'], ['hacksCompleted', '破解']],
         chain: [['movesLeft', '余步'], ['combo', '连锁'], ['mult', '倍率', 'x'], ['phase', '阶段'], ['recipes', '配方']],
@@ -10602,6 +10604,11 @@ function init() {
       hitCount: 0,
       lastHitLabel: '',
       lastHitSource: '',
+      overbreakCharge: 0,
+      overbreakWindow: 0,
+      overbreakFlash: 0,
+      overbreaks: 0,
+      lastOverbreak: '',
       lastBreak: '',
       bonuses: {}
     };
@@ -10700,10 +10707,86 @@ function init() {
       bossMode.score += 340 + phase * 120 + shield.shatters * 90 + clearedBullets * 7;
       bossMode.boss.hp = Math.max(1, bossMode.boss.hp - (28 + phase * 12 + Math.round(overkill * 0.32)));
       bossMode.player.focus = Math.min(100, Number(bossMode.player.focus || 0) + 12 + phase * 4);
+      chargeBossOverbreak(18 + phase * 5, 'shield');
       bossSpark(bossMode.boss.x, bossMode.boss.y, '#FDE68A', 46);
       unlockAchievement('boss_prism_shatter');
       triggerPremiumFeedback('special', { label: 'SHIELD SHATTER' });
       return { blocked: true, shattered: true, spill: overkill, shield: bossShieldState() };
+    }
+
+    function bossOverbreakState() {
+      return {
+        charge: Math.round(Number(bossMode.overbreakCharge || 0)),
+        window: Math.ceil(Number(bossMode.overbreakWindow || 0)),
+        flash: Math.ceil(Number(bossMode.overbreakFlash || 0)),
+        count: Number(bossMode.overbreaks || 0),
+        ready: Number(bossMode.overbreakWindow || 0) > 0,
+        last: bossMode.lastOverbreak || '',
+        hud: document.getElementById('premium-boss-overbreak')?.textContent || ''
+      };
+    }
+
+    function chargeBossOverbreak(amount = 0, reason = '') {
+      const gain = Math.max(0, Number(amount || 0));
+      if (gain <= 0 || !bossMode.running) return bossOverbreakState();
+      if (Number(bossMode.overbreakWindow || 0) > 0) {
+        bossMode.overbreakCharge = 100;
+        return bossOverbreakState();
+      }
+      const before = Number(bossMode.overbreakCharge || 0);
+      bossMode.overbreakCharge = clamp(before + gain, 0, 100);
+      bossMode.lastOverbreak = reason ? `CHARGE ${reason.toUpperCase()}` : bossMode.lastOverbreak;
+      if (before < 100 && bossMode.overbreakCharge >= 100) {
+        bossMode.overbreakWindow = 4300;
+        bossMode.overbreakFlash = Math.max(Number(bossMode.overbreakFlash || 0), 760);
+        bossMode.lastOverbreak = 'OVERBREAK READY';
+        bossSpark(bossMode.boss.x, bossMode.boss.y, '#FDE68A', 36);
+        triggerPremiumFeedback('special', { label: 'OVERBREAK READY', throttleMs: 0 });
+      }
+      return bossOverbreakState();
+    }
+
+    function triggerBossOverbreak(source = 'shot') {
+      const ready = Number(bossMode.overbreakWindow || 0) > 0 || Number(bossMode.overbreakCharge || 0) >= 100;
+      if (!bossMode.running || !ready) {
+        return { triggered: false, reason: ready ? 'not-running' : 'not-ready', before: bossOverbreakState(), after: bossOverbreakState() };
+      }
+      const before = bossOverbreakState();
+      const phase = bossPhaseFromHp();
+      const shield = bossMode.shield || (bossMode.shield = createBossShield());
+      const shieldOpen = Number(shield.exposed || 0) > 0 || Number(shield.layers || 0) <= 0;
+      const clearedBullets = bossMode.bullets.length;
+      const chain = Math.max(0, Number(bossMode.breakChain || 0));
+      const shieldHit = Number(shield.layers || 0) > 0
+        ? damageBossShield(118 + phase * 34 + chain * 24, 'overbreak')
+        : { shattered: false, blocked: false };
+      const exposedAfter = shieldOpen || shieldHit.shattered || Number(shield.exposed || 0) > 0 || Number(shield.layers || 0) <= 0;
+      const coreDamage = 128 + phase * 48 + Math.min(120, chain * 24) + (exposedAfter ? 64 : 0) + (source === 'debug' ? 18 : 0);
+      bossMode.boss.hp = Math.max(0, bossMode.boss.hp - coreDamage);
+      bossMode.bullets = [];
+      bossMode.overbreakCharge = 0;
+      bossMode.overbreakWindow = 0;
+      bossMode.overbreakFlash = 1320;
+      bossMode.overbreaks = Number(bossMode.overbreaks || 0) + 1;
+      bossMode.lastOverbreak = `OVERBREAK x${bossMode.overbreaks}`;
+      bossMode.score += 760 + phase * 180 + clearedBullets * 10 + Math.min(420, chain * 90) + (shieldHit.shattered ? 220 : 0);
+      bossMode.player.invuln = Math.max(Number(bossMode.player.invuln || 0), 620);
+      bossMode.patternTimer = Math.min(Number(bossMode.patternTimer || 0), -320);
+      bossSpark(bossMode.boss.x, bossMode.boss.y, '#FDE68A', 62);
+      unlockAchievement('boss_overbreak');
+      triggerPremiumFeedback('special', { label: 'OVERBREAK EXECUTE', throttleMs: 0 });
+      setBossUi();
+      return {
+        triggered: true,
+        source,
+        coreDamage: Math.round(coreDamage),
+        clearedBullets,
+        shield: shieldHit.shield || bossShieldState(),
+        before,
+        after: bossOverbreakState(),
+        score: Math.floor(bossMode.score),
+        hp: Math.ceil(Math.max(0, bossMode.boss.hp))
+      };
     }
 
     function setBossUi() {
@@ -10756,6 +10839,16 @@ function init() {
         focusEl.textContent = surge > 0 ? 'SURGE' : `${focus}%`;
         focusEl.style.color = surge > 0 ? '#FDE68A' : focus >= 80 ? '#A7F3D0' : '#fff';
       }
+      const overbreakEl = document.getElementById('premium-boss-overbreak');
+      if (overbreakEl) {
+        const state = bossOverbreakState();
+        overbreakEl.textContent = state.ready
+          ? 'EXECUTE'
+          : state.flash > 0
+            ? `HIT x${state.count}`
+            : `${state.charge}%`;
+        overbreakEl.style.color = state.ready || state.flash > 0 ? '#FDE68A' : state.charge >= 70 ? '#A7F3D0' : '#fff';
+      }
       document.getElementById('premium-boss-dash').textContent = bossMode.player.dashCooldown > 0 ? `${Math.ceil(bossMode.player.dashCooldown / 1000)}s` : 'READY';
       updatePremiumMetaControls();
     }
@@ -10803,6 +10896,11 @@ function init() {
       bossMode.hitCount = 0;
       bossMode.lastHitLabel = '';
       bossMode.lastHitSource = '';
+      bossMode.overbreakCharge = 0;
+      bossMode.overbreakWindow = 0;
+      bossMode.overbreakFlash = 0;
+      bossMode.overbreaks = 0;
+      bossMode.lastOverbreak = '';
       bossMode.lastBreak = '';
       bossMode.bonuses = bonuses;
       setBossUi();
@@ -10817,7 +10915,7 @@ function init() {
       stopBossLoop();
       localStorage.setItem(bossMode.bestKey, String(Math.max(Number(localStorage.getItem(bossMode.bestKey) || 0), Math.floor(bossMode.score))));
       if (text === 'PRISM BROKEN') unlockAchievement('boss_clear');
-      recordPremiumResult('boss', bossMode.score, { phase: bossMode.boss.phase, graze: bossMode.player.graze, bestGrazeStreak: bossMode.player.bestGrazeStreak, focusSurges: bossMode.focusSurges, perfectDodges: Number(bossMode.perfectDodges || 0), breakChain: bossMode.breakChain, shieldShatters: Number(bossMode.shield?.shatters || 0), runVariant: bossMode.variant });
+      recordPremiumResult('boss', bossMode.score, { phase: bossMode.boss.phase, graze: bossMode.player.graze, bestGrazeStreak: bossMode.player.bestGrazeStreak, focusSurges: bossMode.focusSurges, perfectDodges: Number(bossMode.perfectDodges || 0), breakChain: bossMode.breakChain, shieldShatters: Number(bossMode.shield?.shatters || 0), overbreaks: Number(bossMode.overbreaks || 0), runVariant: bossMode.variant });
       setBossUi();
       updateBossPauseButton();
       drawBoss();
@@ -10868,6 +10966,8 @@ function init() {
       p.grazeStreak = 0;
       p.focus = Math.max(0, Number(p.focus || 0) - 32);
       p.focusSurge = 0;
+      bossMode.overbreakCharge = Math.max(0, Number(bossMode.overbreakCharge || 0) - 26);
+      bossMode.overbreakWindow = 0;
       bossMode.hitFlash = 760;
       bossMode.hitCount = Number(bossMode.hitCount || 0) + 1;
       bossMode.lastHitLabel = label;
@@ -10898,6 +10998,7 @@ function init() {
       bossMode.focusFlash = 980;
       bossMode.focusSurges++;
       bossMode.score += 260 + Math.min(360, Number(p.bestGrazeStreak || 0) * 18);
+      chargeBossOverbreak(24 + Math.min(16, Number(p.bestGrazeStreak || 0) * 2), 'focus');
       unlockAchievement('boss_focus_surge');
       bossSpark(p.x, p.y, '#FDE68A', 40);
       triggerPremiumFeedback('special', { label: 'FOCUS SURGE' });
@@ -10935,6 +11036,7 @@ function init() {
       bossMode.perfectWindow = Math.max(Number(bossMode.perfectWindow || 0), 1850);
       bossMode.lastDodge = 'PERFECT DODGE';
       bossMode.score += 150 + p.grazeStreak * 18;
+      chargeBossOverbreak(22 + Math.min(14, p.grazeStreak * 2), 'dodge');
       bossSpark(p.x, p.y, '#FDE68A', 26);
       triggerPremiumFeedback('special', { label: 'PERFECT DODGE', throttleMs: 0 });
       if (p.focus >= 100) activateBossFocusSurge();
@@ -11027,6 +11129,7 @@ function init() {
           label: bossMode.lastHitLabel || '',
           source: bossMode.lastHitSource || ''
         },
+        overbreak: bossOverbreakState(),
         shield: bossShieldState(),
         variant: bossMode.variant || activeArcadeRunVariant('boss'),
         runPressure: Number((bossMode.runPressure || arcadeRunPressure('boss', bossMode.variant)).toFixed(3)),
@@ -11041,7 +11144,8 @@ function init() {
         hudShield: document.getElementById('premium-boss-shield')?.textContent || '',
         hudBreak: document.getElementById('premium-boss-break')?.textContent || '',
         hudCounter: document.getElementById('premium-boss-counter')?.textContent || '',
-        hudFocus: document.getElementById('premium-boss-focus')?.textContent || ''
+        hudFocus: document.getElementById('premium-boss-focus')?.textContent || '',
+        hudOverbreak: document.getElementById('premium-boss-overbreak')?.textContent || ''
       };
     }
 
@@ -11063,6 +11167,7 @@ function init() {
       bossMode.boss.hp = Math.max(1, bossMode.boss.hp - coreDamage);
       bossMode.player.invuln = Math.max(bossMode.player.invuln, 520);
       bossMode.player.focus = Math.min(100, Number(bossMode.player.focus || 0) + 24 + phase * 4 + chain * 3);
+      chargeBossOverbreak(30 + phase * 5 + chain * 8 + (shieldHit.shattered ? 16 : 0), 'break');
       bossMode.bullets = [];
       bossMode.queuedPattern = '';
       bossMode.currentPattern = '';
@@ -11179,6 +11284,13 @@ function init() {
       bossMode.perfectFlash = Math.max(0, Number(bossMode.perfectFlash || 0) - dt);
       bossMode.perfectWindow = Math.max(0, Number(bossMode.perfectWindow || 0) - dt);
       bossMode.hitFlash = Math.max(0, Number(bossMode.hitFlash || 0) - dt);
+      bossMode.overbreakFlash = Math.max(0, Number(bossMode.overbreakFlash || 0) - dt);
+      const hadOverbreakWindow = Number(bossMode.overbreakWindow || 0) > 0;
+      bossMode.overbreakWindow = Math.max(0, Number(bossMode.overbreakWindow || 0) - dt);
+      if (hadOverbreakWindow && bossMode.overbreakWindow <= 0 && Number(bossMode.overbreakCharge || 0) >= 100) {
+        bossMode.overbreakCharge = 72;
+        bossMode.lastOverbreak = 'OVERBREAK MISSED';
+      }
       if (bossMode.shield) {
         bossMode.shield.exposed = Math.max(0, Number(bossMode.shield.exposed || 0) - dt);
         bossMode.shield.flash = Math.max(0, Number(bossMode.shield.flash || 0) - dt);
@@ -11232,6 +11344,7 @@ function init() {
           return false;
         }
         if (Math.hypot(s.x - b.x, s.y - b.y) < s.r + b.r) {
+          const overbreakReady = Number(bossMode.overbreakWindow || 0) > 0 || Number(bossMode.overbreakCharge || 0) >= 100;
           const counterMult = bossMode.counterWindow > 0
             ? 1 + Math.min(0.75, Number(bossMode.breakChain || 0) * 0.12)
             : bossMode.perfectWindow > 0
@@ -11249,8 +11362,9 @@ function init() {
             ? counterMult * (s.surge ? 1.92 : 1.48)
             : (shieldHit.shattered ? 0.58 : 0.18);
           b.hp -= Math.max(1, s.damage * coreMult);
+          const overbreak = overbreakReady ? triggerBossOverbreak(s.surge ? 'surge-shot' : 'shot') : null;
           bossMode.score += 6 + (shieldHit.blocked ? 3 : 0) + (shieldHit.shattered ? 42 : 0) + (bossMode.counterWindow > 0 ? Number(bossMode.breakChain || 0) * 2 : 0) + (bossMode.perfectWindow > 0 ? 3 : 0);
-          bossSpark(s.x, s.y, shieldHit.shattered ? '#FDE68A' : exposed ? '#34D399' : bossMode.counterWindow > 0 || bossMode.perfectWindow > 0 ? '#FDE68A' : '#BAE6FD', shieldHit.shattered ? 12 : bossMode.counterWindow > 0 || bossMode.perfectWindow > 0 ? 4 : 2);
+          bossSpark(s.x, s.y, overbreak?.triggered ? '#FDE68A' : shieldHit.shattered ? '#FDE68A' : exposed ? '#34D399' : bossMode.counterWindow > 0 || bossMode.perfectWindow > 0 ? '#FDE68A' : '#BAE6FD', overbreak?.triggered || shieldHit.shattered ? 12 : bossMode.counterWindow > 0 || bossMode.perfectWindow > 0 ? 4 : 2);
           return false;
         }
         return true;
@@ -11467,6 +11581,51 @@ function init() {
       }
     }
 
+    function drawBossOverbreak(ctx, c) {
+      const state = bossOverbreakState();
+      if (!state.ready && state.flash <= 0) return;
+      const b = bossMode.boss;
+      ctx.save();
+      if (state.ready) {
+        const progress = clamp(state.window / 4300, 0, 1);
+        const pulse = Math.sin(bossMode.t / 64) * 5;
+        ctx.globalAlpha = 0.18 + progress * 0.28;
+        ctx.strokeStyle = '#FDE68A';
+        ctx.lineWidth = 4;
+        ctx.shadowColor = '#FDE68A';
+        ctx.shadowBlur = 24;
+        ctx.setLineDash([10, 7]);
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r + 38 + pulse, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#FFFBEB';
+        ctx.font = '900 14px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('OVERBREAK READY', b.x, Math.max(30, b.y - b.r - 32));
+      }
+      if (state.flash > 0) {
+        const alpha = clamp(state.flash / 1320, 0, 1);
+        ctx.globalAlpha = 0.14 + alpha * 0.24;
+        ctx.fillStyle = '#FDE68A';
+        ctx.fillRect(0, 0, c.width, c.height);
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = '#FFFBEB';
+        ctx.lineWidth = 5;
+        ctx.shadowColor = '#FDE68A';
+        ctx.shadowBlur = 30;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r + 64 + (1 - alpha) * 54, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#FFFBEB';
+        ctx.font = '900 20px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(state.last === 'OVERBREAK READY' ? 'OVERBREAK READY' : 'OVERBREAK EXECUTE', c.width / 2, 86);
+      }
+      ctx.restore();
+    }
+
     function drawBoss() {
       const { ctx, canvas: c, boss: b, player: p } = bossMode;
       if (!ctx || !c) return;
@@ -11511,6 +11670,7 @@ function init() {
       }
       drawBossTelegraph(ctx, c);
       drawBossWeakpoint(ctx);
+      drawBossOverbreak(ctx, c);
       bossMode.shots.forEach(s => {
         ctx.fillStyle = s.surge ? '#FDE68A' : '#BAE6FD';
         ctx.fillRect(s.x - (s.surge ? 3 : 2), s.y - 9, s.surge ? 6 : 4, s.surge ? 15 : 12);
@@ -11602,7 +11762,8 @@ function init() {
       ctx.fillRect(18, 16, (c.width - 36) * Math.max(0, b.hp / b.maxHp), 8);
       ctx.fillStyle = '#fff';
       ctx.font = '700 12px JetBrains Mono, monospace';
-      ctx.fillText(`PHASE ${b.phase}  SHIELD ${bossShieldLabel()}  GRAZE ${p.graze}  FOCUS ${p.focusSurge > 0 ? 'SURGE' : Math.round(Number(p.focus || 0)) + '%'}  BREAK ${bossMode.breakCount}  COUNTER ${bossMode.counterWindow > 0 ? `${bossMode.breakChain}x` : bossMode.perfectWindow > 0 ? 'DODGE' : '0x'}`, 18, 42);
+      ctx.fillText(`PHASE ${b.phase}  SHIELD ${bossShieldLabel()}  GRAZE ${p.graze}  FOCUS ${p.focusSurge > 0 ? 'SURGE' : Math.round(Number(p.focus || 0)) + '%'}  BREAK ${bossMode.breakCount}`, 18, 42);
+      ctx.fillText(`COUNTER ${bossMode.counterWindow > 0 ? `${bossMode.breakChain}x` : bossMode.perfectWindow > 0 ? 'DODGE' : '0x'}  EXEC ${bossOverbreakState().ready ? 'READY' : Math.round(Number(bossMode.overbreakCharge || 0)) + '%'}  ${bossMode.lastOverbreak || ''}`, 18, 58);
     }
 
     document.getElementById('premium-boss-start').addEventListener('click', () => startPremiumModeFromPanel('boss'));
@@ -16263,6 +16424,11 @@ function init() {
             bossMode.hitCount = 0;
             bossMode.lastHitLabel = '';
             bossMode.lastHitSource = '';
+            bossMode.overbreakCharge = 0;
+            bossMode.overbreakWindow = 0;
+            bossMode.overbreakFlash = 0;
+            bossMode.overbreaks = 0;
+            bossMode.lastOverbreak = '';
             bossMode.perfectDodges = 0;
             bossMode.perfectFlash = 0;
             bossMode.perfectWindow = 0;
@@ -16301,6 +16467,7 @@ function init() {
               label: bossMode.lastHitLabel || '',
               source: bossMode.lastHitSource || ''
             },
+            overbreak: bossOverbreakState(),
             player: {
               lives: Number(bossMode.player.lives || 0),
               invuln: Math.ceil(Number(bossMode.player.invuln || 0)),
@@ -16315,10 +16482,12 @@ function init() {
             hud: document.getElementById('premium-boss-pattern')?.textContent || '',
             weakHud: document.getElementById('premium-boss-weak')?.textContent || '',
             shieldHud: document.getElementById('premium-boss-shield')?.textContent || '',
-            breakHud: document.getElementById('premium-boss-break')?.textContent || ''
+            breakHud: document.getElementById('premium-boss-break')?.textContent || '',
+            overbreakHud: document.getElementById('premium-boss-overbreak')?.textContent || ''
           }),
           bossShieldState: () => bossShieldState(),
           bossWeakState: () => bossWeakState(),
+          bossOverbreakState: () => bossOverbreakState(),
           forceBossFocusSurge: () => {
             if (!bossMode.running) startBoss();
             bossMode.paused = false;
@@ -16391,6 +16560,62 @@ function init() {
               counterText: document.getElementById('premium-boss-counter')?.textContent || '',
               focusText: document.getElementById('premium-boss-focus')?.textContent || '',
               scoreText: document.getElementById('premium-boss-score')?.textContent || ''
+            };
+          },
+          forceBossOverbreak: () => {
+            if (!bossMode.running) startBoss();
+            bossMode.paused = false;
+            bossMode.player.invuln = 0;
+            bossMode.player.focus = 68;
+            bossMode.player.focusSurge = 0;
+            bossMode.boss.hp = Math.max(420, Number(bossMode.boss.hp || 900));
+            bossMode.shield = createBossShield();
+            bossMode.shield.hp = 44;
+            bossMode.shield.exposed = 0;
+            bossMode.shield.flash = 0;
+            bossMode.shield.shatterFlash = 0;
+            bossMode.overbreakCharge = 86;
+            bossMode.overbreakWindow = 0;
+            bossMode.overbreakFlash = 0;
+            bossMode.overbreaks = 0;
+            bossMode.lastOverbreak = '';
+            bossMode.breakChain = 2;
+            bossMode.counterWindow = 3200;
+            bossMode.bullets = [
+              { x: bossMode.boss.x, y: bossMode.boss.y + 58, vx: 0, vy: 110, r: 6, color: '#F97316', grazed: false },
+              { x: bossMode.boss.x - 34, y: bossMode.boss.y + 68, vx: -34, vy: 126, r: 5, color: '#A78BFA', grazed: false },
+              { x: bossMode.boss.x + 34, y: bossMode.boss.y + 68, vx: 34, vy: 126, r: 5, color: '#06B6D4', grazed: false }
+            ];
+            bossMode.queuedPattern = '';
+            bossMode.currentPattern = '';
+            bossMode.telegraphAim = null;
+            bossMode.telegraphTimer = 0;
+            bossMode.telegraphDuration = 0;
+            closeBossWeakpoint();
+            setBossUi();
+            const before = window.__atherixDebug.premium.bossPattern();
+            const ready = chargeBossOverbreak(18, 'debug');
+            setBossUi();
+            const armed = window.__atherixDebug.premium.bossPattern();
+            const result = triggerBossOverbreak('debug');
+            drawBoss();
+            return {
+              before,
+              ready,
+              armed,
+              result,
+              after: window.__atherixDebug.premium.bossPattern(),
+              feedback: {
+                lastTone: premiumFeedback.lastTone,
+                lastLabel: premiumFeedback.lastLabel,
+                tones: { ...premiumFeedback.tones },
+                visualTriggers: premiumFeedback.visualTriggers
+              },
+              stageTone: document.getElementById('premium-game-stage')?.dataset.feedbackTone || '',
+              stageLabel: document.getElementById('premium-game-stage')?.dataset.feedback || '',
+              overbreakText: document.getElementById('premium-boss-overbreak')?.textContent || '',
+              scoreText: document.getElementById('premium-boss-score')?.textContent || '',
+              achieved: (career.achievements || []).includes('boss_overbreak')
             };
           },
           forceBossHit: () => {

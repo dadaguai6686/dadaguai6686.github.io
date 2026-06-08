@@ -3216,6 +3216,7 @@ async function run() {
       shield: document.querySelector('#premium-boss-shield')?.textContent,
       weak: document.querySelector('#premium-boss-weak')?.textContent,
       focus: document.querySelector('#premium-boss-focus')?.textContent,
+      overbreak: document.querySelector('#premium-boss-overbreak')?.textContent || '',
       breaks: Number(document.querySelector('#premium-boss-break')?.textContent || 0),
       counter: document.querySelector('#premium-boss-counter')?.textContent || '',
       lives: Number(document.querySelector('#premium-boss-lives')?.textContent || 0)
@@ -3280,6 +3281,17 @@ async function run() {
       counterText: document.querySelector('#premium-boss-counter')?.textContent || '',
       focusText: document.querySelector('#premium-boss-focus')?.textContent || '',
       scoreText: document.querySelector('#premium-boss-score')?.textContent || ''
+    };
+  })()`);
+  const bossOverbreakState = await evaluate(`(() => {
+    const result = window.__atherixDebug?.premium?.forceBossOverbreak?.() || {};
+    const pixels = window.__atherixSmokeCountCanvasPixels?.('#premium-boss-canvas') || {};
+    return {
+      ...result,
+      nonBlank: !!pixels.nonBlank,
+      overbreakText: document.querySelector('#premium-boss-overbreak')?.textContent || '',
+      scoreText: document.querySelector('#premium-boss-score')?.textContent || '',
+      achieved: (window.__atherixDebug?.premium?.achievements?.() || []).some(item => item.id === 'boss_overbreak' && item.unlocked)
     };
   })()`);
   const bossHitState = await evaluate(`(() => {
@@ -3672,7 +3684,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v78-quality') && swText.includes('/style.css?v=20260608-quality-v13') && swText.includes('/app.js?v=20260608-quality-v35'),
+      swHasQualityVersion: swText.includes('atherix-static-v79-quality') && swText.includes('/style.css?v=20260608-quality-v13') && swText.includes('/app.js?v=20260608-quality-v36'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp'),
       swHasLocalFonts: swText.includes('/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2') && swText.includes('/assets/fonts/outfit-latin-wght-normal.woff2') && swText.includes('/assets/fonts/jetbrains-mono-latin-wght-normal.woff2')
@@ -4470,7 +4482,7 @@ async function run() {
   assert(difficultyProgressState.leaderboardCards >= 2 && difficultyProgressState.leaderboard?.entries?.some(entry => entry.game === 'boss' && entry.score >= 1180) && difficultyProgressState.leaderboard?.latestBest?.game === 'boss' && difficultyProgressState.leaderboard?.latestBest?.score >= difficultyProgressState.bossBest && Number(difficultyProgressState.leaderboardTotal) >= difficultyProgressState.bossBest, `premium arcade hall of fame should include elite boss record after scoring: ${JSON.stringify(difficultyProgressState)}`);
   assert(difficultyProgressState.rival?.game === 'boss' && difficultyProgressState.rivalActionTarget === 'boss' && Number(difficultyProgressState.rivalTarget) === Number(difficultyProgressState.rival.target) && /PRISM-0/.test(difficultyProgressState.rivalTitle), `premium arcade rival intel should follow the latest elite boss result: ${JSON.stringify(difficultyProgressState)}`);
   assert(rivalLaunchState.target === 'boss' && rivalLaunchState.active === 'boss' && /Boss/.test(rivalLaunchState.activeTitle) && rivalLaunchState.challenge?.game === 'boss' && rivalLaunchState.challenge?.target === rivalLaunchState.rival?.target && rivalLaunchState.locked === 'true' && /已锁定/.test(rivalLaunchState.summary) && /宿敌挑战已锁定/.test(rivalLaunchState.toast) && !rivalLaunchState.horizontalOverflow, `premium arcade rival action should lock and launch the current rival mode: ${JSON.stringify(rivalLaunchState)}`);
-  assert(rivalDefeatState.locked?.game && rivalDefeatState.result?.recorded && rivalDefeatState.after?.challenge === null && Number(rivalDefeatState.after?.total || 0) > Number(rivalDefeatState.before?.total || 0) && rivalDefeatState.after?.latestRun?.highlights?.some(item => /宿敌压制/.test(item)) && rivalDefeatState.after?.runTags?.some(item => /宿敌压制/.test(item)) && rivalDefeatState.achieved && rivalDefeatState.after?.profileAchievements?.endsWith('/34') && rivalDefeatState.after?.feedback?.lastLabel === 'RIVAL DOWN', `premium arcade rival defeat should reward a locked target with score, run highlights, feedback, and achievement: ${JSON.stringify(rivalDefeatState)}`);
+  assert(rivalDefeatState.locked?.game && rivalDefeatState.result?.recorded && rivalDefeatState.after?.challenge === null && Number(rivalDefeatState.after?.total || 0) > Number(rivalDefeatState.before?.total || 0) && rivalDefeatState.after?.latestRun?.highlights?.some(item => /宿敌压制/.test(item)) && rivalDefeatState.after?.runTags?.some(item => /宿敌压制/.test(item)) && rivalDefeatState.achieved && rivalDefeatState.after?.profileAchievements?.endsWith('/35') && rivalDefeatState.after?.feedback?.lastLabel === 'RIVAL DOWN', `premium arcade rival defeat should reward a locked target with score, run highlights, feedback, and achievement: ${JSON.stringify(rivalDefeatState)}`);
   assert(profileLaunchState.target && (profileLaunchState.target === 'runner' || profileLaunchState.active === profileLaunchState.target) && /档案目标/.test(profileLaunchState.toast) && !profileLaunchState.horizontalOverflow, `premium arcade command profile action should launch the profiled target: ${JSON.stringify(profileLaunchState)}`);
   assert(prizeLaunchState.target && (prizeLaunchState.target === 'runner' || prizeLaunchState.active === prizeLaunchState.target) && /赛季奖励目标/.test(prizeLaunchState.toast) && !prizeLaunchState.horizontalOverflow, `premium arcade season track action should launch the reward target: ${JSON.stringify(prizeLaunchState)}`);
   assert(['runner', 'survivor', 'boss', 'drift', 'heist', 'chain', 'tactics'].includes(directorLaunchState.target) && (directorLaunchState.target === 'runner' || directorLaunchState.active === directorLaunchState.target) && !directorLaunchState.horizontalOverflow, `premium arcade director should launch the recommended target: ${JSON.stringify(directorLaunchState)}`);
@@ -4506,7 +4518,7 @@ async function run() {
   );
   assert(survivorAnomalyState.started && survivorAnomalyState.nonBlank && survivorAnomalyState.state?.anomaly?.type === 'meteor' && survivorAnomalyState.state?.hazards?.length >= 3 && survivorAnomalyState.state?.hud?.event === 'METEOR' && survivorAnomalyState.eventText === 'METEOR' && survivorAnomalyState.achieved, `survivor anomaly events should create a readable deep-space crisis with hazards and achievement credit: ${JSON.stringify(survivorAnomalyState)}`);
   assert(survivorBountyState.nonBlank && survivorBountyState.after?.bounty?.completed > survivorBountyState.before?.bounty?.completed && survivorBountyState.after?.score > survivorBountyState.before?.score && survivorBountyState.after?.bounty?.last === 'ELITE CLEAR' && survivorBountyState.after?.bounty?.flash > 0 && survivorBountyState.after?.hud?.bounty === survivorBountyState.bountyText && survivorBountyState.achieved, `survivor elite bounty should complete deterministically, reward score, sync HUD, and unlock achievement: ${JSON.stringify(survivorBountyState)}`);
-  assert(bossState.nonBlank && bossState.dash && bossState.weak && /^(I|II|III|OPEN|SHATTER|DOWN)/.test(bossState.shield || '') && bossState.breaks === 0 && bossState.counter === '0x' && bossState.lives >= 4, `boss canvas should render active state, shield HUD, and equipped loadout: ${JSON.stringify(bossState)}`);
+  assert(bossState.nonBlank && bossState.dash && bossState.weak && /^(I|II|III|OPEN|SHATTER|DOWN)/.test(bossState.shield || '') && /%|EXECUTE|HIT/.test(bossState.overbreak || '') && bossState.breaks === 0 && bossState.counter === '0x' && bossState.lives >= 4, `boss canvas should render active state, shield HUD, overbreak meter, and equipped loadout: ${JSON.stringify(bossState)}`);
   assert(bossTelegraphState.running && !bossTelegraphState.paused && bossTelegraphState.queued === 'snipe' && bossTelegraphState.current === 'snipe' && bossTelegraphState.bullets === 0 && bossTelegraphState.weak?.active && bossTelegraphState.weak.remaining >= 1 && /^\d+\/\d+$/.test(bossTelegraphState.weakHud) && /预警/.test(bossTelegraphState.patternText) && /锁定狙击/.test(bossTelegraphState.patternText), `boss mode should surface a readable weakpoint telegraph before spawning bullets: ${JSON.stringify(bossTelegraphState)}`);
   assert(bossTelegraphHoldState.queued === 'snipe' && bossTelegraphHoldState.bullets === 0 && bossTelegraphHoldState.telegraphMs > 0 && bossTelegraphHoldState.weak?.active && bossTelegraphHoldState.weak.timer > 0 && /预警/.test(bossTelegraphHoldState.patternText), `boss telegraph should hold a reaction window before release: ${JSON.stringify(bossTelegraphHoldState)}`);
   assert(bossSnipeLockState.before?.telegraphAim && bossSnipeLockState.before?.telegraphAim?.angle === bossSnipeLockState.moved?.telegraphAim?.angle && bossSnipeLockState.after?.bullets >= 7 && Math.abs(Number(bossSnipeLockState.after?.centerBulletAngle || 0) - Number(bossSnipeLockState.before?.telegraphAim?.angle || 0)) < 0.002, `boss snipe should lock its warning aim before the player moves and release on that locked angle: ${JSON.stringify(bossSnipeLockState)}`);
@@ -4576,6 +4588,27 @@ async function run() {
     bossPerfectDodgeState.stageTone === 'special' &&
     /PERFECT DODGE/.test(bossPerfectDodgeState.stageLabel || ''),
     `boss perfect dodge should clear a dashed-through projectile, reward focus/score, and show DODGE feedback: ${JSON.stringify(bossPerfectDodgeState)}`
+  );
+  assert(
+    bossOverbreakState.nonBlank &&
+    bossOverbreakState.ready?.ready &&
+    Number(bossOverbreakState.ready?.charge || 0) >= 100 &&
+    Number(bossOverbreakState.ready?.window || 0) > 0 &&
+    /EXECUTE/.test(bossOverbreakState.armed?.overbreakHud || bossOverbreakState.ready?.hud || '') &&
+    bossOverbreakState.result?.triggered &&
+    bossOverbreakState.result?.clearedBullets >= 3 &&
+    Number(bossOverbreakState.result?.score || 0) > Number(bossOverbreakState.before?.weak?.score || 0) &&
+    Number(bossOverbreakState.after?.overbreak?.count || 0) >= 1 &&
+    Number(bossOverbreakState.after?.overbreak?.flash || 0) > 0 &&
+    Number(bossOverbreakState.after?.overbreak?.charge || 0) === 0 &&
+    bossOverbreakState.after?.bullets === 0 &&
+    /HIT|EXECUTE/.test(bossOverbreakState.overbreakText || '') &&
+    bossOverbreakState.feedback?.lastTone === 'special' &&
+    bossOverbreakState.feedback?.lastLabel === 'OVERBREAK EXECUTE' &&
+    bossOverbreakState.stageTone === 'special' &&
+    /OVERBREAK EXECUTE/.test(bossOverbreakState.stageLabel || '') &&
+    bossOverbreakState.achieved,
+    `boss overbreak should convert skill charge into a timed execute burst with score, bullet clear, feedback, and achievement: ${JSON.stringify(bossOverbreakState)}`
   );
   assert(
     bossHitState.nonBlank &&
@@ -4920,6 +4953,7 @@ async function run() {
     bossShieldShatterState,
     bossFocusSurgeState,
     bossPerfectDodgeState,
+    bossOverbreakState,
     bossHitState,
     bossPatternReleasedState,
     bossPauseState,
@@ -5050,6 +5084,7 @@ function summarizeSmokeResult(result) {
         rendered: result.bossState?.nonBlank,
         weakpointHud: result.bossTelegraphState?.weakHud,
         perfectDodge: result.bossPerfectDodgeState?.after?.weak?.perfectDodge?.count,
+        overbreaks: result.bossOverbreakState?.after?.overbreak?.count,
         hitFeedback: result.bossHitState?.after?.hit?.label,
         pauseFreezes: result.bossPauseFreezeState?.framesAfter === result.bossPauseState?.framesBefore
       },
