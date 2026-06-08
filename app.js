@@ -5044,6 +5044,23 @@ function init() {
       </div>
       <div class="mini-game-stage" id="premium-game-stage" tabindex="0" aria-label="精品街机操作区">
         <div class="premium-stage-feedback" id="premium-stage-feedback" aria-hidden="true"></div>
+        <div class="arcade-mission-briefing" id="premium-mission-briefing" data-mode="survivor" aria-label="当前模式作战简报">
+          <div class="arcade-briefing-main">
+            <span><i data-lucide="scan-line"></i> MISSION BRIEF</span>
+            <strong id="premium-briefing-title">星核幸存者作战简报</strong>
+            <small id="premium-briefing-objective">吸收星核、升级构筑并顶住深空事件。</small>
+          </div>
+          <div class="arcade-briefing-grid" aria-label="模式关键目标">
+            <span><small>核心动作</small><strong id="premium-briefing-action">Space 星爆</strong></span>
+            <span><small>战术节奏</small><strong id="premium-briefing-tactic">绕圈聚怪</strong></span>
+            <span><small>奖牌目标</small><strong id="premium-briefing-medal">铜 800 · 银 1600 · 金 2600</strong></span>
+            <span><small>本局配置</small><strong id="premium-briefing-loadout">标准 · 脉冲校准</strong></span>
+          </div>
+          <button type="button" class="arcade-briefing-start" id="premium-briefing-start">
+            <i data-lucide="play"></i>
+            <span>开始本模式</span>
+          </button>
+        </div>
         <div class="mini-game-panel active" id="premium-survivor">
           <div class="mini-game-copy">
             <h3>Starcore Survivor</h3>
@@ -5281,6 +5298,50 @@ function init() {
       heist: '赛博潜入',
       chain: '连锁炼金',
       tactics: '裂隙战术'
+    };
+    const premiumBriefings = {
+      survivor: {
+        title: '星核幸存者作战简报',
+        objective: '吸收星核升级构筑，预留星爆处理精英潮和深空异常。',
+        action: 'Space 星爆',
+        tactic: '绕圈聚怪 · 吃核升级',
+        start: '部署幸存者'
+      },
+      boss: {
+        title: '棱镜 Boss 破招简报',
+        objective: '读预警、擦弹攒专注，抓弱点窗口打断高危弹幕。',
+        action: 'Space 闪避',
+        tactic: '擦弹蓄能 · 弱点反击',
+        start: '进入 Boss Rush'
+      },
+      drift: {
+        title: '霓虹漂移线路简报',
+        objective: '连续压准检查点，完成赞助合约，热度过高前用相位刹车降压。',
+        action: 'Space 加速 / Q 相位',
+        tactic: 'PERFECT 门 · 控热超车',
+        start: '点火漂移'
+      },
+      heist: {
+        title: '赛博潜入路线简报',
+        objective: '扫描密钥、终端和缓存，利用隐身与诱饵拆开守卫视野。',
+        action: 'Space 隐身 / Q 诱饵',
+        tactic: '先缓存 · 再撤离',
+        start: '生成潜入任务'
+      },
+      chain: {
+        title: '连锁炼金配方简报',
+        objective: '优先 7+ 连锁和配方颜色，积攒超载后用催化打出大清场。',
+        action: '点击能量团 / Q 催化',
+        tactic: '配方优先 · 留大团',
+        start: '重置能量场'
+      },
+      tactics: {
+        title: '裂隙战术撤离简报',
+        objective: '沿推荐路线吃掩体动量，爆破锁定敌人后拿满 3 个核心撤离。',
+        action: 'Space 爆破/架盾',
+        tactic: '看预判 · 借掩体',
+        start: '开始战术行动'
+      }
     };
     const careerGameOrder = ['runner', 'survivor', 'boss', 'drift', 'heist', 'chain', 'tactics'];
     const careerKey = 'atherix_premium_arcade_career_v2';
@@ -5765,6 +5826,62 @@ function init() {
     function nextMedalTarget(game, score) {
       const rules = [...(medalRules[game] || [])].sort((a, b) => a.threshold - b.threshold);
       return rules.find(rule => score < rule.threshold) || null;
+    }
+
+    function premiumBriefingSnapshot(mode = premiumActive) {
+      const config = premiumBriefings[mode] || premiumBriefings.survivor;
+      const score = Number(career.best?.[mode] || 0);
+      const next = nextMedalTarget(mode, score);
+      const medal = medalClass(career.medals?.[mode] || medalFor(mode, score));
+      const difficulty = activeDifficultyDef();
+      const loadout = activeLoadoutDef();
+      return {
+        mode,
+        label: premiumTabLabels[mode] || titles[mode] || mode,
+        title: config.title,
+        objective: config.objective,
+        action: config.action,
+        tactic: config.tactic,
+        start: config.start,
+        medal,
+        medalTarget: next
+          ? `${medalLabels[next.name] || next.name}牌 ${next.threshold}`
+          : '金牌完成 · 冲击极限',
+        medalFull: medalTargetText(mode),
+        best: score,
+        difficulty: difficulty.short,
+        loadout: loadout.label
+      };
+    }
+
+    function renderPremiumBriefing() {
+      const panel = document.getElementById('premium-mission-briefing');
+      if (!panel) return;
+      const briefing = premiumBriefingSnapshot();
+      panel.dataset.mode = briefing.mode;
+      const titleEl = document.getElementById('premium-briefing-title');
+      const objectiveEl = document.getElementById('premium-briefing-objective');
+      const actionEl = document.getElementById('premium-briefing-action');
+      const tacticEl = document.getElementById('premium-briefing-tactic');
+      const medalEl = document.getElementById('premium-briefing-medal');
+      const loadoutEl = document.getElementById('premium-briefing-loadout');
+      const startBtn = document.getElementById('premium-briefing-start');
+      if (titleEl) titleEl.textContent = briefing.title;
+      if (objectiveEl) objectiveEl.textContent = briefing.objective;
+      if (actionEl) actionEl.textContent = briefing.action;
+      if (tacticEl) tacticEl.textContent = briefing.tactic;
+      if (medalEl) {
+        medalEl.textContent = briefing.best
+          ? `${medalLabels[briefing.medal] || medalLabels.none}牌 · 下一目标 ${briefing.medalTarget}`
+          : briefing.medalFull;
+      }
+      if (loadoutEl) loadoutEl.textContent = `${briefing.difficulty} · ${briefing.loadout}`;
+      if (startBtn) {
+        startBtn.dataset.briefingGame = briefing.mode;
+        startBtn.setAttribute('aria-label', `开始${briefing.label}`);
+        const label = startBtn.querySelector('span');
+        if (label) label.textContent = briefing.start;
+      }
     }
 
     function arcadeCompletionPercent() {
@@ -6880,6 +6997,7 @@ function init() {
       renderArcadeLeague();
       renderArcadeDifficulty();
       renderArcadeLoadouts();
+      renderPremiumBriefing();
       updatePremiumTabBadges();
       renderCareerDialog();
     }
@@ -7126,6 +7244,7 @@ function init() {
       if (name === 'tactics') drawTactics();
       if (name === 'drift') drawDrift();
       updatePremiumTouchLabels();
+      renderPremiumBriefing();
       renderArcadeCockpit();
       if (previous !== name) triggerPremiumFeedback('switch', { label: premiumTabLabels[name] || titles[name] || name });
       focusStage();
@@ -7186,6 +7305,12 @@ function init() {
       startPremiumActiveGame();
       stage?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       showToast(`开局：${premiumTabLabels[premiumActive] || titles[premiumActive] || premiumActive}`, 'success');
+    });
+    document.getElementById('premium-briefing-start')?.addEventListener('click', () => {
+      focusStage();
+      startPremiumActiveGame();
+      stage?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      showToast(`作战简报执行：${premiumTabLabels[premiumActive] || titles[premiumActive] || premiumActive}`, 'success');
     });
     document.getElementById('premium-cockpit-target')?.addEventListener('click', () => {
       const target = document.getElementById('premium-cockpit-target')?.dataset.cockpitTargetGame || arcadeDirective().game;

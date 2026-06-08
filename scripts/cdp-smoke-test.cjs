@@ -1262,6 +1262,16 @@ async function run() {
       cockpitTarget: document.querySelector('#premium-cockpit-target')?.dataset.cockpitTargetGame || '',
       cockpitActionLabel: document.querySelector('#premium-cockpit-play')?.getAttribute('aria-label') || '',
       debugCockpit: window.__atherixDebug?.premium?.cockpit?.() || {},
+      briefingPanel: !!document.querySelector('#premium-mission-briefing'),
+      briefingMode: document.querySelector('#premium-mission-briefing')?.dataset.mode || '',
+      briefingTitle: document.querySelector('#premium-briefing-title')?.textContent || '',
+      briefingObjective: document.querySelector('#premium-briefing-objective')?.textContent || '',
+      briefingAction: document.querySelector('#premium-briefing-action')?.textContent || '',
+      briefingTactic: document.querySelector('#premium-briefing-tactic')?.textContent || '',
+      briefingMedal: document.querySelector('#premium-briefing-medal')?.textContent || '',
+      briefingLoadout: document.querySelector('#premium-briefing-loadout')?.textContent || '',
+      briefingStartTarget: document.querySelector('#premium-briefing-start')?.dataset.briefingGame || '',
+      briefingStartLabel: document.querySelector('#premium-briefing-start')?.textContent.trim() || '',
       directorPanel: !!document.querySelector('#premium-arcade-director'),
       directorTarget: document.querySelector('#premium-director-start')?.dataset.targetGame || '',
       directorTitle: document.querySelector('#premium-director-title')?.textContent || '',
@@ -1353,6 +1363,7 @@ async function run() {
         cockpit: rectFor('#premium-cockpit-panel'),
         tabs: rectFor('#premium-game-tabs'),
         stage: rectFor('#premium-game-stage'),
+        briefing: rectFor('#premium-mission-briefing'),
         feedback: rectFor('#premium-feedback-console'),
         career: rectFor('.arcade-career-panel'),
         profile: rectFor('#premium-profile-panel'),
@@ -1362,6 +1373,62 @@ async function run() {
         difficulty: rectFor('#premium-difficulty-panel'),
         loadout: rectFor('#premium-loadout-panel')
       }
+    };
+  })()`);
+  const briefingModeState = await evaluate(`(() => {
+    const modes = ['survivor', 'boss', 'drift', 'heist', 'chain', 'tactics'];
+    const read = (mode) => ({
+      mode,
+      activeTab: document.querySelector(\`[data-premium-game="\${mode}"]\`)?.classList.contains('active') || false,
+      panelMode: document.querySelector('#premium-mission-briefing')?.dataset.mode || '',
+      title: document.querySelector('#premium-briefing-title')?.textContent.trim() || '',
+      objective: document.querySelector('#premium-briefing-objective')?.textContent.trim() || '',
+      action: document.querySelector('#premium-briefing-action')?.textContent.trim() || '',
+      tactic: document.querySelector('#premium-briefing-tactic')?.textContent.trim() || '',
+      medal: document.querySelector('#premium-briefing-medal')?.textContent.trim() || '',
+      loadout: document.querySelector('#premium-briefing-loadout')?.textContent.trim() || '',
+      startTarget: document.querySelector('#premium-briefing-start')?.dataset.briefingGame || '',
+      startLabel: document.querySelector('#premium-briefing-start')?.textContent.trim() || ''
+    });
+    const snapshots = modes.map(mode => {
+      document.querySelector(\`[data-premium-game="\${mode}"]\`)?.click();
+      return read(mode);
+    });
+    document.querySelector('[data-premium-game="survivor"]')?.click();
+    return {
+      snapshots,
+      restoredMode: document.querySelector('#premium-mission-briefing')?.dataset.mode || '',
+      activeTitle: document.querySelector('#premium-active-title')?.textContent.trim() || '',
+      horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+    };
+  })()`);
+  const briefingStartState = await evaluate(`(async () => {
+    document.querySelector('[data-premium-game="survivor"]')?.click();
+    const btn = document.querySelector('#premium-briefing-start');
+    const before = {
+      active: window.__atherixDebug?.premium?.active?.() || '',
+      running: !!window.__atherixDebug?.premium?.survivorRunning?.(),
+      paused: !!window.__atherixDebug?.premium?.survivorPaused?.(),
+      mode: document.querySelector('#premium-mission-briefing')?.dataset.mode || '',
+      startTarget: btn?.dataset.briefingGame || '',
+      startLabel: btn?.textContent.trim() || ''
+    };
+    btn?.click();
+    await new Promise(resolve => setTimeout(resolve, 260));
+    return {
+      clicked: !!btn,
+      before,
+      active: window.__atherixDebug?.premium?.active?.() || '',
+      running: !!window.__atherixDebug?.premium?.survivorRunning?.(),
+      paused: !!window.__atherixDebug?.premium?.survivorPaused?.(),
+      mode: document.querySelector('#premium-mission-briefing')?.dataset.mode || '',
+      startTarget: btn?.dataset.briefingGame || '',
+      startLabel: btn?.textContent.trim() || '',
+      actionLabel: document.querySelector('[data-premium-control="action"]')?.textContent || '',
+      toolDisabled: !!document.querySelector('[data-premium-control="tool"]')?.disabled,
+      toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || '',
+      feedback: window.__atherixDebug?.premium?.feedback?.() || {},
+      horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
     };
   })()`);
   const premiumGamepadState = await evaluate(`(() => {
@@ -2037,7 +2104,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasMarkdownSafeVersion: swText.includes('atherix-static-v33-markdown-safe') && swText.includes('/style.css?v=20260608-markdown-safe-v1') && swText.includes('/app.js?v=20260608-markdown-safe-v1'),
+      swHasMissionBriefingVersion: swText.includes('atherix-static-v34-mission-briefing') && swText.includes('/style.css?v=20260608-mission-briefing-v1') && swText.includes('/app.js?v=20260608-mission-briefing-v1'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
   })()`, 10000);
@@ -2219,15 +2286,67 @@ async function run() {
     arcadeInitial.playfieldLayout?.cockpit
       && arcadeInitial.playfieldLayout?.tabs
       && arcadeInitial.playfieldLayout?.stage
+      && arcadeInitial.playfieldLayout?.briefing
       && arcadeInitial.playfieldLayout?.career
       && arcadeInitial.playfieldLayout?.director
       && arcadeInitial.playfieldLayout?.mastery
       && arcadeInitial.playfieldLayout.tabs.top >= arcadeInitial.playfieldLayout.cockpit.bottom - 8
       && arcadeInitial.playfieldLayout.stage.top >= arcadeInitial.playfieldLayout.tabs.bottom - 8
+      && arcadeInitial.playfieldLayout.briefing.top >= arcadeInitial.playfieldLayout.stage.top - 8
+      && arcadeInitial.playfieldLayout.briefing.bottom <= arcadeInitial.playfieldLayout.stage.bottom + 8
       && arcadeInitial.playfieldLayout.career.top >= arcadeInitial.playfieldLayout.stage.bottom - 8
       && arcadeInitial.playfieldLayout.director.top >= arcadeInitial.playfieldLayout.stage.bottom - 8
       && arcadeInitial.playfieldLayout.mastery.top >= arcadeInitial.playfieldLayout.stage.bottom - 8,
     `premium arcade should prioritize playable tabs and canvas before meta panels: ${JSON.stringify(arcadeInitial.playfieldLayout)}`
+  );
+  assert(
+    arcadeInitial.briefingPanel
+      && ['survivor', 'boss', 'drift', 'heist', 'chain', 'tactics'].includes(arcadeInitial.briefingMode)
+      && arcadeInitial.briefingTitle.length > 6
+      && arcadeInitial.briefingObjective.length > 12
+      && arcadeInitial.briefingAction.length > 2
+      && arcadeInitial.briefingTactic.length > 4
+      && /铜|银|金|牌/.test(arcadeInitial.briefingMedal)
+      && /标准/.test(arcadeInitial.briefingLoadout)
+      && /脉冲/.test(arcadeInitial.briefingLoadout)
+      && arcadeInitial.briefingStartTarget === arcadeInitial.briefingMode
+      && arcadeInitial.briefingStartLabel.length > 3,
+    `premium arcade mission briefing should explain the currently active run: ${JSON.stringify(arcadeInitial)}`
+  );
+  assert(
+    briefingModeState.snapshots?.length === 6
+      && briefingModeState.restoredMode === 'survivor'
+      && !briefingModeState.horizontalOverflow
+      && new Set(briefingModeState.snapshots.map(snapshot => snapshot.title)).size === 6
+      && briefingModeState.snapshots.every(snapshot => (
+        snapshot.activeTab
+        && snapshot.panelMode === snapshot.mode
+        && snapshot.startTarget === snapshot.mode
+        && snapshot.title.length > 6
+        && snapshot.objective.length > 12
+        && snapshot.action.length > 2
+        && snapshot.tactic.length > 3
+        && snapshot.medal.length > 4
+        && snapshot.loadout.length > 4
+        && snapshot.startLabel.length > 3
+      )),
+    `premium arcade mission briefing should update for every premium mode: ${JSON.stringify(briefingModeState)}`
+  );
+  assert(
+    briefingStartState.clicked
+      && briefingStartState.before?.mode === 'survivor'
+      && briefingStartState.before?.startTarget === 'survivor'
+      && briefingStartState.active === 'survivor'
+      && briefingStartState.mode === 'survivor'
+      && briefingStartState.startTarget === 'survivor'
+      && briefingStartState.running
+      && !briefingStartState.paused
+      && /星爆/.test(briefingStartState.actionLabel)
+      && briefingStartState.toolDisabled
+      && /作战简报执行/.test(briefingStartState.toast)
+      && briefingStartState.feedback?.tones?.start >= 1
+      && !briefingStartState.horizontalOverflow,
+    `premium arcade mission briefing start should launch the active mode: ${JSON.stringify(briefingStartState)}`
   );
   assert(arcadeInitial.feedbackPanel && arcadeInitial.feedbackStage && arcadeInitial.feedbackTogglePressed === 'true' && arcadeInitial.feedbackDebug?.muted === false && arcadeInitial.feedbackDebug?.total === 0 && /沉浸反馈/.test(arcadeInitial.feedbackStatus), `premium arcade feedback console should start enabled and observable: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.cockpitPanel && arcadeInitial.cockpitTarget === arcadeInitial.debugCockpit?.targetGame && arcadeInitial.cockpitMode === arcadeInitial.debugCockpit?.activeLabel && arcadeInitial.cockpitDifficulty && arcadeInitial.cockpitLoadout && (arcadeInitial.cockpitSeason === '完成' || /^\d+%$/.test(arcadeInitial.cockpitSeason)) && arcadeInitial.cockpitActionLabel.includes(arcadeInitial.cockpitMode), `premium arcade cockpit should summarize the next playable run: ${JSON.stringify(arcadeInitial)}`);
@@ -2377,7 +2496,7 @@ async function run() {
   assert(tacticsForecastAfterAction.dangerCount > 0 && tacticsForecastAfterAction.coverHud && tacticsForecastAfterAction.momentumHud !== undefined && tacticsForecastAfterAction.routeHud && tacticsJammedIntent, `tactics mode should expose post-action JAM, cover, momentum, and route forecast: ${JSON.stringify(tacticsForecastAfterAction)}`);
   assert(tacticsState.nonBlank && Number(tacticsState.ap) >= 0 && tacticsState.action && tacticsState.cover && tacticsState.momentum !== undefined && tacticsState.route && tacticsState.debug?.route?.length > 0, `tactics mode should render and accept enhanced actions: ${JSON.stringify(tacticsState)}`);
   assert(Number(tacticsState.danger) > 0 && tacticsState.intel && tacticsState.debug?.hud?.route === tacticsState.route && tacticsState.debug?.hud?.cover === tacticsState.cover && tacticsState.debug?.hud?.momentum === tacticsState.momentum, `tactics HUD should stay in sync with enhanced debug state: ${JSON.stringify(tacticsState)}`);
-  assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /markdown-safe/.test(key)) && pwaState.swHasMarkdownSafeVersion, `service worker should register and cache the latest app shell: ${JSON.stringify(pwaState)}`);
+  assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /mission-briefing/.test(key)) && pwaState.swHasMissionBriefingVersion, `service worker should register and cache the latest app shell: ${JSON.stringify(pwaState)}`);
   assert(pwaState.swHasLocalProjectAssets, `service worker should precache local portfolio assets: ${JSON.stringify(pwaState)}`);
   assert(pwaState.swHasNavigationPreload && pwaState.swHasOfflineShellHeader && pwaState.swHasFallbackUrl, `service worker should include robust offline navigation fallback: ${JSON.stringify(pwaState)}`);
   const diagnosticText = JSON.stringify(diagnostics);
@@ -2428,6 +2547,8 @@ async function run() {
     runnerMobileState,
     premiumMobileState,
     arcadeInitial,
+    briefingModeState,
+    briefingStartState,
     premiumGamepadState,
     premiumPauseHookState,
     contractProgressState,
