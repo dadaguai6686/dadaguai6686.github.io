@@ -5451,6 +5451,7 @@ function init() {
               <span>动量 <strong id="premium-tactics-momentum">0</strong></span>
               <span>连击 <strong id="premium-tactics-combo">0x</strong></span>
               <span>脉冲 <strong id="premium-tactics-surge">0%</strong></span>
+              <span>压制 <strong id="premium-tactics-suppression">0%</strong></span>
               <span>路线 <strong id="premium-tactics-route">SCAN</strong></span>
               <span>最佳 <strong id="premium-tactics-best">0</strong></span>
             </div>
@@ -8513,7 +8514,7 @@ function init() {
       document.getElementById('premium-survivor-score').textContent = Math.floor(survivor.score);
       document.getElementById('premium-survivor-best').textContent = localStorage.getItem(survivor.bestKey) || '0';
       document.getElementById('premium-survivor-level').textContent = survivor.player?.level || 1;
-      document.getElementById('premium-survivor-hp').textContent = Math.max(0, Math.ceil(survivor.player?.hp || 100));
+      document.getElementById('premium-survivor-hp').textContent = Math.max(0, Math.ceil(survivor.player?.hp ?? 100));
       document.getElementById('premium-survivor-build').textContent = survivorBuildSummary();
       const chainEl = document.getElementById('premium-survivor-chain');
       if (chainEl) {
@@ -9345,6 +9346,7 @@ function init() {
         pickups: survivor.pickups.map(item => item.type),
         hud: {
           chain: document.getElementById('premium-survivor-chain')?.textContent || '',
+          hp: document.getElementById('premium-survivor-hp')?.textContent || '',
           overdrive: document.getElementById('premium-survivor-overdrive')?.textContent || '',
           build: document.getElementById('premium-survivor-build')?.textContent || '',
           threat: document.getElementById('premium-survivor-threat')?.textContent || '',
@@ -9441,6 +9443,15 @@ function init() {
       };
     }
 
+    function forceSurvivorHpZero() {
+      switchPremiumGame('survivor');
+      if (!survivor.running) startSurvivor();
+      survivor.player.hp = 0;
+      setSurvivorUi();
+      drawSurvivor();
+      return survivorDebugState();
+    }
+
     document.getElementById('premium-survivor-start').addEventListener('click', () => {
       startSurvivor();
       triggerPremiumFeedback('start', { label: 'START SURVIVOR' });
@@ -9471,6 +9482,7 @@ function init() {
       patternTimer: 0,
       queuedPattern: '',
       currentPattern: '',
+      telegraphAim: null,
       telegraphTimer: 0,
       telegraphDuration: 0,
       patternFlash: 0,
@@ -9635,6 +9647,7 @@ function init() {
       bossMode.patternTimer = 0;
       bossMode.queuedPattern = '';
       bossMode.currentPattern = '';
+      bossMode.telegraphAim = null;
       bossMode.telegraphTimer = 0;
       bossMode.telegraphDuration = 0;
       bossMode.patternFlash = 0;
@@ -9823,6 +9836,7 @@ function init() {
       bossMode.bullets = [];
       bossMode.queuedPattern = '';
       bossMode.currentPattern = '';
+      bossMode.telegraphAim = null;
       bossMode.telegraphTimer = 0;
       bossMode.telegraphDuration = 0;
       bossMode.patternTimer = -420;
@@ -9854,8 +9868,19 @@ function init() {
       const phase = bossPhaseFromHp();
       const pressure = Number(bossMode.runPressure || arcadeRunPressure('boss', bossMode.variant));
       const pattern = forcedPattern || pickBossPattern(phase);
+      const b = bossMode.boss;
       bossMode.queuedPattern = pattern;
       bossMode.currentPattern = pattern;
+      bossMode.telegraphAim = pattern === 'snipe'
+        ? {
+            pattern,
+            originX: b.x,
+            originY: b.y,
+            targetX: bossMode.player.x,
+            targetY: bossMode.player.y,
+            angle: Math.atan2(bossMode.player.y - b.y, bossMode.player.x - b.x)
+          }
+        : null;
       bossMode.telegraphDuration = Math.max(430, (780 - phase * 70) / Math.sqrt(pressure));
       bossMode.telegraphTimer = bossMode.telegraphDuration;
       bossMode.patternFlash = bossMode.telegraphDuration;
@@ -9882,7 +9907,8 @@ function init() {
         }
       }
       if (pattern === 'snipe') {
-        const base = Math.atan2(bossMode.player.y - b.y, bossMode.player.x - b.x);
+        const aim = bossMode.telegraphAim?.pattern === 'snipe' ? bossMode.telegraphAim : null;
+        const base = Number.isFinite(aim?.angle) ? aim.angle : Math.atan2(bossMode.player.y - b.y, bossMode.player.x - b.x);
         for (let i = -3; i <= 3; i++) bossMode.bullets.push({ x: b.x, y: b.y, vx: Math.cos(base + i * 0.13) * (178 + phase * 22), vy: Math.sin(base + i * 0.13) * (178 + phase * 22), r: 6, color: '#F97316', grazed: false });
       }
       if (pattern === 'rain') {
@@ -10034,7 +10060,8 @@ function init() {
         ctx.stroke();
       }
       if (pattern === 'snipe') {
-        const base = Math.atan2(p.y - b.y, p.x - b.x);
+        const aim = bossMode.telegraphAim?.pattern === 'snipe' ? bossMode.telegraphAim : null;
+        const base = Number.isFinite(aim?.angle) ? aim.angle : Math.atan2(p.y - b.y, p.x - b.x);
         for (let i = -3; i <= 3; i++) {
           const angle = base + i * 0.13;
           ctx.beginPath();
@@ -10764,6 +10791,7 @@ function init() {
       const complete = drift.gateIndex >= drift.gates.length;
       const timeBonus = complete ? Math.max(0, 76000 - drift.elapsed) / 42 : 0;
       const finalScore = Math.floor(drift.score + drift.gateIndex * 120 + drift.player.shield * 7 + timeBonus + drift.bestCombo * 75 + drift.lineBank + drift.overtakes * 180 + drift.draftBank);
+      drift.score = finalScore;
       localStorage.setItem(drift.bestKey, String(Math.max(Number(localStorage.getItem(drift.bestKey) || 0), finalScore)));
       if (complete) unlockAchievement('drift_clear');
       if (complete && drift.player.shield >= 75) unlockAchievement('drift_clean');
@@ -11223,7 +11251,7 @@ function init() {
         : (['MID', 'GHOST'].includes(heist.alert) ? '#FBBF24' : '#34D399');
     }
 
-    function newHeist() {
+    function newHeist({ shouldFocus = true } = {}) {
       const bonuses = loadoutBonuses();
       const tuning = difficultyTuning();
       const variant = activeArcadeRunVariant('heist');
@@ -11285,7 +11313,7 @@ function init() {
       heist.recorded = false;
       heist.lockdownReason = '';
       setHeistUi();
-      focusStage();
+      if (shouldFocus) focusStage();
       drawHeist();
     }
 
@@ -11787,6 +11815,7 @@ function init() {
       heist.securityPeak = Math.max(heist.securityPeak, heist.security);
       heist.lastTactic = `LOCKDOWN ${cause}`;
       const score = Math.max(70, 150 + heist.collected * 120 + heist.loot + heist.bestChain * 18 + heist.hacksCompleted * 140 + heist.cloaks * 25 - heist.steps * 10 - Math.round(heist.securityPeak * 2));
+      localStorage.setItem(heist.bestKey, String(Math.max(Number(localStorage.getItem(heist.bestKey) || 0), Math.floor(score))));
       recordPremiumResult('heist', score, {
         outcome: 'lockdown',
         cause,
@@ -12069,7 +12098,7 @@ function init() {
       newHeist();
       triggerPremiumFeedback('start', { label: 'START HEIST' });
     });
-    newHeist();
+    newHeist({ shouldFocus: false });
 
     const chain = {
       board: document.getElementById('premium-chain-board'),
@@ -12291,7 +12320,7 @@ function init() {
       return '';
     }
 
-    function newChain() {
+    function newChain({ shouldFocus = true } = {}) {
       const bonuses = loadoutBonuses();
       const tuning = difficultyTuning();
       const variant = activeArcadeRunVariant('chain');
@@ -12330,7 +12359,7 @@ function init() {
       chain.grid[5][1] = 'gold';
       chain.grid[6][1] = 'pink';
       setChainCursorToBest();
-      focusStage();
+      if (shouldFocus) focusStage();
       renderChain();
     }
 
@@ -12915,7 +12944,7 @@ function init() {
       triggerPremiumFeedback('start', { label: 'START CHAIN' });
     });
     document.getElementById('premium-chain-catalyst').addEventListener('click', triggerChainCatalyst);
-    newChain();
+    newChain({ shouldFocus: false });
 
     const tactics = {
       canvas: document.getElementById('premium-tactics-canvas'),
@@ -12938,6 +12967,10 @@ function init() {
       combo: 0,
       surge: 0,
       surges: 0,
+      suppression: 0,
+      dangerSteps: 0,
+      evades: 0,
+      lastHazard: null,
       lastAction: '',
       won: false,
       lost: false,
@@ -12996,6 +13029,10 @@ function init() {
       tactics.combo = 0;
       tactics.surge = 0;
       tactics.surges = 0;
+      tactics.suppression = 0;
+      tactics.dangerSteps = 0;
+      tactics.evades = 0;
+      tactics.lastHazard = null;
       tactics.lastAction = '';
       tactics.won = false;
       tactics.lost = false;
@@ -13340,6 +13377,12 @@ function init() {
         comboEl.textContent = `${Math.max(0, tactics.combo)}x`;
         comboEl.style.color = tactics.combo >= 3 ? '#FDE68A' : tactics.combo >= 1 ? '#A7F3D0' : '#94A3B8';
       }
+      const suppressionEl = document.getElementById('premium-tactics-suppression');
+      if (suppressionEl) {
+        const suppressionValue = Math.floor(Number(tactics.suppression || 0));
+        suppressionEl.textContent = suppressionValue > 0 ? `${suppressionValue}%` : (tactics.evades > 0 ? `EVADE ${tactics.evades}` : '0%');
+        suppressionEl.style.color = suppressionValue >= 70 ? '#EF4444' : suppressionValue >= 36 ? '#FBBF24' : tactics.evades > 0 ? '#A7F3D0' : '#94A3B8';
+      }
       const surgeEl = document.getElementById('premium-tactics-surge');
       if (surgeEl) {
         const surgeValue = Math.floor(Number(tactics.surge || 0));
@@ -13389,6 +13432,51 @@ function init() {
       return { raw: amount, pressured: pressuredAmount, mitigated, absorbed, cover };
     }
 
+    function resolveTacticsHazardStep(dangerCell, risk = 0, cover = tacticsCoverProfile(), followedRoute = false) {
+      const severityMap = { lane: 1, adjacent: 2, move: 3, impact: 5 };
+      const severity = dangerCell ? (severityMap[dangerCell.tone] || 2) : 0;
+      if (!dangerCell && risk <= 1) {
+        tactics.evades = Math.min(9, Number(tactics.evades || 0) + 1);
+        tactics.suppression = Math.max(0, Number(tactics.suppression || 0) - 10);
+        tactics.lastHazard = { tone: 'clear', risk, pressure: 0, shieldLoss: 0, hpLoss: 0, evaded: true };
+        return tactics.lastHazard;
+      }
+      const mitigation = Number(cover.level || 0) * 2 + (followedRoute ? 2 : 0) + (tactics.momentum >= 5 ? 1 : 0);
+      const pressure = Math.max(0, severity + Math.ceil(Number(risk || 0) / 2) - mitigation);
+      if (pressure <= 0) {
+        tactics.evades = Math.min(9, Number(tactics.evades || 0) + 1);
+        tactics.suppression = Math.max(0, Number(tactics.suppression || 0) - 14);
+        awardTacticsSurge(6 + Number(cover.level || 0) * 4 + (followedRoute ? 4 : 0), 'evasion');
+        tactics.lastHazard = { tone: dangerCell?.tone || 'risk', risk, pressure: 0, shieldLoss: 0, hpLoss: 0, evaded: true };
+        return tactics.lastHazard;
+      }
+      tactics.dangerSteps = Number(tactics.dangerSteps || 0) + 1;
+      tactics.evades = 0;
+      const beforeShield = Number(tactics.player.shield || 0);
+      const shieldLoss = Math.min(beforeShield, pressure * 3);
+      tactics.player.shield = Math.max(0, beforeShield - shieldLoss);
+      const hpLoss = pressure >= 3 ? Math.max(1, pressure - Number(cover.level || 0)) : 0;
+      if (hpLoss > 0) tactics.player.hp = Math.max(0, Number(tactics.player.hp || 0) - hpLoss);
+      tactics.suppression = clamp(Number(tactics.suppression || 0) + pressure * 12, 0, 100);
+      tactics.flash = Math.max(tactics.flash, pressure >= 4 ? 12 : 7);
+      tactics.lastAction = 'hazard';
+      tactics.lastHazard = {
+        tone: dangerCell?.tone || 'risk',
+        risk,
+        pressure,
+        shieldLoss,
+        hpLoss,
+        evaded: false,
+        followedRoute,
+        cover: cover.label
+      };
+      if (tactics.player.hp <= 0) {
+        tactics.player.hp = 0;
+        finishTacticsLoss('SUPPRESSION');
+      }
+      return tactics.lastHazard;
+    }
+
     function damageTacticsEnemy(enemy, amount) {
       const before = enemy.hp;
       enemy.hp -= amount;
@@ -13420,6 +13508,7 @@ function init() {
       tactics.lost = true;
       tactics.recorded = true;
       const score = Math.max(80, 160 + tactics.player.cores * 160 + tactics.kills * 95 + tactics.momentum * 24 + tactics.combo * 36 + tactics.surges * 80 - tactics.turn * 18);
+      localStorage.setItem(tactics.bestKey, String(Math.max(Number(localStorage.getItem(tactics.bestKey) || 0), Math.floor(score))));
       recordPremiumResult('tactics', score, {
         outcome: 'down',
         cause,
@@ -13452,6 +13541,8 @@ function init() {
       const nx = tactics.player.x + dx;
       const ny = tactics.player.y + dy;
       const routeBefore = tacticsRoutePlan();
+      const forecastBefore = tacticsForecast();
+      const dangerCell = (forecastBefore.dangerCells || []).find(cell => cell.x === nx && cell.y === ny) || null;
       const enemy = tacticsEnemyAt(nx, ny);
       if (enemy) {
         const result = damageTacticsEnemy(enemy, 28 + tactics.momentum * 2);
@@ -13473,6 +13564,12 @@ function init() {
       const cover = tacticsCoverProfile(nx, ny);
       const risk = tacticsCellRisk(nx, ny);
       const followedRoute = !!routeBefore.next && routeBefore.next.x === nx && routeBefore.next.y === ny;
+      const hazard = resolveTacticsHazardStep(dangerCell, risk, cover, followedRoute);
+      if (tactics.lost) {
+        setTacticsUi();
+        drawTactics();
+        return;
+      }
       if (followedRoute) awardTacticsMomentum(1, 'route');
       if (cover.level > 0) awardTacticsMomentum(cover.level, 'cover');
       if (risk <= 1) awardTacticsMomentum(1, 'clean');
@@ -13483,7 +13580,10 @@ function init() {
       } else {
         if (!collected) {
           const routeText = followedRoute ? '推荐路线推进' : cover.level > 0 ? `${cover.label} 掩体就位` : risk > 2 ? '高危推进' : '战术推进';
-          tactics.message = `${routeText} · 动量 ${tactics.momentum}`;
+          const hazardText = hazard?.pressure > 0
+            ? ` · 压制 +${Math.floor(tactics.suppression)}%`
+            : (hazard?.evaded ? ` · 闪避 ${tactics.evades}` : '');
+          tactics.message = `${routeText}${hazardText} · 动量 ${tactics.momentum}`;
         }
         spendTacticsAp(1);
       }
@@ -13758,7 +13858,7 @@ function init() {
 
       ctx.fillStyle = '#fff';
       ctx.font = '800 12px JetBrains Mono, monospace';
-      ctx.fillText(`SHIELD ${Math.round(p.shield)} · CHARGE ${p.charge} · MOM ${tactics.momentum} · COMBO ${tactics.combo}x`, 18, 24);
+      ctx.fillText(`SHIELD ${Math.round(p.shield)} · CHARGE ${p.charge} · MOM ${tactics.momentum} · COMBO ${tactics.combo}x · SUP ${Math.floor(Number(tactics.suppression || 0))}%`, 18, 24);
       ctx.fillStyle = forecast.tone === 'danger' ? '#FCA5A5' : forecast.tone === 'warn' ? '#FDE68A' : forecast.tone === 'attack' ? '#DDD6FE' : '#A7F3D0';
       ctx.font = '800 11px JetBrains Mono, monospace';
       ctx.fillText(`INTEL ${forecast.label} · ${forecast.dangerCells.length} ZONES · ${routePlan.label}`, 18, 42);
@@ -13800,6 +13900,10 @@ function init() {
         combo: tactics.combo,
         surge: Math.floor(Number(tactics.surge || 0)),
         surges: tactics.surges,
+        suppression: Math.floor(Number(tactics.suppression || 0)),
+        dangerSteps: Number(tactics.dangerSteps || 0),
+        evades: Number(tactics.evades || 0),
+        lastHazard: tactics.lastHazard ? { ...tactics.lastHazard } : null,
         lastAction: tactics.lastAction,
         won: tactics.won,
         lost: tactics.lost,
@@ -13840,6 +13944,7 @@ function init() {
           shield: document.getElementById('premium-tactics-shield')?.textContent || '',
           combo: document.getElementById('premium-tactics-combo')?.textContent || '',
           surge: document.getElementById('premium-tactics-surge')?.textContent || '',
+          suppression: document.getElementById('premium-tactics-suppression')?.textContent || '',
           route: document.getElementById('premium-tactics-route')?.textContent || '',
           intel: document.getElementById('premium-tactics-intel')?.textContent || '',
           danger: document.getElementById('premium-tactics-danger')?.textContent || '',
@@ -13875,6 +13980,7 @@ function init() {
           forceSurvivorAnomaly: (type = 'meteor') => forceSurvivorAnomaly(type),
           forceSurvivorOverdrive: () => forceSurvivorOverdrive(),
           forceSurvivorBounty: () => forceSurvivorBounty(),
+          forceSurvivorHpZero: () => forceSurvivorHpZero(),
           bossRunning: () => bossMode.running,
           bossPaused: () => bossMode.paused,
           bossPhase: () => bossMode.boss.phase,
@@ -13883,6 +13989,15 @@ function init() {
             current: bossMode.currentPattern,
             label: bossPatternDefs[bossMode.queuedPattern || bossMode.currentPattern]?.label || '',
             telegraphMs: Math.ceil(bossMode.telegraphTimer),
+            telegraphAim: bossMode.telegraphAim ? {
+              pattern: bossMode.telegraphAim.pattern || '',
+              targetX: Math.round(Number(bossMode.telegraphAim.targetX || 0)),
+              targetY: Math.round(Number(bossMode.telegraphAim.targetY || 0)),
+              angle: Number(Number(bossMode.telegraphAim.angle || 0).toFixed(4))
+            } : null,
+            centerBulletAngle: bossMode.bullets[3]
+              ? Number(Math.atan2(bossMode.bullets[3].vy, bossMode.bullets[3].vx).toFixed(4))
+              : null,
             bullets: bossMode.bullets.length,
             weak: bossWeakState(),
             shield: bossShieldState(),
@@ -13924,12 +14039,41 @@ function init() {
             bossMode.bullets = [];
             bossMode.queuedPattern = '';
             bossMode.currentPattern = '';
+            bossMode.telegraphAim = null;
             bossMode.telegraphTimer = 0;
             bossMode.telegraphDuration = 0;
             bossMode.patternTimer = 0;
             startBossTelegraph(pattern);
             drawBoss();
             return window.__atherixDebug.premium.bossPattern();
+          },
+          forceBossSnipeLock: () => {
+            if (!bossMode.running) startBoss();
+            bossMode.paused = false;
+            bossMode.bullets = [];
+            bossMode.boss.x = 280;
+            bossMode.boss.y = 92;
+            bossMode.player.x = 220;
+            bossMode.player.y = 294;
+            bossMode.queuedPattern = '';
+            bossMode.currentPattern = '';
+            bossMode.telegraphAim = null;
+            bossMode.telegraphTimer = 0;
+            bossMode.telegraphDuration = 0;
+            bossMode.patternTimer = 0;
+            startBossTelegraph('snipe');
+            const before = window.__atherixDebug.premium.bossPattern();
+            bossMode.player.x = 360;
+            bossMode.player.y = 260;
+            drawBoss();
+            const moved = window.__atherixDebug.premium.bossPattern();
+            spawnBossPattern('snipe');
+            drawBoss();
+            return {
+              before,
+              moved,
+              after: window.__atherixDebug.premium.bossPattern()
+            };
           },
           forceBossCounter: (pattern = 'snipe') => {
             if (!bossMode.running) startBoss();
@@ -13940,6 +14084,7 @@ function init() {
             ];
             bossMode.queuedPattern = '';
             bossMode.currentPattern = '';
+            bossMode.telegraphAim = null;
             bossMode.telegraphTimer = 0;
             bossMode.telegraphDuration = 0;
             bossMode.patternTimer = 0;
@@ -14085,6 +14230,34 @@ function init() {
               achieved: (career.achievements || []).includes('drift_sponsor')
             };
           },
+          forceDriftFinish: () => {
+            if (!drift.running) startDrift();
+            drift.paused = false;
+            const before = window.__atherixDebug.premium.driftLineState();
+            let attempts = 0;
+            while (drift.running && attempts < drift.gates.length + 2) {
+              const gate = drift.gates[drift.gateIndex];
+              if (!gate) break;
+              drift.player.x = gate.x;
+              drift.player.y = gate.y;
+              drift.player.angle = driftSegmentAngle(drift.gateIndex);
+              drift.player.vx = Math.cos(drift.player.angle) * 248;
+              drift.player.vy = Math.sin(drift.player.angle) * 248;
+              passDriftGate(Math.hypot(drift.player.vx, drift.player.vy));
+              attempts++;
+            }
+            setDriftUi();
+            if (drift.running) drawDrift();
+            const latestRun = Array.isArray(career.runs) ? career.runs[0] : null;
+            return {
+              attempts,
+              before,
+              after: window.__atherixDebug.premium.driftLineState(),
+              scoreText: document.getElementById('premium-drift-score')?.textContent || '',
+              bestText: document.getElementById('premium-drift-best')?.textContent || '',
+              latestRun
+            };
+          },
           heistSteps: () => heist.steps,
           heistIntel: () => heistDebugState(),
           stepHeistRoute: () => stepHeistRoute(),
@@ -14217,6 +14390,8 @@ function init() {
               alertText: document.querySelector('#premium-heist-alert')?.textContent || '',
               routeText: document.querySelector('#premium-heist-route')?.textContent || '',
               securityText: document.querySelector('#premium-heist-security')?.textContent || '',
+              bestText: document.querySelector('#premium-heist-best')?.textContent || '',
+              bestStored: localStorage.getItem(heist.bestKey) || '0',
               feedback: premiumFeedback.lastTone
             };
           },
@@ -14254,8 +14429,13 @@ function init() {
               shieldHud: document.getElementById('premium-tactics-shield')?.textContent || '',
               comboHud: document.getElementById('premium-tactics-combo')?.textContent || '',
               surgeHud: document.getElementById('premium-tactics-surge')?.textContent || '',
+              suppressionHud: document.getElementById('premium-tactics-suppression')?.textContent || '',
               routeHud: document.getElementById('premium-tactics-route')?.textContent || '',
-              action: document.getElementById('premium-tactics-action')?.textContent || ''
+              action: document.getElementById('premium-tactics-action')?.textContent || '',
+              suppression: Math.floor(Number(tactics.suppression || 0)),
+              dangerSteps: Number(tactics.dangerSteps || 0),
+              evades: Number(tactics.evades || 0),
+              lastHazard: tactics.lastHazard ? { ...tactics.lastHazard } : null
             };
           },
           forceTacticsRoute: () => {
@@ -14288,6 +14468,33 @@ function init() {
             drawTactics();
             const before = tacticsDebugState();
             triggerTacticsAction();
+            return {
+              before,
+              after: tacticsDebugState()
+            };
+          },
+          forceTacticsDangerStep: () => {
+            switchPremiumGame('tactics');
+            newTactics({ shouldFocus: true });
+            tactics.player = { ...tactics.player, x: 6, y: 1, hp: 100, shield: 0, ap: 3, baseAp: 3, charge: 1, cores: 0 };
+            tactics.momentum = 0;
+            tactics.combo = 0;
+            tactics.surge = 0;
+            tactics.surges = 0;
+            tactics.suppression = 0;
+            tactics.dangerSteps = 0;
+            tactics.evades = 0;
+            tactics.lastHazard = null;
+            tactics.cores = tactics.cores.map(core => ({ ...core, taken: core.x === 6 && core.y === 1 }));
+            tactics.enemies = [
+              { id: 'turret-a', type: 'turret', x: 8, y: 1, hp: 90, maxHp: 90, disrupted: 0 },
+              { id: 'drone-a', type: 'drone', x: 1, y: 5, hp: 45, maxHp: 45, disrupted: 0 }
+            ];
+            tactics.message = '调试：压制危险格';
+            setTacticsUi();
+            drawTactics();
+            const before = tacticsDebugState();
+            moveTactics(1, 0);
             return {
               before,
               after: tacticsDebugState()
@@ -14326,6 +14533,8 @@ function init() {
               runGrade: document.querySelector('.arcade-run-log-item .arcade-run-grade')?.textContent.trim() || '',
               runTags: [...document.querySelectorAll('.arcade-run-log-item .arcade-run-tags b')].map(el => el.textContent.trim()),
               feedback: premiumFeedback.lastTone,
+              bestText: document.querySelector('#premium-tactics-best')?.textContent || '',
+              bestStored: localStorage.getItem(tactics.bestKey) || '0',
               message: tactics.message
             };
           },

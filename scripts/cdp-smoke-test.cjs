@@ -1837,6 +1837,8 @@ async function run() {
       oldPrototypeCount: document.querySelectorAll('#snake-canvas,#breakout-canvas,#tile-board,#memory-board').length,
       touchControls: document.querySelectorAll('[data-premium-control]').length,
       gamepadStatus: document.querySelector('#premium-gamepad-status')?.textContent || '',
+      premiumInputArmed: !!window.__atherixPremiumInputArmed,
+      activeElement: document.activeElement?.id || '',
       inputReadout: {
         exists: !!document.querySelector('#premium-input-readout'),
         mode: document.querySelector('#premium-input-readout')?.dataset.mode || '',
@@ -2442,6 +2444,9 @@ async function run() {
       feedbackLabel: document.querySelector('#premium-game-stage')?.dataset.feedback || ''
     };
   })()`);
+  const survivorHpZeroState = await evaluate(`(() => window.__atherixDebug?.premium?.forceSurvivorHpZero?.() || {})()`);
+  await click('#premium-survivor-start');
+  await wait(260);
   const feedbackMuteState = await evaluate(`(() => {
     const api = window.__atherixDebug?.premium;
     const before = api?.feedback?.() || {};
@@ -2586,6 +2591,7 @@ async function run() {
     ...(window.__atherixDebug?.premium?.bossPattern?.() || {}),
     patternText: document.querySelector('#premium-boss-pattern')?.textContent || ''
   }))()`);
+  const bossSnipeLockState = await evaluate(`(() => window.__atherixDebug?.premium?.forceBossSnipeLock?.() || {})()`);
   const bossCounterState = await evaluate(`(() => {
     const result = window.__atherixDebug?.premium?.forceBossCounter?.('snipe') || {};
     const chainResult = window.__atherixDebug?.premium?.forceBossCounter?.('ring') || {};
@@ -2755,6 +2761,7 @@ async function run() {
     paused: !!window.__atherixDebug?.premium?.driftPaused?.(),
     pauseButton: document.querySelector('#premium-drift-pause')?.textContent || ''
   }))()`);
+  const driftFinishState = await evaluate(`(() => window.__atherixDebug?.premium?.forceDriftFinish?.() || {})()`);
 
   await click('[data-premium-game="heist"]');
   await wait(300);
@@ -2905,6 +2912,7 @@ async function run() {
   const tacticsRouteState = await evaluate(`(() => window.__atherixDebug?.premium?.forceTacticsRoute?.() || {})()`);
   const tacticsBlastState = await evaluate(`(() => window.__atherixDebug?.premium?.forceTacticsBlast?.() || {})()`);
   const tacticsForecastAfterAction = await evaluate(`(() => window.__atherixDebug?.premium?.tacticsForecast?.() || {})()`);
+  const tacticsDangerState = await evaluate(`(() => window.__atherixDebug?.premium?.forceTacticsDangerStep?.() || {})()`);
   const tacticsState = await evaluate(`(() => {
     const pixels = window.__atherixSmokeCountCanvasPixels?.('#premium-tactics-canvas') || {};
     return {
@@ -2920,6 +2928,7 @@ async function run() {
       momentum: document.querySelector('#premium-tactics-momentum')?.textContent,
       combo: document.querySelector('#premium-tactics-combo')?.textContent,
       surge: document.querySelector('#premium-tactics-surge')?.textContent,
+      suppression: document.querySelector('#premium-tactics-suppression')?.textContent,
       route: document.querySelector('#premium-tactics-route')?.textContent,
       action: document.querySelector('#premium-tactics-action')?.textContent,
       debug: window.__atherixDebug?.premium?.tacticsState?.() || {}
@@ -2943,7 +2952,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v55-quality') && swText.includes('/style.css?v=20260608-quality-v7') && swText.includes('/app.js?v=20260608-quality-v14'),
+      swHasQualityVersion: swText.includes('atherix-static-v56-quality') && swText.includes('/style.css?v=20260608-quality-v7') && swText.includes('/app.js?v=20260608-quality-v15'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
@@ -3447,6 +3456,7 @@ async function run() {
   assert(arcadeInitial.premium && arcadeInitial.careerPanel, 'premium arcade career panel should render');
   assert(arcadeInitial.oldPrototypeCount === 0, 'old prototype mini-games should be replaced');
   assert(arcadeInitial.premiumTabs >= 6 && arcadeInitial.driftPanel && arcadeInitial.tacticsPanel, 'premium arcade should include drift and tactics modes');
+  assert(!arcadeInitial.premiumInputArmed && arcadeInitial.activeElement !== 'premium-game-stage', `premium arcade hidden initialization should not steal runner input focus: ${JSON.stringify({ premiumInputArmed: arcadeInitial.premiumInputArmed, activeElement: arcadeInitial.activeElement })}`);
   assert(
     arcadeInitial.playfieldLayout?.cockpit
       && arcadeInitial.playfieldLayout?.tabs
@@ -3645,6 +3655,7 @@ async function run() {
   assert(cockpitPlayState.active === 'survivor' && cockpitPlayState.running && !cockpitPlayState.paused && /星爆/.test(cockpitPlayState.actionLabel) && cockpitPlayState.toolDisabled && /开局/.test(cockpitPlayState.toast), `premium cockpit play should start the active mode and refresh touch labels: ${JSON.stringify(cockpitPlayState)}`);
   assert(cockpitPlayState.feedback?.tones?.start >= 1 && cockpitPlayState.feedback?.visualTriggers >= 1 && /START|开局/.test(cockpitPlayState.feedback?.status || ''), `premium arcade feedback should respond to cockpit start: ${JSON.stringify(cockpitPlayState)}`);
   assert(survivorState.nonBlank && survivorState.threat && /\dx$/.test(survivorState.chain) && survivorState.overdrive && survivorState.bounty && survivorState.debug?.hud?.chain === survivorState.chain && survivorState.debug?.hud?.bounty === survivorState.bounty, `survivor canvas should render active state with chain, overdrive, and bounty HUD: ${JSON.stringify(survivorState)}`);
+  assert(survivorHpZeroState.player?.hp === 0 && survivorHpZeroState.hud?.hp === '0', `survivor HUD should show 0 HP instead of falling back to 100: ${JSON.stringify(survivorHpZeroState)}`);
   assert(survivorState.feedback?.tones?.action >= 1 && survivorState.feedback?.visualTriggers >= 1 && survivorState.feedbackTone === 'action' && /ACTION|NOVA/.test(survivorState.feedbackLabel), `premium arcade feedback should treat Space as an action signal, not restart: ${JSON.stringify(survivorState)}`);
   assert(feedbackMuteState.muted?.muted === true && feedbackMuteState.muted?.togglePressed === 'false' && feedbackMuteState.afterSuppressed?.suppressed > feedbackMuteState.muted?.suppressed && feedbackMuteState.afterSuppressed?.total === feedbackMuteState.muted?.total && feedbackMuteState.unmuted?.muted === false && feedbackMuteState.unmuted?.togglePressed === 'true' && feedbackMuteState.panelMuted === 'false', `premium arcade feedback mute should suppress events and restore cleanly: ${JSON.stringify(feedbackMuteState)}`);
   assert(survivorDraftOpenState.open && survivorDraftOpenState.ariaHidden === 'false' && survivorDraftOpenState.optionCards === 3 && survivorDraftOpenState.choices.length === 3 && survivorDraftOpenState.running && !survivorDraftOpenState.paused && survivorDraftOpenState.readoutState === 'draft' && survivorDraftOpenState.readoutStateText === '升级' && survivorDraftOpenState.readoutAction === '选升级' && survivorDraftOpenState.readoutStart === '1/2/3 选择' && survivorDraftOpenState.touchPause === '选择中' && survivorDraftOpenState.touchPauseDisabled && /升级选择中/.test(survivorDraftOpenState.touchPauseLabel), `survivor roguelite draft should open three upgrade choices with clear draft-state controls and without using pause state: ${JSON.stringify(survivorDraftOpenState)}`);
@@ -3657,6 +3668,7 @@ async function run() {
   assert(bossState.nonBlank && bossState.dash && bossState.weak && /^(I|II|III|OPEN|SHATTER|DOWN)/.test(bossState.shield || '') && bossState.breaks === 0 && bossState.counter === '0x' && bossState.lives >= 4, `boss canvas should render active state, shield HUD, and equipped loadout: ${JSON.stringify(bossState)}`);
   assert(bossTelegraphState.running && !bossTelegraphState.paused && bossTelegraphState.queued === 'snipe' && bossTelegraphState.current === 'snipe' && bossTelegraphState.bullets === 0 && bossTelegraphState.weak?.active && bossTelegraphState.weak.remaining >= 1 && /^\d+\/\d+$/.test(bossTelegraphState.weakHud) && /预警/.test(bossTelegraphState.patternText) && /锁定狙击/.test(bossTelegraphState.patternText), `boss mode should surface a readable weakpoint telegraph before spawning bullets: ${JSON.stringify(bossTelegraphState)}`);
   assert(bossTelegraphHoldState.queued === 'snipe' && bossTelegraphHoldState.bullets === 0 && bossTelegraphHoldState.telegraphMs > 0 && bossTelegraphHoldState.weak?.active && bossTelegraphHoldState.weak.timer > 0 && /预警/.test(bossTelegraphHoldState.patternText), `boss telegraph should hold a reaction window before release: ${JSON.stringify(bossTelegraphHoldState)}`);
+  assert(bossSnipeLockState.before?.telegraphAim && bossSnipeLockState.before?.telegraphAim?.angle === bossSnipeLockState.moved?.telegraphAim?.angle && bossSnipeLockState.after?.bullets >= 7 && Math.abs(Number(bossSnipeLockState.after?.centerBulletAngle || 0) - Number(bossSnipeLockState.before?.telegraphAim?.angle || 0)) < 0.002, `boss snipe should lock its warning aim before the player moves and release on that locked angle: ${JSON.stringify(bossSnipeLockState)}`);
   assert(
     bossCounterState.before?.weak?.active &&
     !bossCounterState.after?.weak?.active &&
@@ -3731,6 +3743,7 @@ async function run() {
     `drift mode should freeze while paused: ${JSON.stringify({ driftPauseState, driftPauseFreezeState })}`
   );
   assert(driftResumeState.running && !driftResumeState.paused && driftResumeState.pauseButton === '暂停', `drift mode should resume from keyboard pause: ${JSON.stringify(driftResumeState)}`);
+  assert(!driftFinishState.after?.running && driftFinishState.after?.gates >= 8 && Number(driftFinishState.scoreText || 0) === Number(driftFinishState.after?.score || 0) && Number(driftFinishState.bestText || 0) >= Number(driftFinishState.scoreText || 0) && driftFinishState.latestRun?.game === 'drift' && Number(driftFinishState.latestRun?.rawScore || 0) === Number(driftFinishState.scoreText || 0) && Number(driftFinishState.latestRun?.score || 0) >= Number(driftFinishState.latestRun?.rawScore || 0), `drift completion should sync final score across HUD, best, and run telemetry: ${JSON.stringify(driftFinishState)}`);
   assert(heistState.nonBlank && Number(heistState.steps) >= 2, 'heist should accept keyboard movement and debug route stepping');
   assert(heistState.achievementBadges >= 1, 'heist cloak should unlock at least one achievement badge');
   assert(/^(KEY|EXIT|TERMINAL|CACHE)\s+\d+\s+(SAFE|R\d+)$/.test(heistState.route), `heist route HUD should expose a readable objective and risk: ${JSON.stringify(heistState)}`);
@@ -3752,6 +3765,8 @@ async function run() {
       heistLockdownState.totalAfter > heistLockdownState.totalBefore &&
       heistLockdownState.latestRun?.game === 'heist' &&
       Number(heistLockdownState.latestRun?.score || 0) > 0 &&
+      Number(heistLockdownState.bestStored || 0) >= Number(heistLockdownState.latestRun?.rawScore || 0) &&
+      Number(heistLockdownState.bestText || 0) === Number(heistLockdownState.bestStored || 0) &&
       (heistLockdownState.latestRun?.highlights || []).includes('金库封锁') &&
       heistLockdownState.coach?.game === 'heist' &&
       heistLockdownState.profile?.latest?.game === 'heist' &&
@@ -3809,10 +3824,11 @@ async function run() {
   const tacticsJammedIntent = (tacticsForecastAfterAction.intents || []).some(intent => intent.label === 'JAM' || intent.mode === 'disrupted');
   assert(tacticsForecastStart.dangerCount > 0 && tacticsForecastStart.intents?.length >= 4 && tacticsForecastStart.blastTargets?.length >= 1 && /目标/.test(tacticsForecastStart.action) && tacticsForecastStart.route?.route?.length > 0 && tacticsForecastStart.routeHud === tacticsForecastStart.route?.label && tacticsForecastStart.coverHud && tacticsForecastStart.momentumHud !== undefined && /^\d+%/.test(tacticsForecastStart.surgeHud || ''), `tactics mode should forecast enemy intent, blast windows, cover, momentum, surge, and route intel: ${JSON.stringify(tacticsForecastStart)}`);
   assert(tacticsRouteNext && tacticsRouteState.after?.player?.x === tacticsRouteNext.x && tacticsRouteState.after?.player?.y === tacticsRouteNext.y && Number(tacticsRouteState.after?.momentum || 0) > Number(tacticsRouteState.before?.momentum || 0) && Number(tacticsRouteState.after?.surge || 0) > Number(tacticsRouteState.before?.surge || 0) && tacticsRouteState.after?.route?.label && tacticsRouteState.after?.hud?.route === tacticsRouteState.after?.route?.label, `tactics route debug should move along the recommended path and reward momentum/surge: ${JSON.stringify(tacticsRouteState)}`);
-  assert(tacticsBlastBeforeTargets.length >= 2 && Number(tacticsBlastState.after?.player?.ap || 0) >= Number(tacticsBlastState.before?.player?.ap || 0) && Number(tacticsBlastState.after?.momentum || 0) > Number(tacticsBlastState.before?.momentum || 0) && Number(tacticsBlastState.after?.combo || 0) >= 1 && tacticsSurgedDuringBlast && tacticsBlastState.after?.hud?.surge === tacticsState.surge && tacticsJammedAfterBlast && tacticsKilledDuringBlast, `tactics phase blast should pierce targets, refund AP, trigger surge, build combo/momentum, kill, and jam survivors: ${JSON.stringify(tacticsBlastState)}`);
-  assert(tacticsForecastAfterAction.dangerCount > 0 && tacticsForecastAfterAction.coverHud && tacticsForecastAfterAction.momentumHud !== undefined && tacticsForecastAfterAction.comboHud && tacticsForecastAfterAction.surgeHud && tacticsForecastAfterAction.routeHud && tacticsJammedIntent, `tactics mode should expose post-action JAM, cover, momentum, combo, surge, and route forecast: ${JSON.stringify(tacticsForecastAfterAction)}`);
-  assert(tacticsState.nonBlank && Number(tacticsState.ap) >= 0 && tacticsState.action && tacticsState.cover && tacticsState.momentum !== undefined && tacticsState.combo && tacticsState.surge && tacticsState.route && tacticsState.debug?.route?.length > 0, `tactics mode should render and accept enhanced actions: ${JSON.stringify(tacticsState)}`);
-  assert(Number(tacticsState.danger) > 0 && tacticsState.intel && tacticsState.debug?.hud?.route === tacticsState.route && tacticsState.debug?.hud?.cover === tacticsState.cover && tacticsState.debug?.hud?.momentum === tacticsState.momentum && tacticsState.debug?.hud?.combo === tacticsState.combo && tacticsState.debug?.hud?.surge === tacticsState.surge && tacticsState.debug?.hud?.shield === tacticsState.shield, `tactics HUD should stay in sync with enhanced debug state: ${JSON.stringify(tacticsState)}`);
+  assert(tacticsBlastBeforeTargets.length >= 2 && Number(tacticsBlastState.after?.player?.ap || 0) >= Number(tacticsBlastState.before?.player?.ap || 0) && Number(tacticsBlastState.after?.momentum || 0) > Number(tacticsBlastState.before?.momentum || 0) && Number(tacticsBlastState.after?.combo || 0) >= 1 && tacticsSurgedDuringBlast && /^\d+%\/\d+$/.test(tacticsBlastState.after?.hud?.surge || '') && tacticsJammedAfterBlast && tacticsKilledDuringBlast, `tactics phase blast should pierce targets, refund AP, trigger surge, build combo/momentum, kill, and jam survivors: ${JSON.stringify(tacticsBlastState)}`);
+  assert(tacticsDangerState.before?.forecast?.dangerCount > 0 && tacticsDangerState.after?.dangerSteps > tacticsDangerState.before?.dangerSteps && tacticsDangerState.after?.suppression > tacticsDangerState.before?.suppression && tacticsDangerState.after?.player?.hp < tacticsDangerState.before?.player?.hp && tacticsDangerState.after?.lastHazard?.pressure > 0 && tacticsDangerState.after?.hud?.suppression === tacticsDangerState.after?.suppression + '%', `tactics dangerous movement should convert forecasted zones into readable suppression pressure: ${JSON.stringify(tacticsDangerState)}`);
+  assert(tacticsForecastAfterAction.dangerCount > 0 && tacticsForecastAfterAction.coverHud && tacticsForecastAfterAction.momentumHud !== undefined && tacticsForecastAfterAction.comboHud && tacticsForecastAfterAction.surgeHud && tacticsForecastAfterAction.suppressionHud && tacticsForecastAfterAction.routeHud && tacticsJammedIntent, `tactics mode should expose post-action JAM, cover, momentum, combo, surge, suppression, and route forecast: ${JSON.stringify(tacticsForecastAfterAction)}`);
+  assert(tacticsState.nonBlank && Number(tacticsState.ap) >= 0 && tacticsState.action && tacticsState.cover && tacticsState.momentum !== undefined && tacticsState.combo && tacticsState.surge && tacticsState.suppression && tacticsState.route && tacticsState.debug?.route?.length > 0, `tactics mode should render and accept enhanced actions: ${JSON.stringify(tacticsState)}`);
+  assert(Number(tacticsState.danger) > 0 && tacticsState.intel && tacticsState.debug?.hud?.route === tacticsState.route && tacticsState.debug?.hud?.cover === tacticsState.cover && tacticsState.debug?.hud?.momentum === tacticsState.momentum && tacticsState.debug?.hud?.combo === tacticsState.combo && tacticsState.debug?.hud?.surge === tacticsState.surge && tacticsState.debug?.hud?.suppression === tacticsState.suppression && tacticsState.debug?.hud?.shield === tacticsState.shield, `tactics HUD should stay in sync with enhanced debug state: ${JSON.stringify(tacticsState)}`);
   assert(
     tacticsLossState.after?.lost &&
       tacticsLossState.after?.recorded &&
@@ -3820,6 +3836,8 @@ async function run() {
       tacticsLossState.totalAfter > tacticsLossState.totalBefore &&
       tacticsLossState.latestRun?.game === 'tactics' &&
       Number(tacticsLossState.latestRun?.score || 0) > 0 &&
+      Number(tacticsLossState.bestStored || 0) >= Number(tacticsLossState.latestRun?.rawScore || 0) &&
+      Number(tacticsLossState.bestText || 0) === Number(tacticsLossState.bestStored || 0) &&
       (tacticsLossState.latestRun?.highlights || []).includes('机甲离线') &&
       tacticsLossState.coach?.game === 'tactics' &&
       tacticsLossState.profile?.latest?.game === 'tactics' &&
@@ -3915,6 +3933,7 @@ async function run() {
     cockpitTargetState,
     cockpitPlayState,
     survivorState,
+    survivorHpZeroState,
     survivorDraftOpenState,
     survivorDraftFreezeState,
     survivorDraftAutoPauseState,
@@ -3925,6 +3944,7 @@ async function run() {
     bossState,
     bossTelegraphState,
     bossTelegraphHoldState,
+    bossSnipeLockState,
     bossShieldShatterState,
     bossFocusSurgeState,
     bossPatternReleasedState,
@@ -3938,6 +3958,7 @@ async function run() {
     driftPauseState,
     driftPauseFreezeState,
     driftResumeState,
+    driftFinishState,
     heistState,
     heistLockdownState,
     careerDialogState,
@@ -3947,6 +3968,7 @@ async function run() {
     tacticsForecastStart,
     tacticsRouteState,
     tacticsBlastState,
+    tacticsDangerState,
     tacticsForecastAfterAction,
     tacticsState,
     tacticsLossState,
