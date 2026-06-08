@@ -3499,6 +3499,7 @@ async function run() {
       loot: document.querySelector('#premium-heist-loot')?.textContent,
       hack: document.querySelector('#premium-heist-hack')?.textContent,
       protocol: document.querySelector('#premium-heist-protocol')?.textContent,
+      ghost: document.querySelector('#premium-heist-ghost')?.textContent,
       debug,
       before: ${JSON.stringify(heistIntelBefore)},
       routeStep: ${JSON.stringify(heistRouteStepState)},
@@ -3510,6 +3511,7 @@ async function run() {
       rating: document.querySelector('#premium-career-rating')?.textContent
     };
   })()`);
+  const heistGhostSweepState = await evaluate(`(() => window.__atherixDebug?.premium?.forceHeistGhostSweep?.() || {})()`);
   const heistBlockedState = await evaluate(`(() => {
     const result = window.__atherixDebug?.premium?.forceHeistBlocked?.() || {};
     const pixels = window.__atherixSmokeCountCanvasPixels?.('#premium-heist-canvas') || {};
@@ -3684,7 +3686,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v79-quality') && swText.includes('/style.css?v=20260608-quality-v13') && swText.includes('/app.js?v=20260608-quality-v36'),
+      swHasQualityVersion: swText.includes('atherix-static-v80-quality') && swText.includes('/style.css?v=20260608-quality-v13') && swText.includes('/app.js?v=20260608-quality-v37'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp'),
       swHasLocalFonts: swText.includes('/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2') && swText.includes('/assets/fonts/outfit-latin-wght-normal.woff2') && swText.includes('/assets/fonts/jetbrains-mono-latin-wght-normal.woff2')
@@ -4482,7 +4484,7 @@ async function run() {
   assert(difficultyProgressState.leaderboardCards >= 2 && difficultyProgressState.leaderboard?.entries?.some(entry => entry.game === 'boss' && entry.score >= 1180) && difficultyProgressState.leaderboard?.latestBest?.game === 'boss' && difficultyProgressState.leaderboard?.latestBest?.score >= difficultyProgressState.bossBest && Number(difficultyProgressState.leaderboardTotal) >= difficultyProgressState.bossBest, `premium arcade hall of fame should include elite boss record after scoring: ${JSON.stringify(difficultyProgressState)}`);
   assert(difficultyProgressState.rival?.game === 'boss' && difficultyProgressState.rivalActionTarget === 'boss' && Number(difficultyProgressState.rivalTarget) === Number(difficultyProgressState.rival.target) && /PRISM-0/.test(difficultyProgressState.rivalTitle), `premium arcade rival intel should follow the latest elite boss result: ${JSON.stringify(difficultyProgressState)}`);
   assert(rivalLaunchState.target === 'boss' && rivalLaunchState.active === 'boss' && /Boss/.test(rivalLaunchState.activeTitle) && rivalLaunchState.challenge?.game === 'boss' && rivalLaunchState.challenge?.target === rivalLaunchState.rival?.target && rivalLaunchState.locked === 'true' && /已锁定/.test(rivalLaunchState.summary) && /宿敌挑战已锁定/.test(rivalLaunchState.toast) && !rivalLaunchState.horizontalOverflow, `premium arcade rival action should lock and launch the current rival mode: ${JSON.stringify(rivalLaunchState)}`);
-  assert(rivalDefeatState.locked?.game && rivalDefeatState.result?.recorded && rivalDefeatState.after?.challenge === null && Number(rivalDefeatState.after?.total || 0) > Number(rivalDefeatState.before?.total || 0) && rivalDefeatState.after?.latestRun?.highlights?.some(item => /宿敌压制/.test(item)) && rivalDefeatState.after?.runTags?.some(item => /宿敌压制/.test(item)) && rivalDefeatState.achieved && rivalDefeatState.after?.profileAchievements?.endsWith('/35') && rivalDefeatState.after?.feedback?.lastLabel === 'RIVAL DOWN', `premium arcade rival defeat should reward a locked target with score, run highlights, feedback, and achievement: ${JSON.stringify(rivalDefeatState)}`);
+  assert(rivalDefeatState.locked?.game && rivalDefeatState.result?.recorded && rivalDefeatState.after?.challenge === null && Number(rivalDefeatState.after?.total || 0) > Number(rivalDefeatState.before?.total || 0) && rivalDefeatState.after?.latestRun?.highlights?.some(item => /宿敌压制/.test(item)) && rivalDefeatState.after?.runTags?.some(item => /宿敌压制/.test(item)) && rivalDefeatState.achieved && rivalDefeatState.after?.profileAchievements?.endsWith('/36') && rivalDefeatState.after?.feedback?.lastLabel === 'RIVAL DOWN', `premium arcade rival defeat should reward a locked target with score, run highlights, feedback, and achievement: ${JSON.stringify(rivalDefeatState)}`);
   assert(profileLaunchState.target && (profileLaunchState.target === 'runner' || profileLaunchState.active === profileLaunchState.target) && /档案目标/.test(profileLaunchState.toast) && !profileLaunchState.horizontalOverflow, `premium arcade command profile action should launch the profiled target: ${JSON.stringify(profileLaunchState)}`);
   assert(prizeLaunchState.target && (prizeLaunchState.target === 'runner' || prizeLaunchState.active === prizeLaunchState.target) && /赛季奖励目标/.test(prizeLaunchState.toast) && !prizeLaunchState.horizontalOverflow, `premium arcade season track action should launch the reward target: ${JSON.stringify(prizeLaunchState)}`);
   assert(['runner', 'survivor', 'boss', 'drift', 'heist', 'chain', 'tactics'].includes(directorLaunchState.target) && (directorLaunchState.target === 'runner' || directorLaunchState.active === directorLaunchState.target) && !directorLaunchState.horizontalOverflow, `premium arcade director should launch the recommended target: ${JSON.stringify(directorLaunchState)}`);
@@ -4706,7 +4708,25 @@ async function run() {
   assert(heistState.cacheState.after?.loot > heistState.cacheState.before?.loot && heistState.cacheState.after?.securityPeak >= heistState.cacheState.before?.securityPeak && heistState.cacheState.after?.caches?.some(cache => cache.taken) && heistState.cacheState.achieved, `heist cache should add loot, raise security pressure, and unlock achievement: ${JSON.stringify(heistState.cacheState)}`);
   assert(heistState.hackState.opened?.hack?.active && /^HACK\s+\d+\/\d+$/.test(heistState.hackState.opened?.label || '') && Array.isArray(heistState.hackState.sequence) && heistState.hackState.sequence.length >= 3, `heist terminal should open a readable protocol hack sequence: ${JSON.stringify(heistState.hackState)}`);
   assert(heistState.hackState.after?.hacksCompleted > heistState.hackState.before?.hacksCompleted && heistState.hackState.after?.hack === null && heistState.hackState.after?.terminals?.some(terminal => terminal.used) && heistState.hackState.after?.cameras?.some(camera => camera.disabled) && heistState.hackState.after?.loot > heistState.hackState.before?.loot && heistState.hackState.after?.chain > heistState.hackState.before?.chain && heistState.hackState.after?.hackHud === heistState.hack && heistState.hackState.after?.protocolHud === heistState.protocol && heistState.hackState.achieved, `heist protocol hack should complete, change security systems, reward loot/chain, sync HUD, and unlock achievement: ${JSON.stringify(heistState.hackState)}`);
-  assert(/^\d+x$/.test(heistState.chain) && /^\d+%$/.test(heistState.security) && /^\d+$/.test(heistState.loot) && /^DONE\s+\d+$/.test(heistState.hack) && heistState.protocol === '--' && heistState.debug.chainHud === heistState.chain && heistState.debug.routeHud === heistState.route && heistState.debug.securityHud === heistState.security && heistState.debug.lootHud === heistState.loot && heistState.debug.hackHud === heistState.hack && heistState.debug.protocolHud === heistState.protocol, `heist HUD should stay in sync with debug state: ${JSON.stringify(heistState)}`);
+  assert(
+    heistGhostSweepState.result?.triggered &&
+      Number(heistGhostSweepState.after?.ghost?.sweeps || 0) === Number(heistGhostSweepState.before?.ghost?.sweeps || 0) + 1 &&
+      Number(heistGhostSweepState.after?.ghost?.heat ?? -1) === 0 &&
+      Number(heistGhostSweepState.after?.ghost?.active || 0) > 0 &&
+      heistGhostSweepState.after?.ghostHud === 'SWEEP' &&
+      Number(heistGhostSweepState.after?.security || 0) < Number(heistGhostSweepState.before?.security || 0) &&
+      Number(heistGhostSweepState.after?.loot || 0) > Number(heistGhostSweepState.before?.loot || 0) &&
+      heistGhostSweepState.after?.cameras?.filter(camera => camera.disabled).length >= 2 &&
+      heistGhostSweepState.after?.guards?.some(guard => Number(guard.distracted || 0) > 0) &&
+      /GHOST SWEEP/.test(heistGhostSweepState.after?.lastTactic || '') &&
+      heistGhostSweepState.feedback?.lastTone === 'special' &&
+      heistGhostSweepState.feedback?.lastLabel === 'GHOST SWEEP' &&
+      heistGhostSweepState.stageTone === 'special' &&
+      heistGhostSweepState.stageLabel === 'GHOST SWEEP' &&
+      heistGhostSweepState.achieved,
+    `heist ghost sweep should convert combo charge into cloak, camera jamming, guard distraction, loot, and achievement credit: ${JSON.stringify(heistGhostSweepState)}`
+  );
+  assert(/^\d+x$/.test(heistState.chain) && /^\d+%$/.test(heistState.security) && /^\d+$/.test(heistState.loot) && /^DONE\s+\d+$/.test(heistState.hack) && heistState.protocol === '--' && /^(?:\d+%|READY|FLASH|SWEEP)$/.test(heistState.ghost || '') && heistState.debug.chainHud === heistState.chain && heistState.debug.routeHud === heistState.route && heistState.debug.securityHud === heistState.security && heistState.debug.lootHud === heistState.loot && heistState.debug.hackHud === heistState.hack && heistState.debug.protocolHud === heistState.protocol && heistState.debug.ghostHud === heistState.ghost, `heist HUD should stay in sync with debug state: ${JSON.stringify(heistState)}`);
   assert(heistBlockedState.nonBlank && heistBlockedState.result?.blocked && heistBlockedState.after?.player?.x === heistBlockedState.before?.player?.x && heistBlockedState.after?.player?.y === heistBlockedState.before?.player?.y && heistBlockedState.after?.steps === heistBlockedState.before?.steps && heistBlockedState.after?.blocked?.flash > 0 && /BLOCKED/.test(heistBlockedState.after?.blocked?.label || '') && /BLOCKED/.test(heistBlockedState.after?.routeHud || '') && heistBlockedState.alertText === 'BLOCK' && heistBlockedState.feedback?.lastTone === 'danger' && heistBlockedState.feedbackTone === 'danger' && /BLOCKED/.test(heistBlockedState.feedbackLabel || ''), `heist blocked movement should keep position/turn state and surface readable feedback: ${JSON.stringify(heistBlockedState)}`);
   assert(
     heistLockdownState.after?.locked &&
@@ -4971,6 +4991,7 @@ async function run() {
     driftFinishState,
     heistState,
     heistTakedownState,
+    heistGhostSweepState,
     heistBlockedState,
     heistLockdownState,
     careerDialogState,
@@ -5099,6 +5120,7 @@ function summarizeSmokeResult(result) {
         route: result.heistState?.route,
         blocked: result.heistBlockedState?.after?.blocked?.label,
         takedowns: result.heistTakedownState?.after?.takedowns,
+        ghostSweep: result.heistGhostSweepState?.after?.ghostHud,
         hackHud: result.heistState?.hack,
         protocolHud: result.heistState?.protocol,
         protocolAchieved: result.heistState?.hackState?.achieved,

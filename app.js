@@ -5324,7 +5324,7 @@ function init() {
         <div class="arcade-profile-grid">
           <span>完成度 <strong id="premium-profile-completion">0%</strong></span>
           <span>奖牌 <strong id="premium-profile-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-profile-achievements">0/35</strong></span>
+          <span>成就 <strong id="premium-profile-achievements">0/36</strong></span>
           <span>最近 <strong id="premium-profile-latest">--</strong></span>
         </div>
         <button type="button" class="arcade-profile-action" id="premium-profile-target" data-profile-target-game="survivor">
@@ -5424,7 +5424,7 @@ function init() {
         </div>
         <div class="arcade-director-meters" aria-label="街机完成度">
           <span>奖牌 <strong id="premium-director-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-director-achievements">0/35</strong></span>
+          <span>成就 <strong id="premium-director-achievements">0/36</strong></span>
           <span>完成度 <strong id="premium-director-completion">0%</strong></span>
         </div>
         <button type="button" class="arcade-director-action" id="premium-director-start" data-target-game="survivor">
@@ -5630,6 +5630,7 @@ function init() {
               <span>战利品 <strong id="premium-heist-loot">0</strong></span>
               <span>破解 <strong id="premium-heist-hack">IDLE</strong></span>
               <span>协议 <strong id="premium-heist-protocol">--</strong></span>
+              <span>幽影 <strong id="premium-heist-ghost">0%</strong></span>
             </div>
             <div class="mini-actions">
               <button type="button" class="action-btn action-btn-primary" id="premium-heist-new">生成任务</button>
@@ -5946,6 +5947,7 @@ function init() {
       { id: 'heist_cache', label: '金库猎手', desc: '赛博潜入中取得高价值缓存' },
       { id: 'heist_protocol', label: '零日破解', desc: '赛博潜入中完成一次终端破解协议' },
       { id: 'heist_takedown', label: '幽影制服', desc: '赛博潜入中从盲区无声制服守卫' },
+      { id: 'heist_ghost_sweep', label: '幽影扫荡', desc: '赛博潜入中触发一次幽影扫荡' },
       { id: 'chain_combo_9', label: '九连炼成', desc: '一次连锁爆破 9 格以上' },
       { id: 'chain_recipe', label: '秘方共振', desc: '连锁炼金完成一张配方契约' },
       { id: 'chain_resonance', label: '谱线共鸣', desc: '连锁炼金一次行动补足 4 点以上当前配方材料' },
@@ -6980,7 +6982,7 @@ function init() {
         survivor: [['level', '等级'], ['bestChain', '连锁', 'x'], ['overdrive', '超载'], ['drones', '无人机'], ['bounties', '赏金']],
         boss: [['phase', '阶段'], ['graze', '擦弹'], ['perfectDodges', '精准闪避'], ['focusSurges', '专注'], ['shieldShatters', '碎盾'], ['overbreaks', '处决']],
         drift: [['gates', '弯道'], ['bestCombo', '连段', 'x'], ['overtakes', '超车'], ['nearMisses', '擦车'], ['phaseUses', '相位']],
-        heist: [['steps', '步数'], ['bestChain', '潜行链'], ['takedowns', '制服'], ['loot', '缓存'], ['security', '警戒', '%'], ['hacksCompleted', '破解']],
+        heist: [['steps', '步数'], ['bestChain', '潜行链'], ['takedowns', '制服'], ['ghostSweeps', '幽影'], ['loot', '缓存'], ['security', '警戒', '%'], ['hacksCompleted', '破解']],
         chain: [['movesLeft', '余步'], ['combo', '连锁'], ['mult', '倍率', 'x'], ['phase', '阶段'], ['recipes', '配方']],
         tactics: [['turns', '回合'], ['hp', '装甲'], ['kills', '击破'], ['combo', '连段', 'x'], ['counters', '反制'], ['surges', '脉冲']]
       }[game] || [];
@@ -12857,9 +12859,88 @@ function init() {
       blockedFlash: 0,
       blockedCell: null,
       blockedReason: '',
-      blockedLabel: ''
+      blockedLabel: '',
+      ghostHeat: 0,
+      ghostSweep: 0,
+      ghostSweepFlash: 0,
+      ghostSweeps: 0,
+      lastGhostSweep: ''
     };
     const heistHackGlyphs = { up: 'U', down: 'D', left: 'L', right: 'R' };
+
+    function heistGhostState() {
+      const heat = Math.round(clamp(Number(heist.ghostHeat || 0), 0, 100));
+      const active = Math.max(0, Number(heist.ghostSweep || 0));
+      const flash = Math.max(0, Number(heist.ghostSweepFlash || 0));
+      return {
+        heat,
+        ready: heat >= 100,
+        active,
+        flash,
+        sweeps: Number(heist.ghostSweeps || 0),
+        label: active > 0 ? 'SWEEP' : flash > 0 ? 'FLASH' : heat >= 100 ? 'READY' : `${heat}%`,
+        last: heist.lastGhostSweep || ''
+      };
+    }
+
+    function triggerHeistGhostSweep(reason = 'combo') {
+      if (heist.won || heist.locked || Number(heist.ghostSweep || 0) > 0) return false;
+      const before = heistGhostState();
+      const disabledCameras = heist.cameras
+        .filter(camera => !camera.disabled)
+        .sort((a, b) => heistDistance(a, heist.player) - heistDistance(b, heist.player))
+        .slice(0, 2);
+      disabledCameras.forEach(camera => {
+        camera.disabled = true;
+      });
+      const distractedGuards = heist.guards
+        .filter(guard => heistDistance(guard, heist.player) <= 7)
+        .sort((a, b) => heistDistance(a, heist.player) - heistDistance(b, heist.player))
+        .slice(0, 3);
+      distractedGuards.forEach(guard => {
+        guard.distracted = Math.max(Number(guard.distracted || 0), 5);
+        guard.dir *= -1;
+      });
+      heist.ghostHeat = 0;
+      heist.ghostSweep = 4;
+      heist.ghostSweepFlash = 8;
+      heist.ghostSweeps = Number(heist.ghostSweeps || 0) + 1;
+      heist.lastGhostSweep = reason || 'combo';
+      heist.cloakTurns = Math.max(Number(heist.cloakTurns || 0), 3);
+      heist.security = Math.max(0, heist.security - (22 + Math.min(10, heist.chain)));
+      heist.chain += 3 + disabledCameras.length + distractedGuards.length;
+      heist.bestChain = Math.max(heist.bestChain, heist.chain);
+      heist.loot += 110 + heist.chain * 9 + disabledCameras.length * 45 + distractedGuards.length * 20;
+      heist.alert = 'GHOST';
+      heist.lastTactic = 'GHOST SWEEP';
+      heist.alarmFlash = Math.max(heist.alarmFlash || 0, 5);
+      unlockAchievement('heist_ghost_sweep');
+      setHeistUi();
+      drawHeist();
+      triggerPremiumFeedback('special', { label: 'GHOST SWEEP', throttleMs: 0 });
+      return {
+        triggered: true,
+        before,
+        after: heistGhostState(),
+        disabledCameras: disabledCameras.length,
+        distractedGuards: distractedGuards.length,
+        reason: heist.lastGhostSweep
+      };
+    }
+
+    function chargeHeistGhost(amount, reason = '') {
+      if (heist.won || heist.locked || Number(amount || 0) <= 0) {
+        return { charged: false, triggered: false, heat: heistGhostState().heat };
+      }
+      const before = heistGhostState().heat;
+      heist.ghostHeat = clamp(before + Number(amount || 0), 0, 100);
+      if (reason) heist.lastGhostSweep = reason;
+      if (heist.ghostHeat >= 100 && Number(heist.ghostSweep || 0) <= 0) {
+        const result = triggerHeistGhostSweep(reason);
+        return { charged: true, triggered: !!result, before, heat: heistGhostState().heat, result };
+      }
+      return { charged: true, triggered: false, before, heat: heistGhostState().heat };
+    }
 
     function setHeistUi() {
       document.getElementById('premium-heist-keys').textContent = heist.collected;
@@ -12900,6 +12981,16 @@ function init() {
       if (protocolEl) {
         protocolEl.textContent = heist.hack?.active ? heistProtocolText(heist.hack) : '--';
         protocolEl.style.color = heist.hack?.active ? '#BAE6FD' : '#94A3B8';
+      }
+      const ghostEl = document.getElementById('premium-heist-ghost');
+      if (ghostEl) {
+        const ghost = heistGhostState();
+        ghostEl.textContent = ghost.label;
+        ghostEl.style.color = ghost.active > 0 || ghost.ready || ghost.flash > 0
+          ? '#FDE68A'
+          : ghost.heat >= 70
+            ? '#A7F3D0'
+            : '#94A3B8';
       }
       const alertEl = document.getElementById('premium-heist-alert');
       alertEl.textContent = heist.alert;
@@ -12978,6 +13069,11 @@ function init() {
       heist.blockedCell = null;
       heist.blockedReason = '';
       heist.blockedLabel = '';
+      heist.ghostHeat = 0;
+      heist.ghostSweep = 0;
+      heist.ghostSweepFlash = 0;
+      heist.ghostSweeps = 0;
+      heist.lastGhostSweep = '';
       setHeistUi();
       if (shouldFocus) focusStage();
       drawHeist();
@@ -13090,9 +13186,10 @@ function init() {
       heist.lastTactic = camera ? 'PROTOCOL CAM-OFF' : 'PROTOCOL DOOR';
       heist.hackFlash = 8;
       unlockAchievement('heist_protocol');
+      const ghostResult = chargeHeistGhost(38 + hack.sequence.length * 4 + (camera ? 8 : 0), 'ZERO DAY');
       setHeistUi();
       drawHeist();
-      triggerPremiumFeedback('achievement', { label: 'ZERO DAY' });
+      if (!ghostResult.triggered) triggerPremiumFeedback('achievement', { label: 'ZERO DAY' });
       return true;
     }
 
@@ -13250,6 +13347,12 @@ function init() {
       heist.alarmFlash = Math.max(0, heist.alarmFlash - 1);
       heist.blockedFlash = Math.max(0, Number(heist.blockedFlash || 0) - 1);
       heist.takedownFlash = Math.max(0, Number(heist.takedownFlash || 0) - 1);
+      heist.ghostSweepFlash = Math.max(0, Number(heist.ghostSweepFlash || 0) - 1);
+      if (Number(heist.ghostSweep || 0) > 0) {
+        heist.ghostSweep = Math.max(0, Number(heist.ghostSweep || 0) - 1);
+        heist.cloakTurns = Math.max(Number(heist.cloakTurns || 0), 2);
+        heist.security = Math.max(0, Number(heist.security || 0) - 0.9);
+      }
     }
 
     function heistHeatMap() {
@@ -13430,6 +13533,8 @@ function init() {
         hacksCompleted: heist.hacksCompleted,
         hackHud: document.getElementById('premium-heist-hack')?.textContent || '',
         protocolHud: document.getElementById('premium-heist-protocol')?.textContent || '',
+        ghost: heistGhostState(),
+        ghostHud: document.getElementById('premium-heist-ghost')?.textContent || '',
         chain: heist.chain,
         bestChain: heist.bestChain,
         takedowns: Number(heist.takedowns || 0),
@@ -13527,11 +13632,13 @@ function init() {
       heist.takedownPoint = { x: guard.x, y: guard.y };
       heist.alarmFlash = Math.max(heist.alarmFlash || 0, 3);
       unlockAchievement('heist_takedown');
+      const ghostResult = chargeHeistGhost(42 + (target.blindSide ? 12 : 0) + (heist.cloakTurns > 0 ? 8 : 0), target.blindSide ? 'SILENT TAKEDOWN' : 'GHOST TAKEDOWN');
       setHeistUi();
       drawHeist();
-      triggerPremiumFeedback('special', { label: 'SILENT TAKEDOWN', throttleMs: 120 });
+      if (!ghostResult.triggered) triggerPremiumFeedback('special', { label: 'SILENT TAKEDOWN', throttleMs: 120 });
       return {
         applied: true,
+        ghost: ghostResult,
         before,
         after: heistDebugState(),
         target: {
@@ -13576,6 +13683,8 @@ function init() {
       heist.chain = 0;
       heist.decoy = null;
       heist.hack = null;
+      heist.ghostHeat = Math.max(0, Number(heist.ghostHeat || 0) - 28);
+      heist.ghostSweep = 0;
       heistRaiseSecurity(cause === 'LOCK' ? 26 : 18, cause === 'LOCK' ? 'LOCKDOWN' : 'SPOTTED');
       if (cause === 'LOCK' || heist.security >= 100) {
         finishHeistLockdown(cause);
@@ -13608,6 +13717,7 @@ function init() {
         security: Math.round(heist.securityPeak),
         hacksCompleted: heist.hacksCompleted,
         takedowns: Number(heist.takedowns || 0),
+        ghostSweeps: Number(heist.ghostSweeps || 0),
         keys: heist.collected,
         runVariant: heist.variant
       });
@@ -13615,12 +13725,16 @@ function init() {
     }
 
     function collectHeistTile(risk) {
+      let ghostCharge = 0;
+      let ghostReason = '';
       heist.keys = heist.keys.filter(k => {
         const got = k.x === heist.player.x && k.y === heist.player.y;
         if (got) {
           heist.collected++;
           heist.loot += 55 + Math.max(0, heist.chain * 3);
           heist.lastTactic = 'KEY';
+          ghostCharge += 14 + (heist.cloakTurns > 0 ? 12 : 0) + Math.min(10, Number(risk || 0) * 2);
+          ghostReason = heist.cloakTurns > 0 ? 'GHOST KEY' : 'KEY';
         }
         return !got;
       });
@@ -13630,12 +13744,15 @@ function init() {
         const chainBonus = Math.max(0, heist.chain * 6);
         heist.loot += cache.value + chainBonus;
         heistRaiseSecurity(10 + Math.min(14, Math.floor(cache.value / 28)) + risk, `CACHE ${cache.tier}`);
+        ghostCharge += 24 + Math.min(20, Math.floor(cache.value / 12)) + Math.min(10, Number(risk || 0) * 2);
+        ghostReason = `CACHE ${cache.tier}`;
         if (cache.value >= 240) unlockAchievement('heist_cache');
       });
       heist.terminals.forEach(t => {
         if (t.used || t.x !== heist.player.x || t.y !== heist.player.y) return;
         startHeistHack(t, risk);
       });
+      if (ghostCharge > 0) chargeHeistGhost(ghostCharge, ghostReason);
     }
 
     function moveHeist(dx, dy) {
@@ -13668,6 +13785,11 @@ function init() {
         if (risk === 0) heist.chain++;
         heist.bestChain = Math.max(heist.bestChain, heist.chain);
         if (risk >= 3) heistRaiseSecurity(risk * 1.35, 'HOT ROUTE');
+        if (heist.cloakTurns > 0 && risk <= 1) {
+          chargeHeistGhost(5, 'GHOST STEP');
+        } else if (risk === 0 && heist.chain >= 6) {
+          chargeHeistGhost(2, 'CLEAN ROUTE');
+        }
         collectHeistTile(risk);
         const nearby = heist.guards.some(g => heistDistance(g, heist.player) <= 4);
         heist.alert = heist.cloakTurns > 0
@@ -13696,6 +13818,7 @@ function init() {
           security: Math.round(heist.securityPeak),
           hacksCompleted: heist.hacksCompleted,
           takedowns: Number(heist.takedowns || 0),
+          ghostSweeps: Number(heist.ghostSweeps || 0),
           runVariant: heist.variant
         });
         heist.alert = 'CLEAR';
@@ -13831,6 +13954,27 @@ function init() {
         ctx.stroke();
         ctx.restore();
       }
+      if (Number(heist.ghostSweepFlash || 0) > 0) {
+        const alpha = clamp(Number(heist.ghostSweepFlash || 0) / 8, 0, 1);
+        const px = heist.player.x * tile + tile / 2;
+        const py = heist.player.y * tile + tile / 2;
+        ctx.save();
+        ctx.globalAlpha = 0.24 + alpha * 0.54;
+        ctx.strokeStyle = '#FDE68A';
+        ctx.fillStyle = 'rgba(253, 230, 138, 0.12)';
+        ctx.lineWidth = 2 + alpha * 3;
+        ctx.shadowColor = '#FDE68A';
+        ctx.shadowBlur = 22;
+        ctx.beginPath();
+        ctx.arc(px, py, 32 + (1 - alpha) * 34, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.font = '900 10px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#FDE68A';
+        ctx.fillText('GHOST SWEEP', px, Math.max(12, py - 42));
+        ctx.restore();
+      }
       if (Number(heist.takedownFlash || 0) > 0 && heist.takedownPoint) {
         const alpha = clamp(Number(heist.takedownFlash || 0) / 8, 0, 1);
         const tx = heist.takedownPoint.x * tile + tile / 2;
@@ -13905,7 +14049,7 @@ function init() {
       ctx.save();
       const hudX = c.width - 252;
       ctx.fillStyle = 'rgba(5, 8, 22, 0.68)';
-      ctx.fillRect(hudX, 10, 238, 80);
+      ctx.fillRect(hudX, 10, 238, 100);
       ctx.fillStyle = heist.routeRisk >= 3 ? '#FCA5A5' : heist.routeRisk > 0 ? '#FDE68A' : '#A7F3D0';
       ctx.font = '800 11px JetBrains Mono, monospace';
       ctx.textAlign = 'left';
@@ -13914,12 +14058,15 @@ function init() {
       ctx.fillText(`CHAIN ${heist.chain}x · BEST ${heist.bestChain}x · TD ${Number(heist.takedowns || 0)}`, hudX + 10, 42);
       ctx.fillStyle = heist.security >= 82 ? '#FCA5A5' : heist.security >= 48 ? '#FDE68A' : '#A7F3D0';
       ctx.fillText(`SEC ${Math.round(heist.security)}% · LOOT ${heist.loot}`, hudX + 10, 58);
+      const ghost = heistGhostState();
+      ctx.fillStyle = ghost.active > 0 || ghost.flash > 0 || ghost.heat >= 70 ? '#FDE68A' : '#94A3B8';
+      ctx.fillText(`GHOST ${ghost.label} · SWP ${ghost.sweeps}`, hudX + 10, 74);
       ctx.fillStyle = heist.hack?.active ? '#FDE68A' : '#94A3B8';
-      ctx.fillText(`HACK ${heist.hack?.active ? heistProtocolText(heist.hack) : `DONE ${heist.hacksCompleted}`}`, hudX + 10, 74);
+      ctx.fillText(`HACK ${heist.hack?.active ? heistProtocolText(heist.hack) : `DONE ${heist.hacksCompleted}`}`, hudX + 10, 90);
       ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
-      ctx.fillRect(hudX + 10, 78, 214, 4);
+      ctx.fillRect(hudX + 10, 96, 214, 4);
       ctx.fillStyle = heist.security >= 82 ? '#EF4444' : heist.security >= 48 ? '#F59E0B' : '#34D399';
-      ctx.fillRect(hudX + 10, 78, 214 * (heist.security / 100), 4);
+      ctx.fillRect(hudX + 10, 96, 214 * (heist.security / 100), 4);
       ctx.restore();
       if (heist.lastTactic && heist.lastTactic !== 'INFILTRATE') {
         ctx.save();
@@ -17059,6 +17206,52 @@ function init() {
               stageTone: document.getElementById('premium-game-stage')?.dataset.feedbackTone || '',
               stageLabel: document.getElementById('premium-game-stage')?.dataset.feedback || '',
               achieved: (career.achievements || []).includes('heist_takedown')
+            };
+          },
+          forceHeistGhostSweep: () => {
+            switchPremiumGame('heist');
+            newHeist();
+            heist.player = { x: 6, y: 8 };
+            heist.security = 68;
+            heist.securityPeak = 68;
+            heist.cloakTurns = 1;
+            heist.chain = 8;
+            heist.bestChain = 8;
+            heist.loot = 180;
+            heist.ghostHeat = 88;
+            heist.ghostSweep = 0;
+            heist.ghostSweepFlash = 0;
+            heist.ghostSweeps = 0;
+            heist.lastGhostSweep = 'DEBUG PRIME';
+            heist.guards = [
+              { x: 7, y: 8, dir: 1, axis: 'x', min: 5, max: 11, cone: 3, patrolAxis: 'x', distracted: 0 },
+              { x: 10, y: 8, dir: -1, axis: 'x', min: 8, max: 12, cone: 3, patrolAxis: 'x', distracted: 0 },
+              { x: 16, y: 7, dir: -1, axis: 'y', min: 3, max: 10, cone: 4, patrolAxis: 'y', distracted: 0 }
+            ];
+            heist.cameras.forEach(camera => {
+              camera.disabled = false;
+            });
+            heist.alert = 'LOW';
+            heist.lastTactic = '调试：幽影扫荡窗口';
+            setHeistUi();
+            drawHeist();
+            const before = heistDebugState();
+            const result = chargeHeistGhost(24, 'DEBUG SWEEP');
+            setHeistUi();
+            drawHeist();
+            return {
+              before,
+              result,
+              after: heistDebugState(),
+              feedback: {
+                lastTone: premiumFeedback.lastTone,
+                lastLabel: premiumFeedback.lastLabel,
+                tones: { ...premiumFeedback.tones },
+                visualTriggers: premiumFeedback.visualTriggers
+              },
+              stageTone: document.getElementById('premium-game-stage')?.dataset.feedbackTone || '',
+              stageLabel: document.getElementById('premium-game-stage')?.dataset.feedback || '',
+              achieved: (career.achievements || []).includes('heist_ghost_sweep')
             };
           },
           forceHeistCache: () => {
