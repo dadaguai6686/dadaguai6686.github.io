@@ -6146,15 +6146,255 @@ function init() {
       };
     }
 
+    const careerGameSet = new Set(careerGameOrder);
+    const achievementIdSet = new Set(achievementDefs.map(def => def.id));
+    const loadoutIdSet = new Set(loadoutDefs.map(def => def.id));
+    const difficultyIdSet = new Set(difficultyDefs.map(def => def.id));
+    const careerScoreCap = 9999999;
+    const careerModeScoreCap = 999999;
+    const careerPlaysCap = 99999;
+    const careerRunLimit = 12;
+
+    function isCareerObject(value) {
+      return !!value && typeof value === 'object' && !Array.isArray(value);
+    }
+
+    function clampCareerInt(value, max = careerScoreCap) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return 0;
+      return Math.max(0, Math.min(max, Math.floor(numeric)));
+    }
+
+    function clampCareerNumber(value, min = 0, max = 1, fallback = 0) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return fallback;
+      return Math.max(min, Math.min(max, numeric));
+    }
+
+    function cleanCareerText(value, max = 36) {
+      return String(value || '')
+        .replace(/[\u0000-\u001F\u007F]/g, ' ')
+        .replace(/[<>"'`=]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, max);
+    }
+
+    function normalizeCareerIsoDate(value, fallbackMs = Date.now()) {
+      const parsedMs = Date.parse(String(value || ''));
+      const now = Date.now();
+      const minMs = Date.UTC(2024, 0, 1);
+      const maxMs = now + 86400000;
+      const safeFallback = Number.isFinite(Number(fallbackMs)) ? Number(fallbackMs) : now;
+      const safeMs = Number.isFinite(parsedMs) ? parsedMs : safeFallback;
+      return new Date(Math.min(maxMs, Math.max(minMs, safeMs))).toISOString();
+    }
+
+    function normalizeCareerBest(best) {
+      const source = isCareerObject(best) ? best : {};
+      return careerGameOrder.reduce((map, game) => {
+        const score = clampCareerInt(source[game], careerModeScoreCap);
+        if (score > 0) map[game] = score;
+        return map;
+      }, {});
+    }
+
+    function normalizeCareerMedals(medals, best) {
+      return careerGameOrder.reduce((map, game) => {
+        const computed = medalClass(medalFor(game, Number(best?.[game] || 0)));
+        if (computed !== 'none') map[game] = computed;
+        return map;
+      }, {});
+    }
+
+    function normalizeCareerAchievements(achievements) {
+      const seen = new Set();
+      return (Array.isArray(achievements) ? achievements : [])
+        .map(id => String(id || ''))
+        .filter(id => {
+          if (!achievementIdSet.has(id) || seen.has(id)) return false;
+          seen.add(id);
+          return true;
+        })
+        .slice(0, achievementDefs.length);
+    }
+
+    function careerMedalCountForState(state) {
+      return careerGameOrder.filter(game => {
+        const score = Number(state.best?.[game] || 0);
+        return medalClass(state.medals?.[game] || medalFor(game, score)) !== 'none';
+      }).length;
+    }
+
+    function loadoutUnlockedForCareer(id, state) {
+      if (id === 'pulse') return true;
+      if (id === 'aegis') return Number(state.plays || 0) >= 1 || Number(state.totalScore || 0) >= 600;
+      if (id === 'overdrive') return careerMedalCountForState(state) >= 1 || Number(state.totalScore || 0) >= 1500;
+      if (id === 'strategist') return (state.achievements || []).length >= 2 || Number(state.totalScore || 0) >= 2600;
+      return false;
+    }
+
+    function normalizeCareerDaily(daily) {
+      const source = isCareerObject(daily) ? daily : {};
+      const current = getDailyChallenge();
+      if (source.date === current.date && source.id === current.id && source.done === true) {
+        return { date: current.date, id: current.id, done: true };
+      }
+      return {};
+    }
+
+    function normalizeContractProgress(contract, source) {
+      const entry = isCareerObject(source) ? source : {};
+      const normalized = { value: 0, games: {} };
+      if (contract.type === 'score_pool') {
+        normalized.value = clampCareerInt(entry.value, Number(contract.target || 0));
+        return normalized;
+      }
+      const allowedGames = contract.type === 'target_games'
+        ? new Set((contract.games || []).filter(game => careerGameSet.has(game)))
+        : careerGameSet;
+      const games = isCareerObject(entry.games) ? entry.games : {};
+      Object.keys(games).forEach(game => {
+        if (allowedGames.has(game) && games[game]) normalized.games[game] = true;
+      });
+      return normalized;
+    }
+
+    function normalizedContractProgressValue(contract, entry) {
+      if (contract.type === 'score_pool') {
+        return Math.min(Number(contract.target || 0), clampCareerInt(entry.value, Number(contract.target || 0)));
+      }
+      return Math.min(Number(contract.targetCount || 0), Object.keys(entry.games || {}).length);
+    }
+
+    function normalizeCareerContracts(contracts) {
+      const date = todayKey();
+      const source = isCareerObject(contracts) ? contracts : {};
+      if (source.date !== date) return createDefaultContractState(date);
+      const contractSet = new Set(getDailyContracts().map(contract => contract.id));
+      const normalized = createDefaultContractState(date);
+      getDailyContracts().forEach(contract => {
+        const entry = normalizeContractProgress(contract, source.progress?.[contract.id]);
+        normalized.progress[contract.id] = entry;
+        const target = Number(contract.type === 'score_pool' ? contract.target : contract.targetCount || 0);
+        if (contractSet.has(contract.id) && normalizedContractProgressValue(contract, entry) >= target) {
+          normalized.claimed.push(contract.id);
+        }
+      });
+      return normalized;
+    }
+
+    function normalizeCareerLeague(league) {
+      const date = todayKey();
+      const route = getDailyLeagueRoute(date);
+      const source = isCareerObject(league) ? league : {};
+      if (source.date !== date || source.routeId !== route.id) return createDefaultLeagueState(date);
+      const stageScores = {};
+      const sourceScores = isCareerObject(source.stageScores) ? source.stageScores : {};
+      route.stages.forEach(stage => {
+        const score = clampCareerInt(sourceScores[stage.id], careerModeScoreCap);
+        if (score > 0) stageScores[stage.id] = score;
+      });
+      let earnedStageIndex = 0;
+      while (
+        earnedStageIndex < route.stages.length &&
+        Number(stageScores[route.stages[earnedStageIndex].id] || 0) >= Number(route.stages[earnedStageIndex].target || 0)
+      ) {
+        earnedStageIndex += 1;
+      }
+      const requestedStageIndex = clampCareerInt(source.stageIndex, route.stages.length);
+      const stageIndex = Math.min(requestedStageIndex, earnedStageIndex);
+      const completed = stageIndex >= route.stages.length;
+      return {
+        date,
+        routeId: route.id,
+        stageIndex,
+        completed,
+        rewarded: completed,
+        stageScores
+      };
+    }
+
+    function normalizeCareerRuns(runs, state) {
+      const fallbackDifficulty = difficultyIdSet.has(state.difficulty) ? state.difficulty : 'standard';
+      const fallbackLoadout = loadoutIdSet.has(state.loadout?.active) ? state.loadout.active : 'pulse';
+      return (Array.isArray(runs) ? runs : [])
+        .map((run, index) => {
+          if (!isCareerObject(run) || !careerGameSet.has(run.game)) return null;
+          const game = run.game;
+          const score = clampCareerInt(run.score ?? run.rawScore, careerModeScoreCap);
+          const rawScore = clampCareerInt(run.rawScore ?? score, careerModeScoreCap);
+          const previousBest = clampCareerInt(run.previousBest, careerModeScoreCap);
+          const at = normalizeCareerIsoDate(run.at, Date.now() - index);
+          const medal = medalClass(medalFor(game, score));
+          const difficulty = difficultyIdSet.has(run.difficulty) ? run.difficulty : fallbackDifficulty;
+          const loadout = loadoutIdSet.has(run.loadout) ? run.loadout : fallbackLoadout;
+          const variant = cleanCareerText(run.variant, 32);
+          const highlights = (Array.isArray(run.highlights) ? run.highlights : [])
+            .map(item => cleanCareerText(item, 28))
+            .filter(Boolean)
+            .slice(0, 4);
+          return {
+            id: cleanCareerText(run.id, 72) || `${Date.parse(at)}-${game}-${index}`,
+            at,
+            game,
+            rawScore,
+            score,
+            medal,
+            previousBest,
+            previousMedal: medalClass(medalFor(game, previousBest)),
+            difficulty,
+            loadout,
+            variant,
+            highlights
+          };
+        })
+        .filter(Boolean)
+        .slice(0, careerRunLimit);
+    }
+
+    function normalizeCareerState(rawState) {
+      const source = isCareerObject(rawState) ? rawState : {};
+      const normalized = createDefaultCareer();
+      normalized.totalScore = clampCareerInt(source.totalScore, careerScoreCap);
+      normalized.plays = clampCareerInt(source.plays, careerPlaysCap);
+      normalized.best = normalizeCareerBest(source.best);
+      normalized.achievements = normalizeCareerAchievements(source.achievements);
+      normalized.difficulty = difficultyIdSet.has(source.difficulty) ? source.difficulty : 'standard';
+      normalized.loadout = { active: loadoutIdSet.has(source.loadout?.active) ? source.loadout.active : 'pulse' };
+      normalized.runs = normalizeCareerRuns(source.runs, normalized);
+      normalized.runs.forEach(run => {
+        if (run.score > Number(normalized.best[run.game] || 0)) normalized.best[run.game] = run.score;
+      });
+      normalized.medals = normalizeCareerMedals(source.medals, normalized.best);
+      const bestTotal = careerGameOrder.reduce((sum, game) => sum + Number(normalized.best[game] || 0), 0);
+      normalized.totalScore = Math.max(normalized.totalScore, Math.min(careerScoreCap, bestTotal));
+      if (!loadoutUnlockedForCareer(normalized.loadout.active, normalized)) {
+        normalized.loadout = { active: 'pulse' };
+      }
+      normalized.daily = normalizeCareerDaily(source.daily);
+      normalized.contracts = normalizeCareerContracts(source.contracts);
+      normalized.league = normalizeCareerLeague(source.league);
+      return normalized;
+    }
+
+    function persistNormalizedCareer(rawText, careerState) {
+      const serialized = JSON.stringify(careerState);
+      const stored = localStorage.getItem(careerKey);
+      if ((rawText !== null || stored !== null) && stored !== serialized) {
+        localStorage.setItem(careerKey, serialized);
+      }
+    }
+
     function hydrateCareerFromLegacyBests(careerState) {
       const target = careerState && typeof careerState === 'object' ? careerState : createDefaultCareer();
       target.best = target.best && typeof target.best === 'object' ? target.best : {};
       target.medals = target.medals && typeof target.medals === 'object' ? target.medals : {};
       let changed = false;
       Object.entries(legacyPremiumBestKeys).forEach(([game, key]) => {
-        const legacyScore = Math.max(0, Math.floor(Number(localStorage.getItem(key) || 0)));
+        const legacyScore = clampCareerInt(localStorage.getItem(key), careerModeScoreCap);
         if (!legacyScore) return;
-        const currentBest = Math.max(0, Math.floor(Number(target.best[game] || 0)));
+        const currentBest = clampCareerInt(target.best[game], careerModeScoreCap);
         if (legacyScore > currentBest) {
           target.best[game] = legacyScore;
           changed = true;
@@ -6166,9 +6406,9 @@ function init() {
           changed = true;
         }
       });
-      const bestTotal = careerGameOrder.reduce((sum, game) => sum + Math.max(0, Number(target.best?.[game] || 0)), 0);
+      const bestTotal = careerGameOrder.reduce((sum, game) => sum + clampCareerInt(target.best?.[game], careerModeScoreCap), 0);
       if (bestTotal > Number(target.totalScore || 0)) {
-        target.totalScore = bestTotal;
+        target.totalScore = Math.min(careerScoreCap, bestTotal);
         changed = true;
       }
       if (changed) {
@@ -6178,36 +6418,24 @@ function init() {
     }
 
     function loadCareer() {
+      const rawText = localStorage.getItem(careerKey);
       try {
-        const parsed = JSON.parse(localStorage.getItem(careerKey) || 'null');
-        const merged = { ...createDefaultCareer(), ...(parsed || {}) };
-        merged.best = merged.best && typeof merged.best === 'object' ? merged.best : {};
-        merged.medals = merged.medals && typeof merged.medals === 'object' ? merged.medals : {};
-        merged.achievements = Array.isArray(merged.achievements) ? merged.achievements : [];
-        merged.daily = merged.daily && typeof merged.daily === 'object' ? merged.daily : {};
-        merged.contracts = merged.contracts && typeof merged.contracts === 'object' ? merged.contracts : createDefaultContractState();
-        merged.league = merged.league && typeof merged.league === 'object' ? merged.league : createDefaultLeagueState();
-        merged.loadout = merged.loadout && typeof merged.loadout === 'object' ? merged.loadout : { active: 'pulse' };
-        if (!loadoutDefs.some(def => def.id === merged.loadout.active)) merged.loadout.active = 'pulse';
-        if (!difficultyDefs.some(def => def.id === merged.difficulty)) merged.difficulty = 'standard';
-        merged.runs = Array.isArray(merged.runs) ? merged.runs.slice(0, 12).filter(run => run && typeof run === 'object') : [];
-        if (!Array.isArray(merged.contracts.claimed)) merged.contracts.claimed = [];
-        if (!merged.contracts.progress || typeof merged.contracts.progress !== 'object') merged.contracts.progress = {};
-        if (!merged.league.stageScores || typeof merged.league.stageScores !== 'object') merged.league.stageScores = {};
-        merged.league.stageIndex = Number.isFinite(Number(merged.league.stageIndex)) ? Number(merged.league.stageIndex) : 0;
-        merged.league.completed = !!merged.league.completed;
-        merged.league.rewarded = !!merged.league.rewarded;
-        merged.totalScore = Number.isFinite(Number(merged.totalScore)) ? Number(merged.totalScore) : 0;
-        merged.plays = Number.isFinite(Number(merged.plays)) ? Number(merged.plays) : 0;
-        return hydrateCareerFromLegacyBests(merged);
+        const parsed = rawText ? JSON.parse(rawText) : null;
+        const hydrated = hydrateCareerFromLegacyBests(normalizeCareerState(parsed));
+        const normalized = normalizeCareerState(hydrated);
+        persistNormalizedCareer(rawText, normalized);
+        return normalized;
       } catch {
-        return hydrateCareerFromLegacyBests(createDefaultCareer());
+        const fallback = normalizeCareerState(hydrateCareerFromLegacyBests(createDefaultCareer()));
+        persistNormalizedCareer(rawText, fallback);
+        return fallback;
       }
     }
 
     let career = loadCareer();
 
     function saveCareer() {
+      career = normalizeCareerState(career);
       localStorage.setItem(careerKey, JSON.stringify(career));
     }
 
@@ -7383,15 +7611,17 @@ function init() {
     }
 
     function updateArcadeLeague(game, score, details = {}) {
+      if (!careerGameSet.has(game)) return { advanced: false, completed: false, details };
       const state = ensureLeagueForToday();
       const route = getDailyLeagueRoute(state.date);
       if (state.completed) return { advanced: false, completed: true, details };
       const stage = route.stages[Math.max(0, Math.min(route.stages.length - 1, Number(state.stageIndex || 0)))];
       if (!stage) return { advanced: false, completed: true, details };
+      const safeScore = clampCareerInt(score, careerModeScoreCap);
       if (stage.game === game) {
-        state.stageScores[stage.id] = Math.max(Number(state.stageScores[stage.id] || 0), Number(score || 0));
+        state.stageScores[stage.id] = Math.max(Number(state.stageScores[stage.id] || 0), safeScore);
       }
-      if (stage.game !== game || Number(score || 0) < Number(stage.target || 0)) {
+      if (stage.game !== game || safeScore < Number(stage.target || 0)) {
         return { advanced: false, completed: false, details };
       }
       state.stageIndex = Math.min(route.stages.length, Number(state.stageIndex || 0) + 1);
@@ -7411,20 +7641,22 @@ function init() {
     }
 
     function updateArcadeContracts(game, score, details = {}) {
+      if (!careerGameSet.has(game)) return { completed: [], details };
       const state = ensureContractsForToday();
+      const safeScore = clampCareerInt(score, careerModeScoreCap);
       const completed = [];
       getDailyContracts().forEach(contract => {
         const entry = contractProgressEntry(contract.id);
         const beforeComplete = contractProgressValue(contract) >= contractTargetValue(contract);
         if (contract.type === 'score_pool') {
-          entry.value = Math.max(0, Number(entry.value || 0) + score);
+          entry.value = Math.max(0, Number(entry.value || 0) + safeScore);
         } else if (contract.type === 'distinct_modes') {
           entry.games[game] = true;
         } else if (contract.type === 'medal_result') {
-          if (medalFor(game, score) !== 'none') entry.games[game] = true;
+          if (medalFor(game, safeScore) !== 'none') entry.games[game] = true;
         } else if (contract.type === 'target_games') {
           const targetScore = Number(contract.scoreTarget || 0);
-          if ((contract.games || []).includes(game) && score >= targetScore) {
+          if ((contract.games || []).includes(game) && safeScore >= targetScore) {
             entry.games[game] = true;
           }
         }
@@ -7679,7 +7911,7 @@ function init() {
     }
 
     function unlockAchievement(id) {
-      if (!id || career.achievements.includes(id)) return false;
+      if (!achievementIdSet.has(id) || career.achievements.includes(id)) return false;
       career.achievements.push(id);
       saveCareer();
       updateCareerPanel();
@@ -7688,23 +7920,36 @@ function init() {
       return true;
     }
 
+    function normalizeRunVariantForResult(game, runVariant) {
+      const fallback = activeArcadeRunVariant(game);
+      const source = isCareerObject(runVariant) ? runVariant : fallback;
+      const fallbackBoost = clampCareerNumber(fallback.scoreBoost, -0.25, 0.25, 0);
+      return {
+        active: source.active === true,
+        short: cleanCareerText(source.short || fallback.short || '', 32),
+        scoreBoost: clampCareerNumber(source.scoreBoost, -0.25, 0.25, fallbackBoost),
+        pressure: clampCareerNumber(source.pressure, 0.65, 1.5, clampCareerNumber(fallback.pressure, 0.65, 1.5, 1)),
+        tone: cleanCareerText(source.tone || fallback.tone || 'free', 16)
+      };
+    }
+
     function recordPremiumResult(game, score, details = {}) {
-      const rawValue = Math.max(0, Math.floor(score || 0));
+      if (!careerGameSet.has(game)) return { recorded: false, reason: 'unknown-game' };
+      const detailMap = isCareerObject(details) ? details : {};
+      const rawValue = clampCareerInt(score, careerModeScoreCap);
       const difficulty = activeDifficultyDef();
       const loadout = activeLoadoutDef();
-      const variant = details.runVariant && typeof details.runVariant === 'object'
-        ? details.runVariant
-        : activeArcadeRunVariant(game);
-      const scoreBoost = Number(loadoutBonuses().scoreBoost || 0) + Number(difficulty.scoreBoost || 0) + Number(variant.scoreBoost || 0);
-      const value = Math.max(0, Math.floor(rawValue * (1 + scoreBoost)));
+      const variant = normalizeRunVariantForResult(game, detailMap.runVariant);
+      const scoreBoost = clampCareerNumber(loadoutBonuses().scoreBoost, -0.2, 0.2, 0) + clampCareerNumber(difficulty.scoreBoost, -0.2, 0.4, 0) + variant.scoreBoost;
+      const value = clampCareerInt(rawValue * Math.max(0.1, 1 + scoreBoost), careerModeScoreCap);
       const totalBeforeRun = Number(career.totalScore || 0);
-      career.totalScore = Math.max(0, (career.totalScore || 0) + value);
-      career.plays = (career.plays || 0) + 1;
+      career.totalScore = clampCareerInt((career.totalScore || 0) + value, careerScoreCap);
+      career.plays = clampCareerInt((career.plays || 0) + 1, careerPlaysCap);
       const previousBest = Number(career.best[game] || 0);
       const previousMedal = medalClass(career.medals[game] || medalFor(game, previousBest));
       career.best[game] = Math.max(Number(career.best[game] || 0), value);
       const medal = medalFor(game, value);
-      const highlights = summarizeRunDetails(game, details);
+      const highlights = summarizeRunDetails(game, detailMap).map(item => cleanCareerText(item, 28)).filter(Boolean);
       if (!highlights.length) {
         highlights.push(`基础分 ${rawValue}`, `${medalLabels[medal] || medalLabels.none}牌`);
       }
@@ -7729,12 +7974,13 @@ function init() {
         ...(Array.isArray(career.runs) ? career.runs : [])
       ].slice(0, 12);
       const daily = getDailyChallenge();
-      if ((!career.daily || career.daily.date !== daily.date || career.daily.id !== daily.id) && daily.check(game, value, { ...details, rawScore: rawValue, loadout: loadout.id, difficulty: difficulty.id })) {
+      const resultDetails = { ...detailMap, rawScore: rawValue, loadout: loadout.id, difficulty: difficulty.id };
+      if ((!career.daily || career.daily.date !== daily.date || career.daily.id !== daily.id) && daily.check(game, value, resultDetails)) {
         career.daily = { date: daily.date, id: daily.id, done: true };
         unlockAchievement('daily_clear');
       }
-      updateArcadeContracts(game, value, { ...details, rawScore: rawValue, loadout: loadout.id, difficulty: difficulty.id });
-      updateArcadeLeague(game, value, { ...details, rawScore: rawValue, loadout: loadout.id, difficulty: difficulty.id });
+      updateArcadeContracts(game, value, resultDetails);
+      updateArcadeLeague(game, value, resultDetails);
       const unlockedPrizes = prizeMilestoneUnlocks(totalBeforeRun, career.totalScore || 0);
       if (unlockedPrizes.length) {
         showToast(`赛季奖励解锁：${unlockedPrizes.map(node => node.label).join('、')}`, 'success');
@@ -7742,6 +7988,7 @@ function init() {
       saveCareer();
       updateCareerPanel();
       triggerPremiumFeedback('result', { label: `${premiumTabLabels[game] || game} +${value}` });
+      return { recorded: true, game, rawScore: rawValue, score: value };
     }
 
     window.atherixArcadeCareer = {

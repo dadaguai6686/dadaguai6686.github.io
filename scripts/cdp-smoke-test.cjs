@@ -1036,6 +1036,185 @@ async function run() {
     window.sessionStorage?.removeItem('admin_token');
     return state;
   })()`, 5000);
+  const dirtyCareerImportState = await evaluate(`(async () => {
+    const clearArcadeState = () => {
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i += 1) keys.push(localStorage.key(i));
+      keys
+        .filter(key => key && (key === 'atherix_premium_arcade_career_v2' || key.startsWith('atherix_premium_') || key.startsWith('atherix_astro_runner_best_lvl_')))
+        .forEach(key => localStorage.removeItem(key));
+    };
+    const mastery = window.__atherixDebug?.premium?.mastery?.() || [];
+    const achievements = window.__atherixDebug?.premium?.achievements?.() || [];
+    const contracts = window.__atherixDebug?.premium?.contracts?.() || [];
+    const league = window.__atherixDebug?.premium?.league?.() || {};
+    const daily = window.__atherixDebug?.premium?.daily?.() || {};
+    const allowedGames = mastery.map(item => item.game);
+    const knownAchievementIds = achievements.map(item => item.id);
+    const contractIds = contracts.map(item => item.id);
+    const leagueStageIds = (league.stages || []).map(item => item.id);
+    const firstLeagueStage = (league.stages || [])[0] || {};
+    const repeatedRuns = Array.from({ length: 16 }, (_, index) => ({
+      id: \`dirty-run-\${index}\`,
+      at: index % 2 ? 'bad-date' : new Date(Date.now() + 1000000000).toISOString(),
+      game: index % 3 === 0 ? 'evil' : (allowedGames[index % allowedGames.length] || 'survivor'),
+      rawScore: index % 2 ? -99 : 123456789,
+      score: index % 2 ? 'Infinity' : 123456789,
+      medal: 'diamond',
+      previousBest: -42,
+      previousMedal: 'diamond',
+      difficulty: 'evil',
+      loadout: 'evil',
+      variant: '<script>evil</script>',
+      highlights: ['有效高光', '<img onerror=evil>', ' '.repeat(80), null, 'extra']
+    }));
+    const dirtyCareer = {
+      totalScore: 'Infinity',
+      plays: -99,
+      best: { survivor: -10, boss: 123456789, evil: 777 },
+      medals: { survivor: 'diamond', boss: 'gold', evil: 'gold' },
+      achievements: ['daily_clear', 'daily_clear', 'evil_badge', 42],
+      daily: { date: daily.date, id: 'evil_daily', done: true },
+      contracts: {
+        date: daily.date,
+        claimed: ['score_pool', 'mode_sampler', 'evil_contract', 'score_pool'],
+        progress: {
+          score_pool: { value: 123456789, games: { evil: true, survivor: true } },
+          mode_sampler: { value: -7, games: { evil: true, survivor: true, boss: true, drift: true } },
+          evil_contract: { value: 999999, games: { evil: true } }
+        }
+      },
+      league: {
+        date: league.date,
+        routeId: league.id,
+        stageIndex: 99,
+        completed: true,
+        rewarded: true,
+        stageScores: {
+          [firstLeagueStage.id || 'frontline-survivor']: -5,
+          evil_stage: 999999
+        }
+      },
+      loadout: { active: 'evil' },
+      difficulty: 'evil',
+      runs: repeatedRuns
+    };
+    clearArcadeState();
+    const result = window.__atherixDebug.vault.importText(JSON.stringify({
+      schema: 'atherix-vault-v1',
+      version: 1,
+      storage: {
+        'atherix_premium_arcade_career_v2': JSON.stringify(dirtyCareer)
+      }
+    }));
+    await new Promise(resolve => setTimeout(resolve, 320));
+    const stored = JSON.parse(localStorage.getItem('atherix_premium_arcade_career_v2') || '{}');
+    const terminalProgress = {};
+    (contracts || []).forEach(contract => {
+      terminalProgress[contract.id] = contract.id === 'score_pool'
+        ? { value: 123456, games: { evil: true } }
+        : { value: -99, games: Object.fromEntries(allowedGames.map(game => [game, true])) };
+    });
+    const terminalLeagueScores = Object.fromEntries((league.stages || []).map(stage => [stage.id, Number(stage.target || 0) + 50]));
+    localStorage.setItem('atherix_premium_arcade_career_v2', JSON.stringify({
+      contracts: {
+        date: daily.date,
+        claimed: [],
+        progress: terminalProgress
+      },
+      league: {
+        date: league.date,
+        routeId: league.id,
+        stageIndex: 99,
+        completed: true,
+        rewarded: false,
+        stageScores: terminalLeagueScores
+      }
+    }));
+    document.dispatchEvent(new CustomEvent('atherix:vault-imported', { detail: { keys: ['atherix_premium_arcade_career_v2'] } }));
+    await new Promise(resolve => setTimeout(resolve, 220));
+    const terminalStored = JSON.parse(localStorage.getItem('atherix_premium_arcade_career_v2') || '{}');
+    const beforePublic = JSON.parse(localStorage.getItem('atherix_premium_arcade_career_v2') || '{}');
+    const badRecord = window.atherixArcadeCareer?.recordResult?.('evil', 999999, { runVariant: { active: true, short: '<b>BAD</b>', scoreBoost: 999 } });
+    const badUnlock = window.atherixArcadeCareer?.unlock?.('evil_badge');
+    const afterBadPublic = JSON.parse(localStorage.getItem('atherix_premium_arcade_career_v2') || '{}');
+    const goodRecord = window.atherixArcadeCareer?.recordResult?.('survivor', 1000, { runVariant: { active: true, short: '<b>合法变体</b>', scoreBoost: 999 } });
+    const afterGoodPublic = JSON.parse(localStorage.getItem('atherix_premium_arcade_career_v2') || '{}');
+    const profile = window.__atherixDebug?.premium?.profile?.() || {};
+    const loadout = window.__atherixDebug?.premium?.loadout?.() || {};
+    const difficulty = window.__atherixDebug?.premium?.difficulty?.() || {};
+    const runGames = (stored.runs || []).map(run => run.game);
+    const runScores = (stored.runs || []).map(run => Number(run.score));
+    const runMedals = (stored.runs || []).map(run => run.medal);
+    const runDifficulties = (stored.runs || []).map(run => run.difficulty);
+    const runLoadouts = (stored.runs || []).map(run => run.loadout);
+    const runDates = (stored.runs || []).map(run => Date.parse(run.at));
+    const runHighlights = (stored.runs || []).flatMap(run => run.highlights || []);
+    const contractGameKeys = Object.values(stored.contracts?.progress || {})
+      .flatMap(entry => Object.keys(entry?.games || {}));
+    const hasUnknownIds = Object.keys(stored.best || {}).some(key => !allowedGames.includes(key)) ||
+      Object.keys(stored.medals || {}).some(key => !allowedGames.includes(key)) ||
+      (stored.achievements || []).some(id => !knownAchievementIds.includes(id)) ||
+      Object.keys(stored.contracts?.progress || {}).some(id => !contractIds.includes(id)) ||
+      (stored.contracts?.claimed || []).some(id => !contractIds.includes(id)) ||
+      contractGameKeys.some(game => !allowedGames.includes(game)) ||
+      Object.keys(stored.league?.stageScores || {}).some(id => !leagueStageIds.includes(id)) ||
+      runGames.some(game => !allowedGames.includes(game)) ||
+      runDifficulties.some(id => !['training', 'standard', 'elite', 'nightmare'].includes(id)) ||
+      runLoadouts.some(id => !['pulse', 'aegis', 'overdrive', 'strategist'].includes(id)) ||
+      stored.loadout?.active === 'evil' ||
+      stored.difficulty === 'evil';
+    return {
+      imported: result.imported,
+      ignored: result.ignored,
+      allowedGames,
+      knownAchievementIds,
+      contractIds,
+      leagueStageIds,
+      totalScore: stored.totalScore,
+      plays: stored.plays,
+      bestKeys: Object.keys(stored.best || {}),
+      bestScores: Object.values(stored.best || {}).map(Number),
+      medalValues: Object.values(stored.medals || {}),
+      achievements: stored.achievements || [],
+      daily: stored.daily || {},
+      contracts: stored.contracts || {},
+      contractProgressKeys: Object.keys(stored.contracts?.progress || {}),
+      contractClaimed: stored.contracts?.claimed || [],
+      contractGameKeys,
+      league: stored.league || {},
+      leagueStageScoreKeys: Object.keys(stored.league?.stageScores || {}),
+      terminalContracts: terminalStored.contracts || {},
+      terminalLeague: terminalStored.league || {},
+      terminalStoredTotal: terminalStored.totalScore || 0,
+      runCount: (stored.runs || []).length,
+      runGames,
+      runScores,
+      runMedals,
+      runDifficulties,
+      runLoadouts,
+      runDates,
+      runHighlights,
+      loadoutActive: stored.loadout?.active || '',
+      loadoutDebug: loadout.active || '',
+      difficultyActive: stored.difficulty || '',
+      difficultyDebug: difficulty.active || '',
+      profileMedals: profile.medalCount || 0,
+      profileUnlocked: profile.unlocked || 0,
+      profileAchievementTotal: profile.achievementTotal || 0,
+      hasUnknownIds,
+      hasUnsafeHighlightMarkup: runHighlights.some(text => /[<>]/.test(String(text || ''))),
+      badRecord,
+      badUnlock,
+      badPublicChanged: JSON.stringify(beforePublic) !== JSON.stringify(afterBadPublic),
+      afterBadTotal: afterBadPublic.totalScore || 0,
+      afterGoodTotal: afterGoodPublic.totalScore || 0,
+      goodRecord,
+      goodVariant: (afterGoodPublic.runs || [])[0]?.variant || '',
+      goodVariantScore: (afterGoodPublic.runs || [])[0]?.score || 0,
+      goodHighlights: (afterGoodPublic.runs || [])[0]?.highlights || []
+    };
+  })()`, 6000);
   const vaultClearConfirmState = await evaluate(`(async () => {
     localStorage.setItem('atherix_reader_progress_clear-smoke', '31');
     localStorage.setItem('atherix_todos', JSON.stringify([{ text: 'Clear smoke task', completed: false }]));
@@ -3299,7 +3478,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v65-quality') && swText.includes('/style.css?v=20260608-quality-v10') && swText.includes('/app.js?v=20260608-quality-v23'),
+      swHasQualityVersion: swText.includes('atherix-static-v66-quality') && swText.includes('/style.css?v=20260608-quality-v10') && swText.includes('/app.js?v=20260608-quality-v24'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
@@ -3616,6 +3795,19 @@ async function run() {
   assert(vaultImportState.progress === '77' && vaultImportState.survivorBest === '4321' && vaultImportState.theme === 'light' && vaultImportState.listHasProgress, `data vault import should restore whitelisted state and refresh UI: ${JSON.stringify(vaultImportState)}`);
   assert(vaultImportState.tokenAfter === 'vault-session-preserved' && !vaultImportState.localTokenAfter && !vaultImportState.outsideKey && vaultImportState.ignored.includes('admin_token') && vaultImportState.ignored.includes('outside_key'), `data vault import should ignore unsafe or unknown keys without touching the active admin session: ${JSON.stringify(vaultImportState)}`);
   assert(/Vault restored task/.test(vaultImportState.todoStored), `data vault import should restore local tool state: ${JSON.stringify(vaultImportState)}`);
+  assert(dirtyCareerImportState.imported.includes('atherix_premium_arcade_career_v2') && dirtyCareerImportState.ignored.length === 0, `dirty premium career vault import should accept the allowed storage key for normalization: ${JSON.stringify(dirtyCareerImportState)}`);
+  assert(Number.isFinite(Number(dirtyCareerImportState.totalScore)) && dirtyCareerImportState.totalScore >= 0 && dirtyCareerImportState.totalScore <= 9999999 && Number.isInteger(dirtyCareerImportState.plays) && dirtyCareerImportState.plays >= 0 && dirtyCareerImportState.plays <= 99999, `premium career normalization should clamp aggregate numbers: ${JSON.stringify(dirtyCareerImportState)}`);
+  assert(dirtyCareerImportState.bestKeys.every(key => dirtyCareerImportState.allowedGames.includes(key)) && dirtyCareerImportState.bestScores.every(score => Number.isFinite(score) && score >= 0 && score <= 999999), `premium career normalization should keep only known mode best scores: ${JSON.stringify(dirtyCareerImportState)}`);
+  assert(dirtyCareerImportState.medalValues.every(medal => ['bronze', 'silver', 'gold'].includes(medal)) && dirtyCareerImportState.profileMedals <= dirtyCareerImportState.allowedGames.length, `premium career normalization should recompute valid medals only: ${JSON.stringify(dirtyCareerImportState)}`);
+  assert(dirtyCareerImportState.achievements.length === new Set(dirtyCareerImportState.achievements).size && dirtyCareerImportState.achievements.every(id => dirtyCareerImportState.knownAchievementIds.includes(id)) && dirtyCareerImportState.profileUnlocked <= dirtyCareerImportState.profileAchievementTotal, `premium career normalization should dedupe achievements and drop unknown badges: ${JSON.stringify(dirtyCareerImportState)}`);
+  assert(!dirtyCareerImportState.daily.id && dirtyCareerImportState.contractProgressKeys.every(id => dirtyCareerImportState.contractIds.includes(id)) && dirtyCareerImportState.contractClaimed.every(id => dirtyCareerImportState.contractIds.includes(id)) && dirtyCareerImportState.contractGameKeys.every(game => dirtyCareerImportState.allowedGames.includes(game)), `premium career normalization should reset bogus daily state and restrict contract progress: ${JSON.stringify(dirtyCareerImportState)}`);
+  assert(dirtyCareerImportState.league.routeId && dirtyCareerImportState.league.stageIndex === 0 && dirtyCareerImportState.league.completed === false && dirtyCareerImportState.league.rewarded === false && dirtyCareerImportState.leagueStageScoreKeys.every(id => dirtyCareerImportState.leagueStageIds.includes(id)), `premium career normalization should prevent forged league completion: ${JSON.stringify(dirtyCareerImportState)}`);
+  assert(dirtyCareerImportState.runCount <= 12 && dirtyCareerImportState.runGames.every(game => dirtyCareerImportState.allowedGames.includes(game)) && dirtyCareerImportState.runScores.every(score => Number.isFinite(score) && score >= 0 && score <= 999999) && dirtyCareerImportState.runMedals.every(medal => ['none', 'bronze', 'silver', 'gold'].includes(medal)), `premium career normalization should sanitize imported run logs: ${JSON.stringify(dirtyCareerImportState)}`);
+  assert(dirtyCareerImportState.runDifficulties.every(id => ['training', 'standard', 'elite', 'nightmare'].includes(id)) && dirtyCareerImportState.runLoadouts.every(id => ['pulse', 'aegis', 'overdrive', 'strategist'].includes(id)) && dirtyCareerImportState.runDates.every(ms => Number.isFinite(ms)) && dirtyCareerImportState.runHighlights.every(text => typeof text === 'string' && text.length <= 28), `premium career normalization should sanitize run metadata: ${JSON.stringify(dirtyCareerImportState)}`);
+  assert(dirtyCareerImportState.loadoutActive === 'pulse' && dirtyCareerImportState.loadoutDebug === 'pulse' && dirtyCareerImportState.difficultyActive === 'standard' && dirtyCareerImportState.difficultyDebug === 'standard' && !dirtyCareerImportState.hasUnknownIds && !dirtyCareerImportState.hasUnsafeHighlightMarkup, `premium career normalization should fall back unknown loadout/difficulty ids and strip unsafe run text markers: ${JSON.stringify(dirtyCareerImportState)}`);
+  assert(dirtyCareerImportState.contractIds.every(id => dirtyCareerImportState.terminalContracts.claimed?.includes(id)) && dirtyCareerImportState.terminalLeague.completed === true && dirtyCareerImportState.terminalLeague.rewarded === true && dirtyCareerImportState.terminalLeague.stageIndex === dirtyCareerImportState.leagueStageIds.length, `premium career normalization should not leave complete contracts or leagues in unclaimable terminal states: ${JSON.stringify(dirtyCareerImportState)}`);
+  assert(dirtyCareerImportState.badRecord?.recorded === false && dirtyCareerImportState.badUnlock === false && !dirtyCareerImportState.badPublicChanged && dirtyCareerImportState.afterBadTotal === dirtyCareerImportState.terminalStoredTotal, `premium public career API should reject unknown game results and unknown achievements without mutating state: ${JSON.stringify(dirtyCareerImportState)}`);
+  assert(dirtyCareerImportState.goodRecord?.recorded === true && dirtyCareerImportState.afterGoodTotal > dirtyCareerImportState.afterBadTotal && dirtyCareerImportState.goodVariant && !/[<>]/.test(dirtyCareerImportState.goodVariant) && dirtyCareerImportState.goodVariantScore <= 1300 && dirtyCareerImportState.goodHighlights.every(text => !/[<>]/.test(String(text || ''))), `premium public career API should clamp custom run variants and sanitize recorded text: ${JSON.stringify(dirtyCareerImportState)}`);
   assert(vaultClearConfirmState.openBeforeCancel && vaultClearConfirmState.role === 'dialog' && vaultClearConfirmState.ariaHiddenBeforeCancel === 'false' && vaultClearConfirmState.focusedCancel && /清空本地状态/.test(vaultClearConfirmState.title) && /Atherix/.test(vaultClearConfirmState.message), `data vault clear should use the accessible in-app confirmation dialog: ${JSON.stringify(vaultClearConfirmState)}`);
   assert(vaultClearConfirmState.stillStoredAfterCancel === '31' && vaultClearConfirmState.closedAfterCancel && vaultClearConfirmState.openBeforeAccept && vaultClearConfirmState.clearedAfterAccept && vaultClearConfirmState.ariaHiddenAfterAccept === 'true' && /本地状态已清空/.test(vaultClearConfirmState.clearToast), `data vault clear confirmation should cancel safely and only clear after explicit accept: ${JSON.stringify(vaultClearConfirmState)}`);
   assert(legacyVaultHydrationState.survivorBest === 4321 && legacyVaultHydrationState.survivorMedal === 'gold' && legacyVaultHydrationState.totalScore >= 4321 && legacyVaultHydrationState.leaderboardTopGame === 'survivor' && legacyVaultHydrationState.leaderboardTopScore === 4321 && legacyVaultHydrationState.profileTopGame === 'survivor' && legacyVaultHydrationState.profileMedals >= 1 && legacyVaultHydrationState.masterySurvivorScore === 4321 && legacyVaultHydrationState.prizeTotal >= 4321 && legacyVaultHydrationState.prizeProgress > 0 && legacyVaultHydrationState.prizeUnlocked >= 3 && /4321/.test(legacyVaultHydrationState.totalText), `legacy arcade best imports should hydrate the premium career profile and season track: ${JSON.stringify(legacyVaultHydrationState)}`);
@@ -4305,6 +4497,7 @@ async function run() {
     compressorLimitState,
     vaultExportState,
     vaultImportState,
+    dirtyCareerImportState,
     vaultClearConfirmState,
     legacyVaultHydrationState,
     blogHubBefore,
