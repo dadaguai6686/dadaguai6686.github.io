@@ -1,5 +1,6 @@
-const CACHE_VERSION = 'atherix-static-v40-mobile-draft';
+const CACHE_VERSION = 'atherix-static-v41-discovery-fresh';
 const NAVIGATION_FALLBACK_URL = '/index.html';
+const DISCOVERY_ASSET_PATHS = new Set(['/feed.xml', '/sitemap.xml', '/robots.txt']);
 const STATIC_ASSETS = [
   '/',
   NAVIGATION_FALLBACK_URL,
@@ -144,6 +145,11 @@ self.addEventListener('fetch', (event) => {
 
   if (request.mode === 'navigate') {
     event.respondWith(navigationFallback(event.preloadResponse, request));
+    return;
+  }
+
+  if (DISCOVERY_ASSET_PATHS.has(url.pathname)) {
+    event.respondWith(networkFirstCacheFallback(request));
     return;
   }
 

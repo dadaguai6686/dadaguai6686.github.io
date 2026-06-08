@@ -141,10 +141,11 @@ async function run() {
     assert(serviceWorkerText.includes('/feed.xml') && serviceWorkerText.includes('/sitemap.xml'), 'service worker should precache discovery metadata');
     assert(serviceWorkerText.includes('/assets/atherix-og-card.png') && serviceWorkerText.includes('/assets/atherix-icon-512.png'), 'service worker should precache branded PWA assets');
     assert(serviceWorkerText.includes('/assets/atherix-profile-avatar.png') && serviceWorkerText.includes('/assets/project-bento-dashboard.webp') && serviceWorkerText.includes('/assets/project-arcade-suite.webp'), 'service worker should precache local profile and portfolio visual assets');
-    assert(serviceWorkerText.includes('atherix-static-v40-mobile-draft'), 'service worker should use the latest mobile draft cache version');
+    assert(serviceWorkerText.includes('atherix-static-v41-discovery-fresh'), 'service worker should use the latest discovery-fresh cache version');
     assert(serviceWorkerText.includes('NAVIGATION_FALLBACK_URL') && serviceWorkerText.includes('navigationPreload') && serviceWorkerText.includes('X-Atherix-Offline-Shell'), 'service worker should provide a navigation-preload offline app shell');
     assert(serviceWorkerText.includes('/style.css?v=20260608-mobile-draft-v1') && serviceWorkerText.includes('/app.js?v=20260608-mobile-draft-v1'), 'service worker should precache the latest versioned app assets');
     assert(serviceWorkerText.includes('networkFirstCacheFallback') && serviceWorkerText.includes('staleWhileRevalidate') && serviceWorkerText.includes('offlineResponseFor') && serviceWorkerText.includes('cacheResponseQuietly'), 'service worker should use explicit offline-safe caching strategies');
+    assert(serviceWorkerText.includes('DISCOVERY_ASSET_PATHS') && serviceWorkerText.includes('/feed.xml') && serviceWorkerText.includes('/sitemap.xml') && serviceWorkerText.includes('/robots.txt'), 'service worker should keep discovery metadata network-first before cache fallback');
     assert(serviceWorkerText.includes('X-Atherix-Offline-Asset') && serviceWorkerText.includes('status: 204'), 'service worker should provide a quiet offline image placeholder');
 
     const indexHtml = await fetch(`${baseUrl}/`);
@@ -327,6 +328,12 @@ async function run() {
     const createdPostRows = await createdPostList.json();
     const createdSmokePost = createdPostRows.find(post => post.id === smokePostId);
     assert(createdSmokePost?.date, 'created smoke post should receive a date');
+    const discoveryCreatedFeed = await fetch(`${baseUrl}/feed.xml`);
+    const discoveryCreatedFeedText = await discoveryCreatedFeed.text();
+    const discoveryCreatedSitemap = await fetch(`${baseUrl}/sitemap.xml`);
+    const discoveryCreatedSitemapText = await discoveryCreatedSitemap.text();
+    assert(discoveryCreatedFeedText.includes(`<link>https://dadaguai6686.github.io/?post=${smokePostId}</link>`) && discoveryCreatedFeedText.includes('<title>Smoke Test Draft</title>'), 'dynamic RSS feed should include newly created admin posts');
+    assert(discoveryCreatedSitemapText.includes(`<loc>https://dadaguai6686.github.io/?post=${smokePostId}</loc>`), 'dynamic sitemap should include newly created admin posts');
 
     const updatedPostWithoutDate = await fetch(`${baseUrl}/api/posts/${encodeURIComponent(smokePostId)}`, {
       method: 'PUT',
@@ -348,6 +355,12 @@ async function run() {
     const updatedPostRows = await updatedPostList.json();
     const updatedSmokePost = updatedPostRows.find(post => post.id === smokePostId);
     assert(updatedSmokePost?.date === createdSmokePost.date, 'admin post update without date should preserve the original date');
+    const discoveryUpdatedFeed = await fetch(`${baseUrl}/feed.xml`);
+    const discoveryUpdatedFeedText = await discoveryUpdatedFeed.text();
+    const discoveryUpdatedSitemap = await fetch(`${baseUrl}/sitemap.xml`);
+    const discoveryUpdatedSitemapText = await discoveryUpdatedSitemap.text();
+    assert(discoveryUpdatedFeedText.includes('<title>Smoke Test Draft Updated</title>') && discoveryUpdatedFeedText.includes('<description>updated draft</description>'), 'dynamic RSS feed should reflect updated post titles and excerpts');
+    assert(discoveryUpdatedSitemapText.includes(`<loc>https://dadaguai6686.github.io/?post=${smokePostId}</loc>`) && discoveryUpdatedSitemapText.includes(`<lastmod>${createdSmokePost.date}</lastmod>`), 'dynamic sitemap should preserve the article URL and original lastmod after date-less edits');
 
     const deletedPost = await fetch(`${baseUrl}/api/posts/${encodeURIComponent(smokePostId)}`, {
       method: 'DELETE',
@@ -355,6 +368,11 @@ async function run() {
     });
     assert(deletedPost.status === 200, 'admin post deletion should succeed');
     assert(deletedPost.headers.get('ratelimit-limit') === '30', 'admin post deletion should be write rate-limited');
+    const discoveryDeletedFeed = await fetch(`${baseUrl}/feed.xml`);
+    const discoveryDeletedFeedText = await discoveryDeletedFeed.text();
+    const discoveryDeletedSitemap = await fetch(`${baseUrl}/sitemap.xml`);
+    const discoveryDeletedSitemapText = await discoveryDeletedSitemap.text();
+    assert(!discoveryDeletedFeedText.includes(smokePostId) && !discoveryDeletedSitemapText.includes(smokePostId), 'dynamic discovery metadata should remove deleted posts');
 
     const projectHeaders = {
       'Content-Type': 'application/json',
@@ -469,6 +487,8 @@ async function run() {
       ogImageBytes: Number(ogImage.headers.get('content-length') || 0),
       sitemapStatus: sitemap.status,
       feedStatus: feed.status,
+      discoveryCreatedInFeed: discoveryCreatedFeedText.includes(smokePostId),
+      discoveryDeletedFromFeed: !discoveryDeletedFeedText.includes(smokePostId),
       unknownApiStatus: unknownApi.status,
       malformedJsonStatus: malformedJson.status,
       seededProjectCount: projectRows.length,
