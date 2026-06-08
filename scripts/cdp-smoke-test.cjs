@@ -3264,6 +3264,17 @@ async function run() {
       achieved: (window.__atherixDebug?.premium?.achievements?.() || []).some(item => item.id === 'boss_focus_surge' && item.unlocked)
     };
   })()`);
+  const bossPerfectDodgeState = await evaluate(`(() => {
+    const result = window.__atherixDebug?.premium?.forceBossPerfectDodge?.() || {};
+    const pixels = window.__atherixSmokeCountCanvasPixels?.('#premium-boss-canvas') || {};
+    return {
+      ...result,
+      nonBlank: !!pixels.nonBlank,
+      counterText: document.querySelector('#premium-boss-counter')?.textContent || '',
+      focusText: document.querySelector('#premium-boss-focus')?.textContent || '',
+      scoreText: document.querySelector('#premium-boss-score')?.textContent || ''
+    };
+  })()`);
   const bossHitState = await evaluate(`(() => {
     const result = window.__atherixDebug?.premium?.forceBossHit?.() || {};
     const pixels = window.__atherixSmokeCountCanvasPixels?.('#premium-boss-canvas') || {};
@@ -4519,6 +4530,25 @@ async function run() {
     `boss focus surge should reward graze chains with a timed damage state and achievement: ${JSON.stringify(bossFocusSurgeState)}`
   );
   assert(
+    bossPerfectDodgeState.nonBlank &&
+    bossPerfectDodgeState.result?.triggered &&
+    Number(bossPerfectDodgeState.after?.weak?.perfectDodge?.count || 0) > Number(bossPerfectDodgeState.before?.weak?.perfectDodge?.count || 0) &&
+    Number(bossPerfectDodgeState.after?.weak?.perfectDodge?.window || 0) > 0 &&
+    Number(bossPerfectDodgeState.after?.weak?.perfectDodge?.flash || 0) > 0 &&
+    bossPerfectDodgeState.after?.weak?.perfectDodge?.last === 'PERFECT DODGE' &&
+    bossPerfectDodgeState.after?.bullets === 0 &&
+    Number(bossPerfectDodgeState.after?.weak?.focus || 0) > Number(bossPerfectDodgeState.before?.weak?.focus || 0) &&
+    Number(bossPerfectDodgeState.after?.weak?.score || 0) > Number(bossPerfectDodgeState.before?.weak?.score || 0) &&
+    Number(bossPerfectDodgeState.after?.player?.invuln || 0) > Number(bossPerfectDodgeState.before?.player?.invuln || 0) &&
+    bossPerfectDodgeState.counterText === 'DODGE' &&
+    bossPerfectDodgeState.after?.weak?.hudCounter === 'DODGE' &&
+    bossPerfectDodgeState.feedback?.lastTone === 'special' &&
+    bossPerfectDodgeState.feedback?.lastLabel === 'PERFECT DODGE' &&
+    bossPerfectDodgeState.stageTone === 'special' &&
+    /PERFECT DODGE/.test(bossPerfectDodgeState.stageLabel || ''),
+    `boss perfect dodge should clear a dashed-through projectile, reward focus/score, and show DODGE feedback: ${JSON.stringify(bossPerfectDodgeState)}`
+  );
+  assert(
     bossHitState.nonBlank &&
     bossHitState.result?.applied &&
     Number(bossHitState.after?.player?.lives || 0) === Number(bossHitState.before?.player?.lives || 0) - 1 &&
@@ -4794,6 +4824,7 @@ async function run() {
     bossSnipeLockState,
     bossShieldShatterState,
     bossFocusSurgeState,
+    bossPerfectDodgeState,
     bossHitState,
     bossPatternReleasedState,
     bossPauseState,
@@ -4915,6 +4946,7 @@ function summarizeSmokeResult(result) {
       boss: {
         rendered: result.bossState?.nonBlank,
         weakpointHud: result.bossTelegraphState?.weakHud,
+        perfectDodge: result.bossPerfectDodgeState?.after?.weak?.perfectDodge?.count,
         hitFeedback: result.bossHitState?.after?.hit?.label,
         pauseFreezes: result.bossPauseFreezeState?.framesAfter === result.bossPauseState?.framesBefore
       },

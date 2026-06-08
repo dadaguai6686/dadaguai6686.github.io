@@ -6969,7 +6969,7 @@ function init() {
       const spec = {
         runner: [['level', '关卡'], ['finishTime', '用时', 's'], ['bestCombo', '连段', 'x'], ['contractsCompleted', '合约']],
         survivor: [['level', '等级'], ['bestChain', '连锁', 'x'], ['overdrive', '超载'], ['drones', '无人机'], ['bounties', '赏金']],
-        boss: [['phase', '阶段'], ['graze', '擦弹'], ['bestGrazeStreak', '连擦'], ['focusSurges', '专注'], ['shieldShatters', '碎盾']],
+        boss: [['phase', '阶段'], ['graze', '擦弹'], ['perfectDodges', '精准闪避'], ['focusSurges', '专注'], ['shieldShatters', '碎盾']],
         drift: [['gates', '弯道'], ['bestCombo', '连段', 'x'], ['overtakes', '超车'], ['heatPeak', '热度', '%'], ['phaseUses', '相位']],
         heist: [['steps', '步数'], ['bestChain', '潜行链'], ['loot', '缓存'], ['security', '警戒', '%'], ['hacksCompleted', '破解']],
         chain: [['movesLeft', '余步'], ['combo', '连锁'], ['mult', '倍率', 'x'], ['phase', '阶段'], ['recipes', '配方']],
@@ -10511,6 +10511,10 @@ function init() {
       breakFlash: 0,
       focusFlash: 0,
       focusSurges: 0,
+      perfectDodges: 0,
+      perfectFlash: 0,
+      perfectWindow: 0,
+      lastDodge: '',
       hitFlash: 0,
       hitCount: 0,
       lastHitLabel: '',
@@ -10655,8 +10659,12 @@ function init() {
       }
       const counterEl = document.getElementById('premium-boss-counter');
       if (counterEl) {
-        counterEl.textContent = bossMode.counterWindow > 0 ? `${bossMode.breakChain}x` : '0x';
-        counterEl.style.color = bossMode.counterWindow > 0 ? '#FDE68A' : '#fff';
+        counterEl.textContent = bossMode.counterWindow > 0
+          ? `${bossMode.breakChain}x`
+          : bossMode.perfectWindow > 0
+            ? 'DODGE'
+            : '0x';
+        counterEl.style.color = bossMode.counterWindow > 0 || bossMode.perfectWindow > 0 ? '#FDE68A' : '#fff';
       }
       const focusEl = document.getElementById('premium-boss-focus');
       if (focusEl) {
@@ -10704,6 +10712,10 @@ function init() {
       bossMode.breakFlash = 0;
       bossMode.focusFlash = 0;
       bossMode.focusSurges = 0;
+      bossMode.perfectDodges = 0;
+      bossMode.perfectFlash = 0;
+      bossMode.perfectWindow = 0;
+      bossMode.lastDodge = '';
       bossMode.hitFlash = 0;
       bossMode.hitCount = 0;
       bossMode.lastHitLabel = '';
@@ -10722,7 +10734,7 @@ function init() {
       stopBossLoop();
       localStorage.setItem(bossMode.bestKey, String(Math.max(Number(localStorage.getItem(bossMode.bestKey) || 0), Math.floor(bossMode.score))));
       if (text === 'PRISM BROKEN') unlockAchievement('boss_clear');
-      recordPremiumResult('boss', bossMode.score, { phase: bossMode.boss.phase, graze: bossMode.player.graze, bestGrazeStreak: bossMode.player.bestGrazeStreak, focusSurges: bossMode.focusSurges, breakChain: bossMode.breakChain, shieldShatters: Number(bossMode.shield?.shatters || 0), runVariant: bossMode.variant });
+      recordPremiumResult('boss', bossMode.score, { phase: bossMode.boss.phase, graze: bossMode.player.graze, bestGrazeStreak: bossMode.player.bestGrazeStreak, focusSurges: bossMode.focusSurges, perfectDodges: Number(bossMode.perfectDodges || 0), breakChain: bossMode.breakChain, shieldShatters: Number(bossMode.shield?.shatters || 0), runVariant: bossMode.variant });
       setBossUi();
       updateBossPauseButton();
       drawBoss();
@@ -10823,6 +10835,38 @@ function init() {
       else setBossUi();
     }
 
+    function triggerBossPerfectDodge(projectile = {}) {
+      projectile = projectile || {};
+      const p = bossMode.player;
+      if (!p || projectile.perfectDodged) {
+        return { triggered: false, reason: projectile.perfectDodged ? 'already-counted' : 'missing-player' };
+      }
+      projectile.perfectDodged = true;
+      p.graze++;
+      p.grazeStreak = Number(p.grazeStreak || 0) + 1;
+      p.bestGrazeStreak = Math.max(Number(p.bestGrazeStreak || 0), p.grazeStreak);
+      p.focus = Math.min(100, Number(p.focus || 0) + 34 + Math.min(18, p.grazeStreak * 2));
+      p.invuln = Math.max(Number(p.invuln || 0), 320);
+      bossMode.perfectDodges = Number(bossMode.perfectDodges || 0) + 1;
+      bossMode.perfectFlash = 900;
+      bossMode.perfectWindow = Math.max(Number(bossMode.perfectWindow || 0), 1850);
+      bossMode.lastDodge = 'PERFECT DODGE';
+      bossMode.score += 150 + p.grazeStreak * 18;
+      bossSpark(p.x, p.y, '#FDE68A', 26);
+      triggerPremiumFeedback('special', { label: 'PERFECT DODGE', throttleMs: 0 });
+      if (p.focus >= 100) activateBossFocusSurge();
+      else setBossUi();
+      return {
+        triggered: true,
+        perfectDodges: Number(bossMode.perfectDodges || 0),
+        focus: Math.round(Number(p.focus || 0)),
+        focusSurge: Math.ceil(Number(p.focusSurge || 0)),
+        grazeStreak: Number(p.grazeStreak || 0),
+        perfectWindow: Math.ceil(Number(bossMode.perfectWindow || 0)),
+        score: Math.floor(bossMode.score)
+      };
+    }
+
     function bossPhaseFromHp() {
       const b = bossMode.boss;
       const hpRatio = b.maxHp > 0 ? b.hp / b.maxHp : 0;
@@ -10888,6 +10932,12 @@ function init() {
         focusSurge: Math.ceil(Number(bossMode.player.focusSurge || 0)),
         focusFlash: Math.ceil(Number(bossMode.focusFlash || 0)),
         focusSurges: Number(bossMode.focusSurges || 0),
+        perfectDodge: {
+          count: Number(bossMode.perfectDodges || 0),
+          flash: Math.ceil(Number(bossMode.perfectFlash || 0)),
+          window: Math.ceil(Number(bossMode.perfectWindow || 0)),
+          last: bossMode.lastDodge || ''
+        },
         hit: {
           flash: Math.ceil(Number(bossMode.hitFlash || 0)),
           count: Number(bossMode.hitCount || 0),
@@ -11043,6 +11093,8 @@ function init() {
       bossMode.counterWindow = Math.max(0, bossMode.counterWindow - dt);
       if (bossMode.counterWindow <= 0) bossMode.breakChain = 0;
       bossMode.focusFlash = Math.max(0, bossMode.focusFlash - dt);
+      bossMode.perfectFlash = Math.max(0, Number(bossMode.perfectFlash || 0) - dt);
+      bossMode.perfectWindow = Math.max(0, Number(bossMode.perfectWindow || 0) - dt);
       bossMode.hitFlash = Math.max(0, Number(bossMode.hitFlash || 0) - dt);
       if (bossMode.shield) {
         bossMode.shield.exposed = Math.max(0, Number(bossMode.shield.exposed || 0) - dt);
@@ -11097,23 +11149,35 @@ function init() {
           return false;
         }
         if (Math.hypot(s.x - b.x, s.y - b.y) < s.r + b.r) {
-          const counterMult = bossMode.counterWindow > 0 ? 1 + Math.min(0.75, Number(bossMode.breakChain || 0) * 0.12) : 1;
+          const counterMult = bossMode.counterWindow > 0
+            ? 1 + Math.min(0.75, Number(bossMode.breakChain || 0) * 0.12)
+            : bossMode.perfectWindow > 0
+              ? 1.18
+              : 1;
           const shield = bossMode.shield || createBossShield();
-          const shieldMult = (s.surge ? 1.58 : 0.86) * (bossMode.counterWindow > 0 ? 1 + Math.min(0.55, Number(bossMode.breakChain || 0) * 0.16) : 1);
+          const shieldMult = (s.surge ? 1.58 : 0.86) * (bossMode.counterWindow > 0
+            ? 1 + Math.min(0.55, Number(bossMode.breakChain || 0) * 0.16)
+            : bossMode.perfectWindow > 0
+              ? 1.12
+              : 1);
           const shieldHit = damageBossShield(s.damage * shieldMult, s.surge ? 'surge' : 'shot');
           const exposed = Number(shield.exposed || 0) > 0 || Number(shield.layers || 0) <= 0;
           const coreMult = exposed
             ? counterMult * (s.surge ? 1.92 : 1.48)
             : (shieldHit.shattered ? 0.58 : 0.18);
           b.hp -= Math.max(1, s.damage * coreMult);
-          bossMode.score += 6 + (shieldHit.blocked ? 3 : 0) + (shieldHit.shattered ? 42 : 0) + (bossMode.counterWindow > 0 ? Number(bossMode.breakChain || 0) * 2 : 0);
-          bossSpark(s.x, s.y, shieldHit.shattered ? '#FDE68A' : exposed ? '#34D399' : bossMode.counterWindow > 0 ? '#FDE68A' : '#BAE6FD', shieldHit.shattered ? 12 : bossMode.counterWindow > 0 ? 4 : 2);
+          bossMode.score += 6 + (shieldHit.blocked ? 3 : 0) + (shieldHit.shattered ? 42 : 0) + (bossMode.counterWindow > 0 ? Number(bossMode.breakChain || 0) * 2 : 0) + (bossMode.perfectWindow > 0 ? 3 : 0);
+          bossSpark(s.x, s.y, shieldHit.shattered ? '#FDE68A' : exposed ? '#34D399' : bossMode.counterWindow > 0 || bossMode.perfectWindow > 0 ? '#FDE68A' : '#BAE6FD', shieldHit.shattered ? 12 : bossMode.counterWindow > 0 || bossMode.perfectWindow > 0 ? 4 : 2);
           return false;
         }
         return true;
       });
       bossMode.bullets = bossMode.bullets.filter(s => {
         const distance = Math.hypot(s.x - p.x, s.y - p.y);
+        if (p.dash > 0 && distance < s.r + p.r + 6) {
+          triggerBossPerfectDodge(s);
+          return false;
+        }
         if (!s.grazed && distance < s.r + p.r + 12 && distance > s.r + p.r) {
           s.grazed = true;
           awardBossGraze();
@@ -11400,6 +11464,27 @@ function init() {
         ctx.fillText('FOCUS SURGE', p.x, p.y - 30);
         ctx.restore();
       }
+      if (Number(bossMode.perfectFlash || 0) > 0) {
+        const alpha = clamp(Number(bossMode.perfectFlash || 0) / 900, 0, 1);
+        ctx.save();
+        ctx.globalAlpha = 0.16 + alpha * 0.22;
+        ctx.fillStyle = '#FDE68A';
+        ctx.fillRect(0, 0, c.width, c.height);
+        ctx.globalAlpha = 0.4 + alpha * 0.55;
+        ctx.strokeStyle = '#FDE68A';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 30 + (1 - alpha) * 34, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = '#FFFBEB';
+        ctx.font = '900 14px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#FDE68A';
+        ctx.shadowBlur = 16;
+        ctx.fillText('PERFECT DODGE', p.x, Math.max(28, p.y - 38));
+        ctx.restore();
+      }
       if (Number(bossMode.hitFlash || 0) > 0) {
         const alpha = clamp(Number(bossMode.hitFlash || 0) / 760, 0, 1);
         ctx.save();
@@ -11434,7 +11519,7 @@ function init() {
       ctx.fillRect(18, 16, (c.width - 36) * Math.max(0, b.hp / b.maxHp), 8);
       ctx.fillStyle = '#fff';
       ctx.font = '700 12px JetBrains Mono, monospace';
-      ctx.fillText(`PHASE ${b.phase}  SHIELD ${bossShieldLabel()}  GRAZE ${p.graze}  FOCUS ${p.focusSurge > 0 ? 'SURGE' : Math.round(Number(p.focus || 0)) + '%'}  BREAK ${bossMode.breakCount}  COUNTER ${bossMode.counterWindow > 0 ? `${bossMode.breakChain}x` : '0x'}`, 18, 42);
+      ctx.fillText(`PHASE ${b.phase}  SHIELD ${bossShieldLabel()}  GRAZE ${p.graze}  FOCUS ${p.focusSurge > 0 ? 'SURGE' : Math.round(Number(p.focus || 0)) + '%'}  BREAK ${bossMode.breakCount}  COUNTER ${bossMode.counterWindow > 0 ? `${bossMode.breakChain}x` : bossMode.perfectWindow > 0 ? 'DODGE' : '0x'}`, 18, 42);
     }
 
     document.getElementById('premium-boss-start').addEventListener('click', () => startPremiumModeFromPanel('boss'));
@@ -15559,6 +15644,10 @@ function init() {
             bossMode.hitCount = 0;
             bossMode.lastHitLabel = '';
             bossMode.lastHitSource = '';
+            bossMode.perfectDodges = 0;
+            bossMode.perfectFlash = 0;
+            bossMode.perfectWindow = 0;
+            bossMode.lastDodge = '';
             setBossUi();
             drawBoss();
             overlay(bossMode.ctx, bossMode.canvas.width, bossMode.canvas.height, '棱镜核心等待挑战', 'A/D 移动 · Space 冲刺无敌 · 自动射击');
@@ -15632,6 +15721,57 @@ function init() {
               attempts,
               before,
               after: bossWeakState()
+            };
+          },
+          forceBossPerfectDodge: () => {
+            if (!bossMode.running) startBoss();
+            bossMode.paused = false;
+            const p = bossMode.player;
+            p.focus = 28;
+            p.focusSurge = 0;
+            p.graze = 0;
+            p.grazeStreak = 0;
+            p.bestGrazeStreak = 0;
+            p.invuln = 0;
+            p.dash = 210;
+            p.dashCooldown = 1040;
+            bossMode.perfectDodges = 0;
+            bossMode.perfectFlash = 0;
+            bossMode.perfectWindow = 0;
+            bossMode.lastDodge = '';
+            bossMode.breakChain = 0;
+            bossMode.counterWindow = 0;
+            bossMode.breakFlash = 0;
+            bossMode.lastBreak = '';
+            bossMode.bullets = [{ x: p.x + p.r + 3, y: p.y, vx: 0, vy: 0, r: 6, color: '#F97316', grazed: false }];
+            bossMode.queuedPattern = '';
+            bossMode.currentPattern = '';
+            bossMode.telegraphAim = null;
+            bossMode.telegraphTimer = 0;
+            bossMode.telegraphDuration = 0;
+            closeBossWeakpoint();
+            setBossUi();
+            const before = window.__atherixDebug.premium.bossPattern();
+            const result = triggerBossPerfectDodge(bossMode.bullets[0]);
+            bossMode.bullets = bossMode.bullets.filter(item => !item.perfectDodged);
+            setBossUi();
+            drawBoss();
+            return {
+              before,
+              result,
+              after: window.__atherixDebug.premium.bossPattern(),
+              weak: bossWeakState(),
+              feedback: {
+                lastTone: premiumFeedback.lastTone,
+                lastLabel: premiumFeedback.lastLabel,
+                tones: { ...premiumFeedback.tones },
+                visualTriggers: premiumFeedback.visualTriggers
+              },
+              stageTone: document.getElementById('premium-game-stage')?.dataset.feedbackTone || '',
+              stageLabel: document.getElementById('premium-game-stage')?.dataset.feedback || '',
+              counterText: document.getElementById('premium-boss-counter')?.textContent || '',
+              focusText: document.getElementById('premium-boss-focus')?.textContent || '',
+              scoreText: document.getElementById('premium-boss-score')?.textContent || ''
             };
           },
           forceBossHit: () => {
