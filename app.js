@@ -400,7 +400,7 @@ function init() {
           ? localPath
           : '';
       }
-      return url.href;
+      return '';
     } catch {
       return '';
     }

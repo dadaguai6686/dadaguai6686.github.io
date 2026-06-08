@@ -544,6 +544,7 @@ async function run() {
 这篇文章验证安全 Markdown 渲染：**粗体**、*强调*、\`inlineCode()\`、[站内游戏入口](/#game)、[带查询的站内链接](/?post=post-1&source=md)、[外部链接](https://example.com/docs?a=1&b=2)、[危险链接](javascript:window.__atherixMarkdownSmokeXss='link')。
 
 ![品牌预览](/assets/atherix-og-card.png)
+![外部追踪图片](https://example.com/tracker.png)
 ![危险图片](javascript:window.__atherixMarkdownSmokeXss='image')
 
 <script>window.__atherixMarkdownSmokeXss='script'</script>
@@ -556,6 +557,7 @@ async function run() {
 3. 第三项
 
 - 本地资源图片应该渲染
+- 外部追踪图片应该降级
 - 危险协议应该降级
 - 原始 HTML 应保持为文本
 
@@ -1082,6 +1084,13 @@ async function run() {
       rawImageHandlers: document.querySelectorAll('#reader-post-content img[onerror], #reader-post-content img[onclick]').length,
       javascriptLinks: [...document.querySelectorAll('#reader-post-content a')].filter(anchor => /^javascript:/i.test(anchor.getAttribute('href') || '')).length,
       javascriptImages: [...document.querySelectorAll('#reader-post-content img')].filter(img => /^javascript:/i.test(img.getAttribute('src') || '')).length,
+      externalImages: [...document.querySelectorAll('#reader-post-content img')].filter(img => {
+        try {
+          return new URL(img.getAttribute('src') || '', location.origin).origin !== location.origin;
+        } catch {
+          return false;
+        }
+      }).length,
       localImages: [...document.querySelectorAll('#reader-post-content img.reader-markdown-image')].filter(img => /\\/assets\\/atherix-og-card\\.png$/.test(new URL(img.getAttribute('src'), location.origin).pathname)).length,
       internalGameHref: [...document.querySelectorAll('#reader-post-content a')].find(anchor => anchor.textContent.trim() === '站内游戏入口')?.getAttribute('href') || '',
       internalGameTarget: [...document.querySelectorAll('#reader-post-content a')].find(anchor => anchor.textContent.trim() === '站内游戏入口')?.getAttribute('target') || '',
@@ -1090,6 +1099,7 @@ async function run() {
       externalTarget: [...document.querySelectorAll('#reader-post-content a')].find(anchor => anchor.textContent.trim() === '外部链接')?.getAttribute('target') || '',
       externalRel: [...document.querySelectorAll('#reader-post-content a')].find(anchor => anchor.textContent.trim() === '外部链接')?.getAttribute('rel') || '',
       dangerousLinkText: document.querySelector('#reader-post-content')?.innerText.includes('危险链接') || false,
+      externalImageText: document.querySelector('#reader-post-content')?.innerText.includes('外部追踪图片') || false,
       dangerousImageText: document.querySelector('#reader-post-content')?.innerText.includes('危险图片') || false,
       escapedRawHtml: document.querySelector('#reader-post-content')?.innerText.includes('<script>window.__atherixMarkdownSmokeXss') || false,
       codeContainsUnsafeText: document.querySelector('#reader-post-content pre code')?.textContent.includes('onclick=') || false
@@ -2696,7 +2706,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v45-quality') && swText.includes('/style.css?v=20260608-quality-v4') && swText.includes('/app.js?v=20260608-quality-v4'),
+      swHasQualityVersion: swText.includes('atherix-static-v46-quality') && swText.includes('/style.css?v=20260608-quality-v5') && swText.includes('/app.js?v=20260608-quality-v5'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
@@ -3003,7 +3013,8 @@ async function run() {
         blogState.markdownSecurity.rawScriptTags === 0 &&
         blogState.markdownSecurity.rawImageHandlers === 0 &&
         blogState.markdownSecurity.javascriptLinks === 0 &&
-        blogState.markdownSecurity.javascriptImages === 0,
+        blogState.markdownSecurity.javascriptImages === 0 &&
+        blogState.markdownSecurity.externalImages === 0,
       `blog markdown should render unsafe author content inertly: ${JSON.stringify(blogState.markdownSecurity)}`
     );
     assert(
@@ -3019,6 +3030,7 @@ async function run() {
     );
     assert(
       blogState.markdownSecurity?.dangerousLinkText &&
+        blogState.markdownSecurity.externalImageText &&
         blogState.markdownSecurity.dangerousImageText &&
         blogState.markdownSecurity.escapedRawHtml &&
         blogState.markdownSecurity.codeContainsUnsafeText,
