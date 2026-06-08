@@ -2894,6 +2894,7 @@ async function run() {
       debug: window.__atherixDebug?.premium?.tacticsState?.() || {}
     };
   })()`);
+  const tacticsLossState = await evaluate(`(() => window.__atherixDebug?.premium?.forceTacticsLoss?.() || {})()`);
 
   const pwaState = await evaluate(`(async () => {
     if (!('serviceWorker' in navigator)) return { supported: false, registered: false };
@@ -2911,7 +2912,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v50-quality') && swText.includes('/style.css?v=20260608-quality-v7') && swText.includes('/app.js?v=20260608-quality-v9'),
+      swHasQualityVersion: swText.includes('atherix-static-v51-quality') && swText.includes('/style.css?v=20260608-quality-v7') && swText.includes('/app.js?v=20260608-quality-v10'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
@@ -3757,6 +3758,22 @@ async function run() {
   assert(tacticsForecastAfterAction.dangerCount > 0 && tacticsForecastAfterAction.coverHud && tacticsForecastAfterAction.momentumHud !== undefined && tacticsForecastAfterAction.comboHud && tacticsForecastAfterAction.surgeHud && tacticsForecastAfterAction.routeHud && tacticsJammedIntent, `tactics mode should expose post-action JAM, cover, momentum, combo, surge, and route forecast: ${JSON.stringify(tacticsForecastAfterAction)}`);
   assert(tacticsState.nonBlank && Number(tacticsState.ap) >= 0 && tacticsState.action && tacticsState.cover && tacticsState.momentum !== undefined && tacticsState.combo && tacticsState.surge && tacticsState.route && tacticsState.debug?.route?.length > 0, `tactics mode should render and accept enhanced actions: ${JSON.stringify(tacticsState)}`);
   assert(Number(tacticsState.danger) > 0 && tacticsState.intel && tacticsState.debug?.hud?.route === tacticsState.route && tacticsState.debug?.hud?.cover === tacticsState.cover && tacticsState.debug?.hud?.momentum === tacticsState.momentum && tacticsState.debug?.hud?.combo === tacticsState.combo && tacticsState.debug?.hud?.surge === tacticsState.surge && tacticsState.debug?.hud?.shield === tacticsState.shield, `tactics HUD should stay in sync with enhanced debug state: ${JSON.stringify(tacticsState)}`);
+  assert(
+    tacticsLossState.after?.lost &&
+      tacticsLossState.after?.recorded &&
+      tacticsLossState.runsAfter === tacticsLossState.runsBefore + 1 &&
+      tacticsLossState.totalAfter > tacticsLossState.totalBefore &&
+      tacticsLossState.latestRun?.game === 'tactics' &&
+      Number(tacticsLossState.latestRun?.score || 0) > 0 &&
+      (tacticsLossState.latestRun?.highlights || []).includes('机甲离线') &&
+      tacticsLossState.coach?.game === 'tactics' &&
+      tacticsLossState.profile?.latest?.game === 'tactics' &&
+      tacticsLossState.runCards >= 1 &&
+      tacticsLossState.runReplayTarget === 'tactics' &&
+      tacticsLossState.runTags.includes('机甲离线') &&
+      /复盘已保存/.test(tacticsLossState.message || ''),
+    `tactics defeat should record a replayable run, coach advice, and profile telemetry: ${JSON.stringify(tacticsLossState)}`
+  );
   assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /quality/.test(key)) && pwaState.swHasQualityVersion && pwaState.swHasNetworkFirstDiscovery, `service worker should register, cache the latest app shell, and keep discovery metadata fresh: ${JSON.stringify(pwaState)}`);
   assert(pwaState.swHasLocalProjectAssets, `service worker should precache local portfolio assets: ${JSON.stringify(pwaState)}`);
   assert(pwaState.swHasNavigationPreload && pwaState.swHasOfflineShellHeader && pwaState.swHasFallbackUrl, `service worker should include robust offline navigation fallback: ${JSON.stringify(pwaState)}`);
@@ -3875,6 +3892,7 @@ async function run() {
     tacticsBlastState,
     tacticsForecastAfterAction,
     tacticsState,
+    tacticsLossState,
     pwaState,
     premiumMobileMetaState,
     survivorDraftMobileState,
@@ -3985,7 +4003,8 @@ function summarizeSmokeResult(result) {
         surge: result.tacticsState?.surge,
         route: result.tacticsState?.route,
         surgeTriggered: Number(result.tacticsBlastState?.after?.surges || 0) > Number(result.tacticsBlastState?.before?.surges || 0),
-        routeSurgeGain: Number(result.tacticsRouteState?.after?.surge || 0) - Number(result.tacticsRouteState?.before?.surge || 0)
+        routeSurgeGain: Number(result.tacticsRouteState?.after?.surge || 0) - Number(result.tacticsRouteState?.before?.surge || 0),
+        defeatRecorded: result.tacticsLossState?.latestRun?.game === 'tactics'
       }
     },
     pwa: {

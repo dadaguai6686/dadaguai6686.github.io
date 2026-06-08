@@ -6521,7 +6521,11 @@ function init() {
     }
 
     function summarizeRunDetails(game, details = {}) {
-      return runDetailHighlights(game, details);
+      const highlights = runDetailHighlights(game, details);
+      if (game === 'tactics' && details.outcome === 'down') {
+        return ['机甲离线', ...highlights].slice(0, 4);
+      }
+      return highlights;
     }
 
     function launchRunLogRun(game, { announce = true } = {}) {
@@ -12756,6 +12760,7 @@ function init() {
       lastAction: '',
       won: false,
       lost: false,
+      recorded: false,
       message: '夺取 3 个数据核心后撤离',
       flash: 0
     };
@@ -12813,6 +12818,7 @@ function init() {
       tactics.lastAction = '';
       tactics.won = false;
       tactics.lost = false;
+      tactics.recorded = false;
       tactics.variant = variant;
       tactics.runPressure = runPressure;
       tactics.message = variant.active ? `${variant.short} · 夺取 3 个数据核心后撤离` : '夺取 3 个数据核心后撤离';
@@ -13197,8 +13203,7 @@ function init() {
       tactics.flash = 10;
       if (tactics.player.hp <= 0) {
         tactics.player.hp = 0;
-        tactics.lost = true;
-        tactics.message = '机甲失去行动能力';
+        finishTacticsLoss('MECH DOWN');
       }
       return { raw: amount, pressured: pressuredAmount, mitigated, absorbed, cover };
     }
@@ -13217,8 +13222,9 @@ function init() {
     }
 
     function finishTacticsWin() {
-      if (tactics.won) return;
+      if (tactics.won || tactics.recorded) return;
       tactics.won = true;
+      tactics.recorded = true;
       const score = Math.max(250, 800 + tactics.player.hp * 8 + tactics.kills * 180 + tactics.player.cores * 260 + tactics.momentum * 45 + tactics.combo * 80 + tactics.surges * 120 + Math.floor(tactics.surge) - tactics.turn * 22);
       localStorage.setItem(tactics.bestKey, String(Math.max(Number(localStorage.getItem(tactics.bestKey) || 0), Math.floor(score))));
       unlockAchievement('tactics_clear');
@@ -13226,6 +13232,27 @@ function init() {
       if (livingTacticsEnemies().length === 0) unlockAchievement('tactics_sweep');
       recordPremiumResult('tactics', score, { turns: tactics.turn, hp: tactics.player.hp, kills: tactics.kills, combo: tactics.combo, surges: tactics.surges, runVariant: tactics.variant });
       tactics.message = `撤离成功 · 评分 ${Math.floor(score)}`;
+    }
+
+    function finishTacticsLoss(cause = 'MECH DOWN') {
+      if (tactics.won || tactics.recorded) return;
+      tactics.lost = true;
+      tactics.recorded = true;
+      const score = Math.max(80, 160 + tactics.player.cores * 160 + tactics.kills * 95 + tactics.momentum * 24 + tactics.combo * 36 + tactics.surges * 80 - tactics.turn * 18);
+      recordPremiumResult('tactics', score, {
+        outcome: 'down',
+        cause,
+        turns: tactics.turn,
+        hp: 0,
+        cores: tactics.player.cores,
+        kills: tactics.kills,
+        combo: tactics.combo,
+        surges: tactics.surges,
+        momentum: tactics.momentum,
+        runVariant: tactics.variant
+      });
+      tactics.message = `机甲离线 · 复盘已保存 ${Math.floor(score)}`;
+      triggerPremiumFeedback('danger', { label: cause });
     }
 
     function collectTacticsCore() {
@@ -13593,6 +13620,9 @@ function init() {
         surge: Math.floor(Number(tactics.surge || 0)),
         surges: tactics.surges,
         lastAction: tactics.lastAction,
+        won: tactics.won,
+        lost: tactics.lost,
+        recorded: tactics.recorded,
         message: tactics.message,
         variant: tactics.variant || activeArcadeRunVariant('tactics'),
         runPressure: Number((tactics.runPressure || arcadeRunPressure('tactics', tactics.variant)).toFixed(3)),
@@ -14033,6 +14063,42 @@ function init() {
             return {
               before,
               after: tacticsDebugState()
+            };
+          },
+          forceTacticsLoss: () => {
+            switchPremiumGame('tactics');
+            newTactics({ shouldFocus: true });
+            tactics.player = { ...tactics.player, hp: 12, shield: 0, ap: 0, cores: 1 };
+            tactics.turn = 4;
+            tactics.kills = 1;
+            tactics.momentum = 2;
+            tactics.combo = 1;
+            tactics.surge = 32;
+            tactics.surges = 0;
+            const runsBefore = Array.isArray(career.runs) ? career.runs.length : 0;
+            const totalBefore = Number(career.totalScore || 0);
+            const before = tacticsDebugState();
+            const damage = damageTacticsPlayer(999);
+            setTacticsUi();
+            drawTactics();
+            const latestRun = Array.isArray(career.runs) ? career.runs[0] : null;
+            return {
+              before,
+              damage,
+              after: tacticsDebugState(),
+              runsBefore,
+              runsAfter: Array.isArray(career.runs) ? career.runs.length : 0,
+              totalBefore,
+              totalAfter: Number(career.totalScore || 0),
+              latestRun,
+              coach: latestRunCoach(),
+              profile: arcadeProfileSnapshot(),
+              runCards: document.querySelectorAll('.arcade-run-log-item').length,
+              runReplayTarget: document.querySelector('.arcade-run-log-item')?.dataset.runLogGame || '',
+              runGrade: document.querySelector('.arcade-run-log-item .arcade-run-grade')?.textContent.trim() || '',
+              runTags: [...document.querySelectorAll('.arcade-run-log-item .arcade-run-tags b')].map(el => el.textContent.trim()),
+              feedback: premiumFeedback.lastTone,
+              message: tactics.message
             };
           },
           gamepadState: () => ({
