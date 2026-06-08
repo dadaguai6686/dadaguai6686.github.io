@@ -2013,6 +2013,138 @@ async function run() {
       horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
     };
   })()`);
+  const premiumKeyboardStartState = await evaluate(`(async () => {
+    const api = window.__atherixDebug?.premium;
+    const stage = document.querySelector('#premium-game-stage');
+    const modes = ['survivor', 'boss', 'drift', 'heist', 'chain', 'tactics'];
+    const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const feedbackStartTone = () => Number(api?.feedback?.().tones?.start || 0);
+    const readout = () => ({
+      mode: document.querySelector('#premium-input-readout')?.dataset.mode || '',
+      state: document.querySelector('#premium-input-readout')?.dataset.state || '',
+      start: document.querySelector('#premium-input-start')?.textContent.trim() || '',
+      stateText: document.querySelector('#premium-input-state')?.textContent.trim() || ''
+    });
+    const fireStageStartKey = async (code, key) => {
+      if (!stage) return { dispatched: false, prevented: false };
+      stage.focus({ preventScroll: true });
+      const down = new KeyboardEvent('keydown', { key, code, bubbles: true, cancelable: true });
+      const dispatched = stage.dispatchEvent(down);
+      const prevented = down.defaultPrevented;
+      stage.dispatchEvent(new KeyboardEvent('keyup', { key, code, bubbles: true, cancelable: true }));
+      await pause(180);
+      return { dispatched, prevented };
+    };
+    const fireOnTarget = async (target, code, key) => {
+      if (!target) return { dispatched: false, prevented: false };
+      const down = new KeyboardEvent('keydown', { key, code, bubbles: true, cancelable: true });
+      const dispatched = target.dispatchEvent(down);
+      const prevented = down.defaultPrevented;
+      target.dispatchEvent(new KeyboardEvent('keyup', { key, code, bubbles: true, cancelable: true }));
+      await pause(140);
+      return { dispatched, prevented };
+    };
+    const snapshot = mode => {
+      const base = {
+        active: api?.active?.() || '',
+        readout: readout(),
+        focusId: document.activeElement?.id || ''
+      };
+      if (mode === 'survivor') {
+        const state = api?.survivorState?.() || {};
+        return { ...base, running: !!state.running, paused: !!state.paused, elapsed: Number(state.elapsed || 0), score: Number(state.score || 0), playerHp: Number(state.player?.hp || 0) };
+      }
+      if (mode === 'boss') {
+        const state = api?.bossPattern?.() || {};
+        return { ...base, running: !!api?.bossRunning?.(), paused: !!api?.bossPaused?.(), hp: Number(state.shield?.hp || 0), layers: Number(state.shield?.layers || 0) };
+      }
+      if (mode === 'drift') {
+        const state = api?.driftLineState?.() || {};
+        return { ...base, running: !!state.running, paused: !!state.paused, gates: Number(state.gates || 0), boost: Number(state.boost || 0), rivalSpeed: Number(state.rival?.speed || 0) };
+      }
+      if (mode === 'heist') {
+        const state = api?.heistIntel?.() || {};
+        return { ...base, routeLength: state.route?.length || 0, guards: state.guards?.length || 0, cameras: state.cameras?.length || 0, remainingKeys: Number(state.remainingKeys || 0), player: state.player || {} };
+      }
+      if (mode === 'chain') {
+        const state = api?.chainState?.() || {};
+        return { ...base, cells: document.querySelectorAll('#premium-chain-board .chain-cell').length, moves: Number(state.moves || 0), target: Number(state.target || 0), bestMove: Number(state.bestMove?.cleared || 0) };
+      }
+      if (mode === 'tactics') {
+        const state = api?.tacticsState?.() || {};
+        return { ...base, turn: Number(state.turn || 0), player: state.player || {}, enemies: state.enemies?.length || 0, routeLength: Number(state.route?.length || 0) };
+      }
+      return base;
+    };
+    const started = (mode, state) => {
+      if (state.active !== mode || state.readout?.mode !== mode || !/Enter/.test(state.readout?.start || '')) return false;
+      if (mode === 'survivor') return state.running && !state.paused && state.playerHp > 0;
+      if (mode === 'boss') return state.running && !state.paused && state.layers >= 1;
+      if (mode === 'drift') return state.running && !state.paused && state.boost > 0 && state.rivalSpeed > 0;
+      if (mode === 'heist') return state.remainingKeys >= 1 && state.guards >= 4 && state.cameras >= 3 && Number.isFinite(Number(state.player?.x));
+      if (mode === 'chain') return state.cells === 49 && state.moves > 0 && state.target >= 9000 && state.bestMove >= 3;
+      if (mode === 'tactics') return state.turn === 1 && state.enemies >= 4 && Number.isFinite(Number(state.player?.x));
+      return false;
+    };
+
+    const results = [];
+    for (const mode of modes) {
+      document.querySelector('[data-premium-game="' + mode + '"]')?.click();
+      await pause(120);
+      stage?.focus({ preventScroll: true });
+      const beforeStartTone = feedbackStartTone();
+      const enter = await fireStageStartKey('Enter', 'Enter');
+      const after = snapshot(mode);
+      const afterStartTone = feedbackStartTone();
+      const beforeRestartTone = feedbackStartTone();
+      const restart = await fireStageStartKey('KeyR', 'r');
+      const restarted = snapshot(mode);
+      const afterRestartTone = feedbackStartTone();
+      results.push({
+        mode,
+        enter,
+        restart,
+        after,
+        restarted,
+        started: started(mode, after),
+        restartedOk: started(mode, restarted),
+        startToneAdvanced: afterStartTone > beforeStartTone,
+        restartToneAdvanced: afterRestartTone > beforeRestartTone,
+        readoutHasEnter: /Enter/.test(after.readout?.start || '')
+      });
+    }
+
+    document.querySelector('[data-premium-game="survivor"]')?.click();
+    await pause(120);
+    const startToneBefore = feedbackStartTone();
+    const beforeNonStage = snapshot('survivor');
+    window.__atherixSetPremiumInputArmed?.(false);
+    stage?.blur?.();
+    const playButton = document.querySelector('#premium-cockpit-play');
+    playButton?.focus({ preventScroll: true });
+    const nonStageEnter = await fireOnTarget(playButton, 'Enter', 'Enter');
+    const startToneAfter = feedbackStartTone();
+    const afterNonStage = snapshot('survivor');
+
+    return {
+      stageExists: !!stage,
+      results,
+      allStarted: results.every(item => item.started),
+      allRestarted: results.every(item => item.restartedOk),
+      allReadoutsHaveEnter: results.every(item => item.readoutHasEnter),
+      allStageEventsPrevented: results.every(item => item.enter.prevented && item.restart.prevented),
+      allFeedbackAdvanced: results.every(item => item.startToneAdvanced && item.restartToneAdvanced),
+      nonStage: {
+        before: beforeNonStage,
+        after: afterNonStage,
+        enter: nonStageEnter,
+        startToneBefore,
+        startToneAfter,
+        activeElement: document.activeElement?.id || ''
+      },
+      horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+    };
+  })()`, 12000);
   const premiumGamepadState = await evaluate(`(() => {
     const api = window.__atherixDebug?.premium;
     document.querySelector('[data-premium-game="tactics"]')?.click();
@@ -2779,7 +2911,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v49-quality') && swText.includes('/style.css?v=20260608-quality-v7') && swText.includes('/app.js?v=20260608-quality-v8'),
+      swHasQualityVersion: swText.includes('atherix-static-v50-quality') && swText.includes('/style.css?v=20260608-quality-v7') && swText.includes('/app.js?v=20260608-quality-v9'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
@@ -3420,6 +3552,19 @@ async function run() {
       && !briefingStartState.horizontalOverflow,
     `premium arcade mission briefing start should launch the active mode: ${JSON.stringify(briefingStartState)}`
   );
+  assert(
+    premiumKeyboardStartState.stageExists
+      && premiumKeyboardStartState.allStarted
+      && premiumKeyboardStartState.allRestarted
+      && premiumKeyboardStartState.allReadoutsHaveEnter
+      && premiumKeyboardStartState.allStageEventsPrevented
+      && premiumKeyboardStartState.allFeedbackAdvanced
+      && premiumKeyboardStartState.nonStage?.enter?.prevented === false
+      && premiumKeyboardStartState.nonStage?.startToneAfter === premiumKeyboardStartState.nonStage?.startToneBefore
+      && premiumKeyboardStartState.nonStage?.activeElement === 'premium-cockpit-play'
+      && !premiumKeyboardStartState.horizontalOverflow,
+    `premium arcade Enter/R keyboard start should be scoped to the play stage and work across all modes: ${JSON.stringify(premiumKeyboardStartState)}`
+  );
   assert(arcadeInitial.feedbackPanel && arcadeInitial.feedbackStage && arcadeInitial.feedbackTogglePressed === 'true' && arcadeInitial.feedbackDebug?.muted === false && arcadeInitial.feedbackDebug?.total === 0 && /沉浸反馈/.test(arcadeInitial.feedbackStatus), `premium arcade feedback console should start enabled and observable: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.cockpitPanel && arcadeInitial.cockpitTarget === arcadeInitial.debugCockpit?.targetGame && arcadeInitial.cockpitMode === arcadeInitial.debugCockpit?.activeLabel && arcadeInitial.cockpitDifficulty && arcadeInitial.cockpitLoadout && (arcadeInitial.cockpitSeason === '完成' || /^\d+%$/.test(arcadeInitial.cockpitSeason)) && arcadeInitial.cockpitActionLabel.includes(arcadeInitial.cockpitMode), `premium arcade cockpit should summarize the next playable run: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.runLogPanel && arcadeInitial.runLogEmpty === 'true' && arcadeInitial.runLogCards === 0 && arcadeInitial.debugRuns === 0, `premium arcade run telemetry should start empty: ${JSON.stringify(arcadeInitial)}`);
@@ -3682,6 +3827,7 @@ async function run() {
     briefingModeState,
     arcadeVariantState,
     briefingStartState,
+    premiumKeyboardStartState,
     premiumGamepadState,
     premiumPauseHookState,
     contractProgressState,

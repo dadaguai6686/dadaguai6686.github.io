@@ -5466,6 +5466,7 @@ function init() {
           <span><small>MOVE</small><strong id="premium-input-move">方向</strong></span>
           <span><small>ACT</small><strong id="premium-input-action">星爆</strong></span>
           <span><small>TOOL</small><strong id="premium-input-tool">--</strong></span>
+          <span><small>START</small><strong id="premium-input-start">Enter</strong></span>
           <span><small>STATE</small><strong id="premium-input-state">待机</strong></span>
         </div>
         <div class="premium-touch-controls" aria-label="触控街机控制器">
@@ -7707,6 +7708,7 @@ function init() {
       const moveEl = document.getElementById('premium-input-move');
       const actionEl = document.getElementById('premium-input-action');
       const toolEl = document.getElementById('premium-input-tool');
+      const startEl = document.getElementById('premium-input-start');
       const stateEl = document.getElementById('premium-input-state');
       const stateText = state.realtime
         ? state.paused ? '暂停' : state.running ? '运行' : '待机'
@@ -7722,6 +7724,7 @@ function init() {
         toolEl.textContent = config.tool || '--';
         toolEl.closest('span')?.classList.toggle('is-disabled', !premiumControlAvailable('tool'));
       }
+      if (startEl) startEl.textContent = state.running ? 'Enter 重开' : 'Enter 开始';
       if (stateEl) stateEl.textContent = stateText;
     }
 
@@ -14110,9 +14113,12 @@ function init() {
     });
 
     window.addEventListener('keydown', (e) => {
-      const codes = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyQ', 'KeyP', 'Escape', 'Digit1', 'Digit2', 'Digit3'];
+      const codes = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'Enter', 'KeyR', 'KeyQ', 'KeyP', 'Escape', 'Digit1', 'Digit2', 'Digit3'];
       if (!codes.includes(e.code)) return;
       if (isEditableTarget(e.target) || !isPremiumArcadeInputContext(e.target)) return;
+      const premiumStartKey = e.code === 'Enter' || e.code === 'KeyR';
+      const stageHasKeyboardFocus = !!(e.target?.closest?.('#premium-game-stage') || document.activeElement?.closest?.('#premium-game-stage'));
+      if (premiumStartKey && !stageHasKeyboardFocus) return;
       e.preventDefault();
       setPremiumInputArmed(true);
       const discreteCodes = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyQ'];
@@ -14121,6 +14127,10 @@ function init() {
         if (['Digit1', 'Digit2', 'Digit3'].includes(e.code)) {
           selectSurvivorUpgrade(survivor.draftChoices[Number(e.code.replace('Digit', '')) - 1]?.id);
         }
+        return;
+      }
+      if (premiumStartKey) {
+        startPremiumActiveGame();
         return;
       }
       if (e.code === 'KeyP' || e.code === 'Escape') {

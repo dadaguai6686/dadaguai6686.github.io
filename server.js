@@ -22,6 +22,8 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .split(',')
   .map(origin => origin.trim())
   .filter(Boolean);
+const loginUsernameMaxLength = 80;
+const loginPasswordMaxLength = 256;
 const contentSecurityPolicy = [
   "default-src 'self'",
   "script-src 'self'",
@@ -169,6 +171,23 @@ function readUrlField(res, label, value, { max = 2048, allowLocalUploads = false
     : 'a valid http(s) URL';
   res.status(400).json({ error: `${label} must be ${allowedCopy}.` });
   return undefined;
+}
+
+function readLoginField(res, label, value, { max, trim = false } = {}) {
+  if (typeof value !== 'string') {
+    res.status(400).json({ error: `${label} is required.` });
+    return undefined;
+  }
+  const text = trim ? value.trim() : value;
+  if (!text) {
+    res.status(400).json({ error: `${label} is required.` });
+    return undefined;
+  }
+  if (text.length > max) {
+    res.status(400).json({ error: `${label} must be ${max} characters or fewer.` });
+    return undefined;
+  }
+  return text;
 }
 
 function normalizeTags(tags) {
@@ -557,11 +576,9 @@ app.get('/api/health', (req, res) => {
 
 // POST: Admin Login
 app.post('/api/auth/login', authLimiter, (req, res) => {
-  const { username, password } = req.body;
-
-  if (!username || !password) {
-    return res.status(400).json({ error: 'Username and password are required.' });
-  }
+  const username = readLoginField(res, 'Username', req.body?.username, { max: loginUsernameMaxLength, trim: true });
+  const password = readLoginField(res, 'Password', req.body?.password, { max: loginPasswordMaxLength });
+  if (username === undefined || password === undefined) return;
 
   db.get('SELECT * FROM users WHERE username = ?', [username], (err, user) => {
     if (err) {
