@@ -1,10 +1,10 @@
-const CACHE_VERSION = 'atherix-static-v66-quality';
+const CACHE_VERSION = 'atherix-static-v67-quality';
 const NAVIGATION_FALLBACK_URL = '/index.html';
 const DISCOVERY_ASSET_PATHS = new Set(['/feed.xml', '/sitemap.xml', '/robots.txt']);
 const APP_SHELL_ASSETS = [
   '/',
   NAVIGATION_FALLBACK_URL,
-  '/style.css?v=20260608-quality-v10',
+  '/style.css?v=20260608-quality-v11',
   '/app.js?v=20260608-quality-v24',
   '/lucide.min.js',
   '/manifest.webmanifest',
@@ -20,7 +20,11 @@ const OPTIONAL_STATIC_ASSETS = [
   '/assets/project-bento-dashboard.webp',
   '/assets/project-webp-converter.webp',
   '/assets/project-focus-synth.webp',
-  '/assets/project-arcade-suite.webp'
+  '/assets/project-arcade-suite.webp',
+  '/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2',
+  '/assets/fonts/outfit-latin-wght-normal.woff2',
+  '/assets/fonts/jetbrains-mono-latin-wght-normal.woff2',
+  '/assets/fonts/jetbrains-mono-latin-wght-italic.woff2'
 ];
 const STATIC_ASSETS = [...APP_SHELL_ASSETS, ...OPTIONAL_STATIC_ASSETS];
 

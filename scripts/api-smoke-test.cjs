@@ -202,8 +202,8 @@ async function run() {
     assert(cspHeader.includes("object-src 'none'"), 'CSP object-src guard missing');
     assert(cspHeader.includes("img-src 'self' data: blob:"), 'CSP should keep images local except data/blob previews');
     assert(!/img-src[^;]*https:/i.test(cspHeader), 'CSP should not allow arbitrary remote image tracking pixels');
-    assert(cspHeader.includes('https://fonts.googleapis.com'), 'CSP should allow configured web font stylesheet');
-    assert(cspHeader.includes('https://fonts.gstatic.com'), 'CSP should allow configured web font files');
+    assert(!cspHeader.includes('fonts.googleapis.com') && !cspHeader.includes('fonts.gstatic.com'), 'CSP should not allow remote font providers after bundling local fonts');
+    assert(cspHeader.includes("font-src 'self' data:"), 'CSP should keep web fonts local-only');
     assert(health.headers.get('strict-transport-security')?.includes('max-age=31536000'), 'HSTS header missing in production');
     assert(health.headers.get('access-control-allow-origin') === allowedOrigin, 'allowed CORS origin not echoed');
     assert(health.headers.get('cache-control') === 'no-store', 'API responses should not be cached');
@@ -223,11 +223,12 @@ async function run() {
     assert(serviceWorkerText.includes('/feed.xml') && serviceWorkerText.includes('/sitemap.xml'), 'service worker should precache discovery metadata');
     assert(serviceWorkerText.includes('/assets/atherix-og-card.png') && serviceWorkerText.includes('/assets/atherix-icon-512.png'), 'service worker should precache branded PWA assets');
     assert(serviceWorkerText.includes('/assets/atherix-profile-avatar.png') && serviceWorkerText.includes('/assets/project-bento-dashboard.webp') && serviceWorkerText.includes('/assets/project-arcade-suite.webp'), 'service worker should precache local profile and portfolio visual assets');
-    assert(serviceWorkerText.includes('atherix-static-v66-quality'), 'service worker should use the latest quality cache version');
+    assert(serviceWorkerText.includes('atherix-static-v67-quality'), 'service worker should use the latest quality cache version');
     assert(serviceWorkerText.includes('APP_SHELL_ASSETS') && serviceWorkerText.includes('OPTIONAL_STATIC_ASSETS') && serviceWorkerText.includes('Promise.allSettled'), 'service worker install should keep optional assets from breaking the critical app shell cache');
     assert(serviceWorkerText.includes('canRefreshNavigationShell') && serviceWorkerText.includes('!url.search'), 'service worker should avoid caching article deep-link responses as the generic app shell');
     assert(serviceWorkerText.includes('NAVIGATION_FALLBACK_URL') && serviceWorkerText.includes('navigationPreload') && serviceWorkerText.includes('X-Atherix-Offline-Shell'), 'service worker should provide a navigation-preload offline app shell');
-    assert(serviceWorkerText.includes('/style.css?v=20260608-quality-v10') && serviceWorkerText.includes('/app.js?v=20260608-quality-v24'), 'service worker should precache the latest versioned app assets');
+    assert(serviceWorkerText.includes('/style.css?v=20260608-quality-v11') && serviceWorkerText.includes('/app.js?v=20260608-quality-v24'), 'service worker should precache the latest versioned app assets');
+    assert(serviceWorkerText.includes('/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2') && serviceWorkerText.includes('/assets/fonts/outfit-latin-wght-normal.woff2') && serviceWorkerText.includes('/assets/fonts/jetbrains-mono-latin-wght-normal.woff2'), 'service worker should precache bundled local font assets');
     assert(serviceWorkerText.includes('networkFirstCacheFallback') && serviceWorkerText.includes('staleWhileRevalidate') && serviceWorkerText.includes('offlineResponseFor') && serviceWorkerText.includes('cacheResponseQuietly'), 'service worker should use explicit offline-safe caching strategies');
     assert(serviceWorkerText.includes('DISCOVERY_ASSET_PATHS') && serviceWorkerText.includes('/feed.xml') && serviceWorkerText.includes('/sitemap.xml') && serviceWorkerText.includes('/robots.txt'), 'service worker should keep discovery metadata network-first before cache fallback');
     assert(serviceWorkerText.includes('X-Atherix-Offline-Asset') && serviceWorkerText.includes('status: 204'), 'service worker should provide a quiet offline image placeholder');
@@ -237,8 +238,9 @@ async function run() {
     assert(indexText.includes('rel="canonical" href="https://dadaguai6686.github.io/"'), 'index should expose an absolute canonical URL');
     assert(indexText.includes('type="application/rss+xml"'), 'index should link the RSS feed');
     assert(indexText.includes('href="/style.css') && indexText.includes('src="/app.js') && indexText.includes('src="/lucide.min.js"'), 'local app assets should use root-absolute URLs for deep links');
-    assert(indexText.includes('href="/style.css?v=20260608-quality-v10"') && indexText.includes('src="/app.js?v=20260608-quality-v24"'), 'index should reference the latest versioned app assets');
-    assert(indexText.includes('rel="preload" href="/style.css?v=20260608-quality-v10" as="style"') && indexText.includes('rel="preload" href="/app.js?v=20260608-quality-v24" as="script"') && indexText.includes('rel="preload" href="/lucide.min.js" as="script"'), 'index should preload critical local app assets');
+    assert(indexText.includes('href="/style.css?v=20260608-quality-v11"') && indexText.includes('src="/app.js?v=20260608-quality-v24"'), 'index should reference the latest versioned app assets');
+    assert(indexText.includes('rel="preload" href="/style.css?v=20260608-quality-v11" as="style"') && indexText.includes('rel="preload" href="/app.js?v=20260608-quality-v24" as="script"') && indexText.includes('rel="preload" href="/lucide.min.js" as="script"'), 'index should preload critical local app assets');
+    assert(indexText.includes('href="/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2" as="font"') && indexText.includes('href="/assets/fonts/outfit-latin-wght-normal.woff2" as="font"') && indexText.includes('href="/assets/fonts/jetbrains-mono-latin-wght-normal.woff2" as="font"'), 'index should preload bundled local font assets');
     assert(indexText.includes('Atherix 高级街机') && indexText.includes('Premium Arcade Suite') && indexText.includes('高级街机生涯实验室'), 'index shell should present the premium arcade suite before runtime hydration');
     assert(indexText.includes('主线跑酷') && indexText.includes('霓虹漂移') && indexText.includes('裂隙战术') && indexText.includes('战术芯片'), 'index shell should advertise the full seven-line arcade career');
     assert(indexText.includes('<strong>29</strong>成就'), 'index shell should expose the current arcade achievement count');
@@ -256,11 +258,15 @@ async function run() {
     assert(indexText.includes('rel="apple-touch-icon" href="/assets/atherix-icon-192.png"'), 'index should expose an Apple touch icon');
     assert(indexText.includes('data-target="home" aria-label="打开首页" title="首页" aria-current="page"'), 'home navigation should expose aria-current on the static shell');
 
-    const styleSheet = await fetch(`${baseUrl}/style.css?v=20260608-quality-v10`);
+    const styleSheet = await fetch(`${baseUrl}/style.css?v=20260608-quality-v11`);
     const styleText = await styleSheet.text();
     assert(styleSheet.status === 200 && styleText.includes('@media (prefers-reduced-motion: reduce)') && styleText.includes('animation: none !important') && styleText.includes('scroll-behavior: auto !important'), 'stylesheet should include a global reduced-motion safety net');
     assert(styleText.includes('.tool-nav-btn[aria-selected="true"]') && styleText.includes('.tool-panel[hidden]') && styleText.includes('.tool-nav-btn:focus-visible'), 'stylesheet should style toolbox semantic tab states and keyboard focus');
     assert(styleText.includes('.mini-game-tab[aria-selected="true"]') && styleText.includes('.mini-game-panel[hidden]') && styleText.includes('.mini-game-tab:focus-visible'), 'stylesheet should style premium arcade semantic tab states and keyboard focus');
+    assert(styleText.includes("@font-face") && styleText.includes('/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2') && styleText.includes('/assets/fonts/outfit-latin-wght-normal.woff2') && styleText.includes('/assets/fonts/jetbrains-mono-latin-wght-normal.woff2') && !styleText.includes('fonts.googleapis.com') && !styleText.includes('fonts.gstatic.com'), 'stylesheet should self-host fonts without remote imports');
+    const bundledFont = await fetch(`${baseUrl}/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2`);
+    const bundledFontBytes = await bundledFont.arrayBuffer();
+    assert(bundledFont.status === 200 && bundledFontBytes.byteLength > 10000, 'bundled local web font should be publicly served');
     const appScript = await fetch(`${baseUrl}/app.js?v=20260608-quality-v24`);
     const appScriptText = await appScript.text();
     assert(appScript.status === 200 && appScriptText.includes('AbortController') && appScriptText.includes('apiTimeoutFor') && appScriptText.includes('timeoutMs'), 'frontend API helper should enforce request timeouts so fallback paths can run');
