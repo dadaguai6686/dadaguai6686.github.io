@@ -43,7 +43,7 @@ function authenticateToken(req, res, next) {
     return res.status(401).json({ error: 'Access denied. Token missing.' });
   }
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
+  jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }, (err, user) => {
     if (err) {
       return res.status(403).json({ error: 'Invalid or expired token.' });
     }

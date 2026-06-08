@@ -610,6 +610,7 @@ async function run() {
       href: link.getAttribute('href') || '',
       as: link.getAttribute('as') || ''
     })),
+    navCurrent: [...document.querySelectorAll('.nav-item')].filter(btn => btn.getAttribute('aria-current') === 'page').map(btn => btn.dataset.target || ''),
     horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
   }))()`);
 
@@ -1274,17 +1275,32 @@ async function run() {
     firstEmoji?.focus();
     const focusedEmoji = document.activeElement === firstEmoji;
     firstEmoji?.click();
+    const activeAvatar = document.querySelector('.avatar-option.active')?.dataset.avatar || '';
+    const activePressed = document.querySelector('.avatar-option.active')?.getAttribute('aria-pressed') || '';
+    const inactivePressed = document.querySelector('.avatar-option:not(.active)')?.getAttribute('aria-pressed') || '';
+    const hiddenAvatar = document.querySelector('#gb-avatar-val')?.value || '';
+    const contentValue = content?.value || '';
+    const form = document.querySelector('#guestbook-form');
+    form?.reset();
+    avatars[0]?.click();
+    const activeAfterReset = document.querySelector('.avatar-option.active');
+    const pressedAfterReset = [...document.querySelectorAll('.avatar-option')]
+      .filter(btn => btn.getAttribute('aria-pressed') === 'true')
+      .map(btn => btn.dataset.avatar || '');
     return {
       avatarButtons: avatars.length,
       avatarButtonTypes: avatars.filter(btn => btn.tagName === 'BUTTON' && btn.getAttribute('type') === 'button').length,
-      activeAvatar: document.querySelector('.avatar-option.active')?.dataset.avatar || '',
-      activePressed: document.querySelector('.avatar-option.active')?.getAttribute('aria-pressed') || '',
-      inactivePressed: document.querySelector('.avatar-option:not(.active)')?.getAttribute('aria-pressed') || '',
-      hiddenAvatar: document.querySelector('#gb-avatar-val')?.value || '',
+      activeAvatar,
+      activePressed,
+      inactivePressed,
+      hiddenAvatar,
+      activeAfterReset: activeAfterReset?.dataset.avatar || '',
+      pressedAfterReset,
+      hiddenAfterReset: document.querySelector('#gb-avatar-val')?.value || '',
       emojiButtons: document.querySelectorAll('.emoji-item[role="menuitem"]').length,
       triggerExpandedAfterClose: trigger?.getAttribute('aria-expanded') || '',
       focusedEmoji,
-      contentValue: content?.value || '',
+      contentValue,
       horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
     };
   })()`);
@@ -1529,6 +1545,26 @@ async function run() {
     await new Promise(resolve => setTimeout(resolve, 180));
     const pausedAfterResume = !!window.__atherixDebug?.gamePaused?.();
     const runningAfterResume = !!window.__atherixDebug?.gameRunning?.();
+    firePointer('#btn-right-led', 'pointerdown');
+    await new Promise(resolve => setTimeout(resolve, 120));
+    const stuckReleaseBefore = {
+      held: document.querySelector('#btn-right-led')?.classList.contains('is-held') || false,
+      keyRight: !!window.__atherixDebug?.runnerState?.().keys?.right,
+      x: window.__atherixDebug?.player?.x || 0
+    };
+    window.dispatchEvent(new PointerEvent('pointercancel', {
+      bubbles: true,
+      cancelable: true,
+      pointerId: 7,
+      pointerType: 'touch',
+      isPrimary: true
+    }));
+    await new Promise(resolve => setTimeout(resolve, 260));
+    const stuckReleaseAfter = {
+      held: document.querySelector('#btn-right-led')?.classList.contains('is-held') || false,
+      keyRight: !!window.__atherixDebug?.runnerState?.().keys?.right,
+      x: window.__atherixDebug?.player?.x || 0
+    };
     const forceContract = window.__atherixDebug?.forceRunnerContract?.() || {};
     await new Promise(resolve => setTimeout(resolve, 1240));
     const missionAfterRecovery = missionSnapshot();
@@ -1570,9 +1606,11 @@ async function run() {
       runningAfterPause,
       activeAfterPause,
       pausedAfterResume,
-      runningAfterResume
+      runningAfterResume,
+      stuckReleaseBefore,
+      stuckReleaseAfter
     };
-  })()`, 7000);
+  })()`, 9000);
   const runnerGamepadState = await evaluate(`(async () => {
     const api = window.__atherixDebug;
     const before = api?.player || {};
@@ -3026,7 +3064,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v59-quality') && swText.includes('/style.css?v=20260608-quality-v7') && swText.includes('/app.js?v=20260608-quality-v18'),
+      swHasQualityVersion: swText.includes('atherix-static-v62-quality') && swText.includes('/style.css?v=20260608-quality-v8') && swText.includes('/app.js?v=20260608-quality-v20'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
@@ -3350,7 +3388,8 @@ async function run() {
   );
   assert(emptyReaderHashState.blogActive && !emptyReaderHashState.readerActive && emptyReaderHashState.hash === '#blog', `bare #blog-reader route should recover to the blog list instead of an active empty reader: ${JSON.stringify(emptyReaderHashState)}`);
   assert(nativeArticleLinkState.found && /\\?post=/.test(nativeArticleLinkState.href) && nativeArticleLinkState.ctrlAllowed && !nativeArticleLinkState.ctrlDefaultPrevented && !nativeArticleLinkState.plainAllowed && nativeArticleLinkState.plainDefaultPrevented, `article links should preserve native modified-click behavior while SPA-handling plain clicks: ${JSON.stringify(nativeArticleLinkState)}`);
-  assert(guestbookA11yState.avatarButtons >= 10 && guestbookA11yState.avatarButtonTypes === guestbookA11yState.avatarButtons && guestbookA11yState.activeAvatar === guestbookA11yState.hiddenAvatar && guestbookA11yState.activePressed === 'true' && guestbookA11yState.inactivePressed === 'false' && guestbookA11yState.emojiButtons >= 12 && guestbookA11yState.focusedEmoji && guestbookA11yState.triggerExpandedAfterClose === 'false' && guestbookA11yState.contentValue.length > 0 && !guestbookA11yState.horizontalOverflow, `guestbook avatar and emoji controls should be keyboard-accessible buttons: ${JSON.stringify(guestbookA11yState)}`);
+  assert(accessibilityBaseline.navCurrent.length === 1 && accessibilityBaseline.navCurrent[0] === 'home', `primary nav should expose a single aria-current page on boot: ${JSON.stringify(accessibilityBaseline.navCurrent)}`);
+  assert(guestbookA11yState.avatarButtons >= 10 && guestbookA11yState.avatarButtonTypes === guestbookA11yState.avatarButtons && guestbookA11yState.activeAvatar === guestbookA11yState.hiddenAvatar && guestbookA11yState.activePressed === 'true' && guestbookA11yState.inactivePressed === 'false' && guestbookA11yState.activeAfterReset === guestbookA11yState.hiddenAfterReset && guestbookA11yState.pressedAfterReset.length === 1 && guestbookA11yState.pressedAfterReset[0] === guestbookA11yState.activeAfterReset && guestbookA11yState.emojiButtons >= 12 && guestbookA11yState.focusedEmoji && guestbookA11yState.triggerExpandedAfterClose === 'false' && guestbookA11yState.contentValue.length > 0 && !guestbookA11yState.horizontalOverflow, `guestbook avatar and emoji controls should be keyboard-accessible buttons with synced reset state: ${JSON.stringify(guestbookA11yState)}`);
   assert(
     blogState.codeBlocks >= 1,
     `blog markdown should preserve fenced code blocks: ${JSON.stringify(blogState)}`
@@ -3484,6 +3523,7 @@ async function run() {
   assert(runnerTouchState.activeAfterPause === 'game-pause-resume', `runner pause overlay should move focus to the resume action: ${JSON.stringify(runnerTouchState)}`);
   assert(runnerTouchState.timerAtPause === runnerTouchState.timerAfterPauseWait && Math.abs(runnerTouchState.xAfterPauseWait - runnerTouchState.xAtPause) < 0.01, `runner should not advance while paused: ${JSON.stringify(runnerTouchState)}`);
   assert(runnerTouchState.runningAfterResume && !runnerTouchState.pausedAfterResume, `runner should resume from pause: ${JSON.stringify(runnerTouchState)}`);
+  assert(runnerTouchState.stuckReleaseBefore?.held && runnerTouchState.stuckReleaseBefore?.keyRight && !runnerTouchState.stuckReleaseAfter?.held && !runnerTouchState.stuckReleaseAfter?.keyRight, `runner touch controls should release on global pointercancel to avoid stuck movement: ${JSON.stringify(runnerTouchState)}`);
   assert(runnerTouchState.scoreAfterDash > runnerTouchState.scoreBefore && runnerTouchState.debugAfterDash?.score === runnerTouchState.scoreAfterDash, `runner dash should award synced route score: ${JSON.stringify(runnerTouchState)}`);
   assert(/^\d+x$/.test(runnerTouchState.comboAfterDash) && runnerTouchState.debugAfterDash?.comboHud === runnerTouchState.comboAfterDash, `runner combo HUD should use a stable Nx format and sync with debug state: ${JSON.stringify(runnerTouchState)}`);
   assert(runnerTouchState.contractAfterDash && runnerTouchState.debugAfterDash?.contractHud === runnerTouchState.contractAfterDash, `runner contract HUD should sync with debug state: ${JSON.stringify(runnerTouchState)}`);

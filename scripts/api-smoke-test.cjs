@@ -1,5 +1,6 @@
 const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
+const jwt = require('jsonwebtoken');
 const os = require('os');
 const path = require('path');
 
@@ -222,9 +223,9 @@ async function run() {
     assert(serviceWorkerText.includes('/feed.xml') && serviceWorkerText.includes('/sitemap.xml'), 'service worker should precache discovery metadata');
     assert(serviceWorkerText.includes('/assets/atherix-og-card.png') && serviceWorkerText.includes('/assets/atherix-icon-512.png'), 'service worker should precache branded PWA assets');
     assert(serviceWorkerText.includes('/assets/atherix-profile-avatar.png') && serviceWorkerText.includes('/assets/project-bento-dashboard.webp') && serviceWorkerText.includes('/assets/project-arcade-suite.webp'), 'service worker should precache local profile and portfolio visual assets');
-    assert(serviceWorkerText.includes('atherix-static-v59-quality'), 'service worker should use the latest quality cache version');
+    assert(serviceWorkerText.includes('atherix-static-v62-quality'), 'service worker should use the latest quality cache version');
     assert(serviceWorkerText.includes('NAVIGATION_FALLBACK_URL') && serviceWorkerText.includes('navigationPreload') && serviceWorkerText.includes('X-Atherix-Offline-Shell'), 'service worker should provide a navigation-preload offline app shell');
-    assert(serviceWorkerText.includes('/style.css?v=20260608-quality-v7') && serviceWorkerText.includes('/app.js?v=20260608-quality-v18'), 'service worker should precache the latest versioned app assets');
+    assert(serviceWorkerText.includes('/style.css?v=20260608-quality-v8') && serviceWorkerText.includes('/app.js?v=20260608-quality-v20'), 'service worker should precache the latest versioned app assets');
     assert(serviceWorkerText.includes('networkFirstCacheFallback') && serviceWorkerText.includes('staleWhileRevalidate') && serviceWorkerText.includes('offlineResponseFor') && serviceWorkerText.includes('cacheResponseQuietly'), 'service worker should use explicit offline-safe caching strategies');
     assert(serviceWorkerText.includes('DISCOVERY_ASSET_PATHS') && serviceWorkerText.includes('/feed.xml') && serviceWorkerText.includes('/sitemap.xml') && serviceWorkerText.includes('/robots.txt'), 'service worker should keep discovery metadata network-first before cache fallback');
     assert(serviceWorkerText.includes('X-Atherix-Offline-Asset') && serviceWorkerText.includes('status: 204'), 'service worker should provide a quiet offline image placeholder');
@@ -234,8 +235,8 @@ async function run() {
     assert(indexText.includes('rel="canonical" href="https://dadaguai6686.github.io/"'), 'index should expose an absolute canonical URL');
     assert(indexText.includes('type="application/rss+xml"'), 'index should link the RSS feed');
     assert(indexText.includes('href="/style.css') && indexText.includes('src="/app.js') && indexText.includes('src="/lucide.min.js"'), 'local app assets should use root-absolute URLs for deep links');
-    assert(indexText.includes('href="/style.css?v=20260608-quality-v7"') && indexText.includes('src="/app.js?v=20260608-quality-v18"'), 'index should reference the latest versioned app assets');
-    assert(indexText.includes('rel="preload" href="/style.css?v=20260608-quality-v7" as="style"') && indexText.includes('rel="preload" href="/app.js?v=20260608-quality-v18" as="script"') && indexText.includes('rel="preload" href="/lucide.min.js" as="script"'), 'index should preload critical local app assets');
+    assert(indexText.includes('href="/style.css?v=20260608-quality-v8"') && indexText.includes('src="/app.js?v=20260608-quality-v20"'), 'index should reference the latest versioned app assets');
+    assert(indexText.includes('rel="preload" href="/style.css?v=20260608-quality-v8" as="style"') && indexText.includes('rel="preload" href="/app.js?v=20260608-quality-v20" as="script"') && indexText.includes('rel="preload" href="/lucide.min.js" as="script"'), 'index should preload critical local app assets');
     assert(indexText.includes('Atherix 高级街机') && indexText.includes('Premium Arcade Suite') && indexText.includes('高级街机生涯实验室'), 'index shell should present the premium arcade suite before runtime hydration');
     assert(indexText.includes('主线跑酷') && indexText.includes('霓虹漂移') && indexText.includes('裂隙战术') && indexText.includes('战术芯片'), 'index shell should advertise the full seven-line arcade career');
     assert(indexText.includes('<strong>29</strong>成就'), 'index shell should expose the current arcade achievement count');
@@ -250,6 +251,11 @@ async function run() {
     assert(indexText.includes('property="og:image" content="https://dadaguai6686.github.io/assets/atherix-og-card.png"'), 'index should expose the local branded Open Graph image');
     assert(indexText.includes('name="twitter:image" content="https://dadaguai6686.github.io/assets/atherix-og-card.png"'), 'index should expose the local Twitter card image');
     assert(indexText.includes('rel="apple-touch-icon" href="/assets/atherix-icon-192.png"'), 'index should expose an Apple touch icon');
+    assert(indexText.includes('data-target="home" aria-label="打开首页" title="首页" aria-current="page"'), 'home navigation should expose aria-current on the static shell');
+
+    const styleSheet = await fetch(`${baseUrl}/style.css?v=20260608-quality-v8`);
+    const styleText = await styleSheet.text();
+    assert(styleSheet.status === 200 && styleText.includes('@media (prefers-reduced-motion: reduce)') && styleText.includes('animation: none !important') && styleText.includes('scroll-behavior: auto !important'), 'stylesheet should include a global reduced-motion safety net');
 
     const spaRoute = await fetch(`${baseUrl}/blog/deep-link`);
     const spaRouteText = await spaRoute.text();
@@ -404,6 +410,30 @@ async function run() {
     const loginBody = await login.json();
     assert(typeof loginBody.token === 'string' && loginBody.token.length > 20, 'login should return a JWT');
 
+    const wrongAlgorithmToken = jwt.sign({ username: 'admin' }, smokeJwtSecret, { algorithm: 'HS512', expiresIn: '7d' });
+    const wrongAlgorithmVerify = await fetch(`${baseUrl}/api/auth/verify`, {
+      headers: { Authorization: `Bearer ${wrongAlgorithmToken}` }
+    });
+    assert(wrongAlgorithmVerify.status === 403, 'auth verify should reject JWTs signed with unexpected algorithms');
+
+    const invalidDatePost = await fetch(`${baseUrl}/api/posts`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${loginBody.token}`
+      },
+      body: JSON.stringify({
+        id: `bad-date-${Date.now()}`,
+        title: 'Bad Date Draft',
+        excerpt: 'invalid date',
+        content: '# Bad Date',
+        tag: '测试',
+        date: '2026-99-99',
+        readTime: '1 分钟阅读'
+      })
+    });
+    assert(invalidDatePost.status === 400, 'admin post creation should reject invalid calendar dates');
+
     const smokePostId = `smoke-${Date.now()}`;
     const createdPost = await fetch(`${baseUrl}/api/posts`, {
       method: 'POST',
@@ -456,6 +486,23 @@ async function run() {
     const updatedPostRows = await updatedPostList.json();
     const updatedSmokePost = updatedPostRows.find(post => post.id === smokePostId);
     assert(updatedSmokePost?.date === createdSmokePost.date, 'admin post update without date should preserve the original date');
+
+    const invalidDateUpdate = await fetch(`${baseUrl}/api/posts/${encodeURIComponent(smokePostId)}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${loginBody.token}`
+      },
+      body: JSON.stringify({
+        title: 'Smoke Test Draft Bad Date',
+        excerpt: 'bad date update',
+        content: '# Smoke Test Draft Bad Date',
+        tag: '测试',
+        date: '08/06/2026',
+        readTime: '2 分钟阅读'
+      })
+    });
+    assert(invalidDateUpdate.status === 400, 'admin post update should reject non-ISO article dates');
     const discoveryUpdatedFeed = await fetch(`${baseUrl}/feed.xml`);
     const discoveryUpdatedFeedText = await discoveryUpdatedFeed.text();
     const discoveryUpdatedSitemap = await fetch(`${baseUrl}/sitemap.xml`);

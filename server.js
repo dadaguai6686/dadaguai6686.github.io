@@ -190,6 +190,27 @@ function readLoginField(res, label, value, { max, trim = false } = {}) {
   return text;
 }
 
+function readDateField(res, label, value, { required = false } = {}) {
+  const raw = value == null ? '' : String(value).trim();
+  if (!raw) {
+    if (required) {
+      res.status(400).json({ error: `${label} is required.` });
+      return undefined;
+    }
+    return '';
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    res.status(400).json({ error: `${label} must use YYYY-MM-DD format.` });
+    return undefined;
+  }
+  const parsed = new Date(`${raw}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== raw) {
+    res.status(400).json({ error: `${label} must be a valid calendar date.` });
+    return undefined;
+  }
+  return raw;
+}
+
 function normalizeTags(tags) {
   if (!Array.isArray(tags)) return [];
   return tags
@@ -634,7 +655,7 @@ app.post('/api/posts', authenticateToken, writeLimiter, (req, res) => {
   const excerpt = readTextField(res, 'Excerpt', req.body.excerpt, { max: 500 });
   const content = readTextField(res, 'Content', req.body.content, { required: true, max: 60000 });
   const tag = readTextField(res, 'Tag', req.body.tag, { max: 80, fallback: '未分类' });
-  const date = readTextField(res, 'Date', req.body.date, { max: 32 });
+  const date = readDateField(res, 'Date', req.body.date);
   const readTime = readTextField(res, 'Read time', req.body.readTime, { max: 32, fallback: '5 分钟阅读' });
   if ([title, excerpt, content, tag, date, readTime].some(value => value === undefined)) return;
 
@@ -664,7 +685,7 @@ app.put('/api/posts/:id', authenticateToken, writeLimiter, (req, res) => {
   const content = readTextField(res, 'Content', req.body.content, { required: true, max: 60000 });
   const tag = readTextField(res, 'Tag', req.body.tag, { max: 80, fallback: '未分类' });
   const hasDate = Object.prototype.hasOwnProperty.call(req.body || {}, 'date');
-  const date = hasDate ? readTextField(res, 'Date', req.body.date, { max: 32 }) : '';
+  const date = hasDate ? readDateField(res, 'Date', req.body.date) : '';
   const readTime = readTextField(res, 'Read time', req.body.readTime, { max: 32, fallback: '5 分钟阅读' });
   if ([title, excerpt, content, tag, date, readTime].some(value => value === undefined)) return;
   const shouldUpdateDate = Boolean(String(date || '').trim());

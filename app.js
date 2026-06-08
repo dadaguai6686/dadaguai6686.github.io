@@ -688,8 +688,10 @@ function init() {
     navItems.forEach(item => {
       if (item.getAttribute('data-target') === activeNavTarget) {
         item.classList.add('active');
+        item.setAttribute('aria-current', 'page');
       } else {
         item.classList.remove('active');
+        item.removeAttribute('aria-current');
       }
     });
 
@@ -2949,16 +2951,18 @@ function init() {
   }
 
   // Handle avatar select
-  avatarOptions.forEach(opt => {
-    opt.addEventListener('click', () => {
-      avatarOptions.forEach(o => {
-        o.classList.remove('active');
-        o.setAttribute('aria-pressed', 'false');
-      });
-      opt.classList.add('active');
-      opt.setAttribute('aria-pressed', 'true');
-      document.getElementById('gb-avatar-val').value = opt.getAttribute('data-avatar');
+  function selectGuestbookAvatar(option = avatarOptions[0]) {
+    if (!option) return;
+    avatarOptions.forEach(o => {
+      const active = o === option;
+      o.classList.toggle('active', active);
+      o.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
+    document.getElementById('gb-avatar-val').value = option.getAttribute('data-avatar') || '👨‍💻';
+  }
+
+  avatarOptions.forEach(opt => {
+    opt.addEventListener('click', () => selectGuestbookAvatar(opt));
   });
 
   async function loadComments() {
@@ -3073,10 +3077,7 @@ function init() {
         });
         
         guestbookForm.reset();
-        // Reset avatar status
-        avatarOptions.forEach(o => o.classList.remove('active'));
-        avatarOptions[0].classList.add('active');
-        document.getElementById('gb-avatar-val').value = '👨‍💻';
+        selectGuestbookAvatar(avatarOptions[0]);
         updateGuestbookCounter();
 
         loadComments();
@@ -15207,6 +15208,12 @@ function init() {
         buttonText: btnDashLed?.textContent?.trim() || '',
         buttonLabel: btnDashLed?.getAttribute('aria-label') || ''
       },
+      keys: {
+        left: !!gameKeys.ArrowLeft,
+        right: !!gameKeys.ArrowRight,
+        jump: !!gameKeys.Space || !!gameKeys.ArrowUp || !!gameKeys.KeyW,
+        dash: !!gameKeys.ShiftLeft || !!gameKeys.ShiftRight || !!gameKeys.KeyK
+      },
       mission: runnerMissionSnapshot(),
       scoreHud: gameScoreSpan?.textContent || '',
       comboHud: gameComboSpan?.textContent || '',
@@ -16593,10 +16600,69 @@ function init() {
     left: 'ArrowLeft',
     right: 'ArrowRight'
   };
+  const runnerTouchPointerControls = new Map();
+  const runnerTouchActiveCounts = new Map();
 
   function setRunnerTouchButtonState(button, held) {
     if (!button) return;
     button.classList.toggle('is-held', held);
+  }
+
+  function syncRunnerJoystickVisual() {
+    if (!joystickShaft) return;
+    const jumpHeld = !!gameKeys.Space || !!gameKeys.KeyW || !!gameKeys.ArrowUp;
+    const leftHeld = !!gameKeys.KeyA || !!gameKeys.ArrowLeft;
+    const rightHeld = !!gameKeys.KeyD || !!gameKeys.ArrowRight;
+
+    if (jumpHeld) {
+      joystickShaft.style.transform = 'translate(0, -6px)';
+    } else if (rightHeld) {
+      joystickShaft.style.transform = 'translate(6px, 0)';
+    } else if (leftHeld) {
+      joystickShaft.style.transform = 'translate(-6px, 0)';
+    } else {
+      joystickShaft.style.transform = 'translate(0, 0)';
+    }
+  }
+
+  function releaseRunnerTouchControl(control) {
+    runnerTouchActiveCounts.delete(control);
+    if (control === 'left' || control === 'right') {
+      setRunnerDirection(control, false);
+      return;
+    }
+    if (control === 'jump') {
+      setRunnerTouchButtonState(btnJumpLed, false);
+      syncRunnerJoystickVisual();
+      return;
+    }
+    if (control === 'start') setRunnerTouchButtonState(btnStartLed, false);
+    if (control === 'pause') setRunnerTouchButtonState(btnPauseLed, false);
+    if (control === 'dash') setRunnerTouchButtonState(btnDashLed, false);
+  }
+
+  function trackRunnerTouchPointer(pointerId, control) {
+    if (pointerId == null || !control) return;
+    runnerTouchPointerControls.set(pointerId, control);
+    runnerTouchActiveCounts.set(control, (runnerTouchActiveCounts.get(control) || 0) + 1);
+  }
+
+  function releaseRunnerTouchPointer(pointerId) {
+    if (pointerId == null || !runnerTouchPointerControls.has(pointerId)) return;
+    const control = runnerTouchPointerControls.get(pointerId);
+    runnerTouchPointerControls.delete(pointerId);
+    const nextCount = Math.max(0, (runnerTouchActiveCounts.get(control) || 1) - 1);
+    if (nextCount > 0) {
+      runnerTouchActiveCounts.set(control, nextCount);
+      return;
+    }
+    releaseRunnerTouchControl(control);
+  }
+
+  function releaseAllRunnerTouchControls() {
+    runnerTouchPointerControls.clear();
+    runnerTouchActiveCounts.clear();
+    ['left', 'right', 'jump', 'start', 'pause', 'dash'].forEach(releaseRunnerTouchControl);
   }
 
   function setRunnerDirection(control, pressed) {
@@ -16604,13 +16670,7 @@ function init() {
     if (!code) return;
     gameKeys[code] = pressed;
     setRunnerTouchButtonState(control === 'left' ? btnLeftLed : btnRightLed, pressed);
-    if (joystickShaft) {
-      if (pressed) {
-        joystickShaft.style.transform = control === 'left' ? 'translate(-6px, 0)' : 'translate(6px, 0)';
-      } else if (!gameKeys.ArrowLeft && !gameKeys.ArrowRight) {
-        joystickShaft.style.transform = 'translate(0, 0)';
-      }
-    }
+    syncRunnerJoystickVisual();
   }
 
   function runOverlayAction() {
@@ -16795,15 +16855,13 @@ function init() {
     gameKeys[e.code] = true;
 
     if (e.code === 'KeyA' || e.code === 'ArrowLeft') {
-      if (joystickShaft) joystickShaft.style.transform = 'translate(-6px, 0)';
       if (document.getElementById('light-left')) document.getElementById('light-left').classList.add('active');
     } else if (e.code === 'KeyD' || e.code === 'ArrowRight') {
-      if (joystickShaft) joystickShaft.style.transform = 'translate(6px, 0)';
       if (document.getElementById('light-right')) document.getElementById('light-right').classList.add('active');
     } else if (e.code === 'Space' || e.code === 'KeyW' || e.code === 'ArrowUp') {
-      if (joystickShaft) joystickShaft.style.transform = 'translate(0, -6px)';
       if (document.getElementById('light-up')) document.getElementById('light-up').classList.add('active');
     }
+    syncRunnerJoystickVisual();
 
     if (wasPressed || e.repeat) return;
 
@@ -16831,9 +16889,7 @@ function init() {
       if (document.getElementById('light-up')) document.getElementById('light-up').classList.remove('active');
     }
 
-    if (['KeyA', 'ArrowLeft', 'KeyD', 'ArrowRight', 'Space', 'KeyW', 'ArrowUp'].includes(e.code)) {
-      if (joystickShaft) joystickShaft.style.transform = 'translate(0, 0)';
-    }
+    if (['KeyA', 'ArrowLeft', 'KeyD', 'ArrowRight', 'Space', 'KeyW', 'ArrowUp'].includes(e.code)) syncRunnerJoystickVisual();
   });
 
   function pauseRunnerForLifecycle(reason = 'auto') {
@@ -17681,6 +17737,7 @@ function init() {
   if (btnJumpLed) {
     btnJumpLed.addEventListener('pointerdown', (e) => {
       e.preventDefault();
+      trackRunnerTouchPointer(e.pointerId, 'jump');
       setRunnerTouchButtonState(btnJumpLed, true);
       if (gameRunning) {
         triggerPlayerJump();
@@ -17694,18 +17751,15 @@ function init() {
       releaseArcadeButtonFocus();
     });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach(type => {
-      btnJumpLed.addEventListener(type, () => {
-        setRunnerTouchButtonState(btnJumpLed, false);
-        if (joystickShaft) joystickShaft.style.transform = 'translate(0, 0)';
-      });
+      btnJumpLed.addEventListener(type, e => releaseRunnerTouchPointer(e.pointerId));
     });
   }
 
   function bindRunnerHoldControl(button, control) {
     if (!button) return;
-    const release = () => setRunnerDirection(control, false);
     button.addEventListener('pointerdown', (e) => {
       e.preventDefault();
+      trackRunnerTouchPointer(e.pointerId, control);
       setRunnerDirection(control, true);
       try {
         button.setPointerCapture?.(e.pointerId);
@@ -17714,9 +17768,9 @@ function init() {
       }
       releaseArcadeButtonFocus();
     });
-    button.addEventListener('pointerup', release);
-    button.addEventListener('pointercancel', release);
-    button.addEventListener('pointerleave', release);
+    button.addEventListener('pointerup', e => releaseRunnerTouchPointer(e.pointerId));
+    button.addEventListener('pointercancel', e => releaseRunnerTouchPointer(e.pointerId));
+    button.addEventListener('pointerleave', e => releaseRunnerTouchPointer(e.pointerId));
   }
 
   bindRunnerHoldControl(btnLeftLed, 'left');
@@ -17725,6 +17779,7 @@ function init() {
   if (btnStartLed) {
     btnStartLed.addEventListener('pointerdown', (e) => {
       e.preventDefault();
+      trackRunnerTouchPointer(e.pointerId, 'start');
       setRunnerTouchButtonState(btnStartLed, true);
       if (gamePaused) {
         resumeRunnerGame();
@@ -17734,33 +17789,42 @@ function init() {
       releaseArcadeButtonFocus();
     });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach(type => {
-      btnStartLed.addEventListener(type, () => setRunnerTouchButtonState(btnStartLed, false));
+      btnStartLed.addEventListener(type, e => releaseRunnerTouchPointer(e.pointerId));
     });
   }
 
   if (btnPauseLed) {
     btnPauseLed.addEventListener('pointerdown', (e) => {
       e.preventDefault();
+      trackRunnerTouchPointer(e.pointerId, 'pause');
       setRunnerTouchButtonState(btnPauseLed, true);
       toggleRunnerPause();
       releaseArcadeButtonFocus();
     });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach(type => {
-      btnPauseLed.addEventListener(type, () => setRunnerTouchButtonState(btnPauseLed, gamePaused));
+      btnPauseLed.addEventListener(type, e => releaseRunnerTouchPointer(e.pointerId));
     });
   }
 
   if (btnDashLed) {
     btnDashLed.addEventListener('pointerdown', (e) => {
       e.preventDefault();
+      trackRunnerTouchPointer(e.pointerId, 'dash');
       setRunnerTouchButtonState(btnDashLed, true);
       if (gameRunning) triggerPlayerDash();
       releaseArcadeButtonFocus();
     });
     ['pointerup', 'pointercancel', 'pointerleave'].forEach(type => {
-      btnDashLed.addEventListener(type, () => setRunnerTouchButtonState(btnDashLed, false));
+      btnDashLed.addEventListener(type, e => releaseRunnerTouchPointer(e.pointerId));
     });
   }
+
+  window.addEventListener('pointerup', e => releaseRunnerTouchPointer(e.pointerId));
+  window.addEventListener('pointercancel', e => releaseRunnerTouchPointer(e.pointerId));
+  window.addEventListener('blur', releaseAllRunnerTouchControls);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) releaseAllRunnerTouchControls();
+  });
 
   function toggleRunnerMusic() {
     if (!musicSelect) return;
