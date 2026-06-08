@@ -3016,7 +3016,15 @@ async function run() {
       readoutState: document.querySelector('#premium-input-readout')?.dataset.state || '',
       readoutStateText: document.querySelector('#premium-input-state')?.textContent || '',
       readoutAction: document.querySelector('#premium-input-action')?.textContent || '',
+      readoutTool: document.querySelector('#premium-input-tool')?.textContent || '',
       readoutStart: document.querySelector('#premium-input-start')?.textContent || '',
+      rerollButton: !!document.querySelector('#premium-survivor-reroll'),
+      rerollDisabled: !!document.querySelector('#premium-survivor-reroll')?.disabled,
+      rerollRemaining: document.querySelector('#premium-survivor-reroll')?.dataset.remaining || '',
+      rerollCount: document.querySelector('#premium-survivor-reroll-count')?.textContent || '',
+      touchTool: document.querySelector('[data-premium-control="tool"]')?.textContent || '',
+      touchToolDisabled: !!document.querySelector('[data-premium-control="tool"]')?.disabled,
+      touchToolLabel: document.querySelector('[data-premium-control="tool"]')?.getAttribute('aria-label') || '',
       touchStart: document.querySelector('#premium-touch-start')?.textContent || '',
       touchStartDisabled: !!document.querySelector('#premium-touch-start')?.disabled,
       touchStartLabel: document.querySelector('#premium-touch-start')?.getAttribute('aria-label') || '',
@@ -3044,6 +3052,36 @@ async function run() {
       touchPauseDisabled: !!document.querySelector('#premium-touch-pause')?.disabled
     };
   })()`);
+  const survivorDraftRerollState = await evaluate(`(async () => {
+    const api = window.__atherixDebug?.premium;
+    const before = {
+      state: api?.survivorState?.() || {},
+      choices: [...document.querySelectorAll('[data-survivor-upgrade]')].map(btn => btn.dataset.survivorUpgrade || ''),
+      remaining: document.querySelector('#premium-survivor-reroll')?.dataset.remaining || '',
+      disabled: !!document.querySelector('#premium-survivor-reroll')?.disabled,
+      toolText: document.querySelector('[data-premium-control="tool"]')?.textContent || '',
+      toolDisabled: !!document.querySelector('[data-premium-control="tool"]')?.disabled
+    };
+    const result = api?.rerollSurvivorDraft?.() || {};
+    await new Promise(resolve => setTimeout(resolve, 160));
+    const afterChoices = [...document.querySelectorAll('[data-survivor-upgrade]')].map(btn => btn.dataset.survivorUpgrade || '');
+    return {
+      before,
+      result,
+      after: {
+        state: api?.survivorState?.() || {},
+        choices: afterChoices,
+        remaining: document.querySelector('#premium-survivor-reroll')?.dataset.remaining || '',
+        count: document.querySelector('#premium-survivor-reroll-count')?.textContent || '',
+        disabled: !!document.querySelector('#premium-survivor-reroll')?.disabled,
+        aria: document.querySelector('#premium-survivor-reroll')?.getAttribute('aria-label') || '',
+        readoutTool: document.querySelector('#premium-input-tool')?.textContent || '',
+        toolText: document.querySelector('[data-premium-control="tool"]')?.textContent || '',
+        toolDisabled: !!document.querySelector('[data-premium-control="tool"]')?.disabled,
+        feedback: api?.feedback?.() || {}
+      }
+    };
+  })()`, 3000);
   const survivorDraftStartGuardState = await evaluate(`(async () => {
     const api = window.__atherixDebug?.premium;
     const choicesBefore = [...document.querySelectorAll('[data-survivor-upgrade]')].map(btn => btn.dataset.survivorUpgrade || '');
@@ -3535,7 +3573,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v67-quality') && swText.includes('/style.css?v=20260608-quality-v11') && swText.includes('/app.js?v=20260608-quality-v24'),
+      swHasQualityVersion: swText.includes('atherix-static-v68-quality') && swText.includes('/style.css?v=20260608-quality-v12') && swText.includes('/app.js?v=20260608-quality-v25'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp'),
       swHasLocalFonts: swText.includes('/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2') && swText.includes('/assets/fonts/outfit-latin-wght-normal.woff2') && swText.includes('/assets/fonts/jetbrains-mono-latin-wght-normal.woff2')
@@ -4323,9 +4361,10 @@ async function run() {
   assert(survivorHpZeroState.player?.hp === 0 && survivorHpZeroState.hud?.hp === '0', `survivor HUD should show 0 HP instead of falling back to 100: ${JSON.stringify(survivorHpZeroState)}`);
   assert(survivorState.feedback?.tones?.action >= 1 && survivorState.feedback?.visualTriggers >= 1 && survivorState.feedbackTone === 'action' && /ACTION|NOVA/.test(survivorState.feedbackLabel), `premium arcade feedback should treat Space as an action signal, not restart: ${JSON.stringify(survivorState)}`);
   assert(feedbackMuteState.muted?.muted === true && feedbackMuteState.muted?.togglePressed === 'false' && feedbackMuteState.afterSuppressed?.suppressed > feedbackMuteState.muted?.suppressed && feedbackMuteState.afterSuppressed?.total === feedbackMuteState.muted?.total && feedbackMuteState.unmuted?.muted === false && feedbackMuteState.unmuted?.togglePressed === 'true' && feedbackMuteState.panelMuted === 'false', `premium arcade feedback mute should suppress events and restore cleanly: ${JSON.stringify(feedbackMuteState)}`);
-  assert(survivorDraftOpenState.open && survivorDraftOpenState.ariaHidden === 'false' && survivorDraftOpenState.optionCards === 3 && survivorDraftOpenState.choices.length === 3 && survivorDraftOpenState.running && !survivorDraftOpenState.paused && survivorDraftOpenState.readoutState === 'draft' && survivorDraftOpenState.readoutStateText === '升级' && survivorDraftOpenState.readoutAction === '选升级' && survivorDraftOpenState.readoutStart === '1/2/3 选择' && survivorDraftOpenState.touchStart === '选择' && survivorDraftOpenState.touchStartDisabled && /升级选择中/.test(survivorDraftOpenState.touchStartLabel) && survivorDraftOpenState.touchPause === '选择中' && survivorDraftOpenState.touchPauseDisabled && /升级选择中/.test(survivorDraftOpenState.touchPauseLabel), `survivor roguelite draft should open three upgrade choices with clear draft-state controls and without using pause state: ${JSON.stringify(survivorDraftOpenState)}`);
+  assert(survivorDraftOpenState.open && survivorDraftOpenState.ariaHidden === 'false' && survivorDraftOpenState.optionCards === 3 && survivorDraftOpenState.choices.length === 3 && survivorDraftOpenState.running && !survivorDraftOpenState.paused && survivorDraftOpenState.readoutState === 'draft' && survivorDraftOpenState.readoutStateText === '升级' && survivorDraftOpenState.readoutAction === '选升级' && /重铸/.test(survivorDraftOpenState.readoutTool) && survivorDraftOpenState.readoutStart === '1/2/3 选择' && survivorDraftOpenState.rerollButton && !survivorDraftOpenState.rerollDisabled && Number(survivorDraftOpenState.rerollRemaining) >= 1 && /次/.test(survivorDraftOpenState.rerollCount) && survivorDraftOpenState.touchStart === '选择' && survivorDraftOpenState.touchStartDisabled && /升级选择中/.test(survivorDraftOpenState.touchStartLabel) && survivorDraftOpenState.touchPause === '选择中' && survivorDraftOpenState.touchPauseDisabled && /升级选择中/.test(survivorDraftOpenState.touchPauseLabel) && /重铸/.test(survivorDraftOpenState.touchTool) && !survivorDraftOpenState.touchToolDisabled && /重铸升级/.test(survivorDraftOpenState.touchToolLabel), `survivor roguelite draft should open three upgrade choices with reroll strategy controls and without using pause state: ${JSON.stringify(survivorDraftOpenState)}`);
   assert(survivorDraftFreezeState.open && Math.abs(survivorDraftFreezeState.elapsedAfter - survivorDraftOpenState.beforeElapsed) < 1 && Math.abs(survivorDraftFreezeState.scoreAfter - survivorDraftOpenState.beforeScore) < 1, `survivor roguelite draft should freeze the run clock and score until a choice is made: ${JSON.stringify({ survivorDraftOpenState, survivorDraftFreezeState })}`);
   assert(survivorDraftAutoPauseState.open && survivorDraftAutoPauseState.running && !survivorDraftAutoPauseState.paused && !(survivorDraftAutoPauseState.result?.paused || []).includes('survivor') && survivorDraftAutoPauseState.readoutState === 'draft' && survivorDraftAutoPauseState.readoutStateText === '升级' && survivorDraftAutoPauseState.touchPause === '选择中' && survivorDraftAutoPauseState.touchPauseDisabled, `survivor draft should ignore global auto-pause because the upgrade sheet already freezes play: ${JSON.stringify(survivorDraftAutoPauseState)}`);
+  assert(survivorDraftRerollState.before?.choices?.length === 3 && survivorDraftRerollState.result?.remaining === 0 && survivorDraftRerollState.after?.choices?.length === 3 && survivorDraftRerollState.after.choices.join('|') !== survivorDraftRerollState.before.choices.join('|') && survivorDraftRerollState.after?.state?.draftOpen && survivorDraftRerollState.after?.state?.draftRerolls === 0 && survivorDraftRerollState.after?.disabled && survivorDraftRerollState.after?.remaining === '0' && /0/.test(survivorDraftRerollState.after?.readoutTool || '') && /重铸/.test(survivorDraftRerollState.after?.toolText || '') && survivorDraftRerollState.after?.toolDisabled && survivorDraftRerollState.after?.feedback?.lastLabel === 'REROLL DRAFT', `survivor draft reroll should consume its charge, refresh choices, and disable reroll controls: ${JSON.stringify(survivorDraftRerollState)}`);
   assert(survivorDraftStartGuardState.before?.open && survivorDraftStartGuardState.after?.open && survivorDraftStartGuardState.after?.running && !survivorDraftStartGuardState.after?.paused && survivorDraftStartGuardState.after?.level === survivorDraftStartGuardState.before?.level && survivorDraftStartGuardState.after?.choices?.join('|') === survivorDraftStartGuardState.before?.choices?.join('|') && Math.abs(survivorDraftStartGuardState.after?.elapsed - survivorDraftStartGuardState.before?.elapsed) < 1 && survivorDraftStartGuardState.after?.startDisabled && survivorDraftStartGuardState.after?.startText === '选择' && survivorDraftStartGuardState.after?.readoutStart === '1/2/3 选择' && survivorDraftStartGuardState.after?.feedback?.lastLabel === 'CHOOSE UPGRADE', `survivor draft should block touch/gamepad/panel Start from restarting before an upgrade is chosen: ${JSON.stringify(survivorDraftStartGuardState)}`);
   assert(!survivorDraftChosenState.open && survivorDraftChosenState.ariaHidden === 'true' && survivorDraftChosenState.optionCards === 0 && survivorDraftChosenState.running && !survivorDraftChosenState.paused && Number(survivorDraftChosenState.level) >= 2 && survivorDraftChosenState.score > survivorDraftOpenState.beforeScore && survivorDraftChosenState.buildText.length > 2 && survivorDraftChosenState.readoutState === 'running' && survivorDraftChosenState.readoutStateText === '运行' && survivorDraftChosenState.readoutAction === '星爆' && survivorDraftChosenState.readoutStart === 'Enter 请求重开' && survivorDraftChosenState.touchPause === '暂停' && !survivorDraftChosenState.touchPauseDisabled && /暂停/.test(survivorDraftChosenState.touchPauseLabel), `survivor roguelite draft should apply a chosen upgrade and restore running controls: ${JSON.stringify(survivorDraftChosenState)}`);
   assert(survivorOverdriveState.before?.overdrive >= 100 && survivorOverdriveState.before?.hud?.overdrive === 'READY' && survivorOverdriveState.after?.overdrive === 0 && survivorOverdriveState.after?.overdriveFlash > 0 && survivorOverdriveState.after?.score > survivorOverdriveState.before?.score && survivorOverdriveState.after?.slowed >= 1 && survivorOverdriveState.after?.enemies < survivorOverdriveState.before?.enemies && survivorOverdriveState.after?.chain >= survivorOverdriveState.before?.chain, `survivor overdrive should consume a full meter, slow enemies, kill targets, and score: ${JSON.stringify(survivorOverdriveState)}`);
@@ -4620,6 +4659,7 @@ async function run() {
     survivorDraftOpenState,
     survivorDraftFreezeState,
     survivorDraftAutoPauseState,
+    survivorDraftRerollState,
     survivorDraftStartGuardState,
     survivorDraftChosenState,
     survivorOverdriveState,
@@ -4738,6 +4778,7 @@ function summarizeSmokeResult(result) {
       survivor: {
         rendered: result.survivorState?.nonBlank,
         overdriveScoreGain: Number(result.survivorOverdriveState?.after?.score || 0) - Number(result.survivorOverdriveState?.before?.score || 0),
+        draftReroll: result.survivorDraftRerollState?.after?.choices?.join('|') !== result.survivorDraftRerollState?.before?.choices?.join('|'),
         anomaly: result.survivorAnomalyState?.state?.anomaly?.type
       },
       boss: {

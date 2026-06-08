@@ -5530,7 +5530,12 @@ function init() {
               <div class="survivor-draft-heading">
                 <span>LEVEL UP</span>
                 <strong id="premium-survivor-draft-title">选择星核改造</strong>
-                <small>按 1/2/3 或点击卡片，立即改变本局构筑。</small>
+                <small>按 1/2/3 或点击卡片；R / 工具键可重铸一次升级池。</small>
+                <button type="button" class="survivor-draft-reroll" id="premium-survivor-reroll">
+                  <span>R</span>
+                  <strong>重铸升级</strong>
+                  <small id="premium-survivor-reroll-count">1 次</small>
+                </button>
               </div>
               <div class="survivor-upgrade-grid" id="premium-survivor-draft-options"></div>
             </div>
@@ -5797,6 +5802,10 @@ function init() {
 
     function premiumControlAvailable(control, mode = premiumActive) {
       if (['up', 'down', 'left', 'right'].includes(control)) return true;
+      if (mode === 'survivor' && survivor.draftOpen) {
+        if (control === 'action') return true;
+        if (control === 'tool') return Number(survivor.draftRerolls || 0) > 0;
+      }
       const config = premiumControlConfig(mode);
       if (control === 'action') return hasPremiumControlValue(config.action);
       if (control === 'tool') return hasPremiumControlValue(config.tool);
@@ -6016,8 +6025,8 @@ function init() {
         requirement: '2 项成就或声望 2600',
         unlock: () => (career.achievements || []).length >= 2 || (career.totalScore || 0) >= 2600,
         summary: '给解谜与战术模式更多计划空间。',
-        perks: ['战术行动 +1', '连锁步数 +3', '初始护盾 +16'],
-        bonuses: { scoreBoost: 0.07, tacticsAp: 1, tacticsShield: 16, chainMoves: 3, heistCloaks: 1 }
+        perks: ['战术行动 +1', '连锁步数 +3', '升级重铸 +1'],
+        bonuses: { scoreBoost: 0.07, tacticsAp: 1, tacticsShield: 16, chainMoves: 3, heistCloaks: 1, survivorRerolls: 1 }
       }
     ];
     const difficultyDefs = [
@@ -8263,7 +8272,7 @@ function init() {
       if (moveEl) moveEl.textContent = config.move || '方向';
       if (actionEl) actionEl.textContent = state.draft ? '选升级' : config.action || 'ACT';
       if (toolEl) {
-        toolEl.textContent = config.tool || '--';
+        toolEl.textContent = state.draft ? `重铸 ${survivor.draftRerolls || 0}` : config.tool || '--';
         toolEl.closest('span')?.classList.toggle('is-disabled', !premiumControlAvailable('tool'));
       }
       if (startEl) startEl.textContent = state.draft ? '1/2/3 选择' : state.realtime ? state.running ? restartPending ? 'Enter 确认重开' : 'Enter 请求重开' : 'Enter 开始' : state.startText || 'Enter 新局';
@@ -8325,14 +8334,14 @@ function init() {
       const actionBtn = library.querySelector('[data-premium-control="action"]');
       const toolBtn = library.querySelector('[data-premium-control="tool"]');
       if (actionBtn) {
-        actionBtn.textContent = config.action || 'ACT';
+        actionBtn.textContent = premiumActive === 'survivor' && survivor.draftOpen ? '选择' : config.action || 'ACT';
         actionBtn.disabled = !premiumControlAvailable('action');
-        actionBtn.setAttribute('aria-label', config.actionLabel || '当前模式无主要动作');
+        actionBtn.setAttribute('aria-label', premiumActive === 'survivor' && survivor.draftOpen ? '选择第一张升级卡' : config.actionLabel || '当前模式无主要动作');
       }
       if (toolBtn) {
-        toolBtn.textContent = config.tool || '--';
+        toolBtn.textContent = premiumActive === 'survivor' && survivor.draftOpen ? `重铸 ${survivor.draftRerolls || 0}` : config.tool || '--';
         toolBtn.disabled = !premiumControlAvailable('tool');
-        toolBtn.setAttribute('aria-label', config.toolLabel || '当前模式无工具动作');
+        toolBtn.setAttribute('aria-label', premiumActive === 'survivor' && survivor.draftOpen ? `重铸升级选项，剩余 ${survivor.draftRerolls || 0} 次` : config.toolLabel || '当前模式无工具动作');
       }
       updatePremiumInputReadout();
     }
@@ -8567,9 +8576,16 @@ function init() {
     updatePremiumFeedbackUi();
 
     function applyPremiumControl(control, pressed, source = 'touch', options = {}) {
-      if (pressed && premiumActive === 'survivor' && survivor.draftOpen && control === 'action') {
-        triggerPremiumFeedback('special', { label: 'UPGRADE' });
-        selectSurvivorUpgrade(survivor.draftChoices[0]?.id);
+      if (pressed && premiumActive === 'survivor' && survivor.draftOpen) {
+        if (control === 'tool') {
+          rerollSurvivorDraft();
+          return;
+        }
+        if (control === 'action') {
+          triggerPremiumFeedback('special', { label: 'UPGRADE' });
+          selectSurvivorUpgrade(survivor.draftChoices[0]?.id);
+          return;
+        }
         return;
       }
       if (!premiumControlAvailable(control)) return;
@@ -8963,6 +8979,7 @@ function init() {
       particles: [],
       draftOpen: false,
       draftChoices: [],
+      draftRerolls: 0,
       anomaly: null,
       anomalyCooldown: 0,
       anomalyCount: 0,
@@ -9231,6 +9248,7 @@ function init() {
       resetSurvivorBounty();
       survivor.draftOpen = false;
       survivor.draftChoices = [];
+      survivor.draftRerolls = 0;
       hideSurvivorDraft();
       const hpMax = 100 + Number(bonuses.survivorHp || 0) + Number(tuning.hp || 0);
       survivor.player = {
@@ -9507,16 +9525,22 @@ function init() {
       survivorBurst(enemy.x, enemy.y, enemy.color, enemy.elite ? 22 : 14);
     }
 
-    function pickSurvivorUpgrades() {
+    function pickSurvivorUpgrades(excludedIds = []) {
       const p = survivor.player;
-      const pool = survivorUpgradeDefs.filter(def => !def.available || def.available(p));
+      const excluded = new Set((excludedIds || []).filter(Boolean));
+      const available = survivorUpgradeDefs.filter(def => !def.available || def.available(p));
+      const pool = available.filter(def => !excluded.has(def.id));
       const choices = [];
-      const mutable = pool.length ? [...pool] : [...survivorUpgradeDefs];
+      const mutable = pool.length >= 3 ? [...pool] : available.length ? [...available] : [...survivorUpgradeDefs];
       while (choices.length < 3 && mutable.length) {
         const index = Math.floor(Math.random() * mutable.length);
         choices.push(mutable.splice(index, 1)[0]);
       }
       return choices;
+    }
+
+    function survivorDraftChoiceIds() {
+      return survivor.draftChoices.map(choice => choice.id).filter(Boolean);
     }
 
     function hideSurvivorDraft() {
@@ -9558,12 +9582,22 @@ function init() {
       const draft = document.getElementById('premium-survivor-draft');
       const options = document.getElementById('premium-survivor-draft-options');
       const title = document.getElementById('premium-survivor-draft-title');
+      const rerollBtn = document.getElementById('premium-survivor-reroll');
+      const rerollCount = document.getElementById('premium-survivor-reroll-count');
       if (!draft || !options || !survivor.player) return;
       if (!survivor.draftOpen) moveFocusBeforeHiding(draft, stage);
       placeSurvivorDraft(draft);
       draft.classList.toggle('active', survivor.draftOpen);
       draft.setAttribute('aria-hidden', survivor.draftOpen ? 'false' : 'true');
       if (title) title.textContent = `选择第 ${survivor.player.level} 级改造`;
+      if (rerollBtn) {
+        const remaining = Math.max(0, Number(survivor.draftRerolls || 0));
+        rerollBtn.disabled = !survivor.draftOpen || remaining <= 0;
+        rerollBtn.dataset.remaining = String(remaining);
+        rerollBtn.setAttribute('aria-label', `重铸升级选项，剩余 ${remaining} 次`);
+        rerollBtn.onclick = () => rerollSurvivorDraft();
+      }
+      if (rerollCount) rerollCount.textContent = `${Math.max(0, Number(survivor.draftRerolls || 0))} 次`;
       options.innerHTML = survivor.draftChoices.map((choice, index) => `
         <button type="button" class="survivor-upgrade-option" data-survivor-upgrade="${escapeHTML(choice.id)}" data-tone="${escapeHTML(choice.tone)}">
           <span>${index + 1}</span>
@@ -9582,6 +9616,28 @@ function init() {
       }
     }
 
+    function rerollSurvivorDraft() {
+      if (!survivor.running || !survivor.draftOpen || !survivor.player || survivor.draftRerolls <= 0) return false;
+      const previous = survivorDraftChoiceIds();
+      const next = pickSurvivorUpgrades(previous);
+      if (!next.length) return false;
+      survivor.draftRerolls = Math.max(0, Number(survivor.draftRerolls || 0) - 1);
+      survivor.draftChoices = next;
+      clearPremiumKeys();
+      renderSurvivorDraft();
+      setSurvivorUi();
+      updatePremiumMetaControls();
+      updatePremiumTouchLabels();
+      survivorBurst(survivor.player.x, survivor.player.y, '#FDE68A', 26);
+      drawSurvivor();
+      triggerPremiumFeedback('tool', { label: 'REROLL DRAFT' });
+      return {
+        before: previous,
+        after: survivorDraftChoiceIds(),
+        remaining: survivor.draftRerolls
+      };
+    }
+
     function openSurvivorDraft() {
       const p = survivor.player;
       if (!p || survivor.draftOpen) return;
@@ -9589,6 +9645,7 @@ function init() {
       p.xp = 0;
       survivor.draftOpen = true;
       survivor.draftChoices = pickSurvivorUpgrades();
+      survivor.draftRerolls = 1 + Math.max(0, Number(loadoutBonuses().survivorRerolls || 0));
       clearPremiumKeys();
       if (p.level >= 4) unlockAchievement('survivor_level_4');
       survivorBurst(p.x, p.y, '#34D399', 42);
@@ -9610,6 +9667,7 @@ function init() {
       survivor.score += 60 + p.level * 16;
       survivor.draftOpen = false;
       survivor.draftChoices = [];
+      survivor.draftRerolls = 0;
       hideSurvivorDraft();
       clearPremiumKeys();
       survivor.last = performance.now();
@@ -9982,6 +10040,8 @@ function init() {
         running: survivor.running,
         paused: survivor.paused,
         draftOpen: survivor.draftOpen,
+        draftRerolls: Math.max(0, Number(survivor.draftRerolls || 0)),
+        draftChoices: survivorDraftChoiceIds(),
         frames: survivor.frames || 0,
         elapsed: Math.round(survivor.elapsed),
         score: Math.floor(survivor.score),
@@ -14728,6 +14788,7 @@ function init() {
             survivor.paused = false;
             survivor.draftOpen = false;
             survivor.draftChoices = [];
+            survivor.draftRerolls = 0;
             renderSurvivorDraft();
             setSurvivorUi();
             drawSurvivor();
@@ -14740,6 +14801,7 @@ function init() {
             if (!survivor.draftOpen) openSurvivorDraft();
             return survivor.draftChoices.map(choice => choice.id);
           },
+          rerollSurvivorDraft: () => rerollSurvivorDraft(),
           chooseSurvivorUpgrade: (id) => selectSurvivorUpgrade(id || survivor.draftChoices[0]?.id),
           survivorBuild: () => survivorBuildSummary(),
           survivorState: () => survivorDebugState(),
@@ -15453,6 +15515,10 @@ function init() {
       const discreteCodes = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyQ'];
       if (e.repeat && ['heist', 'tactics', 'chain'].includes(premiumActive) && discreteCodes.includes(e.code)) return;
       if (premiumActive === 'survivor' && survivor.draftOpen) {
+        if (e.code === 'KeyR') {
+          rerollSurvivorDraft();
+          return;
+        }
         if (['Digit1', 'Digit2', 'Digit3'].includes(e.code)) {
           selectSurvivorUpgrade(survivor.draftChoices[Number(e.code.replace('Digit', '')) - 1]?.id);
         }
