@@ -13151,6 +13151,9 @@ function init() {
       recipesCompleted: 0,
       overcharge: 0,
       catalystUsed: 0,
+      warningLabel: '',
+      warningTone: '',
+      warningCell: null,
       reshuffles: 0,
       lastReshuffle: '',
       finished: false,
@@ -13335,6 +13338,29 @@ function init() {
       return true;
     }
 
+    function clearChainWarning() {
+      chain.warningLabel = '';
+      chain.warningTone = '';
+      chain.warningCell = null;
+    }
+
+    function markChainWarning(label, tone = 'danger', r = chain.cursor?.r || 0, c = chain.cursor?.c || 0) {
+      chain.warningLabel = label;
+      chain.warningTone = tone;
+      chain.warningCell = {
+        r: Math.floor(clamp(Number(r || 0), 0, 6)),
+        c: Math.floor(clamp(Number(c || 0), 0, 6))
+      };
+      chain.feedback = label;
+      renderChain();
+      triggerPremiumFeedback(tone, { label: tone === 'tool' ? 'OVERCHARGE LOW' : 'INVALID CHAIN', throttleMs: 120 });
+      return {
+        label,
+        tone,
+        cell: { ...chain.warningCell }
+      };
+    }
+
     function chainPhaseDef() {
       return chainPhaseDefs[chain.phaseIndex] || null;
     }
@@ -13360,6 +13386,9 @@ function init() {
       chain.phaseIndex = 0;
       chain.bestMove = null;
       chain.feedback = variant.active ? `${variant.short} · 寻找 3+ 同色能量团` : '寻找 3+ 同色能量团';
+      chain.warningLabel = '';
+      chain.warningTone = '';
+      chain.warningCell = null;
       chain.lastGain = 0;
       chain.lastClear = 0;
       chain.lastSpecial = '';
@@ -13522,6 +13551,7 @@ function init() {
     }
 
     function applyChainResult(result, { catalyst = false } = {}) {
+      clearChainWarning();
       const ledger = collectChainLedger(result.cells);
       chain.combo = result.cleared;
       chain.streak += catalyst ? 2 : 1;
@@ -13627,6 +13657,7 @@ function init() {
       }
       chain.reshuffles = Number(chain.reshuffles || 0) + 1;
       chain.lastReshuffle = reason;
+      clearChainWarning();
       chain.feedback = reason === 'debug'
         ? '矩阵已重洗 · 恢复可用连锁'
         : '无可用连锁 · 自动重洗';
@@ -13665,8 +13696,7 @@ function init() {
         chain.lastClear = 0;
         chain.lastSpecial = '';
         chain.specialsTriggered = 0;
-        chain.feedback = '需要 3+ 相邻能量';
-        renderChain();
+        markChainWarning('需要 3+ 相邻能量', 'danger', r, c);
         return;
       }
       chain.moves--;
@@ -13680,8 +13710,8 @@ function init() {
     function triggerChainCatalyst() {
       if (chain.moves <= 0 || chain.finished) return;
       if (chain.overcharge < 100) {
-        chain.feedback = `超载未满 ${Math.floor(chain.overcharge)}% · 继续完成配方`;
-        renderChain();
+        const cursor = normalizeChainCursor();
+        markChainWarning(`超载未满 ${Math.floor(chain.overcharge)}% · 继续完成配方`, 'tool', cursor.r, cursor.c);
         return;
       }
       const result = evaluateChainCatalyst();
@@ -13690,8 +13720,8 @@ function init() {
           renderChain();
           return;
         }
-        chain.feedback = '催化失败：没有可炼成能量';
-        renderChain();
+        const cursor = normalizeChainCursor();
+        markChainWarning('催化失败：没有可炼成能量', 'danger', cursor.r, cursor.c);
         return;
       }
       chain.overcharge = 0;
@@ -13724,6 +13754,13 @@ function init() {
         goal: phase?.goal || '目标分数',
         phaseIndex: chain.phaseIndex,
         feedback: chain.feedback,
+        warning: {
+          label: chain.warningLabel || '',
+          tone: chain.warningTone || '',
+          cell: chain.warningCell ? { ...chain.warningCell } : null,
+          boardTone: chain.board?.dataset.warningTone || '',
+          boardClass: chain.board?.className || ''
+        },
         lastGain: chain.lastGain,
         lastClear: chain.lastClear,
         lastSpecial: chain.lastSpecial,
@@ -13795,6 +13832,7 @@ function init() {
       chain.mult = 1;
       chain.phaseIndex = 0;
       chain.feedback = '实验矩阵已装载';
+      clearChainWarning();
       chain.lastGain = 0;
       chain.lastClear = 0;
       chain.lastSpecial = '';
@@ -13830,6 +13868,7 @@ function init() {
       chain.mult = 1;
       chain.phaseIndex = 0;
       chain.feedback = '秘方矩阵已装载';
+      clearChainWarning();
       chain.lastGain = 0;
       chain.lastClear = 0;
       chain.lastSpecial = '';
@@ -13861,10 +13900,59 @@ function init() {
       seedChainRecipeBoard();
       chain.overcharge = 100;
       chain.feedback = '超载调试已就绪';
+      clearChainWarning();
       renderChain();
       const before = chainDebugState();
       triggerChainCatalyst();
       return { before, after: chainDebugState() };
+    }
+
+    function findChainInvalidCell() {
+      for (let r = 0; r < 7; r++) {
+        for (let c = 0; c < 7; c++) {
+          if (!evaluateChainMove(r, c).valid) return { r, c };
+        }
+      }
+      return { r: 6, c: 6 };
+    }
+
+    function forceChainInvalid() {
+      seedChainComboBoard();
+      const cell = findChainInvalidCell();
+      chain.cursor = { ...cell };
+      renderChain();
+      const before = chainDebugState();
+      popChain(cell.r, cell.c);
+      return {
+        cell,
+        before,
+        after: chainDebugState(),
+        feedback: {
+          lastTone: premiumFeedback.lastTone,
+          lastLabel: premiumFeedback.lastLabel,
+          tones: { ...premiumFeedback.tones },
+          visualTriggers: premiumFeedback.visualTriggers
+        }
+      };
+    }
+
+    function forceChainCatalystLow() {
+      seedChainRecipeBoard();
+      chain.overcharge = 42;
+      clearChainWarning();
+      renderChain();
+      const before = chainDebugState();
+      triggerChainCatalyst();
+      return {
+        before,
+        after: chainDebugState(),
+        feedback: {
+          lastTone: premiumFeedback.lastTone,
+          lastLabel: premiumFeedback.lastLabel,
+          tones: { ...premiumFeedback.tones },
+          visualTriggers: premiumFeedback.visualTriggers
+        }
+      };
     }
 
     function seedChainNoMoveBoard() {
@@ -13876,6 +13964,7 @@ function init() {
       chain.mult = 1;
       chain.phaseIndex = 0;
       chain.feedback = '无步调试矩阵已装载';
+      clearChainWarning();
       chain.lastGain = 0;
       chain.lastClear = 0;
       chain.lastSpecial = '';
@@ -13945,8 +14034,9 @@ function init() {
         const key = chainKey(r, c);
         const isHint = chain.bestMove?.r === r && chain.bestMove?.c === c;
         const isCursor = cursor.r === r && cursor.c === c;
+        const isWarning = chain.warningCell?.r === r && chain.warningCell?.c === c;
         btn.id = `premium-chain-cell-${r}-${c}`;
-        btn.className = `chain-cell chain-${color}${isHint ? ' chain-hint' : ''}${preview.has(key) && !isHint ? ' chain-preview' : ''}${isCursor ? ' chain-cursor' : ''}`;
+        btn.className = `chain-cell chain-${color}${isHint ? ' chain-hint' : ''}${preview.has(key) && !isHint ? ' chain-preview' : ''}${isCursor ? ' chain-cursor' : ''}${isWarning ? ' chain-warning-cell' : ''}`;
         btn.dataset.chainRow = String(r);
         btn.dataset.chainCol = String(c);
         btn.dataset.chainValue = color;
@@ -13982,8 +14072,11 @@ function init() {
       }
       chain.board.classList.toggle('chain-cleared', chain.finished && chain.score >= chain.target);
       chain.board.classList.toggle('chain-overcharged', chain.overcharge >= 100 && !chain.finished);
+      chain.board.classList.toggle('chain-warning', !!chain.warningLabel && chain.warningTone === 'danger');
+      chain.board.classList.toggle('chain-tool-warning', !!chain.warningLabel && chain.warningTone === 'tool');
       chain.board.dataset.feedback = chain.feedback;
       chain.board.dataset.recipe = chainRecipeDetail();
+      chain.board.dataset.warningTone = chain.warningTone || '';
       if (premiumActive === 'chain') updatePremiumMetaControls();
     }
 
@@ -15566,6 +15659,8 @@ function init() {
           forceChainCombo: () => forceChainCombo(),
           forceChainRecipe: () => forceChainRecipe(),
           forceChainCatalyst: () => forceChainCatalyst(),
+          forceChainInvalid: () => forceChainInvalid(),
+          forceChainCatalystLow: () => forceChainCatalystLow(),
           forceChainNoMove: () => forceChainNoMove(),
           forceChainFinish: (cleared = true) => forceChainFinish(cleared),
           tacticsTurn: () => tactics.turn,

@@ -7980,6 +7980,30 @@ body.command-open {
   border: 1px solid rgba(15, 23, 42, 0.42);
   pointer-events: none;
 }
+.chain-warning,
+.chain-tool-warning {
+  animation: chain-warning-pulse 0.36s ease;
+}
+.chain-warning {
+  border-color: rgba(248, 113, 113, 0.62);
+  box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.22), 0 0 28px rgba(239, 68, 68, 0.18);
+}
+.chain-tool-warning {
+  border-color: rgba(167, 139, 250, 0.58);
+  box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.2), 0 0 26px rgba(167, 139, 250, 0.18);
+}
+.chain-warning .chain-warning-cell,
+.chain-tool-warning .chain-warning-cell {
+  transform: translateY(-1px) scale(1.04);
+}
+.chain-warning .chain-warning-cell {
+  border-color: rgba(252, 165, 165, 0.95);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.28), 0 0 24px rgba(239, 68, 68, 0.42);
+}
+.chain-tool-warning .chain-warning-cell {
+  border-color: rgba(221, 214, 254, 0.95);
+  box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.28), 0 0 24px rgba(167, 139, 250, 0.42);
+}
 .chain-overcharged {
   border-color: rgba(253, 230, 138, 0.48);
   box-shadow: 0 0 0 1px rgba(253, 230, 138, 0.12), 0 0 30px rgba(251, 191, 36, 0.18);
@@ -8006,6 +8030,12 @@ body.command-open {
 .chain-cleared {
   border-color: rgba(52, 211, 153, 0.55);
   box-shadow: 0 0 26px rgba(52, 211, 153, 0.2);
+}
+
+@keyframes chain-warning-pulse {
+  0% { filter: brightness(1); }
+  42% { filter: brightness(1.28) saturate(1.18); }
+  100% { filter: brightness(1); }
 }
 
 #premium-chain-catalyst[data-ready="true"],
