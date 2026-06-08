@@ -713,6 +713,12 @@ async function run() {
   await wait(200);
   const commandBeforeExecute = await evaluate(`(() => ({
     open: document.querySelector('#command-palette')?.classList.contains('active') || false,
+    inputRole: document.querySelector('#command-search-input')?.getAttribute('role') || '',
+    inputExpanded: document.querySelector('#command-search-input')?.getAttribute('aria-expanded') || '',
+    inputControls: document.querySelector('#command-search-input')?.getAttribute('aria-controls') || '',
+    activeDescendant: document.querySelector('#command-search-input')?.getAttribute('aria-activedescendant') || '',
+    activeOptionId: document.querySelector('.command-result-item.active')?.id || '',
+    activeOptionSelected: document.querySelector('.command-result-item.active')?.getAttribute('aria-selected') || '',
     results: document.querySelectorAll('.command-result-item').length,
     firstTitle: document.querySelector('.command-result-title')?.textContent || '',
     countText: document.querySelector('#command-result-count')?.textContent || ''
@@ -751,6 +757,57 @@ async function run() {
     debugReady: !!window.__atherixDebug?.vault,
     horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
   }))()`);
+
+  await evaluate(`document.querySelector('.tool-nav-btn[data-tool="json"]')?.click()`);
+  await wait(180);
+  const jsonTreeA11yState = await evaluate(`(() => {
+    const input = document.querySelector('#json-input');
+    input.value = '{"team":{"name":"Atherix","modes":["runner","tactics"]},"ready":true}';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector('#json-fmt-btn')?.click();
+    const toggle = document.querySelector('.json-toggle');
+    const branchId = toggle?.getAttribute('aria-controls') || '';
+    const node = toggle?.closest('.json-node');
+    toggle?.focus();
+    toggle?.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true }));
+    const afterSpace = {
+      expanded: toggle?.getAttribute('aria-expanded') || '',
+      collapsed: node?.classList.contains('json-collapsed') || false,
+      focusId: document.activeElement?.getAttribute('aria-controls') || ''
+    };
+    toggle?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    return {
+      toggleExists: !!toggle,
+      role: toggle?.getAttribute('role') || '',
+      tabIndex: toggle?.getAttribute('tabindex') || '',
+      label: toggle?.getAttribute('aria-label') || '',
+      branchId,
+      branchExists: !!branchId && !!document.getElementById(branchId),
+      afterSpace,
+      afterEnterExpanded: toggle?.getAttribute('aria-expanded') || '',
+      afterEnterCollapsed: node?.classList.contains('json-collapsed') || false
+    };
+  })()`);
+
+  await evaluate(`document.querySelector('.tool-nav-btn[data-tool="image"]')?.click()`);
+  await wait(180);
+  const compressorLimitState = await evaluate(`(async () => {
+    const input = document.querySelector('#file-input');
+    const file = new File([new Uint8Array((10 * 1024 * 1024) + 1)], 'too-large.png', { type: 'image/png' });
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    input.files = transfer.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 220));
+    return {
+      controlsDisplay: document.querySelector('#compressor-controls')?.style.display || '',
+      panelDisplay: document.querySelector('#image-preview-panel')?.style.display || '',
+      originalDetail: document.querySelector('#orig-img-details')?.textContent.trim() || '',
+      compressedDetail: document.querySelector('#comp-img-details')?.textContent.trim() || '',
+      fileCount: input.files?.length || 0,
+      overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+    };
+  })()`, 3000);
 
   const vaultExportState = await evaluate(`(async () => {
     localStorage.setItem('admin_token', 'vault-secret-should-not-export');
@@ -1141,7 +1198,17 @@ async function run() {
       readerActive: document.querySelector('#blog-reader')?.classList.contains('active') || false,
       title: document.querySelector('#reader-post-title')?.textContent.trim() || ''
     };
-    return { missing, malformed, badQuery, queryOpen };
+    history.pushState(null, '', '/#post/post-1');
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    await new Promise(resolve => setTimeout(resolve, 220));
+    const legacyHashOpen = {
+      pathname: location.pathname,
+      search: location.search,
+      hash: location.hash,
+      readerActive: document.querySelector('#blog-reader')?.classList.contains('active') || false,
+      title: document.querySelector('#reader-post-title')?.textContent.trim() || ''
+    };
+    return { missing, malformed, badQuery, queryOpen, legacyHashOpen };
   })()`);
   await click('.nav-item[data-target="blog"]');
   await waitFor('.blog-post-card');
@@ -2776,10 +2843,43 @@ async function run() {
   if (managedServer) {
     assert(adminLoginSessionState && !adminLoginSessionState.missingForm && adminLoginSessionState.sessionTokenStored && !adminLoginSessionState.localToken && adminLoginSessionState.blogActionsVisible && adminLoginSessionState.projectActionsVisible && !adminLoginSessionState.sessionAfterLogout && !adminLoginSessionState.localAfterLogout && !adminLoginSessionState.blogActionsAfterLogout && !adminLoginSessionState.projectActionsAfterLogout, `admin login should use session-only storage and clear cleanly on logout: ${JSON.stringify(adminLoginSessionState)}`);
   }
-  assert(commandBeforeExecute.open && commandBeforeExecute.results >= 1 && /Rift Tactics/.test(commandBeforeExecute.firstTitle), `command palette should find tactics mode: ${JSON.stringify(commandBeforeExecute)}`);
+  assert(
+    commandBeforeExecute.open &&
+      commandBeforeExecute.results >= 1 &&
+      /Rift Tactics/.test(commandBeforeExecute.firstTitle) &&
+      commandBeforeExecute.inputRole === 'combobox' &&
+      commandBeforeExecute.inputExpanded === 'true' &&
+      commandBeforeExecute.inputControls === 'command-results' &&
+      commandBeforeExecute.activeDescendant &&
+      commandBeforeExecute.activeDescendant === commandBeforeExecute.activeOptionId &&
+      commandBeforeExecute.activeOptionSelected === 'true',
+    `command palette should find tactics mode and expose active descendant semantics: ${JSON.stringify(commandBeforeExecute)}`
+  );
   assert(commandState.closed && commandState.gameActive && commandState.tacticsActive && /Rift Tactics/.test(commandState.activeTitle), `command palette should execute game navigation: ${JSON.stringify(commandState)}`);
   assert(vaultCommandBeforeExecute.open && vaultCommandBeforeExecute.results >= 1 && /数据保险库/.test(vaultCommandBeforeExecute.firstTitle), `command palette should find the data vault: ${JSON.stringify(vaultCommandBeforeExecute)}`);
   assert(vaultCommandState.closed && vaultCommandState.toolboxActive && vaultCommandState.vaultActive && vaultCommandState.navActive && vaultCommandState.debugReady && !vaultCommandState.horizontalOverflow, `data vault command should open the vault panel: ${JSON.stringify(vaultCommandState)}`);
+  assert(
+    jsonTreeA11yState.toggleExists &&
+      jsonTreeA11yState.role === 'button' &&
+      jsonTreeA11yState.tabIndex === '0' &&
+      jsonTreeA11yState.branchExists &&
+      /折叠或展开/.test(jsonTreeA11yState.label) &&
+      jsonTreeA11yState.afterSpace.expanded === 'false' &&
+      jsonTreeA11yState.afterSpace.collapsed &&
+      jsonTreeA11yState.afterSpace.focusId === jsonTreeA11yState.branchId &&
+      jsonTreeA11yState.afterEnterExpanded === 'true' &&
+      !jsonTreeA11yState.afterEnterCollapsed,
+    `JSON tree toggles should be keyboard-accessible and sync aria-expanded: ${JSON.stringify(jsonTreeA11yState)}`
+  );
+  assert(
+    compressorLimitState.controlsDisplay === 'none' &&
+      compressorLimitState.panelDisplay === 'grid' &&
+      /超过 10 MB 上限/.test(compressorLimitState.compressedDetail) &&
+      /文件大小: -/.test(compressorLimitState.originalDetail) &&
+      compressorLimitState.fileCount === 0 &&
+      !compressorLimitState.overflow,
+    `image compressor should enforce the 10MB browser-side limit without stale previews: ${JSON.stringify(compressorLimitState)}`
+  );
   assert(vaultExportState.clicks.length === 1 && /atherix-vault-\d{8}-\d{6}\.json/.test(vaultExportState.clicks[0].download), `data vault should trigger a dated JSON export: ${JSON.stringify(vaultExportState)}`);
   assert(vaultExportState.schema === 'atherix-vault-v1' && vaultExportState.keys >= 2 && !vaultExportState.hasAdminToken && vaultExportState.sessionTokenAfter === 'vault-session-should-not-export' && vaultExportState.readerValue === '64' && vaultExportState.survivorBest === '1234', `data vault export should include allowed state without leaking admin token: ${JSON.stringify(vaultExportState)}`);
   assert(/\d/.test(vaultExportState.keyCountText) && /\d/.test(vaultExportState.readerText) && /\d/.test(vaultExportState.arcadeText), `data vault should refresh summary after export: ${JSON.stringify(vaultExportState)}`);
@@ -2805,6 +2905,14 @@ async function run() {
   assert(/^\d+%$/.test(blogState.progress), 'blog reader should report reading progress');
   assert(blogHubAfterBookmark.activeFilter && blogHubAfterBookmark.bookmarkCount >= 1 && blogHubAfterBookmark.bookmarkedCards >= 1 && !blogHubAfterBookmark.horizontalOverflow, `blog reading hub should filter bookmarked articles: ${JSON.stringify(blogHubAfterBookmark)}`);
   assert(badPostRouteState.missing.hash === '#blog' && badPostRouteState.missing.blogActive && !badPostRouteState.missing.readerActive && badPostRouteState.malformed.hash === '#blog' && badPostRouteState.malformed.blogActive && !badPostRouteState.malformed.readerActive && badPostRouteState.badQuery.pathname === '/' && badPostRouteState.badQuery.search === '' && badPostRouteState.badQuery.hash === '#blog' && badPostRouteState.badQuery.blogActive && !badPostRouteState.badQuery.readerActive && badPostRouteState.queryOpen.search === '?post=post-1' && badPostRouteState.queryOpen.readerActive && badPostRouteState.queryOpen.title, `bad blog routes should recover and query article routes should open: ${JSON.stringify(badPostRouteState)}`);
+  assert(
+    badPostRouteState.legacyHashOpen?.readerActive &&
+      badPostRouteState.legacyHashOpen?.pathname === '/' &&
+      badPostRouteState.legacyHashOpen?.search === '?post=post-1' &&
+      badPostRouteState.legacyHashOpen?.hash === '' &&
+      (badPostRouteState.legacyHashOpen?.title || '').length > 4,
+    `legacy hash post route should open the reader and canonicalize to ?post=: ${JSON.stringify(badPostRouteState.legacyHashOpen)}`
+  );
   assert(emptyReaderHashState.blogActive && !emptyReaderHashState.readerActive && emptyReaderHashState.hash === '#blog', `bare #blog-reader route should recover to the blog list instead of an active empty reader: ${JSON.stringify(emptyReaderHashState)}`);
   assert(nativeArticleLinkState.found && /\\?post=/.test(nativeArticleLinkState.href) && nativeArticleLinkState.ctrlAllowed && !nativeArticleLinkState.ctrlDefaultPrevented && !nativeArticleLinkState.plainAllowed && nativeArticleLinkState.plainDefaultPrevented, `article links should preserve native modified-click behavior while SPA-handling plain clicks: ${JSON.stringify(nativeArticleLinkState)}`);
   assert(guestbookA11yState.avatarButtons >= 10 && guestbookA11yState.avatarButtonTypes === guestbookA11yState.avatarButtons && guestbookA11yState.activeAvatar === guestbookA11yState.hiddenAvatar && guestbookA11yState.activePressed === 'true' && guestbookA11yState.inactivePressed === 'false' && guestbookA11yState.emojiButtons >= 12 && guestbookA11yState.focusedEmoji && guestbookA11yState.triggerExpandedAfterClose === 'false' && guestbookA11yState.contentValue.length > 0 && !guestbookA11yState.horizontalOverflow, `guestbook avatar and emoji controls should be keyboard-accessible buttons: ${JSON.stringify(guestbookA11yState)}`);
@@ -3274,6 +3382,8 @@ async function run() {
     commandState,
     vaultCommandBeforeExecute,
     vaultCommandState,
+    jsonTreeA11yState,
+    compressorLimitState,
     vaultExportState,
     vaultImportState,
     vaultClearConfirmState,
@@ -3377,12 +3487,18 @@ function summarizeSmokeResult(result) {
       hubCards: result.blogHubBefore?.cards,
       filterRole: result.blogHubBefore?.filterRole,
       emptyReaderRecovers: result.emptyReaderHashState?.blogActive && !result.emptyReaderHashState?.readerActive,
+      legacyHashCanonical: result.badPostRouteState?.legacyHashOpen?.search === '?post=post-1' && result.badPostRouteState?.legacyHashOpen?.hash === '',
       modifiedClickNative: result.nativeArticleLinkState?.ctrlAllowed && !result.nativeArticleLinkState?.ctrlDefaultPrevented,
       readerOpened: result.blogState?.visibleArticle,
       articleChars: result.blogState?.articleChars,
       nextOpened: result.readerNextOpenState?.visibleArticle,
       markdownExportBytes: result.readerExportState?.blobInfo?.size,
       horizontalOverflow: result.readerNextOpenState?.horizontalOverflow
+    },
+    tools: {
+      commandActiveDescendant: result.commandBeforeExecute?.activeDescendant,
+      jsonKeyboardToggle: result.jsonTreeA11yState?.afterSpace?.expanded === 'false' && result.jsonTreeA11yState?.afterEnterExpanded === 'true',
+      compressorLimit: result.compressorLimitState?.controlsDisplay === 'none' && /超过 10 MB 上限/.test(result.compressorLimitState?.compressedDetail || '')
     },
     arcade: {
       activeMode: result.arcadeInitial?.cockpitMode,

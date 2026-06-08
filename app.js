@@ -947,6 +947,10 @@ function init() {
     filterCommandItems();
     if (commandResultCount) commandResultCount.textContent = `${commandMatches.length} 项结果`;
     commandResults.innerHTML = '';
+    if (commandSearchInput) {
+      commandSearchInput.setAttribute('aria-expanded', commandPalette?.classList.contains('active') ? 'true' : 'false');
+      commandSearchInput.removeAttribute('aria-activedescendant');
+    }
     if (!commandMatches.length) {
       const empty = document.createElement('div');
       empty.className = 'command-empty-state';
@@ -958,8 +962,12 @@ function init() {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = `command-result-item${index === commandActiveIndex ? ' active' : ''}`;
+      btn.id = item.id;
       btn.setAttribute('role', 'option');
       btn.setAttribute('aria-selected', index === commandActiveIndex ? 'true' : 'false');
+      if (index === commandActiveIndex && commandSearchInput) {
+        commandSearchInput.setAttribute('aria-activedescendant', item.id);
+      }
 
       const iconWrap = document.createElement('span');
       iconWrap.className = 'command-result-icon';
@@ -1002,6 +1010,7 @@ function init() {
     commandActiveIndex = 0;
     commandPalette.classList.add('active');
     commandPalette.setAttribute('aria-hidden', 'false');
+    commandSearchInput.setAttribute('aria-expanded', 'true');
     document.body.classList.add('command-open');
     renderCommandResults();
     restoreFocusTo(commandSearchInput);
@@ -1016,6 +1025,10 @@ function init() {
     moveFocusBeforeHiding(commandPalette, restoreFocus ? (focusTarget || commandTrigger) : mainContent);
     commandPalette.classList.remove('active');
     commandPalette.setAttribute('aria-hidden', 'true');
+    if (commandSearchInput) {
+      commandSearchInput.setAttribute('aria-expanded', 'false');
+      commandSearchInput.removeAttribute('aria-activedescendant');
+    }
     document.body.classList.remove('command-open');
     commandPaletteFocusOrigin = null;
   }
@@ -2344,6 +2357,7 @@ function init() {
     if (rawHash.startsWith('post/')) {
       const postId = rawHash.slice(5);
       if (postId) {
+        window.history.replaceState(null, '', articleRoutePath(postId));
         readArticle(postId);
         return;
       }
@@ -3457,6 +3471,12 @@ function init() {
   function renderJSONTree(val) {
     const container = document.createElement('div');
     container.className = 'json-tree';
+    let toggleId = 0;
+
+    function setJsonNodeCollapsed(node, toggle, collapsed) {
+      node.classList.toggle('json-collapsed', collapsed);
+      toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    }
     
     function buildNode(key, value, isLast) {
       const node = document.createElement('div');
@@ -3481,14 +3501,26 @@ function init() {
         
         const toggle = document.createElement('span');
         toggle.className = 'json-toggle';
+        toggle.setAttribute('role', 'button');
+        toggle.setAttribute('tabindex', '0');
+        toggle.setAttribute('aria-expanded', 'true');
+        toggle.setAttribute('aria-controls', `json-branch-${++toggleId}`);
+        toggle.setAttribute('aria-label', `${key === null ? '根节点' : key} 折叠或展开`);
         toggle.addEventListener('click', (e) => {
           e.stopPropagation();
-          node.classList.toggle('json-collapsed');
+          setJsonNodeCollapsed(node, toggle, !node.classList.contains('json-collapsed'));
+        });
+        toggle.addEventListener('keydown', (e) => {
+          if (e.key !== 'Enter' && e.key !== ' ') return;
+          e.preventDefault();
+          e.stopPropagation();
+          setJsonNodeCollapsed(node, toggle, !node.classList.contains('json-collapsed'));
         });
         node.appendChild(toggle);
         
         const collapsible = document.createElement('span');
         collapsible.className = 'json-collapsible';
+        collapsible.id = toggle.getAttribute('aria-controls');
         
         const keys = Object.keys(value);
         keys.forEach((k, idx) => {
@@ -3660,9 +3692,11 @@ function init() {
 
   const origImgPreview = document.getElementById('orig-img-preview');
   const compImgPreview = document.getElementById('comp-img-preview');
-  const origImgDetails = document.getElementById('orig-img-details').querySelector('span');
+  const origImgDetails = document.getElementById('orig-img-details')?.querySelector('span');
   const compImgDetails = document.getElementById('comp-img-details');
 
+  const maxImageFileSize = 10 * 1024 * 1024;
+  const supportedImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
   let currentImageFile = null;
   let compressedDataUrl = null;
 
@@ -3696,14 +3730,41 @@ function init() {
   function formatBytes(bytes) {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.min(sizes.length - 1, Math.floor(Math.log(bytes) / Math.log(k)));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 
+  function resetCompressorPreview(message = '') {
+    currentImageFile = null;
+    if (compressedDataUrl) {
+      URL.revokeObjectURL(compressedDataUrl);
+      compressedDataUrl = null;
+    }
+    if (origImgPreview) origImgPreview.removeAttribute('src');
+    if (compImgPreview) compImgPreview.removeAttribute('src');
+    if (origImgDetails) origImgDetails.textContent = '-';
+    if (compImgDetails) {
+      compImgDetails.innerHTML = message
+        ? `<span style="color: var(--danger); font-weight: 700;">${escapeHTML(message)}</span>`
+        : '预计大小: <span>-</span> (节约: <span>-</span>)';
+    }
+    if (compressorControls) compressorControls.style.display = 'none';
+    if (imagePreviewPanel) imagePreviewPanel.style.display = message ? 'grid' : 'none';
+  }
+
   function handleImageSelect(file) {
-    if (!file.type.startsWith('image/')) {
-      showToast('请上传有效的图片格式文件', 'warning');
+    if (!supportedImageTypes.has(file.type)) {
+      resetCompressorPreview('仅支持 JPG、PNG、WebP 图片。');
+      if (fileInput) fileInput.value = '';
+      showToast('仅支持 JPG、PNG、WebP 图片', 'warning');
+      return;
+    }
+    if (file.size > maxImageFileSize) {
+      const limitText = formatBytes(maxImageFileSize);
+      resetCompressorPreview(`文件 ${formatBytes(file.size)} 超过 ${limitText} 上限。`);
+      if (fileInput) fileInput.value = '';
+      showToast(`图片超过 ${limitText}，请先缩小后再上传`, 'warning');
       return;
     }
     currentImageFile = file;
@@ -3712,13 +3773,17 @@ function init() {
     reader.onload = (e) => {
       if (origImgPreview) {
         origImgPreview.src = e.target.result;
-        origImgDetails.textContent = formatBytes(file.size);
+        if (origImgDetails) origImgDetails.textContent = formatBytes(file.size);
       }
       
       if (compressorControls) compressorControls.style.display = 'grid';
       if (imagePreviewPanel) imagePreviewPanel.style.display = 'grid';
 
       compressImage();
+    };
+    reader.onerror = () => {
+      resetCompressorPreview('读取图片失败，请重新选择文件。');
+      showToast('读取图片失败，请重新选择文件', 'warning');
     };
     reader.readAsDataURL(file);
   }
@@ -3781,6 +3846,10 @@ function init() {
           compImgDetails.innerHTML = `文件大小: <span>${formatBytes(blob.size)}</span> (<span style="color:${color}; font-weight:700;">${text}</span>)`;
         }
       }, format, q);
+    };
+    img.onerror = () => {
+      resetCompressorPreview('图片解码失败，请换一张图片。');
+      showToast('图片解码失败，请换一张图片', 'warning');
     };
   }
 

@@ -588,7 +588,7 @@
                 <div class="image-card">
                   <div class="stat-label">压缩转换后</div>
                   <img id="comp-img-preview" src="" alt="Compressed Preview" loading="lazy" decoding="async">
-                  <div class="image-details" id="comp-img-details">预计大小: <span>-</span> (节约: <span>-</span>)</div>
+                  <div class="image-details" id="comp-img-details" aria-live="polite">预计大小: <span>-</span> (节约: <span>-</span>)</div>
                 </div>
               </div>
             </div>
@@ -1375,7 +1375,7 @@
     <div class="command-panel" role="dialog" aria-modal="true" aria-labelledby="command-palette-title">
       <div class="command-search-row">
         <i data-lucide="search"></i>
-        <input type="search" id="command-search-input" autocomplete="off" placeholder="搜索文章、项目、工具、游戏..." aria-label="搜索站点内容">
+        <input type="search" id="command-search-input" autocomplete="off" placeholder="搜索文章、项目、工具、游戏..." aria-label="搜索站点内容" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="command-results">
         <button type="button" class="command-close-btn" id="command-palette-close" aria-label="关闭">
           <i data-lucide="x"></i>
         </button>
