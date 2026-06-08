@@ -3355,6 +3355,18 @@ async function run() {
     };
   })()`);
   const driftPhaseState = await evaluate(`(() => window.__atherixDebug?.premium?.forceDriftPhaseBrake?.() || {})()`);
+  const driftCollisionState = await evaluate(`(() => {
+    const result = window.__atherixDebug?.premium?.forceDriftCollision?.('barrier') || {};
+    const pixels = window.__atherixSmokeCountCanvasPixels?.('#premium-drift-canvas') || {};
+    return {
+      ...result,
+      nonBlank: !!pixels.nonBlank,
+      lineText: document.querySelector('#premium-drift-line')?.textContent || '',
+      shieldText: document.querySelector('#premium-drift-shield')?.textContent || '',
+      feedbackTone: document.querySelector('#premium-game-stage')?.dataset.feedbackTone || '',
+      feedbackLabel: document.querySelector('#premium-game-stage')?.dataset.feedback || ''
+    };
+  })()`);
   const driftSponsorState = await evaluate(`(() => window.__atherixDebug?.premium?.forceDriftSponsor?.() || {})()`);
   await key('keyDown', 'p', 'KeyP');
   await key('keyUp', 'p', 'KeyP');
@@ -3595,7 +3607,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v70-quality') && swText.includes('/style.css?v=20260608-quality-v12') && swText.includes('/app.js?v=20260608-quality-v27'),
+      swHasQualityVersion: swText.includes('atherix-static-v71-quality') && swText.includes('/style.css?v=20260608-quality-v12') && swText.includes('/app.js?v=20260608-quality-v28'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp'),
       swHasLocalFonts: swText.includes('/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2') && swText.includes('/assets/fonts/outfit-latin-wght-normal.woff2') && swText.includes('/assets/fonts/jetbrains-mono-latin-wght-normal.woff2')
@@ -4461,6 +4473,7 @@ async function run() {
   assert(driftState.nonBlank && driftState.running && !driftState.paused && driftState.score > 0 && /Neon Drift/.test(driftState.activeTitle) && driftState.boost !== 'READY' && /G$/.test(driftState.rival) && /^\d+%$/.test(driftState.heat) && driftState.phase && driftState.contract && driftState.overtake && driftState.debug?.rivalHud === driftState.rival && driftState.debug?.contractHud === driftState.contract && driftState.debug?.heatHud === driftState.heat && driftState.debug?.phaseHud === driftState.phase, `drift mode should render, move, score, spend boost, and expose synced rival/contract/heat/phase HUD: ${JSON.stringify(driftState)}`);
   assert(driftApexState.after.running && driftApexState.after.gates >= driftApexState.before.gates + 1 && driftApexState.after.label === 'PERFECT' && driftApexState.after.quality >= 86 && driftApexState.after.combo >= 1 && driftApexState.after.bestCombo >= driftApexState.after.combo && driftApexState.after.splits?.length >= 1 && driftApexState.after.lineBank > driftApexState.before.lineBank && driftApexState.after.overtakes > driftApexState.before.overtakes && driftApexState.after.rival?.flash > 0 && driftApexState.after.contract?.progress > driftApexState.before.contract?.progress && driftApexState.after.heat <= driftApexState.before.heat && /PERFECT/.test(driftApexState.line) && /\dx/.test(driftApexState.combo) && driftApexState.rival && driftApexState.overtake, `drift mode should grade clean apex gates with combo, split, rival overtake, sponsor progress, heat control, and HUD feedback: ${JSON.stringify(driftApexState)}`);
   assert(driftPhaseState.triggered && driftPhaseState.before?.phaseCharge === 100 && driftPhaseState.before?.phaseReady === 'true' && driftPhaseState.after?.phaseCharge === 0 && driftPhaseState.after?.phaseBrake > 0 && driftPhaseState.after?.phaseUses === driftPhaseState.before?.phaseUses + 1 && driftPhaseState.after?.heat < driftPhaseState.before?.heat && driftPhaseState.after?.phaseHud === 'BRAKE' && driftPhaseState.after?.phaseReady === 'false', `drift phase brake should consume READY charge, lower heat, and expose BRAKE HUD: ${JSON.stringify(driftPhaseState)}`);
+  assert(driftCollisionState.nonBlank && driftCollisionState.result?.applied && driftCollisionState.after?.shield < driftCollisionState.before?.shield && driftCollisionState.after?.hitCooldown > 0 && driftCollisionState.after?.impact?.flash > 0 && driftCollisionState.after?.impact?.label === 'BARRIER HIT' && driftCollisionState.after?.label === 'BROKEN' && driftCollisionState.after?.tone === 'danger' && /BROKEN/.test(driftCollisionState.lineText || '') && driftCollisionState.feedback?.lastTone === 'danger' && driftCollisionState.feedbackTone === 'danger' && /BARRIER HIT/.test(driftCollisionState.feedbackLabel || ''), `drift collisions should visibly damage shield, reset line, and trigger danger feedback: ${JSON.stringify(driftCollisionState)}`);
   assert(driftSponsorState.after?.contract?.completed > driftSponsorState.before?.contract?.completed && driftSponsorState.after?.score > driftSponsorState.before?.score && driftSponsorState.after?.lineBank > driftSponsorState.before?.lineBank && driftSponsorState.after?.lastContract === 'APEX' && driftSponsorState.achieved, `drift sponsor contract should complete, reward score/line bank, and unlock achievement: ${JSON.stringify(driftSponsorState)}`);
   assert(driftPauseState.running && driftPauseState.paused && driftPauseState.pauseButton === '继续', `drift mode should enter pause with keyboard: ${JSON.stringify(driftPauseState)}`);
   assert(
@@ -4703,6 +4716,7 @@ async function run() {
     driftState,
     driftApexState,
     driftPhaseState,
+    driftCollisionState,
     driftSponsorState,
     driftPauseState,
     driftPauseFreezeState,
@@ -4816,6 +4830,7 @@ function summarizeSmokeResult(result) {
       drift: {
         rendered: result.driftState?.nonBlank,
         phaseBrake: result.driftPhaseState?.after?.phaseHud,
+        collision: result.driftCollisionState?.after?.impact?.label,
         sponsorAchieved: result.driftSponsorState?.achieved
       },
       heist: {

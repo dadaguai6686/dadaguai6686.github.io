@@ -11239,6 +11239,11 @@ function init() {
       contractsCompleted: 0,
       lastContract: '',
       lastTactic: '',
+      impactFlash: 0,
+      impactLabel: '',
+      impactSource: '',
+      impactDamage: 0,
+      impactPoint: null,
       splits: [],
       rival: { x: 132, y: 238, r: 13, segment: 0, progress: 0, speed: 0.000092, flash: 0, pressure: 0, gap: 0 },
       player: { x: 70, y: 276, vx: 0, vy: 0, angle: -0.62, r: 12, shield: 100, trail: [] },
@@ -11446,6 +11451,11 @@ function init() {
       drift.contractsCompleted = 0;
       drift.lastContract = '';
       drift.lastTactic = variant.active ? `${variant.short} · 起跑相位已就绪` : '起跑相位已就绪';
+      drift.impactFlash = 0;
+      drift.impactLabel = '';
+      drift.impactSource = '';
+      drift.impactDamage = 0;
+      drift.impactPoint = null;
       drift.variant = variant;
       drift.runPressure = pressure;
       drift.splits = [];
@@ -11502,17 +11512,35 @@ function init() {
       }
     }
 
-    function damageDrift(amount, x, y) {
-      if (drift.hitCooldown > 0) return;
+    function driftImpactLabel(source = 'impact', phaseGuard = false) {
+      const label = String(source || 'impact').trim().toUpperCase();
+      if (phaseGuard) return 'GLANCING HIT';
+      if (label.includes('DRONE')) return 'DRONE HIT';
+      if (label.includes('RIVAL')) return 'RIVAL BUMP';
+      if (label.includes('WALL')) return 'WALL HIT';
+      if (label.includes('BARRIER')) return 'BARRIER HIT';
+      return 'IMPACT';
+    }
+
+    function damageDrift(amount, x, y, source = 'impact') {
+      if (drift.hitCooldown > 0) {
+        return { applied: false, cooldown: Math.ceil(drift.hitCooldown), label: drift.impactLabel || '' };
+      }
       const phaseGuard = drift.phaseBrake > 0;
       const finalDamage = phaseGuard ? amount * 0.45 : amount;
-      drift.player.shield -= finalDamage;
+      const beforeShield = Number(drift.player.shield || 0);
+      drift.player.shield = Math.max(0, beforeShield - finalDamage);
       const heatGain = phaseGuard ? 3 + amount * 0.22 : 10 + amount * 0.8;
       addDriftHeat(heatGain);
       chargeDriftPhase(phaseGuard ? 11 : 6);
       drift.lastTactic = phaseGuard ? '相位擦碰：损伤降低' : `碰撞热度 +${Math.round(heatGain)}`;
       drift.multiplier = Math.max(1, drift.multiplier * (phaseGuard ? 0.88 : 0.72));
       drift.combo = 0;
+      drift.impactLabel = driftImpactLabel(source, phaseGuard);
+      drift.impactSource = String(source || 'impact');
+      drift.impactDamage = Number(finalDamage.toFixed(1));
+      drift.impactPoint = { x, y };
+      drift.impactFlash = Math.max(Number(drift.impactFlash || 0), phaseGuard ? 620 : 840);
       drift.lineLabel = phaseGuard ? 'GLANCING' : 'BROKEN';
       drift.lineTone = phaseGuard ? 'clean' : 'danger';
       drift.lineQuality = phaseGuard ? 42 : 0;
@@ -11521,6 +11549,17 @@ function init() {
       drift.player.vx *= phaseGuard ? -0.18 : -0.36;
       drift.player.vy *= phaseGuard ? -0.18 : -0.36;
       driftSpark(x, y, phaseGuard ? '#FDE68A' : '#EF4444', phaseGuard ? 18 : 28);
+      triggerPremiumFeedback('danger', { label: drift.impactLabel, throttleMs: 140 });
+      return {
+        applied: true,
+        label: drift.impactLabel,
+        source: drift.impactSource,
+        beforeShield: Math.ceil(beforeShield),
+        afterShield: Math.ceil(drift.player.shield),
+        damage: drift.impactDamage,
+        heatGain: Number(heatGain.toFixed(1)),
+        phaseGuard
+      };
     }
 
     function driftRectCollision(rect) {
@@ -11593,7 +11632,7 @@ function init() {
         drift.draftBank += dt * 0.024 * drift.draft;
       }
       if (dist < drift.player.r + rival.r - 2 && drift.hitCooldown <= 0) {
-        damageDrift(9, rival.x, rival.y);
+        damageDrift(9, rival.x, rival.y, 'rival');
         rival.flash = 760;
       }
     }
@@ -11752,6 +11791,7 @@ function init() {
       drift.elapsed += dt;
       drift.hitCooldown = Math.max(0, drift.hitCooldown - dt);
       drift.lineFlash = Math.max(0, drift.lineFlash - dt);
+      drift.impactFlash = Math.max(0, Number(drift.impactFlash || 0) - dt);
       const drag = Math.pow(phaseActive ? 0.946 : premiumKeys.down ? 0.955 : 0.982, dt / 16.67);
       p.vx *= drag;
       p.vy *= drag;
@@ -11790,16 +11830,16 @@ function init() {
       if (p.x < 20 || p.x > drift.canvas.width - 20 || p.y < 20 || p.y > drift.canvas.height - 20) {
         p.x = clamp(p.x, 20, drift.canvas.width - 20);
         p.y = clamp(p.y, 20, drift.canvas.height - 20);
-        damageDrift(6, p.x, p.y);
+        damageDrift(6, p.x, p.y, 'wall');
       }
       drift.barriers.forEach(rect => {
-        if (driftRectCollision(rect)) damageDrift(8, p.x, p.y);
+        if (driftRectCollision(rect)) damageDrift(8, p.x, p.y, 'barrier');
       });
 
       drift.drones.forEach(drone => {
         drone.x = drone.baseX + Math.sin(drift.elapsed * drone.speed + drone.phase) * drone.ampX;
         drone.y = drone.baseY + Math.cos(drift.elapsed * drone.speed * 0.86 + drone.phase) * drone.ampY;
-        if (Math.hypot(drone.x - p.x, drone.y - p.y) < drone.r + p.r) damageDrift(12, drone.x, drone.y);
+        if (Math.hypot(drone.x - p.x, drone.y - p.y) < drone.r + p.r) damageDrift(12, drone.x, drone.y, 'drone');
       });
       updateDriftRival(dt);
 
@@ -12006,6 +12046,26 @@ function init() {
         ctx.beginPath();
         ctx.arc(p.x, p.y, 24 + Math.sin(drift.elapsed / 75) * 4, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.restore();
+      }
+      const impactAlpha = clamp(Number(drift.impactFlash || 0) / 840, 0, 1);
+      if (impactAlpha > 0) {
+        const point = drift.impactPoint || { x: p.x, y: p.y };
+        ctx.save();
+        ctx.strokeStyle = `rgba(239, 68, 68, ${0.32 + impactAlpha * 0.5})`;
+        ctx.lineWidth = 4 + impactAlpha * 6;
+        ctx.strokeRect(7, 7, Math.max(0, c.width - 14), Math.max(0, c.height - 14));
+        ctx.strokeStyle = drift.lineTone === 'clean'
+          ? `rgba(253, 230, 138, ${0.34 + impactAlpha * 0.46})`
+          : `rgba(252, 165, 165, ${0.38 + impactAlpha * 0.5})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 20 + (1 - impactAlpha) * 24, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = drift.lineTone === 'clean' ? '#FDE68A' : '#FCA5A5';
+        ctx.font = '900 10px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(drift.impactLabel || 'IMPACT', point.x, Math.max(16, point.y - 24));
         ctx.restore();
       }
 
@@ -15177,6 +15237,15 @@ function init() {
             label: drift.lineLabel,
             tone: drift.lineTone,
             quality: drift.lineQuality,
+            shield: Math.ceil(drift.player.shield || 0),
+            hitCooldown: Math.ceil(drift.hitCooldown || 0),
+            impact: {
+              flash: Math.ceil(drift.impactFlash || 0),
+              label: drift.impactLabel || '',
+              source: drift.impactSource || '',
+              damage: Number(drift.impactDamage || 0),
+              point: drift.impactPoint ? { ...drift.impactPoint } : null
+            },
             combo: drift.combo,
             bestCombo: drift.bestCombo,
             lineBank: Math.floor(drift.lineBank),
@@ -15233,6 +15302,34 @@ function init() {
               triggered,
               before,
               after: window.__atherixDebug.premium.driftLineState()
+            };
+          },
+          forceDriftCollision: (source = 'barrier') => {
+            if (!drift.running) startDrift();
+            drift.paused = false;
+            drift.phaseBrake = 0;
+            drift.hitCooldown = 0;
+            drift.player.shield = Math.max(42, Number(drift.player.shield || 100));
+            drift.player.x = 190;
+            drift.player.y = 188;
+            drift.player.vx = 185;
+            drift.player.vy = 0;
+            drift.lineFlash = 0;
+            setDriftUi();
+            const before = window.__atherixDebug.premium.driftLineState();
+            const result = damageDrift(14, drift.player.x, drift.player.y, source);
+            setDriftUi();
+            drawDrift();
+            return {
+              before,
+              result,
+              after: window.__atherixDebug.premium.driftLineState(),
+              feedback: {
+                lastTone: premiumFeedback.lastTone,
+                lastLabel: premiumFeedback.lastLabel,
+                tones: { ...premiumFeedback.tones },
+                visualTriggers: premiumFeedback.visualTriggers
+              }
             };
           },
           forceDriftApex: () => {
