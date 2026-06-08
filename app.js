@@ -497,19 +497,36 @@ function init() {
 
   function restoreFocusTo(element) {
     if (!element || !document.contains(element) || typeof element.focus !== 'function') return false;
+    const needsTemporaryTabIndex = typeof element.hasAttribute === 'function' &&
+      typeof element.setAttribute === 'function' &&
+      !element.hasAttribute('tabindex') &&
+      Number(element.tabIndex) < 0;
+    if (needsTemporaryTabIndex) element.setAttribute('tabindex', '-1');
     try {
       element.focus({ preventScroll: true });
     } catch (err) {
       element.focus();
     }
-    return document.activeElement === element;
+    const focused = document.activeElement === element;
+    if (needsTemporaryTabIndex) element.removeAttribute('tabindex');
+    return focused;
   }
 
   function moveFocusBeforeHiding(container, fallback) {
     const active = document.activeElement;
     if (!container || !active || !container.contains(active)) return true;
-    if (restoreFocusTo(fallback) || restoreFocusTo(mainContent)) return true;
+    const candidates = [
+      ...(Array.isArray(fallback) ? fallback : [fallback]),
+      mainContent,
+      document.body,
+      document.documentElement
+    ].filter(Boolean);
+    for (const candidate of candidates) {
+      if (candidate === container || container.contains(candidate)) continue;
+      if (restoreFocusTo(candidate) && !container.contains(document.activeElement)) return true;
+    }
     if (typeof active.blur === 'function') active.blur();
+    if (!container.contains(document.activeElement)) return true;
     return !container.contains(document.activeElement);
   }
 
@@ -3304,6 +3321,7 @@ function init() {
 
     toolPanels.forEach(panel => {
       const active = panel.id === `tool-${toolId}`;
+      if (!active) moveFocusBeforeHiding(panel, btn);
       panel.classList.toggle('active', active);
       panel.hidden = !active;
       panel.removeAttribute('aria-hidden');
@@ -3360,6 +3378,7 @@ function init() {
     panel.setAttribute('tabindex', '0');
     if (tab?.id) panel.setAttribute('aria-labelledby', tab.id);
     const active = panel.classList.contains('active');
+    if (!active) moveFocusBeforeHiding(panel, toolNavBtns[0] || mainContent);
     panel.hidden = !active;
     panel.removeAttribute('aria-hidden');
   });
@@ -8057,7 +8076,7 @@ function init() {
         careerDialog.setAttribute('aria-hidden', 'false');
         restoreFocusTo(careerCloseBtn);
       } else {
-        moveFocusBeforeHiding(careerDialog, careerOpenBtn);
+        moveFocusBeforeHiding(careerDialog, [careerOpenBtn, stage]);
         careerDialog.classList.remove('active');
         careerDialog.setAttribute('aria-hidden', 'true');
       }
@@ -8370,6 +8389,7 @@ function init() {
         const mode = panel.id.replace(/^premium-/, '');
         const active = mode === name;
         const tab = library.querySelector(`[data-premium-game="${escapeCommandSelectorValue(mode)}"]`);
+        if (!active) moveFocusBeforeHiding(panel, tab || stage);
         panel.classList.toggle('active', active);
         panel.hidden = !active;
         panel.setAttribute('role', 'tabpanel');
@@ -10339,6 +10359,10 @@ function init() {
       breakFlash: 0,
       focusFlash: 0,
       focusSurges: 0,
+      hitFlash: 0,
+      hitCount: 0,
+      lastHitLabel: '',
+      lastHitSource: '',
       lastBreak: '',
       bonuses: {}
     };
@@ -10528,6 +10552,10 @@ function init() {
       bossMode.breakFlash = 0;
       bossMode.focusFlash = 0;
       bossMode.focusSurges = 0;
+      bossMode.hitFlash = 0;
+      bossMode.hitCount = 0;
+      bossMode.lastHitLabel = '';
+      bossMode.lastHitSource = '';
       bossMode.lastBreak = '';
       bossMode.bonuses = bonuses;
       setBossUi();
@@ -10574,6 +10602,44 @@ function init() {
       for (let i = 0; i < count; i++) {
         bossMode.particles.push({ x, y, vx: (Math.random() - 0.5) * 160, vy: (Math.random() - 0.5) * 160, r: Math.random() * 2 + 1, life: 360, color });
       }
+    }
+
+    function damageBossPlayer(source = 'bullet', { force = false } = {}) {
+      const p = bossMode.player;
+      if (!p || (!force && p.invuln > 0)) {
+        return { applied: false, reason: 'INVULN', lives: p?.lives ?? 0 };
+      }
+      const label = source === 'debug' ? 'SHIP HIT' : `${String(source || 'bullet').toUpperCase()} HIT`;
+      const before = {
+        lives: Number(p.lives || 0),
+        focus: Math.round(Number(p.focus || 0)),
+        focusSurge: Math.ceil(Number(p.focusSurge || 0)),
+        grazeStreak: Number(p.grazeStreak || 0)
+      };
+      p.lives = Math.max(0, Number(p.lives || 0) - 1);
+      p.invuln = 1400;
+      p.grazeStreak = 0;
+      p.focus = Math.max(0, Number(p.focus || 0) - 32);
+      p.focusSurge = 0;
+      bossMode.hitFlash = 760;
+      bossMode.hitCount = Number(bossMode.hitCount || 0) + 1;
+      bossMode.lastHitLabel = label;
+      bossMode.lastHitSource = source || 'bullet';
+      bossSpark(p.x, p.y, '#EF4444', 30);
+      triggerPremiumFeedback('danger', { label, throttleMs: force ? 0 : 120 });
+      setBossUi();
+      return {
+        applied: true,
+        label,
+        before,
+        after: {
+          lives: Number(p.lives || 0),
+          invuln: Math.ceil(Number(p.invuln || 0)),
+          focus: Math.round(Number(p.focus || 0)),
+          focusSurge: Math.ceil(Number(p.focusSurge || 0)),
+          grazeStreak: Number(p.grazeStreak || 0)
+        }
+      };
     }
 
     function activateBossFocusSurge() {
@@ -10670,6 +10736,12 @@ function init() {
         focusSurge: Math.ceil(Number(bossMode.player.focusSurge || 0)),
         focusFlash: Math.ceil(Number(bossMode.focusFlash || 0)),
         focusSurges: Number(bossMode.focusSurges || 0),
+        hit: {
+          flash: Math.ceil(Number(bossMode.hitFlash || 0)),
+          count: Number(bossMode.hitCount || 0),
+          label: bossMode.lastHitLabel || '',
+          source: bossMode.lastHitSource || ''
+        },
         shield: bossShieldState(),
         variant: bossMode.variant || activeArcadeRunVariant('boss'),
         runPressure: Number((bossMode.runPressure || arcadeRunPressure('boss', bossMode.variant)).toFixed(3)),
@@ -10678,6 +10750,8 @@ function init() {
         bestGrazeStreak: Number(bossMode.player.bestGrazeStreak || 0),
         bullets: bossMode.bullets.length,
         score: Math.floor(bossMode.score),
+        lives: Number(bossMode.player.lives || 0),
+        invuln: Math.ceil(Number(bossMode.player.invuln || 0)),
         hudWeak: document.getElementById('premium-boss-weak')?.textContent || '',
         hudShield: document.getElementById('premium-boss-shield')?.textContent || '',
         hudBreak: document.getElementById('premium-boss-break')?.textContent || '',
@@ -10817,6 +10891,7 @@ function init() {
       bossMode.counterWindow = Math.max(0, bossMode.counterWindow - dt);
       if (bossMode.counterWindow <= 0) bossMode.breakChain = 0;
       bossMode.focusFlash = Math.max(0, bossMode.focusFlash - dt);
+      bossMode.hitFlash = Math.max(0, Number(bossMode.hitFlash || 0) - dt);
       if (bossMode.shield) {
         bossMode.shield.exposed = Math.max(0, Number(bossMode.shield.exposed || 0) - dt);
         bossMode.shield.flash = Math.max(0, Number(bossMode.shield.flash || 0) - dt);
@@ -10892,12 +10967,7 @@ function init() {
           awardBossGraze();
         }
         if (p.invuln <= 0 && Math.hypot(s.x - p.x, s.y - p.y) < s.r + p.r) {
-          p.lives--;
-          p.invuln = 1400;
-          p.grazeStreak = 0;
-          p.focus = Math.max(0, Number(p.focus || 0) - 32);
-          p.focusSurge = 0;
-          bossSpark(p.x, p.y, '#EF4444', 26);
+          damageBossPlayer('bullet');
           return false;
         }
         return true;
@@ -11176,6 +11246,27 @@ function init() {
         ctx.font = '900 10px JetBrains Mono, monospace';
         ctx.textAlign = 'center';
         ctx.fillText('FOCUS SURGE', p.x, p.y - 30);
+        ctx.restore();
+      }
+      if (Number(bossMode.hitFlash || 0) > 0) {
+        const alpha = clamp(Number(bossMode.hitFlash || 0) / 760, 0, 1);
+        ctx.save();
+        ctx.globalAlpha = 0.12 + alpha * 0.22;
+        ctx.fillStyle = '#EF4444';
+        ctx.fillRect(0, 0, c.width, c.height);
+        ctx.globalAlpha = 0.42 + alpha * 0.48;
+        ctx.strokeStyle = '#FCA5A5';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 26 + (1 - alpha) * 22, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = '#FEE2E2';
+        ctx.font = '900 13px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#EF4444';
+        ctx.shadowBlur = 14;
+        ctx.fillText(bossMode.lastHitLabel || 'SHIP HIT', p.x, Math.max(26, p.y - 34));
         ctx.restore();
       }
       ctx.fillStyle = p.invuln > 0 ? '#34D399' : '#06B6D4';
@@ -15311,6 +15402,10 @@ function init() {
             stopBossLoop();
             bossMode.running = false;
             bossMode.paused = false;
+            bossMode.hitFlash = 0;
+            bossMode.hitCount = 0;
+            bossMode.lastHitLabel = '';
+            bossMode.lastHitSource = '';
             setBossUi();
             drawBoss();
             overlay(bossMode.ctx, bossMode.canvas.width, bossMode.canvas.height, '棱镜核心等待挑战', 'A/D 移动 · Space 冲刺无敌 · 自动射击');
@@ -15339,6 +15434,19 @@ function init() {
             bullets: bossMode.bullets.length,
             weak: bossWeakState(),
             shield: bossShieldState(),
+            hit: {
+              flash: Math.ceil(Number(bossMode.hitFlash || 0)),
+              count: Number(bossMode.hitCount || 0),
+              label: bossMode.lastHitLabel || '',
+              source: bossMode.lastHitSource || ''
+            },
+            player: {
+              lives: Number(bossMode.player.lives || 0),
+              invuln: Math.ceil(Number(bossMode.player.invuln || 0)),
+              focus: Math.round(Number(bossMode.player.focus || 0)),
+              focusSurge: Math.ceil(Number(bossMode.player.focusSurge || 0)),
+              grazeStreak: Number(bossMode.player.grazeStreak || 0)
+            },
             variant: bossMode.variant || activeArcadeRunVariant('boss'),
             runPressure: Number((bossMode.runPressure || arcadeRunPressure('boss', bossMode.variant)).toFixed(3)),
             frames: bossMode.frames || 0,
@@ -15371,6 +15479,37 @@ function init() {
               attempts,
               before,
               after: bossWeakState()
+            };
+          },
+          forceBossHit: () => {
+            if (!bossMode.running) startBoss();
+            bossMode.paused = false;
+            bossMode.player.lives = Math.max(3, Number(bossMode.player.lives || 3));
+            bossMode.player.invuln = 0;
+            bossMode.player.focus = 74;
+            bossMode.player.focusSurge = 1800;
+            bossMode.player.grazeStreak = 5;
+            bossMode.hitFlash = 0;
+            bossMode.lastHitLabel = '';
+            bossMode.lastHitSource = '';
+            bossMode.bullets = [{ x: bossMode.player.x, y: bossMode.player.y, vx: 0, vy: 0, r: 8, color: '#EF4444', grazed: false }];
+            setBossUi();
+            const before = window.__atherixDebug.premium.bossPattern();
+            const result = damageBossPlayer('debug', { force: true });
+            bossMode.bullets = [];
+            drawBoss();
+            return {
+              before,
+              result,
+              after: window.__atherixDebug.premium.bossPattern(),
+              feedback: {
+                lastTone: premiumFeedback.lastTone,
+                lastLabel: premiumFeedback.lastLabel,
+                tones: { ...premiumFeedback.tones },
+                visualTriggers: premiumFeedback.visualTriggers
+              },
+              stageTone: document.getElementById('premium-game-stage')?.dataset.feedbackTone || '',
+              stageLabel: document.getElementById('premium-game-stage')?.dataset.feedback || ''
             };
           },
           forceBossTelegraph: (pattern = 'snipe') => {
@@ -16689,7 +16828,7 @@ function init() {
   function releaseArcadeButtonFocus() {
     window.__atherixSetPremiumInputArmed?.(false);
     const active = document.activeElement;
-    if (active && active.closest && active.closest('#game')) {
+    if (active && active.closest && active.closest('#game, #premium-survivor-draft')) {
       active.blur();
     }
   }

@@ -3253,6 +3253,16 @@ async function run() {
       achieved: (window.__atherixDebug?.premium?.achievements?.() || []).some(item => item.id === 'boss_focus_surge' && item.unlocked)
     };
   })()`);
+  const bossHitState = await evaluate(`(() => {
+    const result = window.__atherixDebug?.premium?.forceBossHit?.() || {};
+    const pixels = window.__atherixSmokeCountCanvasPixels?.('#premium-boss-canvas') || {};
+    return {
+      ...result,
+      nonBlank: !!pixels.nonBlank,
+      livesText: document.querySelector('#premium-boss-lives')?.textContent || '',
+      focusText: document.querySelector('#premium-boss-focus')?.textContent || ''
+    };
+  })()`);
   const bossReleaseTelegraphState = await evaluate(`(() => {
     const before = window.__atherixDebug?.premium?.forceBossTelegraph?.('snipe') || {};
     return {
@@ -3612,7 +3622,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v73-quality') && swText.includes('/style.css?v=20260608-quality-v13') && swText.includes('/app.js?v=20260608-quality-v30'),
+      swHasQualityVersion: swText.includes('atherix-static-v74-quality') && swText.includes('/style.css?v=20260608-quality-v13') && swText.includes('/app.js?v=20260608-quality-v31'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp'),
       swHasLocalFonts: swText.includes('/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2') && swText.includes('/assets/fonts/outfit-latin-wght-normal.woff2') && swText.includes('/assets/fonts/jetbrains-mono-latin-wght-normal.woff2')
@@ -3826,6 +3836,9 @@ async function run() {
       ariaHidden: draft?.getAttribute('aria-hidden') || '',
       parentIsBody: draft?.parentElement === document.body,
       display: awayStyle?.display || '',
+      focusInsideDraft: !!draft?.contains(document.activeElement),
+      focusId: document.activeElement?.id || '',
+      focusTag: document.activeElement?.tagName || '',
       visible: !!draft && draft.getBoundingClientRect().bottom > 0 && draft.getBoundingClientRect().top < window.innerHeight && draft.classList.contains('active')
     };
     document.querySelector('.nav-item[data-target="game"]')?.click();
@@ -4190,7 +4203,7 @@ async function run() {
     `premium mobile meta controls should start, pause, resume, request restart confirmation, and only restart on confirmation: ${JSON.stringify(premiumMobileMetaState)}`
   );
   assert(survivorDraftMobileState.open && survivorDraftMobileState.role === 'dialog' && survivorDraftMobileState.modal === 'true' && survivorDraftMobileState.ariaHidden === 'false' && survivorDraftMobileState.position === 'fixed' && survivorDraftMobileState.rect?.visible && survivorDraftMobileState.optionCards === 3 && survivorDraftMobileState.visibleOptions === 3 && survivorDraftMobileState.focusedUpgrade && !survivorDraftMobileState.horizontalOverflow, `survivor mobile upgrade draft should behave like a reachable bottom sheet: ${JSON.stringify(survivorDraftMobileState)}`);
-  assert(survivorDraftMobileState.away?.blogActive && survivorDraftMobileState.away?.draftOpen && !survivorDraftMobileState.away?.active && survivorDraftMobileState.away?.ariaHidden === 'true' && !survivorDraftMobileState.away?.parentIsBody && !survivorDraftMobileState.away?.visible && survivorDraftMobileState.returned?.gameActive && survivorDraftMobileState.returned?.draftOpen && survivorDraftMobileState.returned?.active && survivorDraftMobileState.returned?.ariaHidden === 'false' && survivorDraftMobileState.returned?.parentIsBody && survivorDraftMobileState.returned?.position === 'fixed' && survivorDraftMobileState.returned?.optionCards === 3 && survivorDraftMobileState.returned?.visible, `survivor mobile upgrade draft should hide when navigating away and restore when returning to game: ${JSON.stringify(survivorDraftMobileState)}`);
+  assert(survivorDraftMobileState.away?.blogActive && survivorDraftMobileState.away?.draftOpen && !survivorDraftMobileState.away?.active && survivorDraftMobileState.away?.ariaHidden === 'true' && !survivorDraftMobileState.away?.parentIsBody && !survivorDraftMobileState.away?.focusInsideDraft && !survivorDraftMobileState.away?.visible && survivorDraftMobileState.returned?.gameActive && survivorDraftMobileState.returned?.draftOpen && survivorDraftMobileState.returned?.active && survivorDraftMobileState.returned?.ariaHidden === 'false' && survivorDraftMobileState.returned?.parentIsBody && survivorDraftMobileState.returned?.position === 'fixed' && survivorDraftMobileState.returned?.optionCards === 3 && survivorDraftMobileState.returned?.visible, `survivor mobile upgrade draft should hide, release focus when navigating away, and restore when returning to game: ${JSON.stringify(survivorDraftMobileState)}`);
   assert(arcadeInitial.premium && arcadeInitial.careerPanel, 'premium arcade career panel should render');
   assert(arcadeInitial.oldPrototypeCount === 0, 'old prototype mini-games should be replaced');
   assert(arcadeInitial.premiumTabs >= 6 && arcadeInitial.driftPanel && arcadeInitial.tacticsPanel, 'premium arcade should include drift and tactics modes');
@@ -4462,6 +4475,23 @@ async function run() {
     bossFocusSurgeState.achieved,
     `boss focus surge should reward graze chains with a timed damage state and achievement: ${JSON.stringify(bossFocusSurgeState)}`
   );
+  assert(
+    bossHitState.nonBlank &&
+    bossHitState.result?.applied &&
+    Number(bossHitState.after?.player?.lives || 0) === Number(bossHitState.before?.player?.lives || 0) - 1 &&
+    Number(bossHitState.after?.player?.invuln || 0) > 0 &&
+    Number(bossHitState.after?.player?.focus || 0) < Number(bossHitState.before?.player?.focus || 0) &&
+    Number(bossHitState.after?.player?.focusSurge || 0) === 0 &&
+    Number(bossHitState.after?.player?.grazeStreak || 0) === 0 &&
+    bossHitState.after?.hit?.flash > 0 &&
+    bossHitState.after?.hit?.label === 'SHIP HIT' &&
+    bossHitState.feedback?.lastTone === 'danger' &&
+    bossHitState.feedback?.lastLabel === 'SHIP HIT' &&
+    bossHitState.stageTone === 'danger' &&
+    /SHIP HIT/.test(bossHitState.stageLabel || '') &&
+    Number(bossHitState.livesText || 0) === Number(bossHitState.after?.player?.lives || 0),
+    `boss bullet hits should visibly cost a life, clear focus surge, start invulnerability, and trigger danger feedback: ${JSON.stringify(bossHitState)}`
+  );
   assert(bossReleaseTelegraphState.queued === 'snipe' && bossReleaseTelegraphState.weak?.active && bossReleaseTelegraphState.bullets === 0 && /预警/.test(bossReleaseTelegraphState.patternText), `boss should be able to queue a fresh telegraph after a counter break: ${JSON.stringify(bossReleaseTelegraphState)}`);
   assert(!bossPatternReleasedState.queued && bossPatternReleasedState.current === 'snipe' && bossPatternReleasedState.bullets >= 7 && /锁定狙击/.test(bossPatternReleasedState.patternText), `boss pattern should release bullets only after the telegraph window: ${JSON.stringify(bossPatternReleasedState)}`);
   assert(bossPauseState.running && bossPauseState.paused && bossPauseState.pauseButton === '继续', `boss mode should enter pause with keyboard: ${JSON.stringify(bossPauseState)}`);
@@ -4718,6 +4748,7 @@ async function run() {
     bossSnipeLockState,
     bossShieldShatterState,
     bossFocusSurgeState,
+    bossHitState,
     bossPatternReleasedState,
     bossPauseState,
     bossPauseFreezeState,
@@ -4835,6 +4866,7 @@ function summarizeSmokeResult(result) {
       boss: {
         rendered: result.bossState?.nonBlank,
         weakpointHud: result.bossTelegraphState?.weakHud,
+        hitFeedback: result.bossHitState?.after?.hit?.label,
         pauseFreezes: result.bossPauseFreezeState?.framesAfter === result.bossPauseState?.framesBefore
       },
       drift: {
