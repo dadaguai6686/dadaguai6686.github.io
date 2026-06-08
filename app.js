@@ -4864,7 +4864,7 @@ function init() {
         <div class="arcade-profile-grid">
           <span>完成度 <strong id="premium-profile-completion">0%</strong></span>
           <span>奖牌 <strong id="premium-profile-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-profile-achievements">0/26</strong></span>
+          <span>成就 <strong id="premium-profile-achievements">0/27</strong></span>
           <span>最近 <strong id="premium-profile-latest">--</strong></span>
         </div>
         <button type="button" class="arcade-profile-action" id="premium-profile-target" data-profile-target-game="survivor">
@@ -4964,7 +4964,7 @@ function init() {
         </div>
         <div class="arcade-director-meters" aria-label="街机完成度">
           <span>奖牌 <strong id="premium-director-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-director-achievements">0/25</strong></span>
+          <span>成就 <strong id="premium-director-achievements">0/27</strong></span>
           <span>完成度 <strong id="premium-director-completion">0%</strong></span>
         </div>
         <button type="button" class="arcade-director-action" id="premium-director-start" data-target-game="survivor">
@@ -5097,12 +5097,13 @@ function init() {
         <div class="mini-game-panel" id="premium-boss">
           <div class="mini-game-copy">
             <h3>Prism Boss Rush</h3>
-            <p>WASD / 方向键机动，Space 闪避无敌，自动开火。Boss 会切换环形、狙击、雨幕和横扫四种弹幕。</p>
+            <p>WASD / 方向键机动，Space 闪避无敌，自动开火。抓住预警弱点破招，击碎棱镜护盾后进入高伤害窗口。</p>
             <div class="mini-stats">
               <span>分数 <strong id="premium-boss-score">0</strong></span>
               <span>机体 <strong id="premium-boss-lives">3</strong></span>
               <span>最佳 <strong id="premium-boss-best">0</strong></span>
               <span>Boss <strong id="premium-boss-hp">100%</strong></span>
+              <span>护盾 <strong id="premium-boss-shield">III</strong></span>
               <span>阶段 <strong id="premium-boss-phase">I</strong></span>
               <span>招式 <strong id="premium-boss-pattern">扫描中</strong></span>
               <span>弱点 <strong id="premium-boss-weak">LOCKED</strong></span>
@@ -5401,6 +5402,7 @@ function init() {
       { id: 'boss_clear', label: '碎光终结', desc: '击破棱镜核心' },
       { id: 'boss_focus_surge', label: '擦弹专注', desc: 'Boss 战触发专注爆发' },
       { id: 'boss_counter_chain', label: '连锁破招', desc: 'Boss 战连续破招达到 x2' },
+      { id: 'boss_prism_shatter', label: '棱镜碎盾', desc: 'Boss 战击碎一层棱镜护盾' },
       { id: 'drift_clear', label: '霓虹完赛', desc: 'Neon Drift 穿越全部检查点' },
       { id: 'drift_clean', label: '零损漂移', desc: '高护盾完成 Neon Drift' },
       { id: 'drift_combo', label: '量子倍率', desc: 'Neon Drift 倍率达到 x3.0' },
@@ -8860,6 +8862,7 @@ function init() {
       telegraphDuration: 0,
       patternFlash: 0,
       weakpoint: { active: false, hits: 0, required: 3, x: 280, y: 92, r: 20, pattern: '', timer: 0 },
+      shield: { layers: 3, maxLayers: 3, hp: 114, maxHp: 114, exposed: 0, flash: 0, shatterFlash: 0, shatters: 0, last: '' },
       breakCount: 0,
       breakChain: 0,
       counterWindow: 0,
@@ -8877,11 +8880,93 @@ function init() {
       sweep: { label: '横扫光栅', color: '#EC4899' }
     };
 
+    function bossShieldMaxHp() {
+      const pressure = Math.max(1, Number(activeDifficultyDef().pressure || 1));
+      return Math.round(112 + (pressure - 1) * 42);
+    }
+
+    function createBossShield() {
+      const maxHp = bossShieldMaxHp();
+      return { layers: 3, maxLayers: 3, hp: maxHp, maxHp, exposed: 0, flash: 0, shatterFlash: 0, shatters: 0, last: 'ARMED' };
+    }
+
+    function bossShieldState() {
+      const shield = bossMode.shield || createBossShield();
+      const percent = shield.maxHp > 0 ? Math.ceil(clamp(shield.hp / shield.maxHp, 0, 1) * 100) : 0;
+      return {
+        layers: Number(shield.layers || 0),
+        maxLayers: Number(shield.maxLayers || 0),
+        hp: Math.ceil(Number(shield.hp || 0)),
+        maxHp: Math.ceil(Number(shield.maxHp || 0)),
+        percent,
+        exposed: Math.ceil(Number(shield.exposed || 0)),
+        flash: Math.ceil(Number(shield.flash || 0)),
+        shatterFlash: Math.ceil(Number(shield.shatterFlash || 0)),
+        shatters: Number(shield.shatters || 0),
+        last: shield.last || ''
+      };
+    }
+
+    function bossShieldLabel() {
+      const shield = bossMode.shield || {};
+      if (Number(shield.shatterFlash || 0) > 0) return 'SHATTER';
+      if (Number(shield.exposed || 0) > 0) return `OPEN ${Math.ceil(Number(shield.exposed || 0) / 1000)}s`;
+      if (Number(shield.layers || 0) <= 0) return 'DOWN';
+      const layer = ['DOWN', 'I', 'II', 'III', 'IV', 'V'][Number(shield.layers || 0)] || String(shield.layers || 0);
+      const percent = shield.maxHp > 0 ? Math.ceil(clamp(shield.hp / shield.maxHp, 0, 1) * 100) : 0;
+      return `${layer} ${percent}%`;
+    }
+
+    function damageBossShield(amount = 0, source = 'shot') {
+      const shield = bossMode.shield || (bossMode.shield = createBossShield());
+      const damage = Math.max(0, Number(amount || 0));
+      if (damage <= 0 || Number(shield.layers || 0) <= 0 || Number(shield.exposed || 0) > 0) {
+        return { blocked: false, shattered: false, spill: damage, shield: bossShieldState() };
+      }
+      const before = Number(shield.hp || 0);
+      const next = before - damage;
+      const overkill = Math.max(0, -next);
+      shield.hp = Math.max(0, next);
+      shield.flash = Math.max(Number(shield.flash || 0), 260);
+      shield.last = source.toUpperCase();
+      if (next > 0) {
+        return { blocked: true, shattered: false, spill: 0, shield: bossShieldState() };
+      }
+      const phase = bossPhaseFromHp();
+      const previousLayer = Number(shield.layers || 0);
+      shield.layers = Math.max(0, previousLayer - 1);
+      shield.hp = shield.layers > 0 ? shield.maxHp : 0;
+      shield.exposed = 3200 + phase * 360 + Math.min(900, Number(bossMode.breakChain || 0) * 180);
+      shield.flash = 620;
+      shield.shatterFlash = 1060;
+      shield.shatters = Number(shield.shatters || 0) + 1;
+      shield.last = `SHATTER ${previousLayer}`;
+      const clearedBullets = bossMode.bullets.length;
+      bossMode.bullets = [];
+      bossMode.score += 340 + phase * 120 + shield.shatters * 90 + clearedBullets * 7;
+      bossMode.boss.hp = Math.max(1, bossMode.boss.hp - (28 + phase * 12 + Math.round(overkill * 0.32)));
+      bossMode.player.focus = Math.min(100, Number(bossMode.player.focus || 0) + 12 + phase * 4);
+      bossSpark(bossMode.boss.x, bossMode.boss.y, '#FDE68A', 46);
+      unlockAchievement('boss_prism_shatter');
+      triggerPremiumFeedback('special', { label: 'SHIELD SHATTER' });
+      return { blocked: true, shattered: true, spill: overkill, shield: bossShieldState() };
+    }
+
     function setBossUi() {
       document.getElementById('premium-boss-score').textContent = Math.floor(bossMode.score);
       document.getElementById('premium-boss-lives').textContent = bossMode.player.lives;
       document.getElementById('premium-boss-best').textContent = localStorage.getItem(bossMode.bestKey) || '0';
       document.getElementById('premium-boss-hp').textContent = `${Math.max(0, Math.ceil(bossMode.boss.hp / bossMode.boss.maxHp * 100))}%`;
+      const shieldEl = document.getElementById('premium-boss-shield');
+      if (shieldEl) {
+        const shield = bossMode.shield || {};
+        shieldEl.textContent = bossShieldLabel();
+        shieldEl.style.color = Number(shield.shatterFlash || 0) > 0
+          ? '#FDE68A'
+          : Number(shield.exposed || 0) > 0 || Number(shield.layers || 0) <= 0
+            ? '#34D399'
+            : '#BAE6FD';
+      }
       document.getElementById('premium-boss-phase').textContent = ['I', 'II', 'III'][bossMode.boss.phase - 1] || 'III';
       const patternEl = document.getElementById('premium-boss-pattern');
       if (patternEl) {
@@ -8938,6 +9023,7 @@ function init() {
       bossMode.telegraphDuration = 0;
       bossMode.patternFlash = 0;
       bossMode.weakpoint = { active: false, hits: 0, required: 3, x: 280, y: 92, r: 20, pattern: '', timer: 0 };
+      bossMode.shield = createBossShield();
       bossMode.breakCount = 0;
       bossMode.breakChain = 0;
       bossMode.counterWindow = 0;
@@ -8959,7 +9045,7 @@ function init() {
       cancelAnimationFrame(bossMode.raf);
       localStorage.setItem(bossMode.bestKey, String(Math.max(Number(localStorage.getItem(bossMode.bestKey) || 0), Math.floor(bossMode.score))));
       if (text === 'PRISM BROKEN') unlockAchievement('boss_clear');
-      recordPremiumResult('boss', bossMode.score, { phase: bossMode.boss.phase, graze: bossMode.player.graze, bestGrazeStreak: bossMode.player.bestGrazeStreak, focusSurges: bossMode.focusSurges, breakChain: bossMode.breakChain });
+      recordPremiumResult('boss', bossMode.score, { phase: bossMode.boss.phase, graze: bossMode.player.graze, bestGrazeStreak: bossMode.player.bestGrazeStreak, focusSurges: bossMode.focusSurges, breakChain: bossMode.breakChain, shieldShatters: Number(bossMode.shield?.shatters || 0) });
       setBossUi();
       updateBossPauseButton();
       drawBoss();
@@ -9081,12 +9167,14 @@ function init() {
         focusSurge: Math.ceil(Number(bossMode.player.focusSurge || 0)),
         focusFlash: Math.ceil(Number(bossMode.focusFlash || 0)),
         focusSurges: Number(bossMode.focusSurges || 0),
+        shield: bossShieldState(),
         graze: Number(bossMode.player.graze || 0),
         grazeStreak: Number(bossMode.player.grazeStreak || 0),
         bestGrazeStreak: Number(bossMode.player.bestGrazeStreak || 0),
         bullets: bossMode.bullets.length,
         score: Math.floor(bossMode.score),
         hudWeak: document.getElementById('premium-boss-weak')?.textContent || '',
+        hudShield: document.getElementById('premium-boss-shield')?.textContent || '',
         hudBreak: document.getElementById('premium-boss-break')?.textContent || '',
         hudCounter: document.getElementById('premium-boss-counter')?.textContent || '',
         hudFocus: document.getElementById('premium-boss-focus')?.textContent || ''
@@ -9106,7 +9194,9 @@ function init() {
       bossMode.lastBreak = `${bossPatternDefs[pattern]?.label || pattern || '破招'} x${chain}`;
       bossMode.breakFlash = 920;
       bossMode.score += 420 + phase * 120 + clearedBullets * 8 + chainBonus;
-      bossMode.boss.hp = Math.max(1, bossMode.boss.hp - (42 + phase * 12 + chain * 10));
+      const shieldHit = damageBossShield(64 + phase * 18 + chain * 18, 'counter');
+      const coreDamage = 42 + phase * 12 + chain * 10 + (shieldHit.shattered ? 26 : 0);
+      bossMode.boss.hp = Math.max(1, bossMode.boss.hp - coreDamage);
       bossMode.player.invuln = Math.max(bossMode.player.invuln, 520);
       bossMode.player.focus = Math.min(100, Number(bossMode.player.focus || 0) + 24 + phase * 4 + chain * 3);
       bossMode.bullets = [];
@@ -9130,7 +9220,8 @@ function init() {
       weak.hits++;
       weak.timer = bossMode.telegraphTimer;
       bossMode.score += 36 + weak.hits * 12;
-      bossMode.boss.hp = Math.max(1, bossMode.boss.hp - Math.max(3, Math.round(damage * 0.35)));
+      damageBossShield(Math.max(4, Math.round(damage * 0.7)), 'weak');
+      bossMode.boss.hp = Math.max(1, bossMode.boss.hp - Math.max(3, Math.round(damage * 0.28)));
       bossSpark(weak.x, weak.y, '#FDE68A', 7);
       if (weak.hits >= weak.required) breakBossPattern();
       else setBossUi();
@@ -9208,6 +9299,11 @@ function init() {
       bossMode.counterWindow = Math.max(0, bossMode.counterWindow - dt);
       if (bossMode.counterWindow <= 0) bossMode.breakChain = 0;
       bossMode.focusFlash = Math.max(0, bossMode.focusFlash - dt);
+      if (bossMode.shield) {
+        bossMode.shield.exposed = Math.max(0, Number(bossMode.shield.exposed || 0) - dt);
+        bossMode.shield.flash = Math.max(0, Number(bossMode.shield.flash || 0) - dt);
+        bossMode.shield.shatterFlash = Math.max(0, Number(bossMode.shield.shatterFlash || 0) - dt);
+      }
       p.invuln = Math.max(0, p.invuln - dt);
       p.dash = Math.max(0, p.dash - dt);
       p.dashCooldown = Math.max(0, p.dashCooldown - dt);
@@ -9257,9 +9353,16 @@ function init() {
         }
         if (Math.hypot(s.x - b.x, s.y - b.y) < s.r + b.r) {
           const counterMult = bossMode.counterWindow > 0 ? 1 + Math.min(0.75, Number(bossMode.breakChain || 0) * 0.12) : 1;
-          b.hp -= s.damage * counterMult;
-          bossMode.score += 6 + (bossMode.counterWindow > 0 ? Number(bossMode.breakChain || 0) * 2 : 0);
-          bossSpark(s.x, s.y, bossMode.counterWindow > 0 ? '#FDE68A' : '#BAE6FD', bossMode.counterWindow > 0 ? 4 : 2);
+          const shield = bossMode.shield || createBossShield();
+          const shieldMult = (s.surge ? 1.58 : 0.86) * (bossMode.counterWindow > 0 ? 1 + Math.min(0.55, Number(bossMode.breakChain || 0) * 0.16) : 1);
+          const shieldHit = damageBossShield(s.damage * shieldMult, s.surge ? 'surge' : 'shot');
+          const exposed = Number(shield.exposed || 0) > 0 || Number(shield.layers || 0) <= 0;
+          const coreMult = exposed
+            ? counterMult * (s.surge ? 1.92 : 1.48)
+            : (shieldHit.shattered ? 0.58 : 0.18);
+          b.hp -= Math.max(1, s.damage * coreMult);
+          bossMode.score += 6 + (shieldHit.blocked ? 3 : 0) + (shieldHit.shattered ? 42 : 0) + (bossMode.counterWindow > 0 ? Number(bossMode.breakChain || 0) * 2 : 0);
+          bossSpark(s.x, s.y, shieldHit.shattered ? '#FDE68A' : exposed ? '#34D399' : bossMode.counterWindow > 0 ? '#FDE68A' : '#BAE6FD', shieldHit.shattered ? 12 : bossMode.counterWindow > 0 ? 4 : 2);
           return false;
         }
         return true;
@@ -9403,6 +9506,79 @@ function init() {
       ctx.restore();
     }
 
+    function drawBossShield(ctx) {
+      const shield = bossMode.shield || {};
+      const layers = Math.max(0, Number(shield.layers || 0));
+      const maxLayers = Math.max(1, Number(shield.maxLayers || 3));
+      const hpRatio = shield.maxHp > 0 ? clamp(Number(shield.hp || 0) / shield.maxHp, 0, 1) : 0;
+      const exposed = Number(shield.exposed || 0) > 0 || layers <= 0;
+      const flash = clamp(Number(shield.flash || 0) / 620, 0, 1);
+      const shatter = clamp(Number(shield.shatterFlash || 0) / 1060, 0, 1);
+      const radius = bossMode.boss.r + 16 + Math.sin(bossMode.t / 100) * 2;
+      ctx.save();
+      ctx.translate(bossMode.boss.x, bossMode.boss.y);
+      ctx.rotate(-bossMode.t / 840);
+      if (layers > 0) {
+        for (let i = 0; i < maxLayers; i++) {
+          const start = -Math.PI / 2 + i * Math.PI * 2 / maxLayers + 0.08;
+          const end = start + Math.PI * 2 / maxLayers - 0.16;
+          ctx.beginPath();
+          ctx.lineWidth = i < layers ? 4 : 2;
+          ctx.strokeStyle = i < layers ? `rgba(186, 230, 253, ${0.34 + flash * 0.38})` : 'rgba(148, 163, 184, 0.14)';
+          ctx.shadowColor = '#BAE6FD';
+          ctx.shadowBlur = i < layers ? 12 + flash * 18 : 0;
+          ctx.arc(0, 0, radius + i * 5, start, end);
+          ctx.stroke();
+        }
+        ctx.shadowBlur = 0;
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = flash > 0 ? '#FDE68A' : '#34D399';
+        ctx.beginPath();
+        ctx.arc(0, 0, radius + maxLayers * 5 + 3, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * hpRatio);
+        ctx.stroke();
+      }
+      if (exposed) {
+        const pulse = 1 + Math.sin(bossMode.t / 72) * 0.08;
+        ctx.globalAlpha = 0.34 + Math.min(0.32, Number(shield.exposed || 0) / 4200);
+        ctx.strokeStyle = '#34D399';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([6, 8]);
+        ctx.beginPath();
+        ctx.arc(0, 0, (bossMode.boss.r + 24) * pulse, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      }
+      if (shatter > 0) {
+        ctx.rotate(bossMode.t / 320);
+        ctx.globalAlpha = shatter;
+        ctx.strokeStyle = '#FDE68A';
+        ctx.lineWidth = 3;
+        for (let i = 0; i < 10; i++) {
+          const a = i * Math.PI * 2 / 10;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(a) * (bossMode.boss.r + 12), Math.sin(a) * (bossMode.boss.r + 12));
+          ctx.lineTo(Math.cos(a) * (bossMode.boss.r + 54 * (1 - shatter * 0.3)), Math.sin(a) * (bossMode.boss.r + 54 * (1 - shatter * 0.3)));
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+      if (shatter > 0) {
+        ctx.save();
+        ctx.globalAlpha = 0.18 + shatter * 0.18;
+        ctx.fillStyle = '#FDE68A';
+        ctx.fillRect(0, 0, bossMode.canvas.width, bossMode.canvas.height);
+        ctx.globalAlpha = shatter;
+        ctx.fillStyle = '#FFFBEB';
+        ctx.font = '900 20px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#FDE68A';
+        ctx.shadowBlur = 18;
+        ctx.fillText('PRISM SHATTER', bossMode.canvas.width / 2, 104);
+        ctx.restore();
+      }
+    }
+
     function drawBoss() {
       const { ctx, canvas: c, boss: b, player: p } = bossMode;
       if (!ctx || !c) return;
@@ -9426,6 +9602,7 @@ function init() {
       ctx.closePath();
       ctx.stroke();
       ctx.restore();
+      drawBossShield(ctx);
       if (bossMode.counterWindow > 0) {
         ctx.save();
         const alpha = clamp(bossMode.counterWindow / 5200, 0, 1);
@@ -9495,7 +9672,7 @@ function init() {
       ctx.fillRect(18, 16, (c.width - 36) * Math.max(0, b.hp / b.maxHp), 8);
       ctx.fillStyle = '#fff';
       ctx.font = '700 12px JetBrains Mono, monospace';
-      ctx.fillText(`PHASE ${b.phase}  GRAZE ${p.graze}  FOCUS ${p.focusSurge > 0 ? 'SURGE' : Math.round(Number(p.focus || 0)) + '%'}  BREAK ${bossMode.breakCount}  COUNTER ${bossMode.counterWindow > 0 ? `${bossMode.breakChain}x` : '0x'}`, 18, 42);
+      ctx.fillText(`PHASE ${b.phase}  SHIELD ${bossShieldLabel()}  GRAZE ${p.graze}  FOCUS ${p.focusSurge > 0 ? 'SURGE' : Math.round(Number(p.focus || 0)) + '%'}  BREAK ${bossMode.breakCount}  COUNTER ${bossMode.counterWindow > 0 ? `${bossMode.breakChain}x` : '0x'}`, 18, 42);
     }
 
     document.getElementById('premium-boss-start').addEventListener('click', () => {
@@ -12537,11 +12714,14 @@ function init() {
             telegraphMs: Math.ceil(bossMode.telegraphTimer),
             bullets: bossMode.bullets.length,
             weak: bossWeakState(),
+            shield: bossShieldState(),
             breakCount: bossMode.breakCount,
             hud: document.getElementById('premium-boss-pattern')?.textContent || '',
             weakHud: document.getElementById('premium-boss-weak')?.textContent || '',
+            shieldHud: document.getElementById('premium-boss-shield')?.textContent || '',
             breakHud: document.getElementById('premium-boss-break')?.textContent || ''
           }),
+          bossShieldState: () => bossShieldState(),
           bossWeakState: () => bossWeakState(),
           forceBossFocusSurge: () => {
             if (!bossMode.running) startBoss();
@@ -12597,6 +12777,31 @@ function init() {
             drawBoss();
             return {
               before,
+              after: window.__atherixDebug.premium.bossPattern(),
+              weak: bossWeakState()
+            };
+          },
+          forceBossShieldShatter: () => {
+            if (!bossMode.running) startBoss();
+            bossMode.paused = false;
+            bossMode.shield = createBossShield();
+            bossMode.shield.hp = Math.min(bossMode.shield.hp, 28);
+            bossMode.shield.flash = 0;
+            bossMode.shield.shatterFlash = 0;
+            bossMode.shield.exposed = 0;
+            bossMode.bullets = [
+              { x: bossMode.boss.x, y: bossMode.boss.y + 52, vx: 0, vy: 120, r: 6, color: '#F97316', grazed: false },
+              { x: bossMode.boss.x - 34, y: bossMode.boss.y + 62, vx: -36, vy: 128, r: 5, color: '#A78BFA', grazed: false },
+              { x: bossMode.boss.x + 34, y: bossMode.boss.y + 62, vx: 36, vy: 128, r: 5, color: '#06B6D4', grazed: false }
+            ];
+            setBossUi();
+            const before = window.__atherixDebug.premium.bossPattern();
+            const impact = damageBossShield(64, 'debug');
+            setBossUi();
+            drawBoss();
+            return {
+              before,
+              impact,
               after: window.__atherixDebug.premium.bossPattern(),
               weak: bossWeakState()
             };

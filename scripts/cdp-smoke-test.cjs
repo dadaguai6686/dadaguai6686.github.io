@@ -1786,6 +1786,7 @@ async function run() {
       dash: document.querySelector('#premium-boss-dash')?.textContent,
       pattern: document.querySelector('#premium-boss-pattern')?.textContent,
       hp: document.querySelector('#premium-boss-hp')?.textContent,
+      shield: document.querySelector('#premium-boss-shield')?.textContent,
       weak: document.querySelector('#premium-boss-weak')?.textContent,
       focus: document.querySelector('#premium-boss-focus')?.textContent,
       breaks: Number(document.querySelector('#premium-boss-break')?.textContent || 0),
@@ -1818,7 +1819,19 @@ async function run() {
       breakText: document.querySelector('#premium-boss-break')?.textContent || '',
       counterText: document.querySelector('#premium-boss-counter')?.textContent || '',
       scoreText: document.querySelector('#premium-boss-score')?.textContent || '',
+      shieldText: document.querySelector('#premium-boss-shield')?.textContent || '',
       achievedCounterChain: (window.__atherixDebug?.premium?.achievements?.() || []).some(item => item.id === 'boss_counter_chain' && item.unlocked)
+    };
+  })()`);
+  const bossShieldShatterState = await evaluate(`(() => {
+    const result = window.__atherixDebug?.premium?.forceBossShieldShatter?.() || {};
+    const pixels = window.__atherixSmokeCountCanvasPixels?.('#premium-boss-canvas') || {};
+    return {
+      ...result,
+      nonBlank: !!pixels.nonBlank,
+      shieldText: document.querySelector('#premium-boss-shield')?.textContent || '',
+      scoreText: document.querySelector('#premium-boss-score')?.textContent || '',
+      achieved: (window.__atherixDebug?.premium?.achievements?.() || []).some(item => item.id === 'boss_prism_shatter' && item.unlocked)
     };
   })()`);
   const bossFocusSurgeState = await evaluate(`(() => {
@@ -2104,7 +2117,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasMissionBriefingVersion: swText.includes('atherix-static-v34-mission-briefing') && swText.includes('/style.css?v=20260608-mission-briefing-v1') && swText.includes('/app.js?v=20260608-mission-briefing-v1'),
+      swHasBossShieldVersion: swText.includes('atherix-static-v35-boss-shield') && swText.includes('/style.css?v=20260608-boss-shield-v1') && swText.includes('/app.js?v=20260608-boss-shield-v1'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp')
     };
   })()`, 10000);
@@ -2402,7 +2415,7 @@ async function run() {
   assert(survivorOverdriveState.before?.overdrive >= 100 && survivorOverdriveState.before?.hud?.overdrive === 'READY' && survivorOverdriveState.after?.overdrive === 0 && survivorOverdriveState.after?.overdriveFlash > 0 && survivorOverdriveState.after?.score > survivorOverdriveState.before?.score && survivorOverdriveState.after?.slowed >= 1 && survivorOverdriveState.after?.enemies < survivorOverdriveState.before?.enemies && survivorOverdriveState.after?.chain >= survivorOverdriveState.before?.chain, `survivor overdrive should consume a full meter, slow enemies, kill targets, and score: ${JSON.stringify(survivorOverdriveState)}`);
   assert(survivorAnomalyState.started && survivorAnomalyState.nonBlank && survivorAnomalyState.state?.anomaly?.type === 'meteor' && survivorAnomalyState.state?.hazards?.length >= 3 && survivorAnomalyState.state?.hud?.event === 'METEOR' && survivorAnomalyState.eventText === 'METEOR' && survivorAnomalyState.achieved, `survivor anomaly events should create a readable deep-space crisis with hazards and achievement credit: ${JSON.stringify(survivorAnomalyState)}`);
   assert(survivorBountyState.nonBlank && survivorBountyState.after?.bounty?.completed > survivorBountyState.before?.bounty?.completed && survivorBountyState.after?.score > survivorBountyState.before?.score && survivorBountyState.after?.bounty?.last === 'ELITE CLEAR' && survivorBountyState.after?.bounty?.flash > 0 && survivorBountyState.after?.hud?.bounty === survivorBountyState.bountyText && survivorBountyState.achieved, `survivor elite bounty should complete deterministically, reward score, sync HUD, and unlock achievement: ${JSON.stringify(survivorBountyState)}`);
-  assert(bossState.nonBlank && bossState.dash && bossState.weak && bossState.breaks === 0 && bossState.counter === '0x' && bossState.lives >= 4, `boss canvas should render active state and apply equipped loadout: ${JSON.stringify(bossState)}`);
+  assert(bossState.nonBlank && bossState.dash && bossState.weak && /^(I|II|III|OPEN|SHATTER|DOWN)/.test(bossState.shield || '') && bossState.breaks === 0 && bossState.counter === '0x' && bossState.lives >= 4, `boss canvas should render active state, shield HUD, and equipped loadout: ${JSON.stringify(bossState)}`);
   assert(bossTelegraphState.running && !bossTelegraphState.paused && bossTelegraphState.queued === 'snipe' && bossTelegraphState.current === 'snipe' && bossTelegraphState.bullets === 0 && bossTelegraphState.weak?.active && bossTelegraphState.weak.remaining >= 1 && /^\d+\/\d+$/.test(bossTelegraphState.weakHud) && /预警/.test(bossTelegraphState.patternText) && /锁定狙击/.test(bossTelegraphState.patternText), `boss mode should surface a readable weakpoint telegraph before spawning bullets: ${JSON.stringify(bossTelegraphState)}`);
   assert(bossTelegraphHoldState.queued === 'snipe' && bossTelegraphHoldState.bullets === 0 && bossTelegraphHoldState.telegraphMs > 0 && bossTelegraphHoldState.weak?.active && bossTelegraphHoldState.weak.timer > 0 && /预警/.test(bossTelegraphHoldState.patternText), `boss telegraph should hold a reaction window before release: ${JSON.stringify(bossTelegraphHoldState)}`);
   assert(
@@ -2420,11 +2433,27 @@ async function run() {
     bossCounterState.chain?.after?.weak?.hudCounter === '2x' &&
     bossCounterState.counterText === '2x' &&
     bossCounterState.achievedCounterChain &&
+    bossCounterState.after?.weak?.shield?.layers <= bossCounterState.before?.weak?.shield?.layers &&
+    bossCounterState.after?.weak?.hudShield &&
     Number(bossCounterState.after?.weak?.score || 0) > Number(bossCounterState.before?.weak?.score || 0) &&
     Number(bossCounterState.chain?.after?.weak?.score || 0) > Number(bossCounterState.after?.weak?.score || 0) &&
     (/BROKEN|LOCKED/.test(bossCounterState.weakText)) &&
     Number(bossCounterState.breakText || 0) >= 2,
     `boss weakpoint counter should break queued attacks, chain counters, score, and update HUD: ${JSON.stringify(bossCounterState)}`
+  );
+  assert(
+    bossShieldShatterState.nonBlank &&
+    bossShieldShatterState.before?.shield?.layers === 3 &&
+    bossShieldShatterState.before?.shield?.hp <= 28 &&
+    bossShieldShatterState.impact?.shattered &&
+    bossShieldShatterState.after?.shield?.layers === 2 &&
+    bossShieldShatterState.after?.shield?.shatters > bossShieldShatterState.before?.shield?.shatters &&
+    bossShieldShatterState.after?.shield?.exposed > 0 &&
+    bossShieldShatterState.after?.bullets === 0 &&
+    Number(bossShieldShatterState.after?.weak?.score || 0) > Number(bossShieldShatterState.before?.weak?.score || 0) &&
+    /SHATTER|OPEN|II/.test(bossShieldShatterState.shieldText) &&
+    bossShieldShatterState.achieved,
+    `boss prism shield should shatter into a readable exposed burst window with score, clear bullets, and achievement credit: ${JSON.stringify(bossShieldShatterState)}`
   );
   assert(
     bossFocusSurgeState.after?.focusSurge > 0 &&
@@ -2496,7 +2525,7 @@ async function run() {
   assert(tacticsForecastAfterAction.dangerCount > 0 && tacticsForecastAfterAction.coverHud && tacticsForecastAfterAction.momentumHud !== undefined && tacticsForecastAfterAction.routeHud && tacticsJammedIntent, `tactics mode should expose post-action JAM, cover, momentum, and route forecast: ${JSON.stringify(tacticsForecastAfterAction)}`);
   assert(tacticsState.nonBlank && Number(tacticsState.ap) >= 0 && tacticsState.action && tacticsState.cover && tacticsState.momentum !== undefined && tacticsState.route && tacticsState.debug?.route?.length > 0, `tactics mode should render and accept enhanced actions: ${JSON.stringify(tacticsState)}`);
   assert(Number(tacticsState.danger) > 0 && tacticsState.intel && tacticsState.debug?.hud?.route === tacticsState.route && tacticsState.debug?.hud?.cover === tacticsState.cover && tacticsState.debug?.hud?.momentum === tacticsState.momentum, `tactics HUD should stay in sync with enhanced debug state: ${JSON.stringify(tacticsState)}`);
-  assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /mission-briefing/.test(key)) && pwaState.swHasMissionBriefingVersion, `service worker should register and cache the latest app shell: ${JSON.stringify(pwaState)}`);
+  assert(pwaState.supported && pwaState.registered && pwaState.shellCached && pwaState.cacheKeys.some(key => /boss-shield/.test(key)) && pwaState.swHasBossShieldVersion, `service worker should register and cache the latest app shell: ${JSON.stringify(pwaState)}`);
   assert(pwaState.swHasLocalProjectAssets, `service worker should precache local portfolio assets: ${JSON.stringify(pwaState)}`);
   assert(pwaState.swHasNavigationPreload && pwaState.swHasOfflineShellHeader && pwaState.swHasFallbackUrl, `service worker should include robust offline navigation fallback: ${JSON.stringify(pwaState)}`);
   const diagnosticText = JSON.stringify(diagnostics);
@@ -2572,6 +2601,7 @@ async function run() {
     bossState,
     bossTelegraphState,
     bossTelegraphHoldState,
+    bossShieldShatterState,
     bossFocusSurgeState,
     bossPatternReleasedState,
     bossPauseState,
