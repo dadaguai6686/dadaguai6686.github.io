@@ -5324,7 +5324,7 @@ function init() {
         <div class="arcade-profile-grid">
           <span>完成度 <strong id="premium-profile-completion">0%</strong></span>
           <span>奖牌 <strong id="premium-profile-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-profile-achievements">0/38</strong></span>
+          <span>成就 <strong id="premium-profile-achievements">0/39</strong></span>
           <span>最近 <strong id="premium-profile-latest">--</strong></span>
         </div>
         <button type="button" class="arcade-profile-action" id="premium-profile-target" data-profile-target-game="survivor">
@@ -5424,7 +5424,7 @@ function init() {
         </div>
         <div class="arcade-director-meters" aria-label="街机完成度">
           <span>奖牌 <strong id="premium-director-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-director-achievements">0/38</strong></span>
+          <span>成就 <strong id="premium-director-achievements">0/39</strong></span>
           <span>完成度 <strong id="premium-director-completion">0%</strong></span>
         </div>
         <button type="button" class="arcade-director-action" id="premium-director-start" data-target-game="survivor">
@@ -5534,6 +5534,7 @@ function init() {
               <span>构筑 <strong id="premium-survivor-build">Pulse I</strong></span>
               <span>连段 <strong id="premium-survivor-chain">0x</strong></span>
               <span>超载 <strong id="premium-survivor-overdrive">0%</strong></span>
+              <span>星铸 <strong id="premium-survivor-synergy">0/4</strong></span>
               <span>危机 <strong id="premium-survivor-threat">WAVE 1</strong></span>
               <span>事件 <strong id="premium-survivor-event">稳定</strong></span>
               <span>赏金 <strong id="premium-survivor-bounty">ELITE 0/2</strong></span>
@@ -5933,6 +5934,7 @@ function init() {
       { id: 'survivor_90', label: '深空存活', desc: '坚持完整 90 秒' },
       { id: 'survivor_anomaly', label: '裂隙调度', desc: '星核幸存者触发深空异常事件' },
       { id: 'survivor_bounty', label: '赏金猎星', desc: '星核幸存者完成一项精英赏金' },
+      { id: 'survivor_synergy', label: '星铸协同', desc: '星核幸存者激活一条构筑协同' },
       { id: 'boss_phase_2', label: '棱镜破相', desc: 'Boss 进入第二阶段' },
       { id: 'boss_clear', label: '碎光终结', desc: '击破棱镜核心' },
       { id: 'boss_focus_surge', label: '擦弹专注', desc: 'Boss 战触发专注爆发' },
@@ -6983,7 +6985,7 @@ function init() {
     function runDetailHighlights(game, details = {}) {
       const spec = {
         runner: [['level', '关卡'], ['finishTime', '用时', 's'], ['bestCombo', '连段', 'x'], ['contractsCompleted', '合约']],
-        survivor: [['level', '等级'], ['bestChain', '连锁', 'x'], ['overdrive', '超载'], ['drones', '无人机'], ['bounties', '赏金']],
+        survivor: [['level', '等级'], ['bestChain', '连锁', 'x'], ['synergies', '星铸'], ['overdrive', '超载'], ['drones', '无人机'], ['bounties', '赏金']],
         boss: [['phase', '阶段'], ['graze', '擦弹'], ['perfectDodges', '精准闪避'], ['focusSurges', '专注'], ['shieldShatters', '碎盾'], ['overbreaks', '处决']],
         drift: [['gates', '弯道'], ['bestCombo', '连段', 'x'], ['overtakes', '超车'], ['nearMisses', '擦车'], ['slipstreams', '尾流'], ['phaseUses', '相位']],
         heist: [['steps', '步数'], ['bestChain', '潜行链'], ['takedowns', '制服'], ['ghostSweeps', '幽影'], ['loot', '缓存'], ['security', '警戒', '%'], ['hacksCompleted', '破解']],
@@ -9100,6 +9102,9 @@ function init() {
       bountiesCompleted: 0,
       bountyFlash: 0,
       lastBounty: '',
+      synergies: [],
+      synergyFlash: 0,
+      lastSynergy: '',
       hurtFlash: 0,
       hurtFeedbackCooldown: 0,
       lastHitLabel: '',
@@ -9240,22 +9245,132 @@ function init() {
       }
     ];
 
+    const survivorSynergyDefs = [
+      {
+        id: 'gunship',
+        label: '星舰火网',
+        tag: 'Gunship',
+        color: '#FDE68A',
+        check: counts => Number(counts.drone || 0) >= 2 && (Number(counts.rail || 0) >= 1 || Number(counts.pulse || 0) >= 1),
+        apply: p => {
+          p.droneDamage = Math.min(46, Number(p.droneDamage || 12) + 7);
+          p.pierce = Math.min(5, Number(p.pierce || 0) + 1);
+          p.fireRate = Math.max(66, Number(p.fireRate || 240) - 14);
+        }
+      },
+      {
+        id: 'singularity',
+        label: '奇点收割',
+        tag: 'Singularity',
+        color: '#BAE6FD',
+        check: counts => Number(counts.nova || 0) >= 2 && Number(counts.magnet || 0) >= 2,
+        apply: p => {
+          p.magnet = Math.min(280, Number(p.magnet || 85) + 36);
+          p.novaRadius = Math.min(235, Number(p.novaRadius || 138) + 24);
+          p.novaDamage += 34;
+        }
+      },
+      {
+        id: 'bulwark',
+        label: '熔炉护甲',
+        tag: 'Bulwark',
+        color: '#F97316',
+        check: counts => Number(counts.reactor || 0) >= 2 && Number(counts.overcharge || 0) >= 1,
+        apply: p => {
+          p.maxHp += 16;
+          p.hp = Math.min(p.maxHp, Number(p.hp || 0) + 44);
+          p.damage += 5;
+        }
+      },
+      {
+        id: 'phantom',
+        label: '相位猎手',
+        tag: 'Phantom',
+        color: '#A78BFA',
+        check: counts => Number(counts.thruster || 0) >= 2 && Number(counts.pulse || 0) >= 1,
+        apply: p => {
+          p.speed += 18;
+          p.fireRate = Math.max(64, Number(p.fireRate || 240) - 18);
+          p.r = Math.max(8.5, Number(p.r || 12) - 0.5);
+        }
+      }
+    ];
+
     function survivorUpgradeCount(id) {
       return survivor.player?.upgrades?.filter(item => item === id).length || 0;
+    }
+
+    function survivorUpgradeCounts() {
+      return (survivor.player?.upgrades || []).reduce((map, id) => {
+        map[id] = (map[id] || 0) + 1;
+        return map;
+      }, {});
     }
 
     function survivorBuildSummary() {
       const p = survivor.player;
       if (!p) return 'Pulse I';
-      const counts = (p.upgrades || []).reduce((map, id) => {
-        map[id] = (map[id] || 0) + 1;
-        return map;
-      }, {});
+      const counts = survivorUpgradeCounts();
+      const synergyTag = survivor.synergies?.length
+        ? survivorSynergyDefs.find(def => def.id === survivor.synergies[survivor.synergies.length - 1])?.tag
+        : '';
       const labels = Object.entries(counts)
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 2)
+        .slice(0, synergyTag ? 1 : 2)
         .map(([id, count]) => `${survivorUpgradeDefs.find(def => def.id === id)?.tag || id}${count > 1 ? count : ''}`);
+      if (synergyTag) labels.unshift(synergyTag);
       return labels.length ? labels.join(' + ') : p.build;
+    }
+
+    function formatSurvivorSynergy() {
+      if (survivor.lastSynergy && survivor.synergyFlash > 0) return survivor.lastSynergy;
+      const count = Number(survivor.synergies?.length || 0);
+      const total = survivorSynergyDefs.length;
+      if (!count) return `0/${total}`;
+      const latest = survivorSynergyDefs.find(def => def.id === survivor.synergies[count - 1]);
+      return `${count}/${total} ${latest?.tag || ''}`.trim();
+    }
+
+    function resolveSurvivorSynergies(reason = 'draft') {
+      const p = survivor.player;
+      if (!p) return [];
+      if (!Array.isArray(survivor.synergies)) survivor.synergies = [];
+      const active = new Set(survivor.synergies);
+      const counts = survivorUpgradeCounts();
+      const newlyUnlocked = survivorSynergyDefs.filter(def => !active.has(def.id) && def.check(counts));
+      newlyUnlocked.forEach((def, index) => {
+        active.add(def.id);
+        survivor.synergies.push(def.id);
+        def.apply(p);
+        const reward = 260 + Math.max(1, Number(p.level || 1)) * 44 + index * 90;
+        survivor.score += reward;
+        addSurvivorOverdrive(26 + index * 8, def.tag);
+        survivor.chain = Math.max(Number(survivor.chain || 0), 4 + survivor.synergies.length);
+        survivor.bestChain = Math.max(Number(survivor.bestChain || 0), survivor.chain);
+        survivor.chainTimer = Math.max(Number(survivor.chainTimer || 0), 3000);
+        survivor.synergyFlash = 1350;
+        survivor.lastSynergy = def.label;
+        survivorBurst(p.x, p.y, def.color, 54 + index * 12);
+        if (def.id === 'gunship' && survivor.enemies.length) fireSurvivorDroneVolley();
+        if (def.id === 'singularity') {
+          survivor.orbs.forEach(orb => {
+            orb.x += (p.x - orb.x) * 0.32;
+            orb.y += (p.y - orb.y) * 0.32;
+          });
+        }
+        unlockAchievement('survivor_synergy');
+        triggerPremiumFeedback('special', { label: 'STARFORGE', throttleMs: 140 });
+      });
+      if (newlyUnlocked.length) {
+        p.build = survivorBuildSummary();
+        setSurvivorUi();
+      }
+      return newlyUnlocked.map(def => ({
+        id: def.id,
+        label: def.label,
+        tag: def.tag,
+        reason
+      }));
     }
 
     function survivorXpTarget() {
@@ -9322,6 +9437,11 @@ function init() {
         overdriveEl.textContent = survivor.overdrive >= 100 ? 'READY' : `${Math.floor(survivor.overdrive)}%`;
         overdriveEl.style.color = survivor.overdrive >= 100 ? '#FDE68A' : survivor.overdrive >= 65 ? '#BAE6FD' : '#fff';
       }
+      const synergyEl = document.getElementById('premium-survivor-synergy');
+      if (synergyEl) {
+        synergyEl.textContent = formatSurvivorSynergy();
+        synergyEl.style.color = survivor.synergyFlash > 0 ? '#FDE68A' : survivor.synergies?.length ? '#A7F3D0' : '#fff';
+      }
       document.getElementById('premium-survivor-threat').textContent = `WAVE ${Math.max(1, Math.floor(survivor.elapsed / 18000) + 1)}`;
       const eventEl = document.getElementById('premium-survivor-event');
       if (eventEl) {
@@ -9357,6 +9477,9 @@ function init() {
       survivor.overdrive = 0;
       survivor.overdriveFlash = 0;
       survivor.overdriveText = 'SYNC';
+      survivor.synergies = [];
+      survivor.synergyFlash = 0;
+      survivor.lastSynergy = '';
       survivor.hurtFlash = 0;
       survivor.hurtFeedbackCooldown = 0;
       survivor.lastHitLabel = '';
@@ -9825,15 +9948,16 @@ function init() {
       if (!p || !survivor.draftOpen || !choice) return false;
       choice.apply(p);
       p.upgrades.push(choice.id);
-      p.build = survivorBuildSummary();
       survivor.score += 60 + p.level * 16;
       survivor.draftOpen = false;
       survivor.draftChoices = [];
       survivor.draftRerolls = 0;
       hideSurvivorDraft();
       clearPremiumKeys();
+      const synergies = resolveSurvivorSynergies('draft');
+      p.build = survivorBuildSummary();
       survivor.last = performance.now();
-      survivorBurst(p.x, p.y, '#BAE6FD', 34);
+      survivorBurst(p.x, p.y, synergies.length ? '#FDE68A' : '#BAE6FD', synergies.length ? 48 : 34);
       setSurvivorUi();
       updatePremiumMetaControls();
       updatePremiumTouchLabels();
@@ -9963,7 +10087,7 @@ function init() {
       const finalScore = Math.floor(survivor.score + survivor.elapsed / 120 + survivor.bestChain * 42 + survivor.overdrive * 3 + survivor.anomalyCount * 95 + survivor.bountiesCompleted * 150);
       localStorage.setItem(survivor.bestKey, String(Math.max(Number(localStorage.getItem(survivor.bestKey) || 0), finalScore)));
       if (survivor.elapsed >= 90000) unlockAchievement('survivor_90');
-      recordPremiumResult('survivor', finalScore, { elapsed: survivor.elapsed, level: survivor.player?.level || 1, bestChain: survivor.bestChain, overdrive: Math.floor(survivor.overdrive), anomalies: survivor.anomalyCount, bounties: survivor.bountiesCompleted, drones: Math.floor(Number(survivor.player?.drones || 0)), runVariant: survivor.variant });
+      recordPremiumResult('survivor', finalScore, { elapsed: survivor.elapsed, level: survivor.player?.level || 1, bestChain: survivor.bestChain, synergies: Number(survivor.synergies?.length || 0), overdrive: Math.floor(survivor.overdrive), anomalies: survivor.anomalyCount, bounties: survivor.bountiesCompleted, drones: Math.floor(Number(survivor.player?.drones || 0)), runVariant: survivor.variant });
       setSurvivorUi();
       drawSurvivor();
       overlay(survivor.ctx, survivor.canvas.width, survivor.canvas.height, text, `Score ${finalScore} · 点击部署再来一局`);
@@ -9994,6 +10118,7 @@ function init() {
       if (survivor.chainTimer <= 0) survivor.chain = 0;
       survivor.overdriveFlash = Math.max(0, survivor.overdriveFlash - dt);
       survivor.bountyFlash = Math.max(0, survivor.bountyFlash - dt);
+      survivor.synergyFlash = Math.max(0, Number(survivor.synergyFlash || 0) - dt);
       survivor.hurtFlash = Math.max(0, Number(survivor.hurtFlash || 0) - dt);
       survivor.hurtFeedbackCooldown = Math.max(0, Number(survivor.hurtFeedbackCooldown || 0) - dt);
       updateSurvivorAnomaly(dt);
@@ -10200,6 +10325,24 @@ function init() {
         ctx.arc(p.x, p.y, p.r + 14 + Math.sin(survivor.elapsed / 120) * 2, 0, Math.PI * 2);
         ctx.stroke();
       }
+      if (Number(survivor.synergyFlash || 0) > 0) {
+        const flash = clamp(Number(survivor.synergyFlash || 0) / 1350, 0, 1);
+        ctx.save();
+        ctx.strokeStyle = `rgba(253, 230, 138, ${0.28 + flash * 0.62})`;
+        ctx.fillStyle = `rgba(34, 211, 238, ${0.06 + flash * 0.1})`;
+        ctx.lineWidth = 3 + flash * 3;
+        ctx.shadowColor = '#FDE68A';
+        ctx.shadowBlur = 18;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r + 38 + (1 - flash) * 28, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.font = '900 11px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#FDE68A';
+        ctx.fillText(survivor.lastSynergy || 'STARFORGE', p.x, Math.max(16, p.y - p.r - 34));
+        ctx.restore();
+      }
       const droneCount = Math.max(0, Math.floor(Number(p.drones || 0)));
       if (droneCount > 0) {
         ctx.save();
@@ -10280,6 +10423,10 @@ function init() {
       ctx.fillText(`NOVA ${p.novaCooldown > 0 ? Math.ceil(p.novaCooldown / 1000) : 'READY'}`, 14, 40);
       ctx.fillStyle = survivor.overdrive >= 100 ? '#FDE68A' : '#BAE6FD';
       ctx.fillText(`CHAIN ${survivor.chain}x · OVR ${survivor.overdrive >= 100 ? 'READY' : Math.floor(survivor.overdrive) + '%'}`, 14, 58);
+      if (survivor.synergies?.length || survivor.synergyFlash > 0) {
+        ctx.fillStyle = survivor.synergyFlash > 0 ? '#FDE68A' : '#A7F3D0';
+        ctx.fillText(`STARFORGE ${formatSurvivorSynergy()}`, 14, 76);
+      }
       if (survivor.anomaly) {
         const eventDef = survivorAnomalyDefs[survivor.anomaly.type];
         const remaining = Math.max(0, Math.ceil(survivor.anomaly.timer / 1000));
@@ -10362,6 +10509,15 @@ function init() {
           flash: Math.ceil(survivor.bountyFlash),
           last: survivor.lastBounty
         },
+        synergy: {
+          count: Number(survivor.synergies?.length || 0),
+          ids: Array.isArray(survivor.synergies) ? survivor.synergies.slice() : [],
+          labels: (survivor.synergies || []).map(id => survivorSynergyDefs.find(def => def.id === id)?.label || id),
+          last: survivor.lastSynergy || '',
+          flash: Math.ceil(Number(survivor.synergyFlash || 0)),
+          hud: document.getElementById('premium-survivor-synergy')?.textContent || '',
+          achieved: (career.achievements || []).includes('survivor_synergy')
+        },
         hazards: survivor.hazards.map(hazard => ({
           type: hazard.type,
           exploded: !!hazard.exploded,
@@ -10388,6 +10544,7 @@ function init() {
           chain: document.getElementById('premium-survivor-chain')?.textContent || '',
           hp: document.getElementById('premium-survivor-hp')?.textContent || '',
           overdrive: document.getElementById('premium-survivor-overdrive')?.textContent || '',
+          synergy: document.getElementById('premium-survivor-synergy')?.textContent || '',
           build: document.getElementById('premium-survivor-build')?.textContent || '',
           threat: document.getElementById('premium-survivor-threat')?.textContent || '',
           event: document.getElementById('premium-survivor-event')?.textContent || '',
@@ -10490,6 +10647,50 @@ function init() {
         droneBullets,
         dronePods,
         buildText: document.getElementById('premium-survivor-build')?.textContent || ''
+      };
+    }
+
+    function forceSurvivorSynergy() {
+      switchPremiumGame('survivor');
+      startSurvivor();
+      stopSurvivorLoop();
+      survivor.paused = false;
+      survivor.draftOpen = false;
+      hideSurvivorDraft();
+      const p = survivor.player;
+      p.level = Math.max(4, Number(p.level || 1));
+      p.drones = 2;
+      p.droneDamage = 18;
+      p.pierce = 1;
+      p.upgrades = ['drone', 'drone', 'rail'];
+      p.build = survivorBuildSummary();
+      survivor.synergies = [];
+      survivor.synergyFlash = 0;
+      survivor.lastSynergy = '';
+      survivor.overdrive = 18;
+      survivor.chain = 2;
+      survivor.chainTimer = 1800;
+      survivor.enemies = [
+        { x: p.x + 116, y: p.y - 22, r: 12, hp: 140, maxHp: 140, speed: 82, value: 42, color: '#06B6D4', type: 'charger', elite: false, pulse: 0, slow: 0 },
+        { x: p.x - 94, y: p.y + 44, r: 18, hp: 260, maxHp: 260, speed: 62, value: 96, color: '#F97316', type: 'brute', elite: true, pulse: 1.2, slow: 0 }
+      ];
+      survivor.bullets = [];
+      setSurvivorUi();
+      drawSurvivor();
+      const before = survivorDebugState();
+      const unlocked = resolveSurvivorSynergies('debug');
+      setSurvivorUi();
+      drawSurvivor();
+      return {
+        unlocked,
+        before,
+        after: survivorDebugState(),
+        feedback: {
+          lastTone: premiumFeedback.lastTone,
+          lastLabel: premiumFeedback.lastLabel,
+          tones: { ...premiumFeedback.tones },
+          visualTriggers: premiumFeedback.visualTriggers
+        }
       };
     }
 
@@ -16856,6 +17057,7 @@ function init() {
           forceSurvivorAnomaly: (type = 'meteor') => forceSurvivorAnomaly(type),
           forceSurvivorOverdrive: () => forceSurvivorOverdrive(),
           forceSurvivorDroneVolley: () => forceSurvivorDroneVolley(),
+          forceSurvivorSynergy: () => forceSurvivorSynergy(),
           forceSurvivorBounty: () => forceSurvivorBounty(),
           forceSurvivorHit: (source = 'HIT', amount = 22) => forceSurvivorHit(source, amount),
           forceSurvivorHpZero: () => forceSurvivorHpZero(),
