@@ -7982,6 +7982,10 @@ body.command-open {
   border-color: rgba(52, 211, 153, 0.72);
   box-shadow: inset 0 0 0 2px rgba(52, 211, 153, 0.26), 0 0 18px rgba(52, 211, 153, 0.2);
 }
+.chain-masterwork-plan {
+  border-color: rgba(253, 230, 138, 0.88);
+  box-shadow: inset 0 0 0 2px rgba(253, 230, 138, 0.26), 0 0 22px rgba(34, 211, 238, 0.24), 0 0 18px rgba(251, 191, 36, 0.22);
+}
 .chain-cursor {
   outline: 3px solid rgba(255, 255, 255, 0.86);
   outline-offset: 2px;
@@ -8035,6 +8039,19 @@ body.command-open {
 .chain-resonance .chain-resonance-plan {
   box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.34), 0 0 28px rgba(52, 211, 153, 0.48);
 }
+.chain-masterwork-ready {
+  border-color: rgba(253, 230, 138, 0.54);
+  box-shadow: 0 0 0 1px rgba(253, 230, 138, 0.18), 0 0 32px rgba(34, 211, 238, 0.16);
+}
+.chain-masterwork {
+  border-color: rgba(253, 230, 138, 0.78);
+  box-shadow: 0 0 0 1px rgba(253, 230, 138, 0.26), 0 0 38px rgba(251, 191, 36, 0.32), 0 0 26px rgba(34, 211, 238, 0.2);
+  animation: chain-masterwork-flash 0.62s ease;
+}
+.chain-masterwork .chain-hint,
+.chain-masterwork .chain-masterwork-plan {
+  box-shadow: 0 0 0 2px rgba(253, 230, 138, 0.42), 0 0 32px rgba(251, 191, 36, 0.54);
+}
 .chain-board::after {
   content: attr(data-feedback);
   position: absolute;
@@ -8066,6 +8083,12 @@ body.command-open {
   0% { filter: brightness(1); }
   45% { filter: brightness(1.22) saturate(1.22); }
   100% { filter: brightness(1); }
+}
+
+@keyframes chain-masterwork-flash {
+  0% { filter: brightness(1) saturate(1); }
+  38% { filter: brightness(1.34) saturate(1.28); }
+  100% { filter: brightness(1) saturate(1); }
 }
 
 #premium-chain-catalyst[data-ready="true"],
