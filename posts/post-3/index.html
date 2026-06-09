@@ -32,14 +32,14 @@
   <link rel="alternate" type="application/rss+xml" title="Atherix Digital Space Feed" href="https://dadaguai6686.github.io/feed.xml">
   <link rel="icon" href="/assets/atherix-icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/assets/atherix-icon-192.png">
-  <link rel="preload" href="/style.css?v=20260609-quality-v16" as="style">
+  <link rel="preload" href="/style.css?v=20260609-quality-v20" as="style">
   <link rel="preload" href="/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/assets/fonts/outfit-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/assets/fonts/jetbrains-mono-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/lucide.min.js" as="script">
-  <link rel="preload" href="/app.js?v=20260609-quality-v44" as="script">
+  <link rel="preload" href="/app.js?v=20260609-quality-v49" as="script">
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="/style.css?v=20260609-quality-v16">
+  <link rel="stylesheet" href="/style.css?v=20260609-quality-v20">
   <link rel="manifest" href="/manifest.webmanifest">
   <!-- Lucide Icons Local -->
   <script src="/lucide.min.js"></script>
@@ -76,11 +76,11 @@
         <span>Atherix</span>
       </div>
       <div class="nav-links">
-        <button type="button" class="nav-item active" data-target="home" aria-label="打开首页" title="首页" aria-current="page">
+        <button type="button" class="nav-item" data-target="home" aria-label="打开首页" title="首页">
           <i data-lucide="layout-grid">🏠</i>
           <span>首页</span>
         </button>
-        <button type="button" class="nav-item" data-target="blog" aria-label="打开博客" title="博客">
+        <button type="button" class="nav-item active" data-target="blog" aria-label="打开博客" title="博客" aria-current="page">
           <i data-lucide="book-open">📚</i>
           <span>博客</span>
         </button>
@@ -115,9 +115,51 @@
 
   <!-- Main Content Areas -->
   <main id="main-content" tabindex="-1">
+    <article class="glass-card article-ssr-shell" id="article-ssr-shell" data-ssr-article-id="post-3" aria-labelledby="article-ssr-title">
+      <a class="article-ssr-back" href="/#blog">返回博客列表</a>
+      <div class="article-ssr-meta">
+        <span>前端开发</span>
+        <span>2026-05-10</span>
+        <span>5 分钟阅读</span>
+      </div>
+      <h1 id="article-ssr-title">Canvas 客户端图像压缩的原理与实战</h1>
+      <p class="article-ssr-description">探讨如何直接在前端对上传的 PNG/JPEG 进行高效压缩并转换为 WebP 格式，减小后端存储负担。</p>
+      <div class="article-ssr-content">
+          <p>在这个充满高分辨率照片的时代，将几兆大小的图片直接上传到服务器会消耗极大的带宽与存储。为了优化，我们应该在前端对图片先进行一层“预压缩”。</p>
+          <p>本博客将详解本站“图片 WebP 压缩”工具的核心算法。</p>
+          <h2>Canvas 图像绘制与读取</h2>
+          <p>压缩的第一步是将用户上传的 File 对象转换为 HTMLImageElement，并绘制到 &lt;canvas&gt; 画布上。</p>
+          <pre><code>const img = new Image();
+img.src = URL.createObjectURL(file);
+img.onload = () =&gt; {
+  const canvas = document.createElement(&#39;canvas&#39;);
+  const ctx = canvas.getContext(&#39;2d&#39;);
+
+  // 可以根据需要缩放宽高
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+
+  ctx.drawImage(img, 0, 0);
+};</code></pre>
+          <h2>压缩并转为 WebP</h2>
+          <p>Canvas 提供了一个极其强大的 API：toDataURL(type, encoderOptions) 或 toBlob(callback, type, encoderOptions)。</p>
+          <ul>
+          <li>type：目标格式（推荐使用 image/webp，体积比 JPEG/PNG 小很多）。</li>
+          <li>encoderOptions：压缩质量数值，范围从 0.0 到 1.0。</li>
+          </ul>
+          <pre><code>canvas.toBlob((blob) =&gt; {
+  // blob 即为压缩后的二进制图片数据
+  const compressedUrl = URL.createObjectURL(blob);
+  // 可提供下载或直接上传
+}, &#39;image/webp&#39;, 0.8); // 0.8 代表 80% 质量</code></pre>
+          <h2>跨浏览器支持与性能调优</h2>
+          <p>通过这个机制，本站的工具能帮您瞬间将 3MB 的大图压缩到 200KB 左右，且视觉上几乎没有无损压缩痕迹！</p>
+      </div>
+      <a class="article-ssr-canonical" href="https://dadaguai6686.github.io/posts/post-3/">文章永久链接</a>
+    </article>
 
     <!-- SECTION 1: HOME (Bento Dashboard) -->
-    <section class="view-section active" id="home">
+    <section class="view-section" id="home">
       <div class="bento-grid">
 
         <!-- Profile Card (col-span-2, row-span-2) -->
@@ -1411,6 +1453,6 @@
   <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <!-- Main JavaScript File -->
-  <script src="/app.js?v=20260609-quality-v44"></script>
+  <script src="/app.js?v=20260609-quality-v49"></script>
 </body>
 </html>

@@ -32,14 +32,14 @@
   <link rel="alternate" type="application/rss+xml" title="Atherix Digital Space Feed" href="https://dadaguai6686.github.io/feed.xml">
   <link rel="icon" href="/assets/atherix-icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/assets/atherix-icon-192.png">
-  <link rel="preload" href="/style.css?v=20260609-quality-v16" as="style">
+  <link rel="preload" href="/style.css?v=20260609-quality-v20" as="style">
   <link rel="preload" href="/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/assets/fonts/outfit-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/assets/fonts/jetbrains-mono-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/lucide.min.js" as="script">
-  <link rel="preload" href="/app.js?v=20260609-quality-v44" as="script">
+  <link rel="preload" href="/app.js?v=20260609-quality-v49" as="script">
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="/style.css?v=20260609-quality-v16">
+  <link rel="stylesheet" href="/style.css?v=20260609-quality-v20">
   <link rel="manifest" href="/manifest.webmanifest">
   <!-- Lucide Icons Local -->
   <script src="/lucide.min.js"></script>
@@ -76,11 +76,11 @@
         <span>Atherix</span>
       </div>
       <div class="nav-links">
-        <button type="button" class="nav-item active" data-target="home" aria-label="打开首页" title="首页" aria-current="page">
+        <button type="button" class="nav-item" data-target="home" aria-label="打开首页" title="首页">
           <i data-lucide="layout-grid">🏠</i>
           <span>首页</span>
         </button>
-        <button type="button" class="nav-item" data-target="blog" aria-label="打开博客" title="博客">
+        <button type="button" class="nav-item active" data-target="blog" aria-label="打开博客" title="博客" aria-current="page">
           <i data-lucide="book-open">📚</i>
           <span>博客</span>
         </button>
@@ -115,9 +115,47 @@
 
   <!-- Main Content Areas -->
   <main id="main-content" tabindex="-1">
+    <article class="glass-card article-ssr-shell" id="article-ssr-shell" data-ssr-article-id="post-1" aria-labelledby="article-ssr-title">
+      <a class="article-ssr-back" href="/#blog">返回博客列表</a>
+      <div class="article-ssr-meta">
+        <span>前端开发</span>
+        <span>2026-05-18</span>
+        <span>6 分钟阅读</span>
+      </div>
+      <h1 id="article-ssr-title">如何构建一个极速的无框架博客？</h1>
+      <p class="article-ssr-description">探索现代原生 Web API 的潜能，摆脱重度前端框架依赖，打造秒开的个人网站性能体验。</p>
+      <div class="article-ssr-content">
+          <p>在现代 Web 开发中，我们经常陷入“框架过载”的境地。为了展示几篇文字和几个交互组件，我们常常打包数百 KB 甚至数 MB 的 JavaScript 代码。</p>
+          <p>本篇文章将探讨如何回归初心，利用原生 Web 技术的卓越性能，打造极致速度的个人数字花园。</p>
+          <h2>为什么选择无框架？</h2>
+          <ol>
+          <li>零构建步骤：你可以直接用文本编辑器编写 HTML、CSS 和 JS，在任何浏览器中双击即可运行。</li>
+          <li>瞬时加载 (Instant Load)：没有复杂的运行时加载、虚拟 DOM 对比或巨大的第三方库。Lighthouse 性能评分轻松拉满 100 分。</li>
+          <li>极佳的可读性与复古情怀：代码干净纯粹，对搜索引擎爬虫极度友好，维护生命周期几乎是无限的。</li>
+          </ol>
+          <h2>核心技术选型</h2>
+          <p>要实现极致的无框架体验，我们可以依赖以下现代 Web 标准：</p>
+          <ul>
+          <li>CSS Grid &amp; Custom Properties (变量)：轻松解决复杂布局和暗黑模式切换。</li>
+          <li>Vanilla ES6 JavaScript：用于局部路由管理、交互式小工具及数据同步。</li>
+          <li>Lucide Icons：矢量化、轻量级的图标管理方案。</li>
+          </ul>
+          <pre><code>// 极简的原生路由实现
+function navigateTo(routeId) {
+  document.querySelectorAll(&#39;.view-section&#39;).forEach(sec =&gt; {
+    sec.classList.remove(&#39;active&#39;);
+  });
+  const target = document.getElementById(routeId);
+  if (target) target.classList.add(&#39;active&#39;);
+}</code></pre>
+          <h2>结论</h2>
+          <p>无框架并不是逆行，而是一种对性能、掌控力以及环保编码（Green Coding）的追求。欢迎你在我的工具箱里尝试这些纯原生开发的实用组件！</p>
+      </div>
+      <a class="article-ssr-canonical" href="https://dadaguai6686.github.io/posts/post-1/">文章永久链接</a>
+    </article>
 
     <!-- SECTION 1: HOME (Bento Dashboard) -->
-    <section class="view-section active" id="home">
+    <section class="view-section" id="home">
       <div class="bento-grid">
 
         <!-- Profile Card (col-span-2, row-span-2) -->
@@ -1411,6 +1449,6 @@
   <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <!-- Main JavaScript File -->
-  <script src="/app.js?v=20260609-quality-v44"></script>
+  <script src="/app.js?v=20260609-quality-v49"></script>
 </body>
 </html>

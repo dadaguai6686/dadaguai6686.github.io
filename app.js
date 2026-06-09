@@ -834,6 +834,10 @@ function init() {
     ensureDynamicArticleMeta('article:tag', post?.tag || '');
   }
 
+  function removeArticlePrerenderShell() {
+    document.getElementById('article-ssr-shell')?.remove();
+  }
+
   function shouldUseNativeLinkBehavior(event) {
     return event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
   }
@@ -873,6 +877,7 @@ function init() {
     currentRoute = targetId;
     if (targetId !== 'blog-reader') currentPostId = '';
     if (targetId !== 'blog-reader') {
+      removeArticlePrerenderShell();
       restoreDefaultDocumentMeta();
     }
     const activeNavTarget = targetId === 'blog-reader' ? 'blog' : targetId;
@@ -2452,6 +2457,7 @@ function init() {
     if (blogReaderCard) {
       blogReaderCard.classList.add('active');
     }
+    removeArticlePrerenderShell();
 
     safeCreateIcons();
     setTimeout(() => readerTitle?.focus({ preventScroll: true }), 40);

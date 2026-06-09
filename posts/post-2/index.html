@@ -32,14 +32,14 @@
   <link rel="alternate" type="application/rss+xml" title="Atherix Digital Space Feed" href="https://dadaguai6686.github.io/feed.xml">
   <link rel="icon" href="/assets/atherix-icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/assets/atherix-icon-192.png">
-  <link rel="preload" href="/style.css?v=20260609-quality-v16" as="style">
+  <link rel="preload" href="/style.css?v=20260609-quality-v20" as="style">
   <link rel="preload" href="/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/assets/fonts/outfit-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/assets/fonts/jetbrains-mono-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/lucide.min.js" as="script">
-  <link rel="preload" href="/app.js?v=20260609-quality-v44" as="script">
+  <link rel="preload" href="/app.js?v=20260609-quality-v49" as="script">
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="/style.css?v=20260609-quality-v16">
+  <link rel="stylesheet" href="/style.css?v=20260609-quality-v20">
   <link rel="manifest" href="/manifest.webmanifest">
   <!-- Lucide Icons Local -->
   <script src="/lucide.min.js"></script>
@@ -76,11 +76,11 @@
         <span>Atherix</span>
       </div>
       <div class="nav-links">
-        <button type="button" class="nav-item active" data-target="home" aria-label="打开首页" title="首页" aria-current="page">
+        <button type="button" class="nav-item" data-target="home" aria-label="打开首页" title="首页">
           <i data-lucide="layout-grid">🏠</i>
           <span>首页</span>
         </button>
-        <button type="button" class="nav-item" data-target="blog" aria-label="打开博客" title="博客">
+        <button type="button" class="nav-item active" data-target="blog" aria-label="打开博客" title="博客" aria-current="page">
           <i data-lucide="book-open">📚</i>
           <span>博客</span>
         </button>
@@ -115,9 +115,50 @@
 
   <!-- Main Content Areas -->
   <main id="main-content" tabindex="-1">
+    <article class="glass-card article-ssr-shell" id="article-ssr-shell" data-ssr-article-id="post-2" aria-labelledby="article-ssr-title">
+      <a class="article-ssr-back" href="/#blog">返回博客列表</a>
+      <div class="article-ssr-meta">
+        <span>黑客技术</span>
+        <span>2026-05-15</span>
+        <span>8 分钟阅读</span>
+      </div>
+      <h1 id="article-ssr-title">基于 Web Audio API 实现沉浸式白噪音生成器</h1>
+      <p class="article-ssr-description">深入了解浏览器音频接口，不依赖音频文件也能实时合成雨声、风声和 Lofi 合成器背景音。</p>
+      <div class="article-ssr-content">
+          <p>在我们的番茄钟和音乐播放器中，你可能会注意到好听的雨声和伴奏。其实，这些音效很多不需要通过加载大型 MP3 文件来播放。我们可以直接在浏览器中利用 Web Audio API 合成它们！</p>
+          <h2>什么是 Web Audio API？</h2>
+          <p>Web Audio API 是浏览器提供的一个高级音频处理系统，允许开发者在音频上下文中创建音频源、添加音效节点（如滤波器、延迟器、空间化器），并将最终音轨输出到扬声器。</p>
+          <h2>如何生成“雨声”（粉色噪音 + 滤波器）</h2>
+          <p>雨声本质上接近于粉色噪音 (Pink Noise)，并辅以随机的低频振荡来模拟雷声或大雨滴。</p>
+          <h3>1. 粉色噪音的合成算法</h3>
+          <p>粉色噪音的频谱随着频率的增加而衰减（每倍频程衰减3分贝）。我们可以用一段白噪音，通过特殊滤波器进行处理：</p>
+          <pre><code>const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const bufferSize = 2 * audioCtx.sampleRate;
+const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+const output = noiseBuffer.getChannelData(0);
+
+let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+for (let i = 0; i &lt; bufferSize; i++) {
+  const white = Math.random() * 2 - 1;
+  b0 = 0.99886 * b0 + white * 0.0555179;
+  b1 = 0.99332 * b1 + white * 0.0750759;
+  b2 = 0.96900 * b2 + white * 0.1538520;
+  b3 = 0.86650 * b3 + white * 0.3104856;
+  b4 = 0.55000 * b4 + white * 0.5329522;
+  b5 = -0.7616 * b5 - white * 0.0168980;
+  output[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+  output[i] *= 0.11; // 调整音量平衡
+  b6 = white * 0.115926;
+}</code></pre>
+          <p>有了这段噪音缓存，我们只需用 AudioBufferSourceNode 循环播放它，并用 BiquadFilterNode 设置一个低通滤波，就能模仿出雨滴击打在窗户上的柔和声音。</p>
+          <h2>总结</h2>
+          <p>利用 Web API 合成声音不仅节省带宽，还能让声音产生无穷的变化而不重复。在我的番茄钟里，我已经内置了这种合成机制，快去体验一下吧！</p>
+      </div>
+      <a class="article-ssr-canonical" href="https://dadaguai6686.github.io/posts/post-2/">文章永久链接</a>
+    </article>
 
     <!-- SECTION 1: HOME (Bento Dashboard) -->
-    <section class="view-section active" id="home">
+    <section class="view-section" id="home">
       <div class="bento-grid">
 
         <!-- Profile Card (col-span-2, row-span-2) -->
@@ -1411,6 +1452,6 @@
   <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="false"></div>
 
   <!-- Main JavaScript File -->
-  <script src="/app.js?v=20260609-quality-v44"></script>
+  <script src="/app.js?v=20260609-quality-v49"></script>
 </body>
 </html>

@@ -590,6 +590,25 @@ async function run() {
   await bestEffortSend('Log.enable');
   await navigate(appUrl);
   await waitFor('.nav-item[data-target="blog"]', 12000);
+  await navigate(`${appUrl}/posts/post-1/`);
+  await waitFor('#blog-reader.active', 12000);
+  await waitFor('#reader-post-content h2', 12000);
+  await wait(500);
+  const articleDeepLinkHydrationState = await evaluate(`(() => ({
+    pathname: location.pathname,
+    search: location.search,
+    hash: location.hash,
+    readerActive: document.querySelector('#blog-reader')?.classList.contains('active') || false,
+    ssrShellPresent: !!document.querySelector('#article-ssr-shell'),
+    title: document.querySelector('#reader-post-title')?.textContent.trim() || '',
+    firstVisibleMainH1: ([...document.querySelectorAll('main h1')].find(el => {
+      const section = el.closest('.view-section');
+      return (!section || section.classList.contains('active')) && !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+    })?.textContent || '').trim(),
+    navCurrent: [...document.querySelectorAll('.nav-item[aria-current="page"]')].map(item => item.dataset.target || '')
+  }))()`);
+  await navigate(appUrl);
+  await waitFor('.nav-item[data-target="blog"]', 12000);
   await evaluate(`(() => {
     window.sessionStorage?.removeItem('admin_token');
     localStorage.setItem('admin_token', 'fake-token-for-smoke');
@@ -3831,7 +3850,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v91-quality') && swText.includes('/style.css?v=20260609-quality-v19') && swText.includes('/app.js?v=20260609-quality-v48'),
+      swHasQualityVersion: swText.includes('atherix-static-v92-quality') && swText.includes('/style.css?v=20260609-quality-v20') && swText.includes('/app.js?v=20260609-quality-v49'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp'),
       swHasLocalFonts: swText.includes('/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2') && swText.includes('/assets/fonts/outfit-latin-wght-normal.woff2') && swText.includes('/assets/fonts/jetbrains-mono-latin-wght-normal.woff2')
@@ -4231,6 +4250,7 @@ async function run() {
   assert(blogHubBefore.filterRole === 'group', `blog reader filters should expose button-group semantics, not tablist semantics: ${JSON.stringify(blogHubBefore)}`);
   assert(blogHubBefore.cardLinks >= blogHubBefore.cards && /^\/posts\/[A-Za-z0-9_-]+\/$/.test(blogHubBefore.firstCardHref) && blogHubBefore.pinnedLinks >= 1 && blogHubBefore.quickRole === 'link' && blogHubBefore.quickTabIndex === '0', `blog cards and featured entry should expose native canonical article links: ${JSON.stringify(blogHubBefore)}`);
   assert(blogHubBefore.progressCards >= 1 && /42/.test(blogHubBefore.progressText) && !blogHubBefore.horizontalOverflow, `blog reading hub should show resumable progress without overflow: ${JSON.stringify(blogHubBefore)}`);
+  assert(articleDeepLinkHydrationState.readerActive && !articleDeepLinkHydrationState.ssrShellPresent && articleDeepLinkHydrationState.pathname === '/posts/post-1/' && articleDeepLinkHydrationState.navCurrent.length === 1 && articleDeepLinkHydrationState.navCurrent[0] === 'blog' && articleDeepLinkHydrationState.title === '如何构建一个极速的无框架博客？' && articleDeepLinkHydrationState.firstVisibleMainH1 === articleDeepLinkHydrationState.title, `article deep links should hydrate into one active reader and remove the temporary SSR shell: ${JSON.stringify(articleDeepLinkHydrationState)}`);
   assert(blogState.toolbar && blogState.bookmarkPressed, 'blog reader toolbar should render and toggle bookmark state');
   assert(blogState.meta?.ogType === 'article' && blogState.meta?.canonical?.includes(`/posts/${encodeURIComponent(blogState.postId)}/`) && blogState.meta?.ogUrl?.includes(`/posts/${encodeURIComponent(blogState.postId)}/`) && blogState.meta?.twitterTitle === blogState.meta?.title && blogState.meta?.description.length > 20 && blogState.meta?.articlePublished && blogState.meta?.articleTag, `blog reader should synchronize article SEO/social metadata on client navigation: ${JSON.stringify(blogState.meta)}`);
   assert(readerCompletionState.stored === '100' && readerCompletionState.pressed && /重新阅读/.test(readerCompletionState.label) && readerCompletionState.progress === '100%', `blog reader should support explicit completion: ${JSON.stringify(readerCompletionState)}`);
@@ -5163,6 +5183,7 @@ async function run() {
     appUrl,
     appDataReady,
     adminStartupState,
+    articleDeepLinkHydrationState,
     accessibilityBaseline,
     commandFocusOpenState,
     commandFocusClosedState,

@@ -427,6 +427,144 @@ function appendArticleMeta(html, post, url, jsonLd) {
   return block ? html.replace('</head>', () => `  ${block}\n</head>`) : html;
 }
 
+function stripInlineMarkdown(value) {
+  return String(value ?? '')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/[*_`~]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function renderFallbackArticleBody(markdown = '', title = '') {
+  const lines = String(markdown || '').replace(/\r\n?/g, '\n').split('\n');
+  const normalizedTitle = stripInlineMarkdown(title);
+  const parts = [];
+  let paragraph = [];
+  let listType = '';
+  let inCode = false;
+  let codeLines = [];
+  let skippedTitleHeading = false;
+
+  const closeParagraph = () => {
+    const text = paragraph.join(' ').trim();
+    if (text) parts.push(`<p>${escapeXml(stripInlineMarkdown(text))}</p>`);
+    paragraph = [];
+  };
+  const closeList = () => {
+    if (listType) {
+      parts.push(`</${listType}>`);
+      listType = '';
+    }
+  };
+  const openList = (type) => {
+    closeParagraph();
+    if (listType !== type) {
+      closeList();
+      parts.push(`<${type}>`);
+      listType = type;
+    }
+  };
+  const closeCode = () => {
+    parts.push(`<pre><code>${escapeXml(codeLines.join('\n').trimEnd())}</code></pre>`);
+    codeLines = [];
+    inCode = false;
+  };
+
+  lines.forEach(rawLine => {
+    const line = rawLine.trimEnd();
+    if (/^```/.test(line.trim())) {
+      closeParagraph();
+      closeList();
+      if (inCode) closeCode();
+      else {
+        inCode = true;
+        codeLines = [];
+      }
+      return;
+    }
+    if (inCode) {
+      codeLines.push(rawLine);
+      return;
+    }
+    if (!line.trim()) {
+      closeParagraph();
+      closeList();
+      return;
+    }
+    const heading = line.match(/^(#{1,4})\s+(.+)$/);
+    if (heading) {
+      closeParagraph();
+      closeList();
+      const headingText = stripInlineMarkdown(heading[2]);
+      if (!skippedTitleHeading && heading[1].length === 1 && headingText === normalizedTitle) {
+        skippedTitleHeading = true;
+        return;
+      }
+      const level = Math.min(4, Math.max(2, heading[1].length));
+      parts.push(`<h${level}>${escapeXml(headingText)}</h${level}>`);
+      return;
+    }
+    const quote = line.match(/^\s*>\s+(.+)$/);
+    if (quote) {
+      closeParagraph();
+      closeList();
+      parts.push(`<blockquote>${escapeXml(stripInlineMarkdown(quote[1]))}</blockquote>`);
+      return;
+    }
+    const ordered = line.match(/^\s*\d+\.\s+(.+)$/);
+    if (ordered) {
+      openList('ol');
+      parts.push(`<li>${escapeXml(stripInlineMarkdown(ordered[1]))}</li>`);
+      return;
+    }
+    const unordered = line.match(/^\s*[-*]\s+(.+)$/);
+    if (unordered) {
+      openList('ul');
+      parts.push(`<li>${escapeXml(stripInlineMarkdown(unordered[1]))}</li>`);
+      return;
+    }
+    closeList();
+    paragraph.push(line.trim());
+  });
+
+  closeParagraph();
+  closeList();
+  if (inCode) closeCode();
+  return parts.join('\n          ');
+}
+
+function renderArticlePrerenderShell(post, url, description) {
+  const tag = post?.tag || '未分类';
+  const title = post?.title || '未命名文章';
+  const readTime = post?.readTime || '';
+  const date = post?.date || '';
+  const body = renderFallbackArticleBody(post?.content || '', title);
+  return `<article class="glass-card article-ssr-shell" id="article-ssr-shell" data-ssr-article-id="${escapeXml(post?.id || '')}" aria-labelledby="article-ssr-title">
+      <a class="article-ssr-back" href="/#blog">返回博客列表</a>
+      <div class="article-ssr-meta">
+        <span>${escapeXml(tag)}</span>
+        ${date ? `<span>${escapeXml(date)}</span>` : ''}
+        ${readTime ? `<span>${escapeXml(readTime)}</span>` : ''}
+      </div>
+      <h1 id="article-ssr-title">${escapeXml(title)}</h1>
+      <p class="article-ssr-description">${escapeXml(description)}</p>
+      <div class="article-ssr-content">
+          ${body || `<p>${escapeXml(description)}</p>`}
+      </div>
+      <a class="article-ssr-canonical" href="${escapeXml(url)}">文章永久链接</a>
+    </article>`;
+}
+
+function renderArticlePrerenderedAppShell(html, post, url, description) {
+  const shell = renderArticlePrerenderShell(post, url, description);
+  return html
+    .replace('<button type="button" class="nav-item active" data-target="home" aria-label="打开首页" title="首页" aria-current="page">', '<button type="button" class="nav-item" data-target="home" aria-label="打开首页" title="首页">')
+    .replace('<button type="button" class="nav-item" data-target="blog" aria-label="打开博客" title="博客">', '<button type="button" class="nav-item active" data-target="blog" aria-label="打开博客" title="博客" aria-current="page">')
+    .replace('<section class="view-section active" id="home">', '<section class="view-section" id="home">')
+    .replace('<main id="main-content" tabindex="-1">', `<main id="main-content" tabindex="-1">\n    ${shell}`);
+}
+
 function publicArticleUrl(postId = '') {
   return `${publicSiteUrl}/posts/${encodeURIComponent(postId || '')}/`;
 }
@@ -524,6 +662,7 @@ function renderIndexHtmlWithArticleMeta(post) {
   html = replaceMetaContent(html, 'name', 'twitter:image', defaultOgImageUrl);
   html = replaceCanonicalHref(html, url);
   html = appendArticleMeta(html, post, url, jsonLd);
+  html = renderArticlePrerenderedAppShell(html, post, url, description);
   return { html, csp: cspWithInlineScriptHash(jsonLdHash), jsonLdHash };
 }
 
