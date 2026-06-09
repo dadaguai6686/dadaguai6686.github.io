@@ -5508,10 +5508,20 @@ function init() {
           <strong id="premium-league-title">联赛路线生成中...</strong>
           <small id="premium-league-summary">完成每日 3 段跨模式路线，结算整条联赛声望和限定徽章。</small>
         </div>
-        <div class="arcade-league-route" id="premium-league-route"></div>
+        <div class="arcade-league-main">
+          <div class="arcade-league-route" id="premium-league-route"></div>
+          <div class="arcade-league-command" id="premium-league-command">
+            <span>COMMAND BRIEF</span>
+            <strong id="premium-league-command-title">战术指挥简报</strong>
+            <small id="premium-league-command-summary">系统会根据 PB、当前路线分和已解锁芯片推荐下一把。</small>
+          </div>
+        </div>
         <div class="arcade-league-side">
           <span>阶段 <strong id="premium-league-progress">0/3</strong></span>
           <span>奖励 <strong id="premium-league-reward">+0</strong></span>
+          <span>风险 <strong id="premium-league-risk">--</strong></span>
+          <span>动量 <strong id="premium-league-momentum">0</strong></span>
+          <span>推荐 <strong id="premium-league-plan">标准 / 脉冲</strong></span>
           <button type="button" class="arcade-league-action" id="premium-league-start" data-league-target-game="survivor">
             <i data-lucide="flag"></i>
             <span>进入联赛阶段</span>
@@ -6228,7 +6238,8 @@ function init() {
         stageIndex: 0,
         completed: false,
         rewarded: false,
-        stageScores: {}
+        stageScores: {},
+        commandBonuses: {}
       };
     }
 
@@ -6244,7 +6255,8 @@ function init() {
         league: createDefaultLeagueState(),
         loadout: { active: 'pulse' },
         difficulty: 'standard',
-        runs: []
+        runs: [],
+        settlements: []
       };
     }
 
@@ -6256,6 +6268,7 @@ function init() {
     const careerModeScoreCap = 999999;
     const careerPlaysCap = 99999;
     const careerRunLimit = 12;
+    const careerSettlementLimit = 48;
 
     function isCareerObject(value) {
       return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -6397,6 +6410,14 @@ function init() {
         const score = clampCareerInt(sourceScores[stage.id], careerModeScoreCap);
         if (score > 0) stageScores[stage.id] = score;
       });
+      const commandBonuses = {};
+      const sourceBonuses = isCareerObject(source.commandBonuses) ? source.commandBonuses : {};
+      route.stages.forEach(stage => {
+        const bonus = clampCareerInt(sourceBonuses[stage.id], 9999);
+        if (bonus > 0 && Number(stageScores[stage.id] || 0) >= Number(stage.target || 0)) {
+          commandBonuses[stage.id] = bonus;
+        }
+      });
       let earnedStageIndex = 0;
       while (
         earnedStageIndex < route.stages.length &&
@@ -6413,8 +6434,21 @@ function init() {
         stageIndex,
         completed,
         rewarded: completed,
-        stageScores
+        stageScores,
+        commandBonuses
       };
+    }
+
+    function normalizeCareerSettlements(settlements) {
+      const seen = new Set();
+      return (Array.isArray(settlements) ? settlements : [])
+        .map(id => cleanCareerText(id, 96))
+        .filter(id => {
+          if (!id || seen.has(id)) return false;
+          seen.add(id);
+          return true;
+        })
+        .slice(0, careerSettlementLimit);
     }
 
     function normalizeCareerRuns(runs, state) {
@@ -6432,6 +6466,7 @@ function init() {
           const difficulty = difficultyIdSet.has(run.difficulty) ? run.difficulty : fallbackDifficulty;
           const loadout = loadoutIdSet.has(run.loadout) ? run.loadout : fallbackLoadout;
           const variant = cleanCareerText(run.variant, 32);
+          const settlementId = cleanCareerText(run.settlementId, 96);
           const highlights = (Array.isArray(run.highlights) ? run.highlights : [])
             .map(item => cleanCareerText(item, 28))
             .filter(Boolean)
@@ -6448,6 +6483,7 @@ function init() {
             difficulty,
             loadout,
             variant,
+            settlementId,
             highlights
           };
         })
@@ -6464,6 +6500,7 @@ function init() {
       normalized.achievements = normalizeCareerAchievements(source.achievements);
       normalized.difficulty = difficultyIdSet.has(source.difficulty) ? source.difficulty : 'standard';
       normalized.loadout = { active: loadoutIdSet.has(source.loadout?.active) ? source.loadout.active : 'pulse' };
+      normalized.settlements = normalizeCareerSettlements(source.settlements);
       normalized.runs = normalizeCareerRuns(source.runs, normalized);
       normalized.runs.forEach(run => {
         if (run.score > Number(normalized.best[run.game] || 0)) normalized.best[run.game] = run.score;
@@ -6558,10 +6595,23 @@ function init() {
         career.league = createDefaultLeagueState(date);
       }
       if (!career.league.stageScores || typeof career.league.stageScores !== 'object') career.league.stageScores = {};
+      if (!career.league.commandBonuses || typeof career.league.commandBonuses !== 'object') career.league.commandBonuses = {};
       career.league.stageIndex = Math.max(0, Math.min(route.stages.length, Number(career.league.stageIndex || 0)));
       career.league.completed = !!career.league.completed || career.league.stageIndex >= route.stages.length;
       career.league.rewarded = !!career.league.rewarded;
       return career.league;
+    }
+
+    function createRunSettlementId(game) {
+      const seed = Math.random().toString(36).slice(2, 8);
+      return `${game}-${Date.now()}-${seed}`;
+    }
+
+    function rememberSettlementId(settlementId) {
+      const id = cleanCareerText(settlementId, 96);
+      if (!id) return '';
+      career.settlements = normalizeCareerSettlements([id, ...(Array.isArray(career.settlements) ? career.settlements : [])]);
+      return id;
     }
 
     function contractProgressEntry(contractId) {
@@ -7705,6 +7755,84 @@ function init() {
       }).join('');
     }
 
+    function leagueRecommendedLoadout(game) {
+      const map = {
+        runner: 'pulse',
+        survivor: 'overdrive',
+        boss: 'aegis',
+        drift: 'overdrive',
+        heist: 'strategist',
+        chain: 'strategist',
+        tactics: 'strategist'
+      };
+      const target = loadoutDefs.find(def => def.id === map[game] && loadoutUnlocked(def));
+      return target || activeLoadoutDef();
+    }
+
+    function leagueRecommendedDifficulty(stage, best = 0, score = 0) {
+      const target = Math.max(1, Number(stage?.target || 0));
+      const highWater = Math.max(Number(best || 0), Number(score || 0));
+      const id = highWater >= target * 1.22
+        ? 'nightmare'
+        : highWater >= target * 0.92
+          ? 'elite'
+          : highWater < target * 0.62
+            ? 'training'
+            : 'standard';
+      return difficultyDefs.find(def => def.id === id) || activeDifficultyDef();
+    }
+
+    function leagueStageRisk(stage, best = 0, score = 0, state = 'locked') {
+      const target = Math.max(1, Number(stage?.target || 0));
+      const highWater = Math.max(Number(best || 0), Number(score || 0));
+      const ratio = highWater / target;
+      if (state === 'complete') {
+        return { tone: 'complete', label: 'CLEAR', text: '已清除', detail: '路线已结算' };
+      }
+      if (ratio >= 1.15) {
+        return { tone: 'low', label: 'GREEN', text: '低风险', detail: `超额 ${Math.round((ratio - 1) * 100)}%` };
+      }
+      if (ratio >= 1) {
+        return { tone: 'ready', label: 'READY', text: '可冲线', detail: `余量 ${Math.max(0, highWater - target)}` };
+      }
+      if (ratio >= 0.72) {
+        return { tone: 'medium', label: 'MID', text: '中压', detail: `差 ${Math.max(0, target - highWater)}` };
+      }
+      return { tone: 'high', label: 'HIGH', text: '高压', detail: `差 ${Math.max(0, target - highWater)}` };
+    }
+
+    function leagueStageMomentum(stage, score = 0) {
+      const target = Math.max(1, Number(stage?.target || 0));
+      const safeScore = Math.max(0, Number(score || 0));
+      if (safeScore < target) return 0;
+      const overRatio = Math.max(0, (safeScore - target) / target);
+      return Math.min(100, 20 + Math.round(overRatio * 180));
+    }
+
+    function leagueCommandBonusForStage(stage, score, details = {}) {
+      const target = Math.max(1, Number(stage?.target || 0));
+      const safeScore = Math.max(0, Number(score || 0));
+      if (safeScore < target) return 0;
+      const overRatio = Math.max(0, (safeScore - target) / target);
+      const overBonus = overRatio >= 0.25
+        ? 150
+        : overRatio >= 0.16
+          ? 105
+          : overRatio >= 0.08
+            ? 65
+            : overRatio >= 0.04
+              ? 35
+              : 0;
+      const difficultyId = cleanCareerText(details.difficulty || career.difficulty || activeDifficultyDef().id, 24);
+      const pressureBonus = difficultyId === 'nightmare' ? 70 : difficultyId === 'elite' ? 35 : 0;
+      return Math.min(260, overBonus + pressureBonus);
+    }
+
+    function leagueDeltaLabel(score = 0, target = 0) {
+      const delta = Math.floor(Number(score || 0) - Number(target || 0));
+      return delta >= 0 ? `+${delta}` : `差 ${Math.abs(delta)}`;
+    }
+
     function leagueSnapshot() {
       const state = ensureLeagueForToday();
       const route = getDailyLeagueRoute(state.date);
@@ -7712,15 +7840,54 @@ function init() {
       const completed = !!state.completed || stageIndex >= route.stages.length;
       const stages = route.stages.map((stage, index) => {
         const done = completed || index < stageIndex;
+        const score = Number(state.stageScores?.[stage.id] || 0);
+        const best = Number(career.best?.[stage.game] || 0);
+        const stageState = done ? 'complete' : index === stageIndex ? 'active' : 'locked';
+        const risk = leagueStageRisk(stage, best, score, stageState);
+        const difficulty = leagueRecommendedDifficulty(stage, best, score);
+        const loadout = leagueRecommendedLoadout(stage.game);
+        const target = Number(stage.target || 0);
         return {
           ...stage,
           label: premiumTabLabels[stage.game] || titles[stage.game] || stage.game,
-          best: Number(career.best?.[stage.game] || 0),
-          score: Number(state.stageScores?.[stage.id] || 0),
-          state: done ? 'complete' : index === stageIndex ? 'active' : 'locked'
+          best,
+          score,
+          target,
+          delta: score - target,
+          deltaLabel: leagueDeltaLabel(score, target),
+          bestDeltaLabel: leagueDeltaLabel(best, target),
+          commandBonus: Number(state.commandBonuses?.[stage.id] || 0),
+          momentum: leagueStageMomentum(stage, score),
+          risk,
+          plan: {
+            difficulty: difficulty.id,
+            difficultyLabel: difficulty.short,
+            loadout: loadout.id,
+            loadoutLabel: loadout.label
+          },
+          state: stageState
         };
       });
       const completedCount = completed ? route.stages.length : stageIndex;
+      const activeStage = completed ? null : stages[stageIndex];
+      const commandBonus = stages.reduce((sum, stage) => sum + Number(stage.commandBonus || 0), 0);
+      const momentum = stages.reduce((sum, stage) => sum + Number(stage.momentum || 0), 0);
+      const perfectStages = stages.filter(stage => Number(stage.score || 0) >= Number(stage.target || 0) * 1.16).length;
+      const command = {
+        risk: activeStage?.risk?.text || (completed ? '夺冠' : '待命'),
+        riskTone: activeStage?.risk?.tone || (completed ? 'complete' : 'ready'),
+        momentum,
+        perfectStages,
+        commandBonus,
+        projectedReward: Number(route.reward || 0) + commandBonus,
+        plan: activeStage
+          ? `${activeStage.plan.difficultyLabel} / ${activeStage.plan.loadoutLabel}`
+          : '自由冲榜',
+        activeDelta: activeStage ? Math.max(0, Number(activeStage.target || 0) - Math.max(Number(activeStage.score || 0), Number(activeStage.best || 0))) : 0,
+        summary: activeStage
+          ? `${activeStage.label} · ${activeStage.risk.text} · ${activeStage.risk.detail} · 建议 ${activeStage.plan.difficultyLabel} / ${activeStage.plan.loadoutLabel}`
+          : `路线完成 · 动量 ${momentum} · 额外声望 +${commandBonus}`
+      };
       return {
         id: route.id,
         title: route.title,
@@ -7730,7 +7897,8 @@ function init() {
         stageIndex,
         completed,
         progressText: `${completedCount}/${route.stages.length}`,
-        activeStage: completed ? null : stages[stageIndex],
+        activeStage,
+        command,
         stages
       };
     }
@@ -7744,29 +7912,41 @@ function init() {
       const summaryEl = document.getElementById('premium-league-summary');
       const progressEl = document.getElementById('premium-league-progress');
       const rewardEl = document.getElementById('premium-league-reward');
+      const riskEl = document.getElementById('premium-league-risk');
+      const momentumEl = document.getElementById('premium-league-momentum');
+      const planEl = document.getElementById('premium-league-plan');
+      const commandTitleEl = document.getElementById('premium-league-command-title');
+      const commandSummaryEl = document.getElementById('premium-league-command-summary');
       const actionBtn = document.getElementById('premium-league-start');
       panel.dataset.complete = league.completed ? 'true' : 'false';
+      panel.dataset.risk = league.command.riskTone || 'ready';
       if (titleEl) titleEl.textContent = league.completed ? `${league.title} · 已夺冠` : league.title;
       if (summaryEl) {
         summaryEl.textContent = league.completed
-          ? `整条路线已完成，+${league.reward} 联赛声望已结算。`
+          ? `整条路线已完成，基础 +${league.reward} 与战术额外 +${league.command.commandBonus} 已结算。`
           : `${league.summary} 当前目标：${league.activeStage?.label || '赛季完成'} ${league.activeStage?.target || ''}+。`;
       }
       if (progressEl) progressEl.textContent = league.progressText;
-      if (rewardEl) rewardEl.textContent = `+${league.reward}`;
+      if (rewardEl) rewardEl.textContent = `+${league.command.projectedReward}`;
+      if (riskEl) riskEl.textContent = league.command.risk;
+      if (momentumEl) momentumEl.textContent = `${league.command.momentum}`;
+      if (planEl) planEl.textContent = league.command.plan;
+      if (commandTitleEl) commandTitleEl.textContent = league.completed ? '冠军路线复盘' : '战术指挥简报';
+      if (commandSummaryEl) commandSummaryEl.textContent = league.command.summary;
       if (actionBtn) {
         const target = league.activeStage?.game || masteryFocusTarget()?.game || 'survivor';
         actionBtn.dataset.leagueTargetGame = target;
         actionBtn.querySelector('span').textContent = league.completed ? '继续刷新纪录' : `挑战 ${league.activeStage?.label || '下一阶段'}`;
       }
       routeEl.innerHTML = league.stages.map((stage, index) => `
-        <article class="arcade-league-stage" data-state="${escapeHTML(stage.state)}">
+        <article class="arcade-league-stage" data-state="${escapeHTML(stage.state)}" data-risk="${escapeHTML(stage.risk.tone)}">
           <span>${index + 1}</span>
           <div>
             <strong>${escapeHTML(stage.label)}</strong>
             <small>${escapeHTML(stage.tip)} · 目标 ${escapeHTML(String(stage.target))}+</small>
+            <em>PB ${escapeHTML(String(stage.best || 0))} · 本线 ${escapeHTML(String(stage.score || 0))} · ${escapeHTML(stage.deltaLabel)}</em>
           </div>
-          <b>${stage.state === 'complete' ? 'DONE' : stage.state === 'active' ? 'LIVE' : 'LOCK'}</b>
+          <b>${stage.state === 'complete' ? 'DONE' : stage.state === 'active' ? stage.risk.label : 'LOCK'}</b>
         </article>
       `).join('');
     }
@@ -7785,6 +7965,15 @@ function init() {
       if (stage.game !== game || safeScore < Number(stage.target || 0)) {
         return { advanced: false, completed: false, details };
       }
+      const commandBonus = !state.commandBonuses[stage.id]
+        ? leagueCommandBonusForStage(stage, safeScore, details)
+        : 0;
+      if (commandBonus > 0) {
+        state.commandBonuses[stage.id] = commandBonus;
+        career.totalScore = clampCareerInt(Number(career.totalScore || 0) + commandBonus, careerScoreCap);
+        details.leagueCommandBonus = commandBonus;
+        details.leagueOverTarget = Math.max(0, safeScore - Number(stage.target || 0));
+      }
       state.stageIndex = Math.min(route.stages.length, Number(state.stageIndex || 0) + 1);
       if (state.stageIndex >= route.stages.length) {
         state.completed = true;
@@ -7792,13 +7981,20 @@ function init() {
           state.rewarded = true;
           career.totalScore = Math.max(0, Number(career.totalScore || 0) + Number(route.reward || 0));
           unlockAchievement('league_clear');
-          showToast(`联赛夺冠：${route.title} +${route.reward}`, 'success');
+          showToast(`联赛夺冠：${route.title} +${route.reward + commandBonus}`, 'success');
         }
       } else {
         const next = route.stages[state.stageIndex];
-        showToast(`联赛推进：下一站 ${premiumTabLabels[next.game] || titles[next.game] || next.game}`, 'success');
+        showToast(`联赛推进：下一站 ${premiumTabLabels[next.game] || titles[next.game] || next.game}${commandBonus ? ` · 动量 +${commandBonus}` : ''}`, 'success');
       }
-      return { advanced: true, completed: !!state.completed, details };
+      return {
+        advanced: true,
+        completed: !!state.completed,
+        stageId: stage.id,
+        commandBonus,
+        overTarget: Math.max(0, safeScore - Number(stage.target || 0)),
+        details
+      };
     }
 
     function updateArcadeContracts(game, score, details = {}) {
@@ -8097,6 +8293,11 @@ function init() {
     function recordPremiumResult(game, score, details = {}) {
       if (!careerGameSet.has(game)) return { recorded: false, reason: 'unknown-game' };
       const detailMap = isCareerObject(details) ? details : {};
+      const requestedSettlementId = cleanCareerText(detailMap.settlementId || detailMap.runId || detailMap.resultId, 96);
+      if (requestedSettlementId && Array.isArray(career.settlements) && career.settlements.includes(requestedSettlementId)) {
+        return { recorded: false, duplicate: true, settlementId: requestedSettlementId };
+      }
+      const settlementId = requestedSettlementId ? rememberSettlementId(requestedSettlementId) : '';
       const rawValue = clampCareerInt(score, careerModeScoreCap);
       const difficulty = activeDifficultyDef();
       const loadout = activeLoadoutDef();
@@ -8138,18 +8339,29 @@ function init() {
           difficulty: difficulty.id,
           loadout: loadout.id,
           variant: variant.active ? variant.short : '',
+          settlementId,
           highlights
         },
         ...(Array.isArray(career.runs) ? career.runs : [])
       ].slice(0, 12);
       const daily = getDailyChallenge();
-      const resultDetails = { ...detailMap, rawScore: rawValue, loadout: loadout.id, difficulty: difficulty.id };
+      const resultDetails = { ...detailMap, rawScore: rawValue, loadout: loadout.id, difficulty: difficulty.id, settlementId };
       if ((!career.daily || career.daily.date !== daily.date || career.daily.id !== daily.id) && daily.check(game, value, resultDetails)) {
         career.daily = { date: daily.date, id: daily.id, done: true };
         unlockAchievement('daily_clear');
       }
       updateArcadeContracts(game, value, resultDetails);
-      updateArcadeLeague(game, value, resultDetails);
+      const leagueResult = updateArcadeLeague(game, value, resultDetails);
+      if (leagueResult.commandBonus > 0 && career.runs?.[0]?.game === game) {
+        const leagueTags = [
+          `联赛动量 +${leagueResult.commandBonus}`,
+          leagueResult.overTarget ? `超额 ${leagueResult.overTarget}` : ''
+        ].filter(Boolean);
+        career.runs[0].highlights = [...leagueTags, ...(career.runs[0].highlights || [])]
+          .map(item => cleanCareerText(item, 28))
+          .filter(Boolean)
+          .slice(0, 4);
+      }
       const unlockedPrizes = prizeMilestoneUnlocks(totalBeforeRun, career.totalScore || 0);
       if (unlockedPrizes.length) {
         showToast(`赛季奖励解锁：${unlockedPrizes.map(node => node.label).join('、')}`, 'success');
@@ -8160,7 +8372,7 @@ function init() {
       if (rivalResult.completed) {
         triggerPremiumFeedback('special', { label: 'RIVAL DOWN', throttleMs: 120 });
       }
-      return { recorded: true, game, rawScore: rawValue, score: value, rival: rivalResult.completed ? { reward: rivalResult.reward, profile: rivalResult.challenge?.profile || '' } : null };
+      return { recorded: true, game, rawScore: rawValue, score: value, settlementId, duplicate: false, rival: rivalResult.completed ? { reward: rivalResult.reward, profile: rivalResult.challenge?.profile || '' } : null };
     }
 
     window.atherixArcadeCareer = {
@@ -9165,7 +9377,8 @@ function init() {
       hurtFlash: 0,
       hurtFeedbackCooldown: 0,
       lastHitLabel: '',
-      lastHitSource: ''
+      lastHitSource: '',
+      runId: ''
     };
 
     function stopSurvivorLoop() {
@@ -9522,6 +9735,7 @@ function init() {
       const runPressure = arcadeRunPressure('survivor', variant);
       survivor.running = true;
       survivor.paused = false;
+      survivor.runId = createRunSettlementId('survivor');
       survivor.last = performance.now();
       survivor.frames = 0;
       survivor.elapsed = 0;
@@ -10144,7 +10358,7 @@ function init() {
       const finalScore = Math.floor(survivor.score + survivor.elapsed / 120 + survivor.bestChain * 42 + survivor.overdrive * 3 + survivor.anomalyCount * 95 + survivor.bountiesCompleted * 150);
       localStorage.setItem(survivor.bestKey, String(Math.max(Number(localStorage.getItem(survivor.bestKey) || 0), finalScore)));
       if (survivor.elapsed >= 90000) unlockAchievement('survivor_90');
-      recordPremiumResult('survivor', finalScore, { elapsed: survivor.elapsed, level: survivor.player?.level || 1, bestChain: survivor.bestChain, synergies: Number(survivor.synergies?.length || 0), overdrive: Math.floor(survivor.overdrive), anomalies: survivor.anomalyCount, bounties: survivor.bountiesCompleted, drones: Math.floor(Number(survivor.player?.drones || 0)), runVariant: survivor.variant });
+      recordPremiumResult('survivor', finalScore, { settlementId: survivor.runId, elapsed: survivor.elapsed, level: survivor.player?.level || 1, bestChain: survivor.bestChain, synergies: Number(survivor.synergies?.length || 0), overdrive: Math.floor(survivor.overdrive), anomalies: survivor.anomalyCount, bounties: survivor.bountiesCompleted, drones: Math.floor(Number(survivor.player?.drones || 0)), runVariant: survivor.variant });
       setSurvivorUi();
       drawSurvivor();
       overlay(survivor.ctx, survivor.canvas.width, survivor.canvas.height, text, `Score ${finalScore} · 点击部署再来一局`);
@@ -10874,7 +11088,8 @@ function init() {
       overbreaks: 0,
       lastOverbreak: '',
       lastBreak: '',
-      bonuses: {}
+      bonuses: {},
+      runId: ''
     };
 
     function stopBossLoop() {
@@ -11125,6 +11340,7 @@ function init() {
       const maxHp = Math.round(1000 * Number(tuning.bossHp || 1) * runPressure);
       bossMode.running = true;
       bossMode.paused = false;
+      bossMode.runId = createRunSettlementId('boss');
       bossMode.last = performance.now();
       bossMode.frames = 0;
       bossMode.t = 0;
@@ -11179,7 +11395,7 @@ function init() {
       stopBossLoop();
       localStorage.setItem(bossMode.bestKey, String(Math.max(Number(localStorage.getItem(bossMode.bestKey) || 0), Math.floor(bossMode.score))));
       if (text === 'PRISM BROKEN') unlockAchievement('boss_clear');
-      recordPremiumResult('boss', bossMode.score, { phase: bossMode.boss.phase, graze: bossMode.player.graze, bestGrazeStreak: bossMode.player.bestGrazeStreak, focusSurges: bossMode.focusSurges, perfectDodges: Number(bossMode.perfectDodges || 0), breakChain: bossMode.breakChain, shieldShatters: Number(bossMode.shield?.shatters || 0), overbreaks: Number(bossMode.overbreaks || 0), runVariant: bossMode.variant });
+      recordPremiumResult('boss', bossMode.score, { settlementId: bossMode.runId, phase: bossMode.boss.phase, graze: bossMode.player.graze, bestGrazeStreak: bossMode.player.bestGrazeStreak, focusSurges: bossMode.focusSurges, perfectDodges: Number(bossMode.perfectDodges || 0), breakChain: bossMode.breakChain, shieldShatters: Number(bossMode.shield?.shatters || 0), overbreaks: Number(bossMode.overbreaks || 0), runVariant: bossMode.variant });
       setBossUi();
       updateBossPauseButton();
       drawBoss();
@@ -12095,6 +12311,7 @@ function init() {
       splits: [],
       rival: { x: 132, y: 238, r: 13, segment: 0, progress: 0, speed: 0.000092, flash: 0, pressure: 0, gap: 0 },
       player: { x: 70, y: 276, vx: 0, vy: 0, angle: -0.62, r: 12, shield: 100, trail: [] },
+      runId: '',
       gates: [
         { x: 132, y: 238, r: 27 },
         { x: 220, y: 126, r: 27 },
@@ -12346,6 +12563,7 @@ function init() {
       const pressure = arcadeRunPressure('drift', variant);
       drift.running = true;
       drift.paused = false;
+      drift.runId = createRunSettlementId('drift');
       drift.last = performance.now();
       drift.frames = 0;
       drift.elapsed = 0;
@@ -12747,6 +12965,7 @@ function init() {
       if (complete) unlockAchievement('drift_clear');
       if (complete && drift.player.shield >= 75) unlockAchievement('drift_clean');
       recordPremiumResult('drift', finalScore, {
+        settlementId: drift.runId,
         gates: drift.gateIndex,
         shield: drift.player.shield,
         elapsed: drift.elapsed,
@@ -13251,7 +13470,8 @@ function init() {
       ghostSweep: 0,
       ghostSweepFlash: 0,
       ghostSweeps: 0,
-      lastGhostSweep: ''
+      lastGhostSweep: '',
+      runId: ''
     };
     const heistHackGlyphs = { up: 'U', down: 'D', left: 'L', right: 'R' };
 
@@ -13438,6 +13658,7 @@ function init() {
       heist.lastTactic = variant.active ? variant.short : 'INFILTRATE';
       heist.variant = variant;
       heist.runPressure = runPressure;
+      heist.runId = createRunSettlementId('heist');
       heist.alarmFlash = 0;
       heist.routeLabel = 'SCAN';
       heist.routeRisk = 0;
@@ -14096,6 +14317,7 @@ function init() {
       const score = Math.max(70, 150 + heist.collected * 120 + heist.loot + heist.bestChain * 18 + heist.hacksCompleted * 140 + heist.cloaks * 25 - heist.steps * 10 - Math.round(heist.securityPeak * 2));
       localStorage.setItem(heist.bestKey, String(Math.max(Number(localStorage.getItem(heist.bestKey) || 0), Math.floor(score))));
       recordPremiumResult('heist', score, {
+        settlementId: heist.runId,
         outcome: 'lockdown',
         cause,
         steps: heist.steps,
@@ -14198,6 +14420,7 @@ function init() {
         localStorage.setItem(heist.bestKey, String(Math.max(Number(localStorage.getItem(heist.bestKey) || 0), score)));
         if (heist.steps <= 42) unlockAchievement('heist_clean');
         recordPremiumResult('heist', score, {
+          settlementId: heist.runId,
           steps: heist.steps,
           bestChain: heist.bestChain,
           route: heist.routeLabel,
@@ -14508,7 +14731,8 @@ function init() {
       reshuffles: 0,
       lastReshuffle: '',
       finished: false,
-      recorded: false
+      recorded: false,
+      runId: ''
     };
     const chainPhaseDefs = [
       { label: 'I', goal: '连锁 7+', reward: 420, check: result => result.cleared >= 7 },
@@ -14938,6 +15162,7 @@ function init() {
       chain.specialsTriggered = 0;
       chain.variant = variant;
       chain.runPressure = runPressure;
+      chain.runId = createRunSettlementId('chain');
       resetChainLedger();
       resetChainResonance();
       chain.reshuffles = 0;
@@ -15260,7 +15485,7 @@ function init() {
         if (!chain.recorded) {
           chain.recorded = true;
           if (chain.score >= chain.target) unlockAchievement('chain_clear');
-          recordPremiumResult('chain', chain.score, { movesLeft: chain.moves, combo: chain.combo, mult: chain.mult, phase: chain.phaseIndex, recipes: chain.recipesCompleted, masterworks: chain.masterworks, runVariant: chain.variant });
+          recordPremiumResult('chain', chain.score, { settlementId: chain.runId, movesLeft: chain.moves, combo: chain.combo, mult: chain.mult, phase: chain.phaseIndex, recipes: chain.recipesCompleted, masterworks: chain.masterworks, runVariant: chain.variant });
         }
       }
     }
@@ -15445,6 +15670,7 @@ function init() {
       resetChainResonance();
       chain.finished = false;
       chain.recorded = false;
+      chain.runId = createRunSettlementId('chain');
       chain.grid = [
         ['cyan', 'cyan', 'cyan', 'cyan', 'gold', 'green', 'pink'],
         ['cyan', 'cyan', 'cyan', 'cyan', 'gold', 'green', 'pink'],
@@ -15482,6 +15708,7 @@ function init() {
       resetChainResonance();
       chain.finished = false;
       chain.recorded = false;
+      chain.runId = createRunSettlementId('chain');
       chain.grid = [
         ['cyan', 'cyan', 'wild', 'violet', 'violet', 'gold', 'green'],
         ['cyan', 'bomb', 'violet', 'green', 'gold', 'pink', 'cyan'],
@@ -15519,6 +15746,7 @@ function init() {
       resetChainResonance();
       chain.finished = false;
       chain.recorded = false;
+      chain.runId = createRunSettlementId('chain');
       chain.grid = [
         ['cyan', 'cyan', 'cyan', 'violet', 'gold', 'green', 'pink'],
         ['cyan', 'bomb', 'cyan', 'violet', 'gold', 'green', 'pink'],
@@ -15654,6 +15882,7 @@ function init() {
       resetChainResonance();
       chain.finished = false;
       chain.recorded = false;
+      chain.runId = createRunSettlementId('chain');
       chain.grid = [
         ['cyan', 'violet', 'pink', 'gold', 'green', 'cyan', 'violet'],
         ['pink', 'gold', 'green', 'cyan', 'violet', 'pink', 'gold'],
@@ -15682,6 +15911,7 @@ function init() {
       const before = chainDebugState();
       chain.finished = false;
       chain.recorded = false;
+      chain.runId = createRunSettlementId('chain');
       chain.score = cleared ? Math.max(chain.score, chain.target + 250) : Math.max(0, Math.min(chain.score, chain.target - 1));
       chain.moves = cleared ? Math.max(1, chain.moves) : 0;
       finishChainIfNeeded();
@@ -15816,7 +16046,8 @@ function init() {
       lost: false,
       recorded: false,
       message: '夺取 3 个数据核心后撤离',
-      flash: 0
+      flash: 0,
+      runId: ''
     };
 
     function tacticsKey(x, y) {
@@ -15892,6 +16123,7 @@ function init() {
       tactics.recorded = false;
       tactics.variant = variant;
       tactics.runPressure = runPressure;
+      tactics.runId = createRunSettlementId('tactics');
       tactics.message = variant.active ? `${variant.short} · 夺取 3 个数据核心后撤离` : '夺取 3 个数据核心后撤离';
       tactics.flash = 0;
       setTacticsUi();
@@ -16625,7 +16857,7 @@ function init() {
       unlockAchievement('tactics_clear');
       if (tactics.player.hp >= 80) unlockAchievement('tactics_clean');
       if (livingTacticsEnemies().length === 0) unlockAchievement('tactics_sweep');
-      recordPremiumResult('tactics', score, { turns: tactics.turn, hp: tactics.player.hp, kills: tactics.kills, combo: tactics.combo, counters: Number(tactics.counters || 0), commands: Number(tactics.commandBursts || 0), surges: tactics.surges, runVariant: tactics.variant });
+      recordPremiumResult('tactics', score, { settlementId: tactics.runId, turns: tactics.turn, hp: tactics.player.hp, kills: tactics.kills, combo: tactics.combo, counters: Number(tactics.counters || 0), commands: Number(tactics.commandBursts || 0), surges: tactics.surges, runVariant: tactics.variant });
       tactics.message = `撤离成功 · 评分 ${Math.floor(score)}`;
     }
 
@@ -16636,6 +16868,7 @@ function init() {
       const score = Math.max(80, 160 + tactics.player.cores * 160 + tactics.kills * 95 + tactics.momentum * 24 + tactics.combo * 36 + tactics.surges * 80 + Number(tactics.commandBursts || 0) * 90 + Number(tactics.counters || 0) * 50 - tactics.turn * 18);
       localStorage.setItem(tactics.bestKey, String(Math.max(Number(localStorage.getItem(tactics.bestKey) || 0), Math.floor(score))));
       recordPremiumResult('tactics', score, {
+        settlementId: tactics.runId,
         outcome: 'down',
         cause,
         turns: tactics.turn,

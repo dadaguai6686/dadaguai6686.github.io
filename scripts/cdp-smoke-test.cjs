@@ -2260,6 +2260,12 @@ async function run() {
       leagueSummary: document.querySelector('#premium-league-summary')?.textContent || '',
       leagueProgress: document.querySelector('#premium-league-progress')?.textContent || '',
       leagueReward: document.querySelector('#premium-league-reward')?.textContent || '',
+      leagueRisk: document.querySelector('#premium-league-risk')?.textContent || '',
+      leagueMomentum: document.querySelector('#premium-league-momentum')?.textContent || '',
+      leaguePlan: document.querySelector('#premium-league-plan')?.textContent || '',
+      leagueCommandTitle: document.querySelector('#premium-league-command-title')?.textContent || '',
+      leagueCommandSummary: document.querySelector('#premium-league-command-summary')?.textContent || '',
+      leagueStageIntel: [...document.querySelectorAll('.arcade-league-stage em')].map(el => el.textContent || ''),
       leagueTarget: document.querySelector('#premium-league-start')?.dataset.leagueTargetGame || '',
       debugLeague: window.__atherixDebug?.premium?.league?.() || {},
       runLogPanel: !!document.querySelector('#premium-run-log-panel'),
@@ -2867,6 +2873,13 @@ async function run() {
       progressText: document.querySelector('#premium-league-progress')?.textContent || '',
       title: document.querySelector('#premium-league-title')?.textContent || '',
       summary: document.querySelector('#premium-league-summary')?.textContent || '',
+      reward: document.querySelector('#premium-league-reward')?.textContent || '',
+      risk: document.querySelector('#premium-league-risk')?.textContent || '',
+      momentum: document.querySelector('#premium-league-momentum')?.textContent || '',
+      plan: document.querySelector('#premium-league-plan')?.textContent || '',
+      commandTitle: document.querySelector('#premium-league-command-title')?.textContent || '',
+      commandSummary: document.querySelector('#premium-league-command-summary')?.textContent || '',
+      stageIntel: [...document.querySelectorAll('.arcade-league-stage em')].map(el => el.textContent || ''),
       target: document.querySelector('#premium-league-start')?.dataset.leagueTargetGame || '',
       toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || ''
     };
@@ -3018,6 +3031,34 @@ async function run() {
       panelMuted: document.querySelector('#premium-feedback-console')?.dataset.muted || '',
       status: document.querySelector('#premium-feedback-status')?.textContent || '',
       togglePressed: document.querySelector('#premium-feedback-toggle')?.getAttribute('aria-pressed') || ''
+    };
+  })()`);
+  const duplicateSettlementState = await evaluate(`(() => {
+    const api = window.atherixArcadeCareer;
+    const debug = window.__atherixDebug?.premium;
+    const blocked = new Set([
+      debug?.league?.()?.activeStage?.game || '',
+      debug?.daily?.()?.game || ''
+    ].filter(Boolean));
+    const game = ['runner', 'heist', 'chain', 'tactics', 'drift', 'boss', 'survivor'].find(item => !blocked.has(item)) || 'runner';
+    const id = \`smoke-settlement-\${Date.now()}\`;
+    const before = api?.profile?.() || {};
+    const first = api?.recordResult?.(game, 123, { settlementId: id, smokeDuplicate: true });
+    const middle = api?.profile?.() || {};
+    const middleRun = api?.runs?.()?.[0] || {};
+    const second = api?.recordResult?.(game, 9999, { settlementId: id, smokeDuplicate: true });
+    const after = api?.profile?.() || {};
+    const afterRun = api?.runs?.()?.[0] || {};
+    return {
+      game,
+      id,
+      before,
+      first,
+      middle,
+      middleRun,
+      second,
+      after,
+      afterRun
     };
   })()`);
   const survivorDraftOpenState = await evaluate(`(() => {
@@ -3729,7 +3770,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v85-quality') && swText.includes('/style.css?v=20260608-quality-v14') && swText.includes('/app.js?v=20260608-quality-v42'),
+      swHasQualityVersion: swText.includes('atherix-static-v86-quality') && swText.includes('/style.css?v=20260609-quality-v15') && swText.includes('/app.js?v=20260609-quality-v43'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp'),
       swHasLocalFonts: swText.includes('/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2') && swText.includes('/assets/fonts/outfit-latin-wght-normal.woff2') && swText.includes('/assets/fonts/jetbrains-mono-latin-wght-normal.woff2')
@@ -4500,7 +4541,7 @@ async function run() {
   assert(arcadeInitial.prizePanel && /入站许可/.test(arcadeInitial.prizeTitle) && arcadeInitial.prizeNodes === 6 && arcadeInitial.prizeClaimedNodes === 1 && arcadeInitial.prizeNextNodes === 1 && arcadeInitial.prizeProgressRole === 'progressbar' && arcadeInitial.prizeProgressNow === String(arcadeInitial.debugPrize?.progress) && arcadeInitial.prizeTarget === arcadeInitial.debugPrize?.targetGame, `premium arcade season track should render long-term rewards: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.masteryPanel && arcadeInitial.masteryCards === 7 && arcadeInitial.debugMastery === 7 && /奖牌路线/.test(arcadeInitial.masteryTitle) && arcadeInitial.masterySummary.length > 10, `premium arcade mastery map should render all mode goals: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.contractBoard && arcadeInitial.contractCards === 3 && arcadeInitial.debugContracts === 3 && arcadeInitial.firstContractProgress === 0, `premium arcade contracts should render as daily progression goals: ${JSON.stringify(arcadeInitial)}`);
-  assert(arcadeInitial.leaguePanel && arcadeInitial.leagueCards === 3 && arcadeInitial.debugLeague?.stages?.length === 3 && arcadeInitial.debugLeague?.activeStage?.game && /^\d+\/3$/.test(arcadeInitial.leagueProgress) && /^\+\d+$/.test(arcadeInitial.leagueReward), `premium arcade challenge league should render a 3-stage daily route: ${JSON.stringify(arcadeInitial)}`);
+  assert(arcadeInitial.leaguePanel && arcadeInitial.leagueCards === 3 && arcadeInitial.debugLeague?.stages?.length === 3 && arcadeInitial.debugLeague?.activeStage?.game && arcadeInitial.debugLeague?.command?.plan && /^\d+\/3$/.test(arcadeInitial.leagueProgress) && /^\+\d+$/.test(arcadeInitial.leagueReward) && arcadeInitial.leagueRisk && /^\d+$/.test(arcadeInitial.leagueMomentum) && /\/|自由/.test(arcadeInitial.leaguePlan) && arcadeInitial.leagueCommandSummary.length > 12 && arcadeInitial.leagueStageIntel.length === 3 && arcadeInitial.leagueStageIntel.every(text => /PB/.test(text)), `premium arcade challenge league should render a tactical 3-stage route with command intel: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.difficultyPanel && arcadeInitial.difficultyCards === 4 && arcadeInitial.activeDifficulty === 'standard', `premium arcade difficulty matrix should render with standard default: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.loadoutPanel && arcadeInitial.loadoutCards === 4 && arcadeInitial.activeLoadout === 'pulse' && arcadeInitial.loadoutUnlocked >= 1, `premium arcade loadout chips should render with a default build: ${JSON.stringify(arcadeInitial)}`);
   assert(contractProgressState.afterContracts === 3 && contractProgressState.cards === 3 && contractProgressState.afterFirst > contractProgressState.beforeFirst && /总声望/.test(contractProgressState.total), `premium arcade contracts should advance after a scored run: ${JSON.stringify(contractProgressState)}`);
@@ -4520,7 +4561,7 @@ async function run() {
     `premium arcade mastery map should update after scored runs: ${JSON.stringify(contractProgressState)}`
   );
   assert(/幸存者/.test(contractProgressState.runTitle) && /\d+/.test(contractProgressState.runLastScore) && /\d+/.test(contractProgressState.runAverage) && contractProgressState.runBestMode, `premium arcade run telemetry should render last score, average, and best mode: ${JSON.stringify(contractProgressState)}`);
-  assert(leagueProgressState.before?.activeStage?.game && (leagueProgressState.after?.stageIndex > leagueProgressState.before?.stageIndex || leagueProgressState.after?.completed) && leagueProgressState.cards === 3 && leagueProgressState.completeCards >= 1 && /^\d+\/3$/.test(leagueProgressState.progressText) && leagueProgressState.target, `premium arcade challenge league should advance after clearing the active stage: ${JSON.stringify(leagueProgressState)}`);
+  assert(leagueProgressState.before?.activeStage?.game && (leagueProgressState.after?.stageIndex > leagueProgressState.before?.stageIndex || leagueProgressState.after?.completed) && leagueProgressState.cards === 3 && leagueProgressState.completeCards >= 1 && /^\d+\/3$/.test(leagueProgressState.progressText) && /^\+\d+$/.test(leagueProgressState.reward) && leagueProgressState.risk && /^\d+$/.test(leagueProgressState.momentum) && /\/|自由/.test(leagueProgressState.plan) && leagueProgressState.commandSummary.length > 12 && leagueProgressState.stageIntel.length === 3 && leagueProgressState.target, `premium arcade challenge league should advance with tactical command intel after clearing the active stage: ${JSON.stringify(leagueProgressState)}`);
   assert(loadoutProgressState.active === 'aegis' && loadoutProgressState.equippedCards === 1 && loadoutProgressState.unlocked.includes('aegis') && /棱镜护盾/.test(loadoutProgressState.activeLabel), `premium arcade loadouts should unlock and equip after career progress: ${JSON.stringify(loadoutProgressState)}`);
   assert(difficultyProgressState.active === 'elite' && difficultyProgressState.selectedCards === 1 && /精英/.test(difficultyProgressState.activeLabel) && difficultyProgressState.pressure > 1 && difficultyProgressState.scoreBoost > 0.15, `premium arcade difficulty should switch to elite with visible pressure and score boost: ${JSON.stringify(difficultyProgressState)}`);
   assert(difficultyProgressState.totalDelta >= 1180 && difficultyProgressState.bossBest >= 1180 && /难度 精英/.test(difficultyProgressState.totalText), `premium arcade difficulty should affect scoring and career summary: ${JSON.stringify(difficultyProgressState)}`);
@@ -4543,6 +4584,7 @@ async function run() {
   assert(survivorHpZeroState.player?.hp === 0 && survivorHpZeroState.hud?.hp === '0', `survivor HUD should show 0 HP instead of falling back to 100: ${JSON.stringify(survivorHpZeroState)}`);
   assert(survivorState.feedback?.tones?.action >= 1 && survivorState.feedback?.visualTriggers >= 1 && survivorState.feedbackTone === 'action' && /ACTION|NOVA/.test(survivorState.feedbackLabel), `premium arcade feedback should treat Space as an action signal, not restart: ${JSON.stringify(survivorState)}`);
   assert(feedbackMuteState.muted?.muted === true && feedbackMuteState.muted?.togglePressed === 'false' && feedbackMuteState.afterSuppressed?.suppressed > feedbackMuteState.muted?.suppressed && feedbackMuteState.afterSuppressed?.total === feedbackMuteState.muted?.total && feedbackMuteState.unmuted?.muted === false && feedbackMuteState.unmuted?.togglePressed === 'true' && feedbackMuteState.panelMuted === 'false', `premium arcade feedback mute should suppress events and restore cleanly: ${JSON.stringify(feedbackMuteState)}`);
+  assert(duplicateSettlementState.first?.recorded && duplicateSettlementState.first?.settlementId === duplicateSettlementState.id && duplicateSettlementState.middleRun?.settlementId === duplicateSettlementState.id && duplicateSettlementState.second?.duplicate === true && duplicateSettlementState.second?.recorded === false && Number(duplicateSettlementState.middle?.plays || 0) === Number(duplicateSettlementState.before?.plays || 0) + 1 && Number(duplicateSettlementState.after?.plays || 0) === Number(duplicateSettlementState.middle?.plays || 0) && Number(duplicateSettlementState.after?.totalScore || 0) === Number(duplicateSettlementState.middle?.totalScore || 0) && duplicateSettlementState.afterRun?.settlementId === duplicateSettlementState.id, `premium arcade shared settlement should be idempotent for repeated settlement IDs: ${JSON.stringify(duplicateSettlementState)}`);
   assert(survivorDraftOpenState.open && survivorDraftOpenState.ariaHidden === 'false' && survivorDraftOpenState.optionCards === 3 && survivorDraftOpenState.choices.length === 3 && survivorDraftOpenState.running && !survivorDraftOpenState.paused && survivorDraftOpenState.readoutState === 'draft' && survivorDraftOpenState.readoutStateText === '升级' && survivorDraftOpenState.readoutAction === '选升级' && /重铸/.test(survivorDraftOpenState.readoutTool) && survivorDraftOpenState.readoutStart === '1/2/3 选择' && survivorDraftOpenState.rerollButton && !survivorDraftOpenState.rerollDisabled && Number(survivorDraftOpenState.rerollRemaining) >= 1 && /次/.test(survivorDraftOpenState.rerollCount) && survivorDraftOpenState.touchStart === '选择' && survivorDraftOpenState.touchStartDisabled && /升级选择中/.test(survivorDraftOpenState.touchStartLabel) && survivorDraftOpenState.touchPause === '选择中' && survivorDraftOpenState.touchPauseDisabled && /升级选择中/.test(survivorDraftOpenState.touchPauseLabel) && /重铸/.test(survivorDraftOpenState.touchTool) && !survivorDraftOpenState.touchToolDisabled && /重铸升级/.test(survivorDraftOpenState.touchToolLabel), `survivor roguelite draft should open three upgrade choices with reroll strategy controls and without using pause state: ${JSON.stringify(survivorDraftOpenState)}`);
   assert(survivorDraftFreezeState.open && Math.abs(survivorDraftFreezeState.elapsedAfter - survivorDraftOpenState.beforeElapsed) < 1 && Math.abs(survivorDraftFreezeState.scoreAfter - survivorDraftOpenState.beforeScore) < 1, `survivor roguelite draft should freeze the run clock and score until a choice is made: ${JSON.stringify({ survivorDraftOpenState, survivorDraftFreezeState })}`);
   assert(survivorDraftAutoPauseState.open && survivorDraftAutoPauseState.running && !survivorDraftAutoPauseState.paused && !(survivorDraftAutoPauseState.result?.paused || []).includes('survivor') && survivorDraftAutoPauseState.readoutState === 'draft' && survivorDraftAutoPauseState.readoutStateText === '升级' && survivorDraftAutoPauseState.touchPause === '选择中' && survivorDraftAutoPauseState.touchPauseDisabled, `survivor draft should ignore global auto-pause because the upgrade sheet already freezes play: ${JSON.stringify(survivorDraftAutoPauseState)}`);
@@ -5055,6 +5097,7 @@ async function run() {
     survivorState,
     survivorHitState,
     survivorHpZeroState,
+    duplicateSettlementState,
     survivorDraftOpenState,
     survivorDraftFreezeState,
     survivorDraftAutoPauseState,
