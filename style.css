@@ -7977,6 +7977,11 @@ body.command-open {
   aspect-ratio: 14 / 9;
 }
 
+#premium-boss-canvas,
+#premium-drift-canvas {
+  aspect-ratio: 28 / 17;
+}
+
 #breakout-canvas {
   aspect-ratio: 3 / 2;
 }

@@ -550,6 +550,11 @@ async function run() {
     window.__atherixSmokeCountCanvasPixels = (selector) => {
       const source = document.querySelector(selector);
       if (!source) return { colored: 0, nonBlank: false, width: 0, height: 0 };
+      const rect = source.getBoundingClientRect();
+      const cssWidth = Math.max(1, rect.width || source.clientWidth || 1);
+      const cssHeight = Math.max(1, rect.height || source.clientHeight || 1);
+      const logicalWidth = Number(source.dataset.logicalWidth || source.getAttribute('width') || source.width || 0);
+      const logicalHeight = Number(source.dataset.logicalHeight || source.getAttribute('height') || source.height || 0);
       const sample = document.createElement('canvas');
       sample.width = source.width || source.clientWidth || 1;
       sample.height = source.height || source.clientHeight || 1;
@@ -560,7 +565,21 @@ async function run() {
       for (let i = 0; i < data.length; i += 4) {
         if (data[i] || data[i + 1] || data[i + 2]) colored++;
       }
-      return { colored, nonBlank: colored > 1000, width: sample.width, height: sample.height };
+      return {
+        colored,
+        nonBlank: colored > 1000,
+        width: sample.width,
+        height: sample.height,
+        backingWidth: source.width || 0,
+        backingHeight: source.height || 0,
+        cssWidth,
+        cssHeight,
+        logicalWidth,
+        logicalHeight,
+        dpr: Number(window.devicePixelRatio || 1),
+        backingRatioX: Number(((source.width || 0) / cssWidth).toFixed(3)),
+        backingRatioY: Number(((source.height || 0) / cssHeight).toFixed(3))
+      };
     };
   })();`;
 
@@ -3812,7 +3831,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v90-quality') && swText.includes('/style.css?v=20260609-quality-v18') && swText.includes('/app.js?v=20260609-quality-v47'),
+      swHasQualityVersion: swText.includes('atherix-static-v91-quality') && swText.includes('/style.css?v=20260609-quality-v19') && swText.includes('/app.js?v=20260609-quality-v48'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp'),
       swHasLocalFonts: swText.includes('/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2') && swText.includes('/assets/fonts/outfit-latin-wght-normal.woff2') && swText.includes('/assets/fonts/jetbrains-mono-latin-wght-normal.woff2')
@@ -3821,7 +3840,7 @@ async function run() {
   await send('Emulation.setDeviceMetricsOverride', {
     width: 390,
     height: 844,
-    deviceScaleFactor: 1,
+    deviceScaleFactor: 2,
     mobile: true
   });
   await navigate(`${appUrl}/#game`);
@@ -3928,6 +3947,64 @@ async function run() {
       horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
     };
   })()`);
+  const premiumCanvasHiDpiState = await evaluate(`(async () => {
+    const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const api = window.__atherixDebug?.premium;
+    const expected = {
+      survivor: { selector: '#premium-survivor-canvas', width: 560, height: 360, reset: () => api?.resetSurvivorIdle?.() },
+      boss: { selector: '#premium-boss-canvas', width: 560, height: 340, reset: () => api?.resetBossIdle?.() },
+      drift: { selector: '#premium-drift-canvas', width: 560, height: 340, reset: () => api?.resetDriftIdle?.() },
+      heist: { selector: '#premium-heist-canvas', width: 560, height: 360, reset: () => document.querySelector('#premium-heist-new')?.click() },
+      tactics: { selector: '#premium-tactics-canvas', width: 560, height: 360, reset: () => document.querySelector('#premium-tactics-start')?.click() }
+    };
+    const collect = async (game, config) => {
+      document.querySelector('[data-premium-game="' + game + '"]')?.click();
+      await wait(140);
+      config.reset();
+      await wait(240);
+      const canvas = document.querySelector(config.selector);
+      const rect = canvas?.getBoundingClientRect();
+      const pixels = window.__atherixSmokeCountCanvasPixels?.(config.selector) || {};
+      const metrics = api?.canvasMetrics?.()?.[game] || {};
+      return {
+        expectedWidth: config.width,
+        expectedHeight: config.height,
+        nonBlank: !!pixels.nonBlank,
+        colored: pixels.colored || 0,
+        cssWidth: Number((metrics.cssWidth || pixels.cssWidth || rect?.width || 0).toFixed?.(2) || 0),
+        cssHeight: Number((metrics.cssHeight || pixels.cssHeight || rect?.height || 0).toFixed?.(2) || 0),
+        backingWidth: metrics.backingWidth || pixels.backingWidth || 0,
+        backingHeight: metrics.backingHeight || pixels.backingHeight || 0,
+        logicalWidth: metrics.width || pixels.logicalWidth || 0,
+        logicalHeight: metrics.height || pixels.logicalHeight || 0,
+        ratioX: metrics.ratioX || pixels.backingRatioX || 0,
+        ratioY: metrics.ratioY || pixels.backingRatioY || 0,
+        dpr: metrics.dpr || pixels.dpr || Number(window.devicePixelRatio || 1),
+        visible: !!rect && rect.width > 120 && rect.height > 120,
+        aspectRatio: Number(((rect?.width || 0) / Math.max(1, rect?.height || 1)).toFixed(3))
+      };
+    };
+    const canvases = {};
+    for (const [game, config] of Object.entries(expected)) {
+      canvases[game] = await collect(game, config);
+    }
+    document.querySelector('[data-premium-game="chain"]')?.click();
+    await wait(160);
+    const chainBoard = document.querySelector('#premium-chain-board');
+    const chainRect = chainBoard?.getBoundingClientRect();
+    return {
+      dpr: Number(window.devicePixelRatio || 1),
+      canvases,
+      chain: {
+        cells: document.querySelectorAll('#premium-chain-board .chain-cell').length,
+        role: chainBoard?.getAttribute('role') || '',
+        rows: chainBoard?.getAttribute('aria-rowcount') || '',
+        cols: chainBoard?.getAttribute('aria-colcount') || '',
+        visible: !!chainRect && chainRect.width > 120 && chainRect.height > 120
+      },
+      horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+    };
+  })()`, 12000);
   const premiumMobileMetaState = await evaluate(`(async () => {
     const api = window.__atherixDebug?.premium;
     const reset = api?.resetSurvivorRun?.() || {};
@@ -4383,6 +4460,26 @@ async function run() {
   assert(runnerMobileState.controls >= 7 && runnerMobileState.cabinetBeforeLibrary && runnerMobileState.playfieldVisibleFirst && runnerMobileState.missionBeforeScreen && runnerMobileState.missionFits && runnerMobileState.missionVisibleRatio >= 0.8 && runnerMobileState.visibleAfterScroll && !runnerMobileState.horizontalOverflow, `runner cabinet, mission strip, and playable screen should come first on mobile while touch controls remain reachable: ${JSON.stringify(runnerMobileState)}`);
   assert(premiumMobileState.cockpit?.visible && premiumMobileState.tabs?.top >= premiumMobileState.cockpit?.bottom - 8 && premiumMobileState.stage?.top >= premiumMobileState.tabs?.bottom - 8 && premiumMobileState.career?.top >= premiumMobileState.stage?.bottom - 8 && !premiumMobileState.horizontalOverflow, `premium arcade cockpit, tabs, and stage should be prioritized before meta panels on mobile: ${JSON.stringify(premiumMobileState)}`);
   assert(premiumMobileState.controls?.visible && premiumMobileState.controlsPosition === 'sticky' && premiumMobileState.controls.bottom <= premiumMobileState.height && premiumMobileState.controlsCount >= 5 && premiumMobileState.minControlWidth >= 44 && premiumMobileState.minControlHeight >= 44 && premiumMobileState.metaControls === 2 && premiumMobileState.metaVisible === 2 && premiumMobileState.minMetaHeight >= 34 && premiumMobileState.metaLabels.some(label => ['开始', '重开', '新局', '再来', '选择'].includes(label)) && premiumMobileState.actionText && premiumMobileState.toolText, `premium arcade touch controls should stay visible and tappable on mobile with meta controls: ${JSON.stringify(premiumMobileState)}`);
+  const hiDpiCanvasEntries = Object.entries(premiumCanvasHiDpiState.canvases || {});
+  const hiDpiBackingOk = hiDpiCanvasEntries.every(([, canvas]) => {
+    const expectedDpr = Math.min(2, Number(canvas.dpr || premiumCanvasHiDpiState.dpr || 1));
+    return Math.abs(Number(canvas.backingWidth || 0) - Math.round(Number(canvas.cssWidth || 0) * expectedDpr)) <= 2
+      && Math.abs(Number(canvas.backingHeight || 0) - Math.round(Number(canvas.cssHeight || 0) * expectedDpr)) <= 2;
+  });
+  assert(
+    premiumCanvasHiDpiState.dpr >= 1.5 &&
+      hiDpiCanvasEntries.length === 5 &&
+      hiDpiCanvasEntries.every(([, canvas]) => canvas.visible && canvas.nonBlank && canvas.colored > 1000) &&
+      hiDpiCanvasEntries.every(([, canvas]) => canvas.logicalWidth === canvas.expectedWidth && canvas.logicalHeight === canvas.expectedHeight) &&
+      hiDpiCanvasEntries.every(([, canvas]) => canvas.ratioX >= 1.5 && canvas.ratioX <= 2.05 && canvas.ratioY >= 1.5 && canvas.ratioY <= 2.05) &&
+      hiDpiBackingOk &&
+      premiumCanvasHiDpiState.chain?.cells === 49 &&
+      premiumCanvasHiDpiState.chain?.rows === '7' &&
+      premiumCanvasHiDpiState.chain?.cols === '7' &&
+      premiumCanvasHiDpiState.chain?.visible &&
+      !premiumCanvasHiDpiState.horizontalOverflow,
+    `premium arcade canvases should use DPR backing stores without changing logical worlds, while chain remains a DOM board: ${JSON.stringify(premiumCanvasHiDpiState)}`
+  );
   assert(
     premiumMobileMetaState.controlsVisible
       && ['开始', '重开'].includes(premiumMobileMetaState.labelBefore.start)
@@ -5119,6 +5216,7 @@ async function run() {
     runnerBufferedJumpState,
     runnerMobileState,
     premiumMobileState,
+    premiumCanvasHiDpiState,
     arcadeInitial,
     runnerPremiumReleaseState,
     briefingModeState,
@@ -5241,6 +5339,16 @@ function summarizeSmokeResult(result) {
       profileCompletion: result.arcadeInitial?.profileCompletion,
       mobileOverflow: result.premiumMobileState?.horizontalOverflow,
       touchControls: result.premiumMobileState?.controlsCount,
+      hiDpi: {
+        dpr: result.premiumCanvasHiDpiState?.dpr,
+        canvases: Object.fromEntries(Object.entries(result.premiumCanvasHiDpiState?.canvases || {}).map(([game, canvas]) => [game, {
+          logical: `${canvas.logicalWidth}x${canvas.logicalHeight}`,
+          backing: `${canvas.backingWidth}x${canvas.backingHeight}`,
+          ratio: `${canvas.ratioX}x${canvas.ratioY}`,
+          nonBlank: canvas.nonBlank
+        }])),
+        chainCells: result.premiumCanvasHiDpiState?.chain?.cells
+      },
       runnerMobileOverflow: result.runnerMobileState?.horizontalOverflow,
       runnerFirstScreen: result.runnerMobileState?.playfieldVisibleFirst,
       mobileMetaControls: {

@@ -9353,6 +9353,71 @@ function init() {
 
     requestAnimationFrame(pollPremiumGamepad);
 
+    function premiumCanvasLogicalSize(canvas) {
+      if (!canvas) return { width: 0, height: 0 };
+      if (!canvas.dataset.logicalWidth) {
+        canvas.dataset.logicalWidth = String(Number(canvas.getAttribute('width') || canvas.width || 560));
+      }
+      if (!canvas.dataset.logicalHeight) {
+        canvas.dataset.logicalHeight = String(Number(canvas.getAttribute('height') || canvas.height || 360));
+      }
+      return {
+        width: Math.max(1, Number(canvas.dataset.logicalWidth || 560)),
+        height: Math.max(1, Number(canvas.dataset.logicalHeight || 360))
+      };
+    }
+
+    function premiumCanvasWidth(canvas) {
+      return premiumCanvasLogicalSize(canvas).width;
+    }
+
+    function premiumCanvasHeight(canvas) {
+      return premiumCanvasLogicalSize(canvas).height;
+    }
+
+    function premiumCanvasDpr() {
+      return Math.max(1, Math.min(2, Number(window.devicePixelRatio || 1)));
+    }
+
+    function preparePremiumCanvas(canvas, ctx) {
+      const logical = premiumCanvasLogicalSize(canvas);
+      if (!canvas || !ctx) {
+        return { ...logical, dpr: 1, backingWidth: logical.width, backingHeight: logical.height, cssWidth: logical.width, cssHeight: logical.height };
+      }
+      const rect = canvas.getBoundingClientRect();
+      const cssWidth = Math.max(1, rect.width || logical.width);
+      const cssHeight = Math.max(1, rect.height || logical.height);
+      const dpr = premiumCanvasDpr();
+      const backingWidth = Math.max(1, Math.round(cssWidth * dpr));
+      const backingHeight = Math.max(1, Math.round(cssHeight * dpr));
+      if (canvas.width !== backingWidth || canvas.height !== backingHeight) {
+        canvas.width = backingWidth;
+        canvas.height = backingHeight;
+      }
+      const scaleX = backingWidth / logical.width;
+      const scaleY = backingHeight / logical.height;
+      ctx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
+      return { ...logical, dpr, backingWidth, backingHeight, cssWidth, cssHeight, scaleX, scaleY };
+    }
+
+    function premiumCanvasMetrics(canvas) {
+      const logical = premiumCanvasLogicalSize(canvas);
+      if (!canvas) return { ...logical, dpr: premiumCanvasDpr(), backingWidth: 0, backingHeight: 0, cssWidth: 0, cssHeight: 0, ratioX: 0, ratioY: 0 };
+      const rect = canvas.getBoundingClientRect();
+      const cssWidth = Math.max(1, rect.width || logical.width);
+      const cssHeight = Math.max(1, rect.height || logical.height);
+      return {
+        ...logical,
+        dpr: premiumCanvasDpr(),
+        backingWidth: Number(canvas.width || 0),
+        backingHeight: Number(canvas.height || 0),
+        cssWidth,
+        cssHeight,
+        ratioX: Number((Number(canvas.width || 0) / cssWidth).toFixed(3)),
+        ratioY: Number((Number(canvas.height || 0) / cssHeight).toFixed(3))
+      };
+    }
+
     function drawGrid(ctx, w, h, color, gap = 28) {
       ctx.save();
       ctx.strokeStyle = color;
@@ -9384,6 +9449,11 @@ function init() {
       ctx.font = '700 13px Inter, sans-serif';
       ctx.fillText(subline, w / 2, h / 2 + 24);
       ctx.restore();
+    }
+
+    function overlayPremiumCanvas(ctx, canvas, headline, subline) {
+      if (!ctx || !canvas) return;
+      overlay(ctx, premiumCanvasWidth(canvas), premiumCanvasHeight(canvas), headline, subline);
     }
 
     const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -9604,7 +9674,7 @@ function init() {
 
     function drawSurvivorPauseOverlay() {
       drawSurvivor();
-      overlay(survivor.ctx, survivor.canvas.width, survivor.canvas.height, 'PAUSED', '点击继续或按按钮恢复');
+      overlayPremiumCanvas(survivor.ctx, survivor.canvas, 'PAUSED', '点击继续或按按钮恢复');
     }
 
     function resumeSurvivorLoop() {
@@ -10015,16 +10085,18 @@ function init() {
 
     function spawnSurvivorEnemy() {
       const c = survivor.canvas;
+      const w = premiumCanvasWidth(c);
+      const h = premiumCanvasHeight(c);
       const tuning = difficultyTuning();
       const pressure = Number(survivor.runPressure || arcadeRunPressure('survivor', survivor.variant));
       const enemyHpScale = Number(tuning.enemyHp || 1);
       const enemySpeedScale = 0.92 + pressure * 0.08;
       const side = Math.floor(Math.random() * 4);
       const p = [
-        { x: Math.random() * c.width, y: -24 },
-        { x: c.width + 24, y: Math.random() * c.height },
-        { x: Math.random() * c.width, y: c.height + 24 },
-        { x: -24, y: Math.random() * c.height }
+        { x: Math.random() * w, y: -24 },
+        { x: w + 24, y: Math.random() * h },
+        { x: Math.random() * w, y: h + 24 },
+        { x: -24, y: Math.random() * h }
       ][side];
       const wave = Math.floor(survivor.elapsed / 18000);
       const type = pick(wave > 3 ? ['swarm', 'swarm', 'brute', 'charger', 'warden'] : wave > 1 ? ['swarm', 'swarm', 'brute', 'charger'] : ['swarm', 'swarm', 'brute']);
@@ -10114,9 +10186,11 @@ function init() {
 
     function survivorRandomPoint(margin = 42) {
       const c = survivor.canvas;
+      const w = premiumCanvasWidth(c);
+      const h = premiumCanvasHeight(c);
       return {
-        x: margin + Math.random() * Math.max(1, c.width - margin * 2),
-        y: margin + Math.random() * Math.max(1, c.height - margin * 2)
+        x: margin + Math.random() * Math.max(1, w - margin * 2),
+        y: margin + Math.random() * Math.max(1, h - margin * 2)
       };
     }
 
@@ -10150,13 +10224,15 @@ function init() {
 
     function spawnSurvivorNemesis() {
       const c = survivor.canvas;
+      const w = premiumCanvasWidth(c);
+      const h = premiumCanvasHeight(c);
       const tuning = difficultyTuning();
       const pressure = Number(survivor.runPressure || arcadeRunPressure('survivor', survivor.variant));
       const wave = Math.max(1, Math.floor(survivor.elapsed / 18000) + 1);
       const fromLeft = Math.random() < 0.5;
       survivor.enemies.push({
-        x: fromLeft ? -32 : c.width + 32,
-        y: 72 + Math.random() * (c.height - 144),
+        x: fromLeft ? -32 : w + 32,
+        y: 72 + Math.random() * (h - 144),
         r: 24,
         hp: (360 + wave * 96) * Number(tuning.enemyHp || 1),
         maxHp: (360 + wave * 96) * Number(tuning.enemyHp || 1),
@@ -10572,7 +10648,7 @@ function init() {
       recordPremiumResult('survivor', finalScore, { settlementId: survivor.runId, elapsed: survivor.elapsed, level: survivor.player?.level || 1, bestChain: survivor.bestChain, synergies: Number(survivor.synergies?.length || 0), overdrive: Math.floor(survivor.overdrive), anomalies: survivor.anomalyCount, bounties: survivor.bountiesCompleted, drones: Math.floor(Number(survivor.player?.drones || 0)), runVariant: survivor.variant });
       setSurvivorUi();
       drawSurvivor();
-      overlay(survivor.ctx, survivor.canvas.width, survivor.canvas.height, text, `Score ${finalScore} · 点击部署再来一局`);
+      overlayPremiumCanvas(survivor.ctx, survivor.canvas, text, `Score ${finalScore} · 点击部署再来一局`);
     }
 
     function runSurvivor(now) {
@@ -10594,6 +10670,8 @@ function init() {
       survivor.spawn += dt;
       survivor.shot += dt;
       const c = survivor.canvas;
+      const w = premiumCanvasWidth(c);
+      const h = premiumCanvasHeight(c);
       p.novaCooldown = Math.max(0, p.novaCooldown - dt);
       p.novaFlash = Math.max(0, p.novaFlash - dt);
       survivor.chainTimer = Math.max(0, survivor.chainTimer - dt);
@@ -10608,8 +10686,8 @@ function init() {
       let mx = (premiumKeys.right ? 1 : 0) - (premiumKeys.left ? 1 : 0);
       let my = (premiumKeys.down ? 1 : 0) - (premiumKeys.up ? 1 : 0);
       const len = Math.hypot(mx, my) || 1;
-      p.x = Math.max(16, Math.min(c.width - 16, p.x + mx / len * p.speed * dt / 1000));
-      p.y = Math.max(16, Math.min(c.height - 16, p.y + my / len * p.speed * dt / 1000));
+      p.x = Math.max(16, Math.min(w - 16, p.x + mx / len * p.speed * dt / 1000));
+      p.y = Math.max(16, Math.min(h - 16, p.y + my / len * p.speed * dt / 1000));
       while (survivor.spawn > Math.max(180, (700 - survivor.elapsed / 130) / Number(survivor.runPressure || arcadeRunPressure('survivor', survivor.variant)))) {
         survivor.spawn = 0;
         spawnSurvivorEnemy();
@@ -10619,7 +10697,7 @@ function init() {
         fireSurvivorVolley();
       }
       survivor.bullets.forEach(b => { b.x += b.vx * dt / 1000; b.y += b.vy * dt / 1000; b.life -= dt; });
-      survivor.bullets = survivor.bullets.filter(b => b.life > 0 && b.x > -20 && b.y > -20 && b.x < c.width + 20 && b.y < c.height + 20);
+      survivor.bullets = survivor.bullets.filter(b => b.life > 0 && b.x > -20 && b.y > -20 && b.x < w + 20 && b.y < h + 20);
       survivor.enemies.forEach(enemy => {
         const a = Math.atan2(p.y - enemy.y, p.x - enemy.x);
         enemy.pulse += dt / 280;
@@ -10702,9 +10780,11 @@ function init() {
     function drawSurvivor() {
       const { ctx, canvas: c } = survivor;
       if (!ctx || !c) return;
+      const frame = preparePremiumCanvas(c, ctx);
+      const { width: w, height: h } = frame;
       ctx.fillStyle = '#040711';
-      ctx.fillRect(0, 0, c.width, c.height);
-      drawGrid(ctx, c.width, c.height, 'rgba(6, 182, 212, 0.07)');
+      ctx.fillRect(0, 0, w, h);
+      drawGrid(ctx, w, h, 'rgba(6, 182, 212, 0.07)');
       survivor.hazards.forEach(hazard => {
         if (hazard.type !== 'meteor') return;
         const telegraphProgress = hazard.exploded ? 1 : clamp(1 - hazard.timer / Math.max(1, hazard.telegraph), 0, 1);
@@ -10880,7 +10960,7 @@ function init() {
         const edgeAlpha = Math.min(0.74, 0.24 + hurtAlpha * 0.42);
         ctx.strokeStyle = `rgba(239, 68, 68, ${edgeAlpha})`;
         ctx.lineWidth = 5 + hurtAlpha * 8;
-        ctx.strokeRect(6, 6, Math.max(0, c.width - 12), Math.max(0, c.height - 12));
+        ctx.strokeRect(6, 6, Math.max(0, w - 12), Math.max(0, h - 12));
         const glow = ctx.createRadialGradient(p.x, p.y, p.r + 4, p.x, p.y, p.r + 74);
         glow.addColorStop(0, `rgba(248, 113, 113, ${0.26 * hurtAlpha})`);
         glow.addColorStop(1, 'rgba(248, 113, 113, 0)');
@@ -10915,7 +10995,7 @@ function init() {
         ctx.fillStyle = eventDef?.color || '#FDE68A';
         ctx.font = '900 12px JetBrains Mono, monospace';
         ctx.textAlign = 'right';
-        ctx.fillText(`${eventDef?.short || 'EVENT'} ${remaining}s`, c.width - 14, 22);
+        ctx.fillText(`${eventDef?.short || 'EVENT'} ${remaining}s`, w - 14, 22);
         ctx.textAlign = 'left';
       }
       const bountyDef = currentSurvivorBounty();
@@ -10923,9 +11003,9 @@ function init() {
         ctx.fillStyle = survivor.bountyFlash > 0 ? '#FDE68A' : bountyDef.color;
         ctx.font = '900 12px JetBrains Mono, monospace';
         ctx.textAlign = 'right';
-        ctx.fillText(`BOUNTY ${formatSurvivorBounty()}`, c.width - 14, survivor.anomaly ? 42 : 22);
+        ctx.fillText(`BOUNTY ${formatSurvivorBounty()}`, w - 14, survivor.anomaly ? 42 : 22);
         if (survivor.lastBounty && survivor.bountyFlash > 0) {
-          ctx.fillText(`${survivor.lastBounty} +${survivorBountyDefs[(survivor.bountyIndex + survivorBountyDefs.length - 1) % survivorBountyDefs.length]?.reward || 0}`, c.width - 14, survivor.anomaly ? 60 : 40);
+          ctx.fillText(`${survivor.lastBounty} +${survivorBountyDefs[(survivor.bountyIndex + survivorBountyDefs.length - 1) % survivorBountyDefs.length]?.reward || 0}`, w - 14, survivor.anomaly ? 60 : 40);
         }
         ctx.textAlign = 'left';
       }
@@ -11251,7 +11331,7 @@ function init() {
     });
     setSurvivorUi();
     drawSurvivor();
-    overlay(survivor.ctx, survivor.canvas.width, survivor.canvas.height, '部署星核机体', 'WASD 移动 · 自动射击 · 吸收星核升级');
+    overlayPremiumCanvas(survivor.ctx, survivor.canvas, '部署星核机体', 'WASD 移动 · 自动射击 · 吸收星核升级');
 
     const bossMode = {
       canvas: document.getElementById('premium-boss-canvas'),
@@ -11315,7 +11395,7 @@ function init() {
 
     function drawBossPauseOverlay() {
       drawBoss();
-      overlay(bossMode.ctx, bossMode.canvas.width, bossMode.canvas.height, 'PAUSED', 'P / Esc 或按钮继续 Boss 战');
+      overlayPremiumCanvas(bossMode.ctx, bossMode.canvas, 'PAUSED', 'P / Esc 或按钮继续 Boss 战');
     }
 
     function resumeBossLoop() {
@@ -11610,7 +11690,7 @@ function init() {
       setBossUi();
       updateBossPauseButton();
       drawBoss();
-      overlay(bossMode.ctx, bossMode.canvas.width, bossMode.canvas.height, text, `Score ${Math.floor(bossMode.score)} · 点击开战再来一局`);
+      overlayPremiumCanvas(bossMode.ctx, bossMode.canvas, text, `Score ${Math.floor(bossMode.score)} · 点击开战再来一局`);
     }
 
     function updateBossPauseButton() {
@@ -11944,9 +12024,10 @@ function init() {
         }
       }
       if (pattern === 'sweep') {
+        const w = premiumCanvasWidth(bossMode.canvas);
         for (let i = 0; i < 2; i++) {
           const fromLeft = i === 0;
-          bossMode.bullets.push({ x: fromLeft ? -20 : bossMode.canvas.width + 20, y: 128 + i * 74, vx: fromLeft ? 220 : -220, vy: 18, r: 9, color: '#EC4899', grazed: false });
+          bossMode.bullets.push({ x: fromLeft ? -20 : w + 20, y: 128 + i * 74, vx: fromLeft ? 220 : -220, vy: 18, r: 9, color: '#EC4899', grazed: false });
         }
       }
       setBossUi();
@@ -11992,15 +12073,17 @@ function init() {
       p.dashCooldown = Math.max(0, p.dashCooldown - dt);
       p.focusSurge = Math.max(0, Number(p.focusSurge || 0) - dt);
       const speed = p.dash > 0 ? 410 : 225;
-      p.x = clamp(p.x + ((premiumKeys.right ? 1 : 0) - (premiumKeys.left ? 1 : 0)) * speed * dt / 1000, 16, bossMode.canvas.width - 16);
-      p.y = clamp(p.y + ((premiumKeys.down ? 1 : 0) - (premiumKeys.up ? 1 : 0)) * speed * 0.72 * dt / 1000, 178, bossMode.canvas.height - 18);
+      const arenaW = premiumCanvasWidth(bossMode.canvas);
+      const arenaH = premiumCanvasHeight(bossMode.canvas);
+      p.x = clamp(p.x + ((premiumKeys.right ? 1 : 0) - (premiumKeys.left ? 1 : 0)) * speed * dt / 1000, 16, arenaW - 16);
+      p.y = clamp(p.y + ((premiumKeys.down ? 1 : 0) - (premiumKeys.up ? 1 : 0)) * speed * 0.72 * dt / 1000, 178, arenaH - 18);
       if (premiumKeys.action && p.dashCooldown <= 0) {
         p.dash = 210;
         p.dashCooldown = Math.max(720, 1150 + Number(bossMode.bonuses.bossDashMs || 0));
         p.invuln = Math.max(p.invuln, 280);
         bossSpark(p.x, p.y, '#34D399', 16);
       }
-      b.x = bossMode.canvas.width / 2 + Math.sin(bossMode.t / 850) * 130;
+      b.x = arenaW / 2 + Math.sin(bossMode.t / 850) * 130;
       b.y = 84 + Math.sin(bossMode.t / 520) * 18;
       if (bossMode.weakpoint.active) {
         bossMode.weakpoint.x = b.x;
@@ -12028,7 +12111,7 @@ function init() {
       bossMode.particles.forEach(pt => { pt.x += pt.vx * dt / 1000; pt.y += pt.vy * dt / 1000; pt.life -= dt; });
       bossMode.particles = bossMode.particles.filter(pt => pt.life > 0);
       bossMode.shots = bossMode.shots.filter(s => s.y > -20);
-      bossMode.bullets = bossMode.bullets.filter(s => s.x > -40 && s.x < bossMode.canvas.width + 40 && s.y > -40 && s.y < bossMode.canvas.height + 40);
+      bossMode.bullets = bossMode.bullets.filter(s => s.x > -40 && s.x < arenaW + 40 && s.y > -40 && s.y < arenaH + 40);
       bossMode.shots = bossMode.shots.filter(s => {
         if (bossWeakpointActive() && Math.hypot(s.x - bossMode.weakpoint.x, s.y - bossMode.weakpoint.y) < s.r + bossMode.weakpoint.r) {
           hitBossWeakpoint(s.damage);
@@ -12086,7 +12169,7 @@ function init() {
       if (!bossMode.paused) requestBossLoop();
     }
 
-    function drawBossTelegraph(ctx, c) {
+    function drawBossTelegraph(ctx, bounds) {
       const pattern = bossMode.queuedPattern;
       if (!pattern) return;
       const b = bossMode.boss;
@@ -12118,13 +12201,13 @@ function init() {
       if (pattern === 'rain') {
         for (let i = 0; i < 18; i++) {
           const x = 20 + i * 30 + Math.sin(bossMode.t / 300 + i) * 10;
-          ctx.fillRect(x - 5, 0, 10, c.height);
+          ctx.fillRect(x - 5, 0, 10, bounds.height);
         }
       }
       if (pattern === 'sweep') {
         [128, 202].forEach(y => {
-          ctx.fillRect(0, y - 7, c.width, 14);
-          ctx.strokeRect(4, y - 12, c.width - 8, 24);
+          ctx.fillRect(0, y - 7, bounds.width, 14);
+          ctx.strokeRect(4, y - 12, bounds.width - 8, 24);
         });
       }
       ctx.setLineDash([]);
@@ -12135,7 +12218,7 @@ function init() {
       ctx.restore();
     }
 
-    function drawBossWeakpoint(ctx) {
+    function drawBossWeakpoint(ctx, w = premiumCanvasWidth(bossMode.canvas), h = premiumCanvasHeight(bossMode.canvas)) {
       const weak = bossMode.weakpoint;
       if (!weak?.active && bossMode.breakFlash <= 0) return;
       ctx.save();
@@ -12183,23 +12266,23 @@ function init() {
         const alpha = clamp(bossMode.breakFlash / 920, 0, 1);
         ctx.globalAlpha = 0.18 + alpha * 0.28;
         ctx.fillStyle = '#34D399';
-        ctx.fillRect(0, 0, bossMode.canvas.width, bossMode.canvas.height);
+        ctx.fillRect(0, 0, w, h);
         ctx.globalAlpha = alpha;
         ctx.fillStyle = '#ECFDF5';
         ctx.font = '900 24px JetBrains Mono, monospace';
         ctx.textAlign = 'center';
         ctx.shadowColor = '#34D399';
         ctx.shadowBlur = 18;
-        ctx.fillText('COUNTER BREAK', bossMode.canvas.width / 2, 132);
+        ctx.fillText('COUNTER BREAK', w / 2, 132);
         if (bossMode.lastBreak) {
           ctx.font = '800 12px JetBrains Mono, monospace';
-          ctx.fillText(`破招 ${bossMode.lastBreak}  +${bossMode.breakCount}`, bossMode.canvas.width / 2, 154);
+          ctx.fillText(`破招 ${bossMode.lastBreak}  +${bossMode.breakCount}`, w / 2, 154);
         }
       }
       ctx.restore();
     }
 
-    function drawBossShield(ctx) {
+    function drawBossShield(ctx, w = premiumCanvasWidth(bossMode.canvas), h = premiumCanvasHeight(bossMode.canvas)) {
       const shield = bossMode.shield || {};
       const layers = Math.max(0, Number(shield.layers || 0));
       const maxLayers = Math.max(1, Number(shield.maxLayers || 3));
@@ -12260,19 +12343,19 @@ function init() {
         ctx.save();
         ctx.globalAlpha = 0.18 + shatter * 0.18;
         ctx.fillStyle = '#FDE68A';
-        ctx.fillRect(0, 0, bossMode.canvas.width, bossMode.canvas.height);
+        ctx.fillRect(0, 0, w, h);
         ctx.globalAlpha = shatter;
         ctx.fillStyle = '#FFFBEB';
         ctx.font = '900 20px JetBrains Mono, monospace';
         ctx.textAlign = 'center';
         ctx.shadowColor = '#FDE68A';
         ctx.shadowBlur = 18;
-        ctx.fillText('PRISM SHATTER', bossMode.canvas.width / 2, 104);
+        ctx.fillText('PRISM SHATTER', w / 2, 104);
         ctx.restore();
       }
     }
 
-    function drawBossOverbreak(ctx, c) {
+    function drawBossOverbreak(ctx, bounds) {
       const state = bossOverbreakState();
       if (!state.ready && state.flash <= 0) return;
       const b = bossMode.boss;
@@ -12300,7 +12383,7 @@ function init() {
         const alpha = clamp(state.flash / 1320, 0, 1);
         ctx.globalAlpha = 0.14 + alpha * 0.24;
         ctx.fillStyle = '#FDE68A';
-        ctx.fillRect(0, 0, c.width, c.height);
+        ctx.fillRect(0, 0, bounds.width, bounds.height);
         ctx.globalAlpha = alpha;
         ctx.strokeStyle = '#FFFBEB';
         ctx.lineWidth = 5;
@@ -12312,7 +12395,7 @@ function init() {
         ctx.fillStyle = '#FFFBEB';
         ctx.font = '900 20px JetBrains Mono, monospace';
         ctx.textAlign = 'center';
-        ctx.fillText(state.last === 'OVERBREAK READY' ? 'OVERBREAK READY' : 'OVERBREAK EXECUTE', c.width / 2, 86);
+        ctx.fillText(state.last === 'OVERBREAK READY' ? 'OVERBREAK READY' : 'OVERBREAK EXECUTE', bounds.width / 2, 86);
       }
       ctx.restore();
     }
@@ -12320,9 +12403,12 @@ function init() {
     function drawBoss() {
       const { ctx, canvas: c, boss: b, player: p } = bossMode;
       if (!ctx || !c) return;
+      const frame = preparePremiumCanvas(c, ctx);
+      const { width: w, height: h } = frame;
+      const logicalCanvas = { width: w, height: h };
       ctx.fillStyle = '#050816';
-      ctx.fillRect(0, 0, c.width, c.height);
-      drawGrid(ctx, c.width, c.height, 'rgba(236, 72, 153, 0.07)', 30);
+      ctx.fillRect(0, 0, w, h);
+      drawGrid(ctx, w, h, 'rgba(236, 72, 153, 0.07)', 30);
       ctx.save();
       ctx.translate(b.x, b.y);
       ctx.rotate(bossMode.t / 550);
@@ -12340,7 +12426,7 @@ function init() {
       ctx.closePath();
       ctx.stroke();
       ctx.restore();
-      drawBossShield(ctx);
+      drawBossShield(ctx, w, h);
       if (bossMode.counterWindow > 0) {
         ctx.save();
         const alpha = clamp(bossMode.counterWindow / 5200, 0, 1);
@@ -12359,9 +12445,9 @@ function init() {
         ctx.fillText(`COUNTER x${bossMode.breakChain}`, b.x, b.y + b.r + 30);
         ctx.restore();
       }
-      drawBossTelegraph(ctx, c);
-      drawBossWeakpoint(ctx);
-      drawBossOverbreak(ctx, c);
+      drawBossTelegraph(ctx, logicalCanvas);
+      drawBossWeakpoint(ctx, w, h);
+      drawBossOverbreak(ctx, logicalCanvas);
       bossMode.shots.forEach(s => {
         ctx.fillStyle = s.surge ? '#FDE68A' : '#BAE6FD';
         ctx.fillRect(s.x - (s.surge ? 3 : 2), s.y - 9, s.surge ? 6 : 4, s.surge ? 15 : 12);
@@ -12403,7 +12489,7 @@ function init() {
         ctx.save();
         ctx.globalAlpha = 0.16 + alpha * 0.22;
         ctx.fillStyle = '#FDE68A';
-        ctx.fillRect(0, 0, c.width, c.height);
+        ctx.fillRect(0, 0, w, h);
         ctx.globalAlpha = 0.4 + alpha * 0.55;
         ctx.strokeStyle = '#FDE68A';
         ctx.lineWidth = 4;
@@ -12424,7 +12510,7 @@ function init() {
         ctx.save();
         ctx.globalAlpha = 0.12 + alpha * 0.22;
         ctx.fillStyle = '#EF4444';
-        ctx.fillRect(0, 0, c.width, c.height);
+        ctx.fillRect(0, 0, w, h);
         ctx.globalAlpha = 0.42 + alpha * 0.48;
         ctx.strokeStyle = '#FCA5A5';
         ctx.lineWidth = 3;
@@ -12448,9 +12534,9 @@ function init() {
       ctx.closePath();
       ctx.fill();
       ctx.fillStyle = '#111827';
-      ctx.fillRect(18, 16, c.width - 36, 8);
+      ctx.fillRect(18, 16, w - 36, 8);
       ctx.fillStyle = '#EC4899';
-      ctx.fillRect(18, 16, (c.width - 36) * Math.max(0, b.hp / b.maxHp), 8);
+      ctx.fillRect(18, 16, (w - 36) * Math.max(0, b.hp / b.maxHp), 8);
       ctx.fillStyle = '#fff';
       ctx.font = '700 12px JetBrains Mono, monospace';
       ctx.fillText(`PHASE ${b.phase}  SHIELD ${bossShieldLabel()}  GRAZE ${p.graze}  FOCUS ${p.focusSurge > 0 ? 'SURGE' : Math.round(Number(p.focus || 0)) + '%'}  BREAK ${bossMode.breakCount}`, 18, 42);
@@ -12464,7 +12550,7 @@ function init() {
     setBossUi();
     updateBossPauseButton();
     drawBoss();
-    overlay(bossMode.ctx, bossMode.canvas.width, bossMode.canvas.height, '棱镜核心等待挑战', 'A/D 移动 · Space 冲刺无敌 · 自动射击');
+    overlayPremiumCanvas(bossMode.ctx, bossMode.canvas, '棱镜核心等待挑战', 'A/D 移动 · Space 冲刺无敌 · 自动射击');
 
     const drift = {
       canvas: document.getElementById('premium-drift-canvas'),
@@ -12555,7 +12641,7 @@ function init() {
 
     function drawDriftPauseOverlay() {
       drawDrift();
-      overlay(drift.ctx, drift.canvas.width, drift.canvas.height, 'PAUSED', 'P / Esc 或按钮继续漂移');
+      overlayPremiumCanvas(drift.ctx, drift.canvas, 'PAUSED', 'P / Esc 或按钮继续漂移');
     }
 
     function resumeDriftLoop() {
@@ -13195,7 +13281,7 @@ function init() {
       setDriftUi();
       updateDriftPauseButton();
       drawDrift();
-      overlay(drift.ctx, drift.canvas.width, drift.canvas.height, text, `Score ${finalScore} · 点击点火再来一局`);
+      overlayPremiumCanvas(drift.ctx, drift.canvas, text, `Score ${finalScore} · 点击点火再来一局`);
     }
 
     function runDrift(now) {
@@ -13286,9 +13372,11 @@ function init() {
       p.x += p.vx * dt / 1000;
       p.y += p.vy * dt / 1000;
 
-      if (p.x < 20 || p.x > drift.canvas.width - 20 || p.y < 20 || p.y > drift.canvas.height - 20) {
-        p.x = clamp(p.x, 20, drift.canvas.width - 20);
-        p.y = clamp(p.y, 20, drift.canvas.height - 20);
+      const arenaW = premiumCanvasWidth(drift.canvas);
+      const arenaH = premiumCanvasHeight(drift.canvas);
+      if (p.x < 20 || p.x > arenaW - 20 || p.y < 20 || p.y > arenaH - 20) {
+        p.x = clamp(p.x, 20, arenaW - 20);
+        p.y = clamp(p.y, 20, arenaH - 20);
         damageDrift(6, p.x, p.y, 'wall');
       }
       drift.barriers.forEach(rect => {
@@ -13350,10 +13438,12 @@ function init() {
     function drawDrift() {
       const { ctx, canvas: c } = drift;
       if (!ctx || !c) return;
+      const frame = preparePremiumCanvas(c, ctx);
+      const { width: w, height: h } = frame;
       const p = drift.player;
       ctx.fillStyle = '#040711';
-      ctx.fillRect(0, 0, c.width, c.height);
-      drawGrid(ctx, c.width, c.height, 'rgba(6, 182, 212, 0.055)', 24);
+      ctx.fillRect(0, 0, w, h);
+      drawGrid(ctx, w, h, 'rgba(6, 182, 212, 0.055)', 24);
 
       ctx.strokeStyle = 'rgba(52, 211, 153, 0.22)';
       ctx.lineWidth = 18;
@@ -13566,7 +13656,7 @@ function init() {
         ctx.save();
         ctx.strokeStyle = `rgba(239, 68, 68, ${0.32 + impactAlpha * 0.5})`;
         ctx.lineWidth = 4 + impactAlpha * 6;
-        ctx.strokeRect(7, 7, Math.max(0, c.width - 14), Math.max(0, c.height - 14));
+        ctx.strokeRect(7, 7, Math.max(0, w - 14), Math.max(0, h - 14));
         ctx.strokeStyle = drift.lineTone === 'clean'
           ? `rgba(253, 230, 138, ${0.34 + impactAlpha * 0.46})`
           : `rgba(252, 165, 165, ${0.38 + impactAlpha * 0.5})`;
@@ -13594,7 +13684,7 @@ function init() {
       const slip = driftSlipstreamState();
       ctx.fillText(`HEAT ${Math.floor(drift.heat)}% · PHASE ${drift.phaseBrake > 0 ? 'BRAKE' : drift.phaseCharge >= 100 ? 'READY' : `${Math.floor(drift.phaseCharge)}%`} · SLIP ${slip.label}`, 98, 39);
       ctx.fillStyle = drift.lastContract ? '#FDE68A' : '#A7F3D0';
-      ctx.fillText(`${formatDriftSponsor()}${drift.lastTactic ? ` · ${drift.lastTactic}` : ''}`, 16, c.height - 16);
+      ctx.fillText(`${formatDriftSponsor()}${drift.lastTactic ? ` · ${drift.lastTactic}` : ''}`, 16, h - 16);
       if (drift.lineFlash > 0 && drift.lineLabel !== 'READY') {
         const alpha = clamp(drift.lineFlash / 920, 0, 1);
         ctx.save();
@@ -13602,7 +13692,7 @@ function init() {
         ctx.fillStyle = driftToneColor(drift.lineTone);
         ctx.font = '900 18px JetBrains Mono, monospace';
         ctx.textAlign = 'center';
-        ctx.fillText(`${drift.lineLabel} ${drift.lineQuality} · ${drift.combo}x`, c.width / 2, 42);
+        ctx.fillText(`${drift.lineLabel} ${drift.lineQuality} · ${drift.combo}x`, w / 2, 42);
         ctx.restore();
       }
       drift.splits.forEach((split, index) => {
@@ -13615,7 +13705,7 @@ function init() {
         const overtakeText = split.overtakeBonus > 0 ? ` OVERTAKE +${split.overtakeBonus}` : '';
         const sponsorText = split.sponsor ? ` ${split.sponsor} CONTRACT` : '';
         const riskText = split.nearMiss ? ' RISK' : '';
-        ctx.fillText(`#${split.gate} ${split.label} ${split.quality} +${split.score} ${split.combo}x H${split.heat}${riskText}${overtakeText}${sponsorText}`, c.width - 16, 24 + index * 15);
+        ctx.fillText(`#${split.gate} ${split.label} ${split.quality} +${split.score} ${split.combo}x H${split.heat}${riskText}${overtakeText}${sponsorText}`, w - 16, 24 + index * 15);
         ctx.restore();
       });
     }
@@ -13628,7 +13718,7 @@ function init() {
     setDriftUi();
     updateDriftPauseButton();
     drawDrift();
-    overlay(drift.ctx, drift.canvas.width, drift.canvas.height, '霓虹航线待点火', 'WASD 转向推进 · Space 加速 · Q 相位刹车');
+    overlayPremiumCanvas(drift.ctx, drift.canvas, '霓虹航线待点火', 'WASD 转向推进 · Space 加速 · Q 相位刹车');
 
     const heist = {
       canvas: document.getElementById('premium-heist-canvas'),
@@ -14651,8 +14741,10 @@ function init() {
     function drawHeist() {
       const { ctx, canvas: c, tile } = heist;
       if (!ctx || !c) return;
+      const frame = preparePremiumCanvas(c, ctx);
+      const { width: w, height: h } = frame;
       ctx.fillStyle = '#04111f';
-      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.fillRect(0, 0, w, h);
       for (let y = 0; y < heist.grid.length; y++) {
         for (let x = 0; x < heist.grid[y].length; x++) {
           ctx.fillStyle = heist.grid[y][x] ? '#0f172a' : 'rgba(6, 182, 212, 0.08)';
@@ -14868,7 +14960,7 @@ function init() {
         ctx.restore();
       }
       ctx.save();
-      const hudX = c.width - 252;
+      const hudX = w - 252;
       ctx.fillStyle = 'rgba(5, 8, 22, 0.68)';
       ctx.fillRect(hudX, 10, 238, 100);
       ctx.fillStyle = heist.routeRisk >= 3 ? '#FCA5A5' : heist.routeRisk > 0 ? '#FDE68A' : '#A7F3D0';
@@ -14896,8 +14988,8 @@ function init() {
         ctx.fillText(`TACTIC ${heist.lastTactic}`, 14, 346);
         ctx.restore();
       }
-      if (heist.won) overlay(ctx, c.width, c.height, 'VAULT CLEAR', '高分已保存 · 点击生成任务再来一局');
-      if (heist.locked) overlay(ctx, c.width, c.height, 'LOCKDOWN', `${heist.lockdownReason || '安防封锁'} · 战报已保存，点击生成任务重试`);
+      if (heist.won) overlay(ctx, w, h, 'VAULT CLEAR', '高分已保存 · 点击生成任务再来一局');
+      if (heist.locked) overlay(ctx, w, h, 'LOCKDOWN', `${heist.lockdownReason || '安防封锁'} · 战报已保存，点击生成任务重试`);
     }
 
     document.getElementById('premium-heist-new').addEventListener('click', () => startPremiumModeFromPanel('heist'));
@@ -17283,11 +17375,13 @@ function init() {
     function drawTactics() {
       const { ctx, canvas: c } = tactics;
       if (!ctx || !c) return;
+      const frame = preparePremiumCanvas(c, ctx);
+      const { width: w, height: h } = frame;
       const routePlan = tacticsRoutePlan();
       const routeKeys = new Set((routePlan.route || []).slice(0, 6).map(cell => tacticsKey(cell.x, cell.y)));
       ctx.fillStyle = '#06111f';
-      ctx.fillRect(0, 0, c.width, c.height);
-      drawGrid(ctx, c.width, c.height, 'rgba(56, 189, 248, 0.06)', 28);
+      ctx.fillRect(0, 0, w, h);
+      drawGrid(ctx, w, h, 'rgba(56, 189, 248, 0.06)', 28);
 
       for (let y = 0; y < tactics.rows; y++) {
         for (let x = 0; x < tactics.cols; x++) {
@@ -17438,7 +17532,7 @@ function init() {
         ctx.arc(line.from.x, line.from.y, 16 + (1 - alpha) * 18, 0, Math.PI * 2);
         ctx.stroke();
         ctx.font = '900 9px JetBrains Mono, monospace';
-        ctx.fillText(tactics.lastCounter || 'COUNTER', Math.min(c.width - 120, line.from.x + 12), Math.max(16, line.from.y - 14));
+        ctx.fillText(tactics.lastCounter || 'COUNTER', Math.min(w - 120, line.from.x + 12), Math.max(16, line.from.y - 14));
         ctx.restore();
         tactics.counterFlash = Math.max(0, Number(tactics.counterFlash || 0) - 1);
       }
@@ -17465,7 +17559,7 @@ function init() {
         ctx.arc(origin.x, origin.y, 18 + (1 - alpha) * 24, 0, Math.PI * 2);
         ctx.stroke();
         ctx.font = '900 9px JetBrains Mono, monospace';
-        ctx.fillText(tactics.lastCommand || 'COMMAND MATRIX', Math.min(c.width - 150, origin.x + 14), Math.max(18, origin.y - 18));
+        ctx.fillText(tactics.lastCommand || 'COMMAND MATRIX', Math.min(w - 150, origin.x + 14), Math.max(18, origin.y - 18));
         ctx.restore();
         tactics.commandFlash = Math.max(0, Number(tactics.commandFlash || 0) - 1);
       }
@@ -17582,8 +17676,8 @@ function init() {
       ctx.font = '700 12px Plus Jakarta Sans, sans-serif';
       ctx.fillText(tactics.message, 18, 344);
 
-      if (tactics.won) overlay(ctx, c.width, c.height, 'RIFT SECURED', '数据核心撤离成功 · 评分已保存');
-      if (tactics.lost) overlay(ctx, c.width, c.height, 'MECH DOWN', '点击开始行动重开战术任务');
+      if (tactics.won) overlay(ctx, w, h, 'RIFT SECURED', '数据核心撤离成功 · 评分已保存');
+      if (tactics.lost) overlay(ctx, w, h, 'MECH DOWN', '点击开始行动重开战术任务');
     }
 
     document.getElementById('premium-tactics-start').addEventListener('click', () => startPremiumModeFromPanel('tactics'));
@@ -17693,6 +17787,13 @@ function init() {
           active: () => premiumActive,
           cockpit: () => arcadeCockpitSnapshot(),
           runVariant: (game = premiumActive) => activeArcadeRunVariant(game),
+          canvasMetrics: () => ({
+            survivor: premiumCanvasMetrics(survivor.canvas),
+            boss: premiumCanvasMetrics(bossMode.canvas),
+            drift: premiumCanvasMetrics(drift.canvas),
+            heist: premiumCanvasMetrics(heist.canvas),
+            tactics: premiumCanvasMetrics(tactics.canvas)
+          }),
           daily: () => getDailyChallenge(),
           pauseRealtime: (reason = 'debug') => pauseAllPremiumRealtimeGames(reason),
           survivorRunning: () => survivor.running,
@@ -17720,7 +17821,7 @@ function init() {
             renderSurvivorDraft();
             setSurvivorUi();
             drawSurvivor();
-            overlay(survivor.ctx, survivor.canvas.width, survivor.canvas.height, '部署星核机体', 'WASD 移动 · 自动射击 · 吸收星核升级');
+            overlayPremiumCanvas(survivor.ctx, survivor.canvas, '部署星核机体', 'WASD 移动 · 自动射击 · 吸收星核升级');
             updatePremiumMetaControls();
             return survivorDebugState();
           },
@@ -17763,7 +17864,7 @@ function init() {
             bossMode.lastDodge = '';
             setBossUi();
             drawBoss();
-            overlay(bossMode.ctx, bossMode.canvas.width, bossMode.canvas.height, '棱镜核心等待挑战', 'A/D 移动 · Space 冲刺无敌 · 自动射击');
+            overlayPremiumCanvas(bossMode.ctx, bossMode.canvas, '棱镜核心等待挑战', 'A/D 移动 · Space 冲刺无敌 · 自动射击');
             updatePremiumMetaControls();
             return {
               running: bossMode.running,
@@ -18077,7 +18178,7 @@ function init() {
             drift.paused = false;
             setDriftUi();
             drawDrift();
-            overlay(drift.ctx, drift.canvas.width, drift.canvas.height, '霓虹航线待点火', 'WASD 转向推进 · Space 加速 · Q 相位刹车');
+            overlayPremiumCanvas(drift.ctx, drift.canvas, '霓虹航线待点火', 'WASD 转向推进 · Space 加速 · Q 相位刹车');
             updatePremiumMetaControls();
             return {
               running: drift.running,
