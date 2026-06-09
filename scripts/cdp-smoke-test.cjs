@@ -2267,6 +2267,10 @@ async function run() {
       leagueCommandSummary: document.querySelector('#premium-league-command-summary')?.textContent || '',
       leagueStageIntel: [...document.querySelectorAll('.arcade-league-stage em')].map(el => el.textContent || ''),
       leagueTarget: document.querySelector('#premium-league-start')?.dataset.leagueTargetGame || '',
+      leagueApplyTarget: document.querySelector('#premium-league-apply')?.dataset.leagueTargetGame || '',
+      leagueApplyDifficulty: document.querySelector('#premium-league-apply')?.dataset.leagueDifficulty || '',
+      leagueApplyLoadout: document.querySelector('#premium-league-apply')?.dataset.leagueLoadout || '',
+      leagueApplyLabel: document.querySelector('#premium-league-apply')?.textContent.trim() || '',
       debugLeague: window.__atherixDebug?.premium?.league?.() || {},
       runLogPanel: !!document.querySelector('#premium-run-log-panel'),
       runLogEmpty: document.querySelector('#premium-run-log-panel')?.dataset.empty || '',
@@ -2882,6 +2886,28 @@ async function run() {
       stageIntel: [...document.querySelectorAll('.arcade-league-stage em')].map(el => el.textContent || ''),
       target: document.querySelector('#premium-league-start')?.dataset.leagueTargetGame || '',
       toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || ''
+    };
+  })()`);
+  await click('#premium-league-apply');
+  await wait(220);
+  const leagueApplyState = await evaluate(`(() => {
+    const target = document.querySelector('#premium-league-apply')?.dataset.leagueTargetGame || '';
+    const expectedDifficulty = document.querySelector('#premium-league-apply')?.dataset.leagueDifficulty || '';
+    const expectedLoadout = document.querySelector('#premium-league-apply')?.dataset.leagueLoadout || '';
+    return {
+      target,
+      expectedDifficulty,
+      expectedLoadout,
+      active: window.__atherixDebug?.premium?.active?.() || '',
+      difficulty: window.__atherixDebug?.premium?.difficulty?.() || {},
+      loadout: window.__atherixDebug?.premium?.loadout?.() || {},
+      selectedDifficultyCards: document.querySelectorAll('.arcade-difficulty-card.is-selected').length,
+      equippedLoadoutCards: document.querySelectorAll('.arcade-loadout-card.is-equipped').length,
+      activeDifficultyLabel: document.querySelector('#premium-difficulty-active')?.textContent || '',
+      activeLoadoutLabel: document.querySelector('#premium-loadout-active')?.textContent || '',
+      commandSummary: document.querySelector('#premium-league-command-summary')?.textContent || '',
+      toast: document.querySelector('.toast-stack .toast:last-child')?.textContent || '',
+      horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
     };
   })()`);
   const loadoutProgressState = await evaluate(`(() => {
@@ -3770,7 +3796,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v86-quality') && swText.includes('/style.css?v=20260609-quality-v15') && swText.includes('/app.js?v=20260609-quality-v43'),
+      swHasQualityVersion: swText.includes('atherix-static-v87-quality') && swText.includes('/style.css?v=20260609-quality-v16') && swText.includes('/app.js?v=20260609-quality-v44'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp'),
       swHasLocalFonts: swText.includes('/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2') && swText.includes('/assets/fonts/outfit-latin-wght-normal.woff2') && swText.includes('/assets/fonts/jetbrains-mono-latin-wght-normal.woff2')
@@ -4541,7 +4567,7 @@ async function run() {
   assert(arcadeInitial.prizePanel && /入站许可/.test(arcadeInitial.prizeTitle) && arcadeInitial.prizeNodes === 6 && arcadeInitial.prizeClaimedNodes === 1 && arcadeInitial.prizeNextNodes === 1 && arcadeInitial.prizeProgressRole === 'progressbar' && arcadeInitial.prizeProgressNow === String(arcadeInitial.debugPrize?.progress) && arcadeInitial.prizeTarget === arcadeInitial.debugPrize?.targetGame, `premium arcade season track should render long-term rewards: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.masteryPanel && arcadeInitial.masteryCards === 7 && arcadeInitial.debugMastery === 7 && /奖牌路线/.test(arcadeInitial.masteryTitle) && arcadeInitial.masterySummary.length > 10, `premium arcade mastery map should render all mode goals: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.contractBoard && arcadeInitial.contractCards === 3 && arcadeInitial.debugContracts === 3 && arcadeInitial.firstContractProgress === 0, `premium arcade contracts should render as daily progression goals: ${JSON.stringify(arcadeInitial)}`);
-  assert(arcadeInitial.leaguePanel && arcadeInitial.leagueCards === 3 && arcadeInitial.debugLeague?.stages?.length === 3 && arcadeInitial.debugLeague?.activeStage?.game && arcadeInitial.debugLeague?.command?.plan && /^\d+\/3$/.test(arcadeInitial.leagueProgress) && /^\+\d+$/.test(arcadeInitial.leagueReward) && arcadeInitial.leagueRisk && /^\d+$/.test(arcadeInitial.leagueMomentum) && /\/|自由/.test(arcadeInitial.leaguePlan) && arcadeInitial.leagueCommandSummary.length > 12 && arcadeInitial.leagueStageIntel.length === 3 && arcadeInitial.leagueStageIntel.every(text => /PB/.test(text)), `premium arcade challenge league should render a tactical 3-stage route with command intel: ${JSON.stringify(arcadeInitial)}`);
+  assert(arcadeInitial.leaguePanel && arcadeInitial.leagueCards === 3 && arcadeInitial.debugLeague?.stages?.length === 3 && arcadeInitial.debugLeague?.activeStage?.game && arcadeInitial.debugLeague?.command?.plan && /^\d+\/3$/.test(arcadeInitial.leagueProgress) && /^\+\d+$/.test(arcadeInitial.leagueReward) && arcadeInitial.leagueRisk && /^\d+$/.test(arcadeInitial.leagueMomentum) && /\/|自由/.test(arcadeInitial.leaguePlan) && arcadeInitial.leagueCommandSummary.length > 12 && arcadeInitial.leagueStageIntel.length === 3 && arcadeInitial.leagueStageIntel.every(text => /PB/.test(text)) && arcadeInitial.leagueApplyTarget && arcadeInitial.leagueApplyDifficulty && arcadeInitial.leagueApplyLoadout && /应用/.test(arcadeInitial.leagueApplyLabel), `premium arcade challenge league should render a tactical 3-stage route with command intel and an actionable plan: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.difficultyPanel && arcadeInitial.difficultyCards === 4 && arcadeInitial.activeDifficulty === 'standard', `premium arcade difficulty matrix should render with standard default: ${JSON.stringify(arcadeInitial)}`);
   assert(arcadeInitial.loadoutPanel && arcadeInitial.loadoutCards === 4 && arcadeInitial.activeLoadout === 'pulse' && arcadeInitial.loadoutUnlocked >= 1, `premium arcade loadout chips should render with a default build: ${JSON.stringify(arcadeInitial)}`);
   assert(contractProgressState.afterContracts === 3 && contractProgressState.cards === 3 && contractProgressState.afterFirst > contractProgressState.beforeFirst && /总声望/.test(contractProgressState.total), `premium arcade contracts should advance after a scored run: ${JSON.stringify(contractProgressState)}`);
@@ -4562,6 +4588,7 @@ async function run() {
   );
   assert(/幸存者/.test(contractProgressState.runTitle) && /\d+/.test(contractProgressState.runLastScore) && /\d+/.test(contractProgressState.runAverage) && contractProgressState.runBestMode, `premium arcade run telemetry should render last score, average, and best mode: ${JSON.stringify(contractProgressState)}`);
   assert(leagueProgressState.before?.activeStage?.game && (leagueProgressState.after?.stageIndex > leagueProgressState.before?.stageIndex || leagueProgressState.after?.completed) && leagueProgressState.cards === 3 && leagueProgressState.completeCards >= 1 && /^\d+\/3$/.test(leagueProgressState.progressText) && /^\+\d+$/.test(leagueProgressState.reward) && leagueProgressState.risk && /^\d+$/.test(leagueProgressState.momentum) && /\/|自由/.test(leagueProgressState.plan) && leagueProgressState.commandSummary.length > 12 && leagueProgressState.stageIntel.length === 3 && leagueProgressState.target, `premium arcade challenge league should advance with tactical command intel after clearing the active stage: ${JSON.stringify(leagueProgressState)}`);
+  assert(leagueApplyState.target && (leagueApplyState.target === 'runner' || leagueApplyState.active === leagueApplyState.target) && leagueApplyState.difficulty?.active === leagueApplyState.expectedDifficulty && leagueApplyState.loadout?.active === leagueApplyState.expectedLoadout && leagueApplyState.selectedDifficultyCards === 1 && leagueApplyState.equippedLoadoutCards === 1 && /联赛指挥方案已应用/.test(leagueApplyState.toast) && !leagueApplyState.horizontalOverflow, `premium arcade league command plan should apply recommended difficulty/loadout and launch the target stage: ${JSON.stringify(leagueApplyState)}`);
   assert(loadoutProgressState.active === 'aegis' && loadoutProgressState.equippedCards === 1 && loadoutProgressState.unlocked.includes('aegis') && /棱镜护盾/.test(loadoutProgressState.activeLabel), `premium arcade loadouts should unlock and equip after career progress: ${JSON.stringify(loadoutProgressState)}`);
   assert(difficultyProgressState.active === 'elite' && difficultyProgressState.selectedCards === 1 && /精英/.test(difficultyProgressState.activeLabel) && difficultyProgressState.pressure > 1 && difficultyProgressState.scoreBoost > 0.15, `premium arcade difficulty should switch to elite with visible pressure and score boost: ${JSON.stringify(difficultyProgressState)}`);
   assert(difficultyProgressState.totalDelta >= 1180 && difficultyProgressState.bossBest >= 1180 && /难度 精英/.test(difficultyProgressState.totalText), `premium arcade difficulty should affect scoring and career summary: ${JSON.stringify(difficultyProgressState)}`);
@@ -5085,6 +5112,7 @@ async function run() {
     runLogReplayState,
     coachLaunchState,
     leagueProgressState,
+    leagueApplyState,
     loadoutProgressState,
     difficultyProgressState,
     rivalLaunchState,

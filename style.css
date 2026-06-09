@@ -6725,6 +6725,12 @@ body.command-open {
   transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 }
 
+.arcade-league-command-action {
+  border-color: rgba(52, 211, 153, 0.34);
+  background: rgba(52, 211, 153, 0.13);
+  color: #d1fae5;
+}
+
 .arcade-league-action:hover,
 .arcade-league-action:focus-visible {
   transform: translateY(-1px);

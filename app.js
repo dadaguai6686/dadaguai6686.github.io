@@ -5522,6 +5522,10 @@ function init() {
           <span>风险 <strong id="premium-league-risk">--</strong></span>
           <span>动量 <strong id="premium-league-momentum">0</strong></span>
           <span>推荐 <strong id="premium-league-plan">标准 / 脉冲</strong></span>
+          <button type="button" class="arcade-league-action arcade-league-command-action" id="premium-league-apply" data-league-target-game="survivor" data-league-difficulty="standard" data-league-loadout="pulse">
+            <i data-lucide="settings-2"></i>
+            <span>应用指挥方案</span>
+          </button>
           <button type="button" class="arcade-league-action" id="premium-league-start" data-league-target-game="survivor">
             <i data-lucide="flag"></i>
             <span>进入联赛阶段</span>
@@ -7918,6 +7922,7 @@ function init() {
       const commandTitleEl = document.getElementById('premium-league-command-title');
       const commandSummaryEl = document.getElementById('premium-league-command-summary');
       const actionBtn = document.getElementById('premium-league-start');
+      const applyBtn = document.getElementById('premium-league-apply');
       panel.dataset.complete = league.completed ? 'true' : 'false';
       panel.dataset.risk = league.command.riskTone || 'ready';
       if (titleEl) titleEl.textContent = league.completed ? `${league.title} · 已夺冠` : league.title;
@@ -7937,6 +7942,15 @@ function init() {
         const target = league.activeStage?.game || masteryFocusTarget()?.game || 'survivor';
         actionBtn.dataset.leagueTargetGame = target;
         actionBtn.querySelector('span').textContent = league.completed ? '继续刷新纪录' : `挑战 ${league.activeStage?.label || '下一阶段'}`;
+      }
+      if (applyBtn) {
+        const target = league.activeStage?.game || masteryFocusTarget()?.game || 'survivor';
+        const difficulty = league.activeStage?.plan?.difficulty || activeDifficultyDef().id;
+        const loadout = league.activeStage?.plan?.loadout || activeLoadoutDef().id;
+        applyBtn.dataset.leagueTargetGame = target;
+        applyBtn.dataset.leagueDifficulty = difficulty;
+        applyBtn.dataset.leagueLoadout = loadout;
+        applyBtn.querySelector('span').textContent = league.completed ? '应用冲榜方案' : '应用指挥方案';
       }
       routeEl.innerHTML = league.stages.map((stage, index) => `
         <article class="arcade-league-stage" data-state="${escapeHTML(stage.state)}" data-risk="${escapeHTML(stage.risk.tone)}">
@@ -8816,6 +8830,37 @@ function init() {
       showToast(`已进入联赛阶段：${titles[target] || target}`, 'success');
     }
 
+    function applyLeagueCommandPlan() {
+      const league = leagueSnapshot();
+      const applyBtn = document.getElementById('premium-league-apply');
+      const target = applyBtn?.dataset.leagueTargetGame || league.activeStage?.game || masteryFocusTarget()?.game || 'survivor';
+      const difficulty = applyBtn?.dataset.leagueDifficulty || league.activeStage?.plan?.difficulty || activeDifficultyDef().id;
+      const loadout = applyBtn?.dataset.leagueLoadout || league.activeStage?.plan?.loadout || activeLoadoutDef().id;
+      const difficultyApplied = setArcadeDifficulty(difficulty, { announce: false });
+      const loadoutApplied = setActiveLoadout(loadout, { announce: false });
+      if (target === 'runner') {
+        focusRunnerCabinet();
+      } else {
+        switchPremiumGame(target);
+        stage?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      const activeDifficulty = activeDifficultyDef();
+      const activeLoadout = activeLoadoutDef();
+      const targetLabel = target === 'runner'
+        ? '主线远征'
+        : (premiumTabLabels[target] || titles[target] || target);
+      const difficultyNote = difficultyApplied ? activeDifficulty.short : '当前难度';
+      const loadoutNote = loadoutApplied ? activeLoadout.label : '当前芯片';
+      showToast(`联赛指挥方案已应用：${difficultyNote} · ${loadoutNote} · ${targetLabel}`, 'success');
+      return {
+        target,
+        difficulty: activeDifficulty.id,
+        loadout: activeLoadout.id,
+        difficultyApplied,
+        loadoutApplied
+      };
+    }
+
     function launchRivalChallenge() {
       const intel = arcadeRivalIntel();
       activeRivalChallenge = createRivalChallenge(intel);
@@ -8870,6 +8915,7 @@ function init() {
       launchMasteryTarget(target, { announce: false });
       showToast(`驾驶舱推荐：${target === 'runner' ? '主线远征' : (titles[target] || target)}`, 'info');
     });
+    document.getElementById('premium-league-apply')?.addEventListener('click', applyLeagueCommandPlan);
     document.getElementById('premium-league-start')?.addEventListener('click', launchLeagueStage);
     document.getElementById('premium-rival-start')?.addEventListener('click', launchRivalChallenge);
     document.getElementById('premium-profile-target')?.addEventListener('click', () => {
