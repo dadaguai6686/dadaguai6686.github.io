@@ -5010,6 +5010,59 @@ body.command-open {
   font-size: 0.9rem;
 }
 
+.arcade-run-economy {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.48rem;
+  margin-bottom: 0.65rem;
+  padding: 0.55rem;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, 0.08), rgba(251, 191, 36, 0.05)),
+    rgba(15, 23, 42, 0.38);
+}
+
+.arcade-run-economy[data-empty="true"] {
+  border-color: rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.34);
+}
+
+.arcade-run-economy span {
+  min-height: 54px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.12rem;
+  min-width: 0;
+  padding: 0.48rem 0.52rem;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(3, 7, 18, 0.3);
+}
+
+.arcade-run-economy small {
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  font-weight: 900;
+}
+
+.arcade-run-economy strong {
+  color: #ecfeff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  line-height: 1.22;
+  overflow-wrap: anywhere;
+}
+
+.arcade-run-economy em {
+  grid-column: 1 / -1;
+  color: #bae6fd;
+  font-size: 0.66rem;
+  line-height: 1.35;
+  font-style: normal;
+}
+
 .arcade-run-log-list {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -5945,12 +5998,12 @@ body.command-open {
 
 .arcade-coach-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.55rem;
 }
 
 .arcade-coach-grid span {
-  min-height: 78px;
+  min-height: 70px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -8368,6 +8421,9 @@ body.command-open {
   .arcade-loadout-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .arcade-run-economy {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .arcade-rival-panel {
     grid-template-columns: minmax(220px, 1fr) minmax(250px, 1fr);
   }
@@ -8596,6 +8652,7 @@ body.command-open {
     min-width: 0;
   }
   .arcade-run-log-stats,
+  .arcade-run-economy,
   .arcade-leaderboard-stats {
     grid-template-columns: 1fr;
   }
@@ -8775,6 +8832,11 @@ body.command-open {
   .premium-touch-controls {
     opacity: 0.72;
   }
+}
+
+main .view-section.active {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 @media (prefers-reduced-motion: reduce) {

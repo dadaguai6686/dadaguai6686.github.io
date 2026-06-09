@@ -892,9 +892,13 @@ function init() {
         setTimeout(() => {
           if (version !== navigationVersion) return;
           section.classList.add('active');
+          section.style.opacity = '1';
+          section.style.transform = 'translateY(0)';
         }, 50);
       } else {
         section.classList.remove('active');
+        section.style.opacity = '';
+        section.style.transform = '';
         setTimeout(() => {
           if (version !== navigationVersion) return;
           if (!section.classList.contains('active')) {
@@ -5413,6 +5417,13 @@ function init() {
           <span>强项 <strong id="premium-run-best-mode">--</strong></span>
           <span>均值 <strong id="premium-run-average">--</strong></span>
         </div>
+        <div class="arcade-run-economy" id="premium-run-economy" data-empty="true" aria-label="最近战报得分拆解">
+          <span><small>基础分</small><strong id="premium-run-base-score">--</strong></span>
+          <span><small>加成</small><strong id="premium-run-bonus-score">--</strong></span>
+          <span><small>结算倍率</small><strong id="premium-run-multiplier">--</strong></span>
+          <span><small>路线</small><strong id="premium-run-economy-route">--</strong></span>
+          <em id="premium-run-economy-note">完成一局后显示基础分、芯片、难度与赛季目标对结算的影响。</em>
+        </div>
         <div class="arcade-run-log-list" id="premium-run-log-list"></div>
       </div>
       <div class="arcade-leaderboard-panel" id="premium-leaderboard-panel" data-empty="true" aria-label="街机个人名人堂">
@@ -5455,6 +5466,7 @@ function init() {
           <span><small>奖牌推进</small><strong id="premium-coach-medal">--</strong></span>
           <span><small>纪录变化</small><strong id="premium-coach-delta">--</strong></span>
           <span><small>下一目标</small><strong id="premium-coach-target">--</strong></span>
+          <span><small>预计收益</small><strong id="premium-coach-expected">--</strong></span>
         </div>
         <div class="arcade-coach-actions">
           <button type="button" class="arcade-coach-action arcade-coach-primary" id="premium-coach-launch" data-coach-target-game="survivor">
@@ -6475,6 +6487,7 @@ function init() {
             .map(item => cleanCareerText(item, 28))
             .filter(Boolean)
             .slice(0, 4);
+          const breakdown = normalizeRunScoreBreakdown(run.breakdown, { rawScore, score, difficulty, loadout, variant });
           return {
             id: cleanCareerText(run.id, 72) || `${Date.parse(at)}-${game}-${index}`,
             at,
@@ -6488,6 +6501,7 @@ function init() {
             loadout,
             variant,
             settlementId,
+            breakdown,
             highlights
           };
         })
@@ -7053,6 +7067,115 @@ function init() {
       return loadoutDefs.find(def => def.id === id)?.label || '脉冲校准';
     }
 
+    function runDifficultyBoost(id) {
+      const difficulty = difficultyDefs.find(def => def.id === id);
+      return clampCareerNumber(difficulty?.scoreBoost, -0.2, 0.4, 0);
+    }
+
+    function runLoadoutBoost(id) {
+      const loadout = loadoutDefs.find(def => def.id === id);
+      return clampCareerNumber(loadout?.bonuses?.scoreBoost, -0.2, 0.2, 0);
+    }
+
+    function boostPercentLabel(value = 0) {
+      const percent = Math.round(Number(value || 0) * 100);
+      return percent > 0 ? `+${percent}%` : `${percent}%`;
+    }
+
+    function normalizeRunScoreBreakdown(source, fallback = {}) {
+      const hasDetail = isCareerObject(source);
+      const detail = hasDetail ? source : {};
+      const rawScore = clampCareerInt(detail.rawScore ?? fallback.rawScore ?? fallback.score, careerModeScoreCap);
+      const finalScore = clampCareerInt(detail.finalScore ?? detail.score ?? fallback.score ?? rawScore, careerModeScoreCap);
+      const difficulty = difficultyIdSet.has(fallback.difficulty) ? fallback.difficulty : 'standard';
+      const loadout = loadoutIdSet.has(fallback.loadout) ? fallback.loadout : 'pulse';
+      const inferredBoost = rawScore > 0 ? (finalScore / rawScore) - 1 : 0;
+      const inferKnownBoosts = Math.abs(inferredBoost) > 0.002;
+      const difficultyBoost = clampCareerNumber(detail.difficultyBoost, -0.2, 0.4, hasDetail || inferKnownBoosts ? runDifficultyBoost(difficulty) : 0);
+      const loadoutBoost = clampCareerNumber(detail.loadoutBoost, -0.2, 0.2, hasDetail || inferKnownBoosts ? runLoadoutBoost(loadout) : 0);
+      const variantFallback = cleanCareerText(fallback.variant, 32)
+        ? clampCareerNumber(inferredBoost - difficultyBoost - loadoutBoost, -0.25, 0.25, 0)
+        : 0;
+      const variantBoost = clampCareerNumber(detail.variantBoost, -0.25, 0.25, variantFallback);
+      const multiplierFallback = rawScore > 0
+        ? finalScore / rawScore
+        : Math.max(0.1, 1 + difficultyBoost + loadoutBoost + variantBoost);
+      const multiplier = clampCareerNumber(detail.multiplier, 0.1, 1.8, multiplierFallback);
+      return {
+        rawScore,
+        finalScore,
+        bonusScore: Math.max(0, finalScore - rawScore),
+        multiplier: Number(multiplier.toFixed(3)),
+        difficultyBoost: Number(difficultyBoost.toFixed(3)),
+        loadoutBoost: Number(loadoutBoost.toFixed(3)),
+        variantBoost: Number(variantBoost.toFixed(3))
+      };
+    }
+
+    function createRunScoreBreakdown(rawScore, finalScore, difficulty, loadout, variant) {
+      const difficultyBoost = clampCareerNumber(difficulty?.scoreBoost, -0.2, 0.4, 0);
+      const loadoutBoost = clampCareerNumber(loadout?.bonuses?.scoreBoost, -0.2, 0.2, 0);
+      const variantBoost = clampCareerNumber(variant?.scoreBoost, -0.25, 0.25, 0);
+      const safeRaw = clampCareerInt(rawScore, careerModeScoreCap);
+      const safeFinal = clampCareerInt(finalScore, careerModeScoreCap);
+      const multiplier = safeRaw > 0
+        ? safeFinal / safeRaw
+        : Math.max(0.1, 1 + difficultyBoost + loadoutBoost + variantBoost);
+      return normalizeRunScoreBreakdown({
+        rawScore: safeRaw,
+        finalScore: safeFinal,
+        multiplier,
+        difficultyBoost,
+        loadoutBoost,
+        variantBoost
+      }, {
+        rawScore: safeRaw,
+        score: safeFinal,
+        difficulty: difficulty?.id,
+        loadout: loadout?.id,
+        variant: variant?.active ? variant.short : ''
+      });
+    }
+
+    function runScoreBreakdownFor(run = {}) {
+      return normalizeRunScoreBreakdown(run.breakdown, {
+        rawScore: run.rawScore,
+        score: run.score,
+        difficulty: run.difficulty,
+        loadout: run.loadout,
+        variant: run.variant
+      });
+    }
+
+    function runEconomySummary(run = {}) {
+      const breakdown = runScoreBreakdownFor(run);
+      const boostLabels = [
+        breakdown.difficultyBoost ? `难度 ${boostPercentLabel(breakdown.difficultyBoost)}` : '',
+        breakdown.loadoutBoost ? `芯片 ${boostPercentLabel(breakdown.loadoutBoost)}` : '',
+        breakdown.variantBoost ? `路线 ${boostPercentLabel(breakdown.variantBoost)}` : ''
+      ].filter(Boolean);
+      const next = nextMedalTarget(run.game, Number(run.score || 0));
+      const nextText = next
+        ? `距离${medalLabels[next.name] || next.name}牌还差 ${Math.max(0, next.threshold - Number(run.score || 0))}`
+        : '金牌目标完成，可冲个人极限';
+      const route = `${runDifficultyLabel(run.difficulty)} / ${runLoadoutLabel(run.loadout)}`;
+      return {
+        breakdown,
+        route,
+        nextText,
+        note: `基础 ${breakdown.rawScore} · ${boostLabels.length ? boostLabels.join(' · ') : '标准结算'} · 结算 ${breakdown.finalScore}。${nextText}。`
+      };
+    }
+
+    function projectedRunBreakdown(rawScore, difficulty, loadout, variant) {
+      const safeRaw = clampCareerInt(rawScore, careerModeScoreCap);
+      const boost = clampCareerNumber(difficulty?.scoreBoost, -0.2, 0.4, 0)
+        + clampCareerNumber(loadout?.bonuses?.scoreBoost, -0.2, 0.2, 0)
+        + clampCareerNumber(variant?.scoreBoost, -0.25, 0.25, 0);
+      const projected = clampCareerInt(safeRaw * Math.max(0.1, 1 + boost), careerModeScoreCap);
+      return createRunScoreBreakdown(safeRaw, projected, difficulty, loadout, variant);
+    }
+
     function runGradeFor(run = {}) {
       const medal = medalClass(run.medal || medalFor(run.game, Number(run.score || 0)));
       if (medal === 'gold') return { label: 'S', tone: 'gold' };
@@ -7371,6 +7494,12 @@ function init() {
       const lastEl = document.getElementById('premium-run-last-score');
       const bestEl = document.getElementById('premium-run-best-mode');
       const avgEl = document.getElementById('premium-run-average');
+      const economyEl = document.getElementById('premium-run-economy');
+      const baseEl = document.getElementById('premium-run-base-score');
+      const bonusEl = document.getElementById('premium-run-bonus-score');
+      const multiplierEl = document.getElementById('premium-run-multiplier');
+      const routeEl = document.getElementById('premium-run-economy-route');
+      const economyNoteEl = document.getElementById('premium-run-economy-note');
       const list = document.getElementById('premium-run-log-list');
       if (!panel || !list) return;
       const stats = careerRunStats();
@@ -7385,6 +7514,21 @@ function init() {
       if (lastEl) lastEl.textContent = last ? String(last.score) : '--';
       if (bestEl) bestEl.textContent = stats.bestMode ? (premiumTabLabels[stats.bestMode] || titles[stats.bestMode] || stats.bestMode) : '--';
       if (avgEl) avgEl.textContent = stats.average ? String(stats.average) : '--';
+      if (economyEl) economyEl.dataset.empty = last ? 'false' : 'true';
+      if (last) {
+        const economy = runEconomySummary(last);
+        if (baseEl) baseEl.textContent = String(economy.breakdown.rawScore);
+        if (bonusEl) bonusEl.textContent = economy.breakdown.bonusScore ? `+${economy.breakdown.bonusScore}` : '0';
+        if (multiplierEl) multiplierEl.textContent = `x${economy.breakdown.multiplier.toFixed(2)}`;
+        if (routeEl) routeEl.textContent = economy.route;
+        if (economyNoteEl) economyNoteEl.textContent = economy.note;
+      } else {
+        if (baseEl) baseEl.textContent = '--';
+        if (bonusEl) bonusEl.textContent = '--';
+        if (multiplierEl) multiplierEl.textContent = '--';
+        if (routeEl) routeEl.textContent = '--';
+        if (economyNoteEl) economyNoteEl.textContent = '完成一局后显示基础分、芯片、难度与赛季目标对结算的影响。';
+      }
       list.innerHTML = stats.runs.length
         ? stats.runs.slice(0, 4).map(run => {
           const grade = runGradeFor(run);
@@ -7459,6 +7603,9 @@ function init() {
       const status = masteryStatusForGame(run.game);
       const difficulty = preferredCoachDifficulty(run, status);
       const loadout = preferredCoachLoadout(run.game);
+      const planVariant = activeArcadeRunVariant(run.game);
+      const projected = projectedRunBreakdown(run.rawScore || run.score, difficulty, loadout, planVariant);
+      const projectedNext = nextMedalTarget(run.game, projected.finalScore);
       const improved = Number(run.score || 0) > Number(run.previousBest || 0);
       const deltaText = improved
         ? `+${Math.max(0, Number(run.score || 0) - Number(run.previousBest || 0))}`
@@ -7477,7 +7624,14 @@ function init() {
         difficulty: difficulty.id,
         difficultyLabel: difficulty.short,
         loadout: loadout.id,
-        loadoutLabel: loadout.label
+        loadoutLabel: loadout.label,
+        projectedScore: projected.finalScore,
+        projectedBonus: projected.bonusScore,
+        projectedMultiplier: projected.multiplier,
+        projectedLabel: projectedNext
+          ? `${projected.finalScore} · 差 ${Math.max(0, projectedNext.threshold - projected.finalScore)}`
+          : `${projected.finalScore} · 可冲榜`,
+        planReason: `${difficulty.short}/${loadout.label} 预计 x${projected.multiplier.toFixed(2)}`
       };
     }
 
@@ -7490,6 +7644,7 @@ function init() {
       const medalEl = document.getElementById('premium-coach-medal');
       const deltaEl = document.getElementById('premium-coach-delta');
       const targetEl = document.getElementById('premium-coach-target');
+      const expectedEl = document.getElementById('premium-coach-expected');
       const launchBtn = document.getElementById('premium-coach-launch');
       const difficultyBtn = document.getElementById('premium-coach-difficulty');
       const loadoutBtn = document.getElementById('premium-coach-loadout');
@@ -7502,6 +7657,10 @@ function init() {
         if (medalEl) medalEl.textContent = '--';
         if (deltaEl) deltaEl.textContent = '--';
         if (targetEl) targetEl.textContent = '--';
+        if (expectedEl) {
+          expectedEl.textContent = '--';
+          expectedEl.removeAttribute('title');
+        }
         if (launchBtn) {
           launchBtn.dataset.coachTargetGame = '';
           launchBtn.disabled = true;
@@ -7526,6 +7685,10 @@ function init() {
       if (medalEl) medalEl.textContent = `${coach.medalLabel}牌`;
       if (deltaEl) deltaEl.textContent = coach.deltaText;
       if (targetEl) targetEl.textContent = coach.targetLabel;
+      if (expectedEl) {
+        expectedEl.textContent = coach.projectedLabel;
+        expectedEl.title = coach.planReason;
+      }
       if (launchBtn) {
         launchBtn.disabled = false;
         launchBtn.dataset.coachTargetGame = coach.game;
@@ -8318,6 +8481,7 @@ function init() {
       const variant = normalizeRunVariantForResult(game, detailMap.runVariant);
       const scoreBoost = clampCareerNumber(loadoutBonuses().scoreBoost, -0.2, 0.2, 0) + clampCareerNumber(difficulty.scoreBoost, -0.2, 0.4, 0) + variant.scoreBoost;
       const value = clampCareerInt(rawValue * Math.max(0.1, 1 + scoreBoost), careerModeScoreCap);
+      const breakdown = createRunScoreBreakdown(rawValue, value, difficulty, loadout, variant);
       const totalBeforeRun = Number(career.totalScore || 0);
       career.totalScore = clampCareerInt((career.totalScore || 0) + value, careerScoreCap);
       career.plays = clampCareerInt((career.plays || 0) + 1, careerPlaysCap);
@@ -8354,6 +8518,7 @@ function init() {
           loadout: loadout.id,
           variant: variant.active ? variant.short : '',
           settlementId,
+          breakdown,
           highlights
         },
         ...(Array.isArray(career.runs) ? career.runs : [])
@@ -15494,7 +15659,7 @@ function init() {
       chain.grid[3][4] = color;
     }
 
-    function ensureChainMoveAvailable(reason = 'auto') {
+    function ensureChainMoveAvailable(reason = 'auto', { preserveFeedback = false } = {}) {
       if (chain.finished || chain.moves <= 0 || chain.score >= chain.target) return false;
       const existing = bestChainMove();
       if (existing) {
@@ -15514,12 +15679,14 @@ function init() {
       chain.reshuffles = Number(chain.reshuffles || 0) + 1;
       chain.lastReshuffle = reason;
       clearChainWarning();
-      chain.feedback = reason === 'debug'
-        ? '矩阵已重洗 · 恢复可用连锁'
-        : '无可用连锁 · 自动重洗';
+      if (!preserveFeedback) {
+        chain.feedback = reason === 'debug'
+          ? '矩阵已重洗 · 恢复可用连锁'
+          : '无可用连锁 · 自动重洗';
+      }
       chain.bestMove = recovered || bestChainMove();
       setChainCursorToBest();
-      if (reason !== 'debug') triggerPremiumFeedback('special', { label: 'RESHUFFLE', throttleMs: 240 });
+      if (reason !== 'debug' && !preserveFeedback) triggerPremiumFeedback('special', { label: 'RESHUFFLE', throttleMs: 240 });
       return true;
     }
 
@@ -15556,10 +15723,12 @@ function init() {
         return;
       }
       chain.moves--;
-      applyChainResult(result);
+      const resolution = applyChainResult(result);
       settleChain();
       finishChainIfNeeded();
-      ensureChainMoveAvailable('auto');
+      ensureChainMoveAvailable('auto', {
+        preserveFeedback: !!(resolution?.resonance?.triggered || resolution?.recipeResult?.completed?.length)
+      });
       renderChain();
     }
 
