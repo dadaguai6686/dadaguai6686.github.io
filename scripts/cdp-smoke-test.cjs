@@ -3386,6 +3386,7 @@ async function run() {
       contract: document.querySelector('#premium-drift-contract')?.textContent || '',
       heat: document.querySelector('#premium-drift-heat')?.textContent || '',
       phase: document.querySelector('#premium-drift-phase')?.textContent || '',
+      slipstream: document.querySelector('#premium-drift-slipstream')?.textContent || '',
       phaseReady: document.querySelector('#premium-drift-phase-btn')?.dataset.ready || '',
       debug: window.__atherixDebug?.premium?.driftLineState?.() || {},
       activeTitle: document.querySelector('#premium-active-title')?.textContent || ''
@@ -3416,7 +3417,20 @@ async function run() {
       scoreText: document.querySelector('#premium-drift-score')?.textContent || '',
       boostText: document.querySelector('#premium-drift-boost')?.textContent || '',
       heatText: document.querySelector('#premium-drift-heat')?.textContent || '',
-      phaseText: document.querySelector('#premium-drift-phase')?.textContent || ''
+      phaseText: document.querySelector('#premium-drift-phase')?.textContent || '',
+      slipstreamText: document.querySelector('#premium-drift-slipstream')?.textContent || ''
+    };
+  })()`);
+  const driftSlipstreamState = await evaluate(`(() => {
+    const result = window.__atherixDebug?.premium?.forceDriftSlipstream?.() || {};
+    const pixels = window.__atherixSmokeCountCanvasPixels?.('#premium-drift-canvas') || {};
+    return {
+      ...result,
+      nonBlank: !!pixels.nonBlank,
+      slipstreamText: document.querySelector('#premium-drift-slipstream')?.textContent || '',
+      lineText: document.querySelector('#premium-drift-line')?.textContent || '',
+      heatText: document.querySelector('#premium-drift-heat')?.textContent || '',
+      boostText: document.querySelector('#premium-drift-boost')?.textContent || ''
     };
   })()`);
   const driftCollisionState = await evaluate(`(() => {
@@ -3686,7 +3700,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v80-quality') && swText.includes('/style.css?v=20260608-quality-v13') && swText.includes('/app.js?v=20260608-quality-v37'),
+      swHasQualityVersion: swText.includes('atherix-static-v81-quality') && swText.includes('/style.css?v=20260608-quality-v13') && swText.includes('/app.js?v=20260608-quality-v38'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp'),
       swHasLocalFonts: swText.includes('/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2') && swText.includes('/assets/fonts/outfit-latin-wght-normal.woff2') && swText.includes('/assets/fonts/jetbrains-mono-latin-wght-normal.woff2')
@@ -4484,7 +4498,7 @@ async function run() {
   assert(difficultyProgressState.leaderboardCards >= 2 && difficultyProgressState.leaderboard?.entries?.some(entry => entry.game === 'boss' && entry.score >= 1180) && difficultyProgressState.leaderboard?.latestBest?.game === 'boss' && difficultyProgressState.leaderboard?.latestBest?.score >= difficultyProgressState.bossBest && Number(difficultyProgressState.leaderboardTotal) >= difficultyProgressState.bossBest, `premium arcade hall of fame should include elite boss record after scoring: ${JSON.stringify(difficultyProgressState)}`);
   assert(difficultyProgressState.rival?.game === 'boss' && difficultyProgressState.rivalActionTarget === 'boss' && Number(difficultyProgressState.rivalTarget) === Number(difficultyProgressState.rival.target) && /PRISM-0/.test(difficultyProgressState.rivalTitle), `premium arcade rival intel should follow the latest elite boss result: ${JSON.stringify(difficultyProgressState)}`);
   assert(rivalLaunchState.target === 'boss' && rivalLaunchState.active === 'boss' && /Boss/.test(rivalLaunchState.activeTitle) && rivalLaunchState.challenge?.game === 'boss' && rivalLaunchState.challenge?.target === rivalLaunchState.rival?.target && rivalLaunchState.locked === 'true' && /已锁定/.test(rivalLaunchState.summary) && /宿敌挑战已锁定/.test(rivalLaunchState.toast) && !rivalLaunchState.horizontalOverflow, `premium arcade rival action should lock and launch the current rival mode: ${JSON.stringify(rivalLaunchState)}`);
-  assert(rivalDefeatState.locked?.game && rivalDefeatState.result?.recorded && rivalDefeatState.after?.challenge === null && Number(rivalDefeatState.after?.total || 0) > Number(rivalDefeatState.before?.total || 0) && rivalDefeatState.after?.latestRun?.highlights?.some(item => /宿敌压制/.test(item)) && rivalDefeatState.after?.runTags?.some(item => /宿敌压制/.test(item)) && rivalDefeatState.achieved && rivalDefeatState.after?.profileAchievements?.endsWith('/36') && rivalDefeatState.after?.feedback?.lastLabel === 'RIVAL DOWN', `premium arcade rival defeat should reward a locked target with score, run highlights, feedback, and achievement: ${JSON.stringify(rivalDefeatState)}`);
+  assert(rivalDefeatState.locked?.game && rivalDefeatState.result?.recorded && rivalDefeatState.after?.challenge === null && Number(rivalDefeatState.after?.total || 0) > Number(rivalDefeatState.before?.total || 0) && rivalDefeatState.after?.latestRun?.highlights?.some(item => /宿敌压制/.test(item)) && rivalDefeatState.after?.runTags?.some(item => /宿敌压制/.test(item)) && rivalDefeatState.achieved && rivalDefeatState.after?.profileAchievements?.endsWith('/37') && rivalDefeatState.after?.feedback?.lastLabel === 'RIVAL DOWN', `premium arcade rival defeat should reward a locked target with score, run highlights, feedback, and achievement: ${JSON.stringify(rivalDefeatState)}`);
   assert(profileLaunchState.target && (profileLaunchState.target === 'runner' || profileLaunchState.active === profileLaunchState.target) && /档案目标/.test(profileLaunchState.toast) && !profileLaunchState.horizontalOverflow, `premium arcade command profile action should launch the profiled target: ${JSON.stringify(profileLaunchState)}`);
   assert(prizeLaunchState.target && (prizeLaunchState.target === 'runner' || prizeLaunchState.active === prizeLaunchState.target) && /赛季奖励目标/.test(prizeLaunchState.toast) && !prizeLaunchState.horizontalOverflow, `premium arcade season track action should launch the reward target: ${JSON.stringify(prizeLaunchState)}`);
   assert(['runner', 'survivor', 'boss', 'drift', 'heist', 'chain', 'tactics'].includes(directorLaunchState.target) && (directorLaunchState.target === 'runner' || directorLaunchState.active === directorLaunchState.target) && !directorLaunchState.horizontalOverflow, `premium arcade director should launch the recommended target: ${JSON.stringify(directorLaunchState)}`);
@@ -4642,7 +4656,7 @@ async function run() {
     `boss mode should freeze while paused: ${JSON.stringify({ bossPauseState, bossPauseFreezeState })}`
   );
   assert(bossResumeState.running && !bossResumeState.paused && bossResumeState.pauseButton === '暂停', `boss mode should resume from keyboard pause: ${JSON.stringify(bossResumeState)}`);
-  assert(driftState.nonBlank && driftState.running && !driftState.paused && driftState.score > 0 && /Neon Drift/.test(driftState.activeTitle) && driftState.boost !== 'READY' && /G$/.test(driftState.rival) && /^\d+%$/.test(driftState.heat) && driftState.phase && driftState.contract && driftState.overtake && driftState.debug?.rivalHud === driftState.rival && driftState.debug?.contractHud === driftState.contract && driftState.debug?.heatHud === driftState.heat && driftState.debug?.phaseHud === driftState.phase, `drift mode should render, move, score, spend boost, and expose synced rival/contract/heat/phase HUD: ${JSON.stringify(driftState)}`);
+  assert(driftState.nonBlank && driftState.running && !driftState.paused && driftState.score > 0 && /Neon Drift/.test(driftState.activeTitle) && driftState.boost !== 'READY' && /G$/.test(driftState.rival) && /^\d+%$/.test(driftState.heat) && driftState.phase && driftState.slipstream && driftState.contract && driftState.overtake && driftState.debug?.rivalHud === driftState.rival && driftState.debug?.contractHud === driftState.contract && driftState.debug?.heatHud === driftState.heat && driftState.debug?.phaseHud === driftState.phase && driftState.debug?.slipstreamHud === driftState.slipstream, `drift mode should render, move, score, spend boost, and expose synced rival/contract/heat/phase/slipstream HUD: ${JSON.stringify(driftState)}`);
   assert(driftApexState.after.running && driftApexState.after.gates >= driftApexState.before.gates + 1 && driftApexState.after.label === 'PERFECT' && driftApexState.after.quality >= 86 && driftApexState.after.combo >= 1 && driftApexState.after.bestCombo >= driftApexState.after.combo && driftApexState.after.splits?.length >= 1 && driftApexState.after.lineBank > driftApexState.before.lineBank && driftApexState.after.overtakes > driftApexState.before.overtakes && driftApexState.after.rival?.flash > 0 && driftApexState.after.contract?.progress > driftApexState.before.contract?.progress && driftApexState.after.heat <= driftApexState.before.heat && /PERFECT/.test(driftApexState.line) && /\dx/.test(driftApexState.combo) && driftApexState.rival && driftApexState.overtake, `drift mode should grade clean apex gates with combo, split, rival overtake, sponsor progress, heat control, and HUD feedback: ${JSON.stringify(driftApexState)}`);
   assert(driftPhaseState.triggered && driftPhaseState.before?.phaseCharge === 100 && driftPhaseState.before?.phaseReady === 'true' && driftPhaseState.after?.phaseCharge === 0 && driftPhaseState.after?.phaseBrake > 0 && driftPhaseState.after?.phaseUses === driftPhaseState.before?.phaseUses + 1 && driftPhaseState.after?.heat < driftPhaseState.before?.heat && driftPhaseState.after?.phaseHud === 'BRAKE' && driftPhaseState.after?.phaseReady === 'false', `drift phase brake should consume READY charge, lower heat, and expose BRAKE HUD: ${JSON.stringify(driftPhaseState)}`);
   assert(
@@ -4665,6 +4679,26 @@ async function run() {
       /NEAR MISS|THREAD/.test(driftNearMissState.stageLabel || '') &&
       driftNearMissState.achieved,
     `drift near miss should reward high-speed risk lines with score, phase, boost, HUD feedback, and achievement credit: ${JSON.stringify(driftNearMissState)}`
+  );
+  assert(
+    driftSlipstreamState.nonBlank &&
+      driftSlipstreamState.result?.triggered &&
+      Number(driftSlipstreamState.after?.slipstream?.count || 0) === Number(driftSlipstreamState.before?.slipstream?.count || 0) + 1 &&
+      Number(driftSlipstreamState.after?.slipstream?.charge ?? -1) === 0 &&
+      Number(driftSlipstreamState.after?.slipstream?.active || 0) > 0 &&
+      driftSlipstreamState.after?.slipstreamHud === 'SURGE' &&
+      driftSlipstreamState.slipstreamText === 'SURGE' &&
+      /SLIPSTREAM/.test(driftSlipstreamState.lineText || '') &&
+      Number(driftSlipstreamState.after?.score || 0) > Number(driftSlipstreamState.before?.score || 0) &&
+      Number(driftSlipstreamState.after?.boost || 0) > Number(driftSlipstreamState.before?.boost || 0) &&
+      Number(driftSlipstreamState.after?.heat || 0) < Number(driftSlipstreamState.before?.heat || 0) &&
+      Number(driftSlipstreamState.after?.mult || 0) > Number(driftSlipstreamState.before?.mult || 0) &&
+      driftSlipstreamState.feedback?.lastTone === 'special' &&
+      driftSlipstreamState.feedback?.lastLabel === 'SLIPSTREAM' &&
+      driftSlipstreamState.stageTone === 'special' &&
+      driftSlipstreamState.stageLabel === 'SLIPSTREAM' &&
+      driftSlipstreamState.achieved,
+    `drift slipstream should convert high-skill charge into a timed speed window with score, boost, heat relief, HUD, feedback, and achievement credit: ${JSON.stringify(driftSlipstreamState)}`
   );
   assert(driftCollisionState.nonBlank && driftCollisionState.result?.applied && driftCollisionState.after?.shield < driftCollisionState.before?.shield && driftCollisionState.after?.hitCooldown > 0 && driftCollisionState.after?.impact?.flash > 0 && driftCollisionState.after?.impact?.label === 'BARRIER HIT' && driftCollisionState.after?.label === 'BROKEN' && driftCollisionState.after?.tone === 'danger' && /BROKEN/.test(driftCollisionState.lineText || '') && driftCollisionState.feedback?.lastTone === 'danger' && driftCollisionState.feedbackTone === 'danger' && /BARRIER HIT/.test(driftCollisionState.feedbackLabel || ''), `drift collisions should visibly damage shield, reset line, and trigger danger feedback: ${JSON.stringify(driftCollisionState)}`);
   assert(driftSponsorState.after?.contract?.completed > driftSponsorState.before?.contract?.completed && driftSponsorState.after?.score > driftSponsorState.before?.score && driftSponsorState.after?.lineBank > driftSponsorState.before?.lineBank && driftSponsorState.after?.lastContract === 'APEX' && driftSponsorState.achieved, `drift sponsor contract should complete, reward score/line bank, and unlock achievement: ${JSON.stringify(driftSponsorState)}`);
@@ -4983,6 +5017,7 @@ async function run() {
     driftApexState,
     driftPhaseState,
     driftNearMissState,
+    driftSlipstreamState,
     driftCollisionState,
     driftSponsorState,
     driftPauseState,
@@ -5113,6 +5148,7 @@ function summarizeSmokeResult(result) {
         rendered: result.driftState?.nonBlank,
         phaseBrake: result.driftPhaseState?.after?.phaseHud,
         nearMisses: result.driftNearMissState?.after?.nearMiss?.count,
+        slipstream: result.driftSlipstreamState?.after?.slipstreamHud,
         collision: result.driftCollisionState?.after?.impact?.label,
         sponsorAchieved: result.driftSponsorState?.achieved
       },

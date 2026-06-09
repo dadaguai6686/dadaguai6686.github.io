@@ -5324,7 +5324,7 @@ function init() {
         <div class="arcade-profile-grid">
           <span>完成度 <strong id="premium-profile-completion">0%</strong></span>
           <span>奖牌 <strong id="premium-profile-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-profile-achievements">0/36</strong></span>
+          <span>成就 <strong id="premium-profile-achievements">0/37</strong></span>
           <span>最近 <strong id="premium-profile-latest">--</strong></span>
         </div>
         <button type="button" class="arcade-profile-action" id="premium-profile-target" data-profile-target-game="survivor">
@@ -5424,7 +5424,7 @@ function init() {
         </div>
         <div class="arcade-director-meters" aria-label="街机完成度">
           <span>奖牌 <strong id="premium-director-medals">0/7</strong></span>
-          <span>成就 <strong id="premium-director-achievements">0/36</strong></span>
+          <span>成就 <strong id="premium-director-achievements">0/37</strong></span>
           <span>完成度 <strong id="premium-director-completion">0%</strong></span>
         </div>
         <button type="button" class="arcade-director-action" id="premium-director-start" data-target-game="survivor">
@@ -5604,6 +5604,7 @@ function init() {
               <span>合约 <strong id="premium-drift-contract">APEX 0/3</strong></span>
               <span>热度 <strong id="premium-drift-heat">0%</strong></span>
               <span>相位 <strong id="premium-drift-phase">READY</strong></span>
+              <span>尾流 <strong id="premium-drift-slipstream">0%</strong></span>
             </div>
             <div class="mini-actions">
               <button type="button" class="action-btn action-btn-primary" id="premium-drift-start">点火 / 重开</button>
@@ -5942,6 +5943,7 @@ function init() {
       { id: 'drift_combo', label: '量子倍率', desc: 'Neon Drift 倍率达到 x3.0' },
       { id: 'drift_sponsor', label: '赞助制霸', desc: 'Neon Drift 完成一张赞助合约' },
       { id: 'drift_near_miss', label: '贴边穿线', desc: 'Neon Drift 高速擦过障碍或无人机' },
+      { id: 'drift_slipstream', label: '尾流超频', desc: 'Neon Drift 触发一次尾流超频窗口' },
       { id: 'heist_ghost', label: '幽影协议', desc: '成功启动隐身装置' },
       { id: 'heist_clean', label: '无声撤离', desc: '低步数完成潜入' },
       { id: 'heist_cache', label: '金库猎手', desc: '赛博潜入中取得高价值缓存' },
@@ -6981,7 +6983,7 @@ function init() {
         runner: [['level', '关卡'], ['finishTime', '用时', 's'], ['bestCombo', '连段', 'x'], ['contractsCompleted', '合约']],
         survivor: [['level', '等级'], ['bestChain', '连锁', 'x'], ['overdrive', '超载'], ['drones', '无人机'], ['bounties', '赏金']],
         boss: [['phase', '阶段'], ['graze', '擦弹'], ['perfectDodges', '精准闪避'], ['focusSurges', '专注'], ['shieldShatters', '碎盾'], ['overbreaks', '处决']],
-        drift: [['gates', '弯道'], ['bestCombo', '连段', 'x'], ['overtakes', '超车'], ['nearMisses', '擦车'], ['phaseUses', '相位']],
+        drift: [['gates', '弯道'], ['bestCombo', '连段', 'x'], ['overtakes', '超车'], ['nearMisses', '擦车'], ['slipstreams', '尾流'], ['phaseUses', '相位']],
         heist: [['steps', '步数'], ['bestChain', '潜行链'], ['takedowns', '制服'], ['ghostSweeps', '幽影'], ['loot', '缓存'], ['security', '警戒', '%'], ['hacksCompleted', '破解']],
         chain: [['movesLeft', '余步'], ['combo', '连锁'], ['mult', '倍率', 'x'], ['phase', '阶段'], ['recipes', '配方']],
         tactics: [['turns', '回合'], ['hp', '装甲'], ['kills', '击破'], ['combo', '连段', 'x'], ['counters', '反制'], ['surges', '脉冲']]
@@ -11815,6 +11817,11 @@ function init() {
       phaseCharge: 100,
       phaseBrake: 0,
       phaseUses: 0,
+      slipstreamCharge: 0,
+      slipstream: 0,
+      slipstreamFlash: 0,
+      slipstreams: 0,
+      lastSlipstream: '',
       contractIndex: 0,
       contractProgress: 0,
       contractsCompleted: 0,
@@ -11893,6 +11900,71 @@ function init() {
       drift.phaseCharge = clamp(Number(drift.phaseCharge || 0) + amount, 0, 100);
     }
 
+    function driftSlipstreamState() {
+      const charge = Math.round(clamp(Number(drift.slipstreamCharge || 0), 0, 100));
+      const active = Math.max(0, Number(drift.slipstream || 0));
+      const flash = Math.max(0, Number(drift.slipstreamFlash || 0));
+      return {
+        charge,
+        ready: charge >= 100,
+        active: Math.ceil(active),
+        flash: Math.ceil(flash),
+        count: Number(drift.slipstreams || 0),
+        label: active > 0 ? 'SURGE' : flash > 0 ? 'FLASH' : charge >= 100 ? 'READY' : `${charge}%`,
+        last: drift.lastSlipstream || ''
+      };
+    }
+
+    function triggerDriftSlipstream(reason = 'line') {
+      if (!drift.running || drift.paused || Number(drift.slipstream || 0) > 0) return false;
+      const before = driftSlipstreamState();
+      drift.slipstreamCharge = 0;
+      drift.slipstream = 1850;
+      drift.slipstreamFlash = 1250;
+      drift.slipstreams = Number(drift.slipstreams || 0) + 1;
+      drift.lastSlipstream = reason || 'line';
+      drift.lastTactic = '尾流超频：高速窗口';
+      drift.lineLabel = 'SLIPSTREAM';
+      drift.lineTone = 'perfect';
+      drift.lineQuality = Math.max(drift.lineQuality, 92);
+      drift.lineFlash = 1180;
+      drift.multiplier = Math.min(4.8, Number(drift.multiplier || 1) + 0.42);
+      drift.boost = Math.min(drift.maxBoost, Number(drift.boost || 0) + 28);
+      drift.lineBank += 190 + Number(drift.combo || 0) * 18;
+      drift.score += Math.floor((440 + Number(drift.combo || 0) * 74 + Number(drift.nearMissStreak || 0) * 52 + Number(drift.overtakes || 0) * 38) * drift.multiplier);
+      addDriftHeat(-18);
+      chargeDriftPhase(12);
+      if (drift.rival) {
+        drift.rival.flash = Math.max(Number(drift.rival.flash || 0), 1250);
+        drift.rival.progress = Math.max(0, Number(drift.rival.progress || 0) - 0.1);
+      }
+      driftSpark(drift.player.x, drift.player.y, '#FDE68A', 54);
+      unlockAchievement('drift_slipstream');
+      setDriftUi();
+      drawDrift();
+      triggerPremiumFeedback('special', { label: 'SLIPSTREAM', throttleMs: 0 });
+      return {
+        triggered: true,
+        before,
+        after: driftSlipstreamState(),
+        reason: drift.lastSlipstream
+      };
+    }
+
+    function chargeDriftSlipstream(amount, reason = '') {
+      if (!drift.running || drift.paused || Number(amount || 0) <= 0) {
+        return { charged: false, triggered: false, charge: driftSlipstreamState().charge };
+      }
+      const before = driftSlipstreamState().charge;
+      drift.slipstreamCharge = clamp(before + Number(amount || 0), 0, 100);
+      if (reason) drift.lastSlipstream = reason;
+      if (drift.slipstreamCharge >= 100 && Number(drift.slipstream || 0) <= 0) {
+        const result = triggerDriftSlipstream(reason);
+        return { charged: true, triggered: !!result, before, charge: driftSlipstreamState().charge, result };
+      }
+      return { charged: true, triggered: false, before, charge: driftSlipstreamState().charge };
+    }
+
     function resolveDriftSponsor(context) {
       const sponsor = currentDriftSponsor();
       if (!sponsor?.check(context)) return { completed: false, label: sponsor?.label || '', reward: 0 };
@@ -11911,6 +11983,7 @@ function init() {
       drift.lineBank += Math.floor(sponsor.reward * 0.18);
       addDriftHeat(-sponsor.heatDrop);
       chargeDriftPhase(sponsor.charge);
+      chargeDriftSlipstream(22 + Math.min(12, sponsor.reward / 80), `${sponsor.label} CONTRACT`);
       unlockAchievement('drift_sponsor');
       driftSpark(drift.player.x, drift.player.y, '#FDE68A', 42);
       return { completed: true, label: sponsor.label, reward: sponsor.reward };
@@ -11987,6 +12060,16 @@ function init() {
         phaseEl.textContent = drift.phaseBrake > 0 ? 'BRAKE' : drift.phaseCharge >= 100 ? 'READY' : `${Math.floor(drift.phaseCharge)}%`;
         phaseEl.style.color = drift.phaseBrake > 0 || drift.phaseCharge >= 100 ? '#FDE68A' : '#BAE6FD';
       }
+      const slipstreamEl = document.getElementById('premium-drift-slipstream');
+      if (slipstreamEl) {
+        const slipstream = driftSlipstreamState();
+        slipstreamEl.textContent = slipstream.label;
+        slipstreamEl.style.color = slipstream.active > 0 || slipstream.ready || slipstream.flash > 0
+          ? '#FDE68A'
+          : slipstream.charge >= 70
+            ? '#A7F3D0'
+            : '#94A3B8';
+      }
       const phaseBtn = document.getElementById('premium-drift-phase-btn');
       if (phaseBtn) {
         phaseBtn.textContent = drift.phaseBrake > 0 ? 'Q 相位中' : drift.phaseCharge >= 100 ? 'Q 相位 READY' : `Q 相位 ${Math.floor(drift.phaseCharge)}%`;
@@ -12034,6 +12117,11 @@ function init() {
       drift.phaseCharge = 100;
       drift.phaseBrake = 0;
       drift.phaseUses = 0;
+      drift.slipstreamCharge = 0;
+      drift.slipstream = 0;
+      drift.slipstreamFlash = 0;
+      drift.slipstreams = 0;
+      drift.lastSlipstream = '';
       drift.contractIndex = 0;
       drift.contractProgress = 0;
       drift.contractsCompleted = 0;
@@ -12121,6 +12209,8 @@ function init() {
       const heatGain = phaseGuard ? 3 + amount * 0.22 : 10 + amount * 0.8;
       addDriftHeat(heatGain);
       chargeDriftPhase(phaseGuard ? 11 : 6);
+      drift.slipstreamCharge = Math.max(0, Number(drift.slipstreamCharge || 0) - (phaseGuard ? 12 : 28));
+      if (!phaseGuard) drift.slipstream = 0;
       drift.lastTactic = phaseGuard ? '相位擦碰：损伤降低' : `碰撞热度 +${Math.round(heatGain)}`;
       drift.multiplier = Math.max(1, drift.multiplier * (phaseGuard ? 0.88 : 0.72));
       drift.combo = 0;
@@ -12213,7 +12303,8 @@ function init() {
       drift.splits = drift.splits.slice(0, 4);
       driftSpark(drift.nearMissPoint.x, drift.nearMissPoint.y, quality >= 86 ? '#FDE68A' : '#BAE6FD', quality >= 86 ? 30 : 20);
       unlockAchievement('drift_near_miss');
-      triggerPremiumFeedback('special', { label, throttleMs: 80 });
+      const slipstream = chargeDriftSlipstream(18 + quality * 0.15 + drift.nearMissStreak * 3 + (phaseActive ? 5 : 0), label);
+      if (!slipstream.triggered) triggerPremiumFeedback('special', { label, throttleMs: 80 });
       return {
         triggered: true,
         label,
@@ -12222,7 +12313,8 @@ function init() {
         clearance: Number(cleanClearance.toFixed(1)),
         speed: Math.round(speed),
         count: Number(drift.nearMisses || 0),
-        streak: Number(drift.nearMissStreak || 0)
+        streak: Number(drift.nearMissStreak || 0),
+        slipstream
       };
     }
 
@@ -12306,6 +12398,7 @@ function init() {
       drift.score += bonus;
       drift.boost = Math.min(drift.maxBoost, drift.boost + 20 + drift.combo * 3);
       drift.lineBank += 86 + drift.overtakes * 16;
+      chargeDriftSlipstream(22 + grade.quality * 0.12 + drift.combo * 3, 'OVERTAKE');
       driftSpark(drift.player.x, drift.player.y, '#FDE68A', 34);
       return bonus;
     }
@@ -12364,6 +12457,12 @@ function init() {
       });
       drift.splits = drift.splits.slice(0, 4);
       driftSpark(gate.x, gate.y, driftToneColor(grade.tone), grade.quality >= 70 ? 42 : 24);
+      chargeDriftSlipstream(
+        (grade.quality >= 86 ? 31 : grade.quality >= 70 ? 22 : grade.quality >= 52 ? 10 : 0) +
+        (overtakeBonus > 0 ? 18 : 0) +
+        (sponsorResult.completed ? 14 : 0),
+        grade.label
+      );
     }
 
     function passDriftGate(speed) {
@@ -12400,6 +12499,7 @@ function init() {
         contractsCompleted: drift.contractsCompleted,
         heatPeak: Math.floor(drift.heatPeak),
         phaseUses: drift.phaseUses,
+        slipstreams: Number(drift.slipstreams || 0),
         runVariant: drift.variant
       });
       setDriftUi();
@@ -12421,11 +12521,14 @@ function init() {
 
       const p = drift.player;
       const phaseActive = drift.phaseBrake > 0;
+      const slipstreamActive = Number(drift.slipstream || 0) > 0;
       drift.phaseBrake = Math.max(0, drift.phaseBrake - dt);
+      drift.slipstream = Math.max(0, Number(drift.slipstream || 0) - dt);
+      drift.slipstreamFlash = Math.max(0, Number(drift.slipstreamFlash || 0) - dt);
       const turn = (premiumKeys.right ? 1 : 0) - (premiumKeys.left ? 1 : 0);
       const thrust = (premiumKeys.up ? 1 : 0) - (premiumKeys.down ? 0.55 : 0);
       const boostActive = premiumKeys.action && drift.boost > 2;
-      const turnRate = 0.0044 * dt * (boostActive ? 1.08 : 1) * (phaseActive ? 1.55 : 1);
+      const turnRate = 0.0044 * dt * (boostActive ? 1.08 : 1) * (phaseActive ? 1.55 : 1) * (slipstreamActive ? 1.08 : 1);
       p.angle += turn * turnRate;
       if (phaseActive) {
         const targetAngle = driftSegmentAngle(drift.gateIndex);
@@ -12440,11 +12543,16 @@ function init() {
         p.vy += Math.sin(dir) * accel * dt / 1000;
       }
       if (boostActive) {
-        drift.boost = Math.max(0, drift.boost - dt * (phaseActive ? 0.045 : 0.08));
+        drift.boost = Math.max(0, drift.boost - dt * (phaseActive ? 0.045 : slipstreamActive ? 0.056 : 0.08));
         drift.score += dt * 0.075 * drift.multiplier;
         driftSpark(p.x - Math.cos(p.angle) * 12, p.y - Math.sin(p.angle) * 12, phaseActive ? '#FDE68A' : '#BAE6FD', phaseActive ? 3 : 2);
       } else {
-        drift.boost = Math.min(drift.maxBoost, drift.boost + dt * (phaseActive ? 0.03 : 0.018));
+        drift.boost = Math.min(drift.maxBoost, drift.boost + dt * (phaseActive ? 0.03 : slipstreamActive ? 0.026 : 0.018));
+      }
+      if (slipstreamActive) {
+        drift.score += dt * 0.13 * drift.multiplier;
+        drift.boost = Math.min(drift.maxBoost, drift.boost + dt * 0.014);
+        addDriftHeat(-dt * 0.0065);
       }
 
       drift.elapsed += dt;
@@ -12457,7 +12565,7 @@ function init() {
       p.vx *= drag;
       p.vy *= drag;
       const speed = Math.hypot(p.vx, p.vy);
-      const maxSpeed = phaseActive ? 305 : 360;
+      const maxSpeed = slipstreamActive ? 392 : phaseActive ? 305 : 360;
       if (speed > maxSpeed) {
         p.vx = p.vx / speed * maxSpeed;
         p.vy = p.vy / speed * maxSpeed;
@@ -12529,7 +12637,7 @@ function init() {
       } else {
         drift.multiplier = Math.max(1, drift.multiplier - dt * 0.00023);
       }
-      p.trail.push({ x: p.x, y: p.y, life: 520, boost: boostActive, phase: phaseActive });
+      p.trail.push({ x: p.x, y: p.y, life: 520, boost: boostActive, phase: phaseActive, slipstream: slipstreamActive });
       if (p.trail.length > 42) p.trail.shift();
       p.trail.forEach(item => { item.life -= dt; });
       p.trail = p.trail.filter(item => item.life > 0);
@@ -12678,9 +12786,9 @@ function init() {
 
       p.trail.forEach(item => {
         ctx.globalAlpha = Math.max(0, item.life / 520) * 0.62;
-        ctx.fillStyle = item.phase ? '#FDE68A' : item.boost ? '#BAE6FD' : '#A78BFA';
+        ctx.fillStyle = item.slipstream ? '#FDE68A' : item.phase ? '#FDE68A' : item.boost ? '#BAE6FD' : '#A78BFA';
         ctx.beginPath();
-        ctx.arc(item.x, item.y, item.phase ? 6 : item.boost ? 5 : 3, 0, Math.PI * 2);
+        ctx.arc(item.x, item.y, item.slipstream ? 7 : item.phase ? 6 : item.boost ? 5 : 3, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalAlpha = 1;
       });
@@ -12696,9 +12804,9 @@ function init() {
       ctx.save();
       ctx.translate(p.x, p.y);
       ctx.rotate(p.angle);
-      ctx.shadowColor = drift.phaseBrake > 0 ? '#FDE68A' : drift.hitCooldown > 0 ? '#EF4444' : '#06B6D4';
-      ctx.shadowBlur = drift.phaseBrake > 0 ? 24 : 16;
-      ctx.fillStyle = drift.phaseBrake > 0 ? '#FDE68A' : drift.hitCooldown > 0 ? '#FDE68A' : '#06B6D4';
+      ctx.shadowColor = drift.slipstream > 0 || drift.phaseBrake > 0 ? '#FDE68A' : drift.hitCooldown > 0 ? '#EF4444' : '#06B6D4';
+      ctx.shadowBlur = drift.slipstream > 0 ? 30 : drift.phaseBrake > 0 ? 24 : 16;
+      ctx.fillStyle = drift.slipstream > 0 || drift.phaseBrake > 0 ? '#FDE68A' : drift.hitCooldown > 0 ? '#FDE68A' : '#06B6D4';
       ctx.beginPath();
       ctx.moveTo(17, 0);
       ctx.lineTo(-12, 12);
@@ -12709,6 +12817,24 @@ function init() {
       ctx.fillStyle = '#DFFAFF';
       ctx.fillRect(-4, -4, 11, 8);
       ctx.restore();
+      const slipAlpha = clamp(Number(drift.slipstreamFlash || 0) / 1250, 0, 1);
+      if (drift.slipstream > 0 || slipAlpha > 0) {
+        ctx.save();
+        const alpha = Math.max(slipAlpha, clamp(Number(drift.slipstream || 0) / 1850, 0, 1));
+        ctx.globalAlpha = 0.2 + alpha * 0.58;
+        ctx.strokeStyle = '#FDE68A';
+        ctx.lineWidth = 2 + alpha * 4;
+        ctx.shadowColor = '#FDE68A';
+        ctx.shadowBlur = 18;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 32 + (1 - alpha) * 24, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.font = '900 10px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#FDE68A';
+        ctx.fillText('SLIPSTREAM', p.x, Math.max(16, p.y - 42));
+        ctx.restore();
+      }
       if (drift.phaseBrake > 0) {
         ctx.save();
         ctx.strokeStyle = 'rgba(253, 230, 138, 0.46)';
@@ -12775,7 +12901,8 @@ function init() {
       ctx.strokeRect(16.5, 34.5, 74, 4);
       ctx.fillStyle = drift.phaseBrake > 0 || drift.phaseCharge >= 100 ? '#FDE68A' : '#BAE6FD';
       ctx.font = '800 10px JetBrains Mono, monospace';
-      ctx.fillText(`HEAT ${Math.floor(drift.heat)}% · PHASE ${drift.phaseBrake > 0 ? 'BRAKE' : drift.phaseCharge >= 100 ? 'READY' : `${Math.floor(drift.phaseCharge)}%`}`, 98, 39);
+      const slip = driftSlipstreamState();
+      ctx.fillText(`HEAT ${Math.floor(drift.heat)}% · PHASE ${drift.phaseBrake > 0 ? 'BRAKE' : drift.phaseCharge >= 100 ? 'READY' : `${Math.floor(drift.phaseCharge)}%`} · SLIP ${slip.label}`, 98, 39);
       ctx.fillStyle = drift.lastContract ? '#FDE68A' : '#A7F3D0';
       ctx.fillText(`${formatDriftSponsor()}${drift.lastTactic ? ` · ${drift.lastTactic}` : ''}`, 16, c.height - 16);
       if (drift.lineFlash > 0 && drift.lineLabel !== 'READY') {
@@ -16943,6 +17070,7 @@ function init() {
             phaseCharge: Math.floor(drift.phaseCharge),
             phaseBrake: Math.ceil(drift.phaseBrake),
             phaseUses: drift.phaseUses,
+            slipstream: driftSlipstreamState(),
             contract: {
               id: currentDriftSponsor()?.id || '',
               label: currentDriftSponsor()?.label || '',
@@ -16972,6 +17100,7 @@ function init() {
             contractHud: document.getElementById('premium-drift-contract')?.textContent || '',
             heatHud: document.getElementById('premium-drift-heat')?.textContent || '',
             phaseHud: document.getElementById('premium-drift-phase')?.textContent || '',
+            slipstreamHud: document.getElementById('premium-drift-slipstream')?.textContent || '',
             phaseReady: document.getElementById('premium-drift-phase-btn')?.dataset.ready || ''
           }),
           forceDriftPhaseBrake: () => {
@@ -17029,6 +17158,9 @@ function init() {
             drift.nearMissFlash = 0;
             drift.nearMissPoint = null;
             drift.lastNearMiss = '';
+            drift.slipstreamCharge = 0;
+            drift.slipstream = 0;
+            drift.slipstreamFlash = 0;
             drift.phaseBrake = 0;
             drift.phaseCharge = 36;
             drift.heat = 32;
@@ -17060,6 +17192,47 @@ function init() {
               stageTone: document.getElementById('premium-game-stage')?.dataset.feedbackTone || '',
               stageLabel: document.getElementById('premium-game-stage')?.dataset.feedback || '',
               achieved: (career.achievements || []).includes('drift_near_miss')
+            };
+          },
+          forceDriftSlipstream: () => {
+            if (!drift.running) startDrift();
+            drift.paused = false;
+            drift.slipstreamCharge = 86;
+            drift.slipstream = 0;
+            drift.slipstreamFlash = 0;
+            drift.slipstreams = 0;
+            drift.lastSlipstream = 'DEBUG PRIME';
+            drift.combo = 4;
+            drift.bestCombo = Math.max(drift.bestCombo, drift.combo);
+            drift.overtakes = Math.max(1, drift.overtakes);
+            drift.nearMissStreak = 2;
+            drift.bestNearMissStreak = Math.max(drift.bestNearMissStreak, 2);
+            drift.heat = 58;
+            drift.heatPeak = Math.max(drift.heatPeak, drift.heat);
+            drift.boost = 48;
+            drift.multiplier = Math.max(2.4, drift.multiplier);
+            drift.player.x = 252;
+            drift.player.y = 160;
+            drift.player.vx = 250;
+            drift.player.vy = -28;
+            setDriftUi();
+            const before = window.__atherixDebug.premium.driftLineState();
+            const result = chargeDriftSlipstream(24, 'DEBUG SLIPSTREAM');
+            setDriftUi();
+            drawDrift();
+            return {
+              before,
+              result,
+              after: window.__atherixDebug.premium.driftLineState(),
+              feedback: {
+                lastTone: premiumFeedback.lastTone,
+                lastLabel: premiumFeedback.lastLabel,
+                tones: { ...premiumFeedback.tones },
+                visualTriggers: premiumFeedback.visualTriggers
+              },
+              stageTone: document.getElementById('premium-game-stage')?.dataset.feedbackTone || '',
+              stageLabel: document.getElementById('premium-game-stage')?.dataset.feedback || '',
+              achieved: (career.achievements || []).includes('drift_slipstream')
             };
           },
           forceDriftApex: () => {
