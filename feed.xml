@@ -6,7 +6,7 @@
     <atom:link href="https://dadaguai6686.github.io/feed.xml" rel="self" type="application/rss+xml" />
     <description>个人博客、开发者工具箱、项目展示与互动游戏组成的原生 Web 数字空间。</description>
     <language>zh-CN</language>
-    <lastBuildDate>Mon, 08 Jun 2026 00:00:00 +0800</lastBuildDate>
+    <lastBuildDate>Mon, 18 May 2026 01:00:00 GMT</lastBuildDate>
     <generator>Atherix Vanilla Web Stack</generator>
     <image>
       <url>https://dadaguai6686.github.io/assets/atherix-og-card.png</url>
@@ -17,25 +17,25 @@
     </image>
     <item>
       <title>如何构建一个极速的无框架博客？</title>
-      <link>https://dadaguai6686.github.io/?post=post-1</link>
-      <guid isPermaLink="true">https://dadaguai6686.github.io/?post=post-1</guid>
-      <pubDate>Mon, 18 May 2026 09:00:00 +0800</pubDate>
+      <link>https://dadaguai6686.github.io/posts/post-1/</link>
+      <guid isPermaLink="true">https://dadaguai6686.github.io/posts/post-1/</guid>
+      <pubDate>Mon, 18 May 2026 01:00:00 GMT</pubDate>
       <category>前端开发</category>
       <description>探索现代原生 Web API 的潜能，摆脱重度前端框架依赖，打造秒开的个人网站性能体验。</description>
     </item>
     <item>
       <title>基于 Web Audio API 实现沉浸式白噪音生成器</title>
-      <link>https://dadaguai6686.github.io/?post=post-2</link>
-      <guid isPermaLink="true">https://dadaguai6686.github.io/?post=post-2</guid>
-      <pubDate>Fri, 15 May 2026 09:00:00 +0800</pubDate>
+      <link>https://dadaguai6686.github.io/posts/post-2/</link>
+      <guid isPermaLink="true">https://dadaguai6686.github.io/posts/post-2/</guid>
+      <pubDate>Fri, 15 May 2026 01:00:00 GMT</pubDate>
       <category>黑客技术</category>
       <description>深入了解浏览器音频接口，不依赖音频文件也能实时合成雨声、风声和 Lofi 合成器背景音。</description>
     </item>
     <item>
       <title>Canvas 客户端图像压缩的原理与实战</title>
-      <link>https://dadaguai6686.github.io/?post=post-3</link>
-      <guid isPermaLink="true">https://dadaguai6686.github.io/?post=post-3</guid>
-      <pubDate>Sun, 10 May 2026 09:00:00 +0800</pubDate>
+      <link>https://dadaguai6686.github.io/posts/post-3/</link>
+      <guid isPermaLink="true">https://dadaguai6686.github.io/posts/post-3/</guid>
+      <pubDate>Sun, 10 May 2026 01:00:00 GMT</pubDate>
       <category>前端开发</category>
       <description>探讨如何直接在前端对上传的 PNG/JPEG 进行高效压缩并转换为 WebP 格式，减小后端存储负担。</description>
     </item>

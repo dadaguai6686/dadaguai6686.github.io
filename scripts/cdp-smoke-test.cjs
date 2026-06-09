@@ -1383,7 +1383,7 @@ async function run() {
   await click('#reader-mark-read-btn');
   await wait(150);
   const readerCompletionState = await evaluate(`(() => {
-    const postId = new URLSearchParams(location.search).get('post') || location.hash.replace(/^#post\\//, '');
+    const postId = decodeURIComponent(location.pathname.match(/^\\/posts\\/([^/]+)/)?.[1] || new URLSearchParams(location.search).get('post') || location.hash.replace(/^#post\\//, ''));
     return {
       postId,
       search: location.search,
@@ -1396,7 +1396,7 @@ async function run() {
   await click('#reader-mark-read-btn');
   await wait(150);
   const readerResetState = await evaluate(`(() => {
-    const postId = new URLSearchParams(location.search).get('post') || location.hash.replace(/^#post\\//, '');
+    const postId = decodeURIComponent(location.pathname.match(/^\\/posts\\/([^/]+)/)?.[1] || new URLSearchParams(location.search).get('post') || location.hash.replace(/^#post\\//, ''));
     return {
       postId,
       search: location.search,
@@ -1411,8 +1411,10 @@ async function run() {
   await wait(250);
   await waitFor('#reader-next-panel.active [data-reader-next-open]', 5000);
   const blogState = await evaluate(`(() => ({
+    pathname: location.pathname,
     hash: location.hash,
     search: location.search,
+    postId: decodeURIComponent(location.pathname.match(/^\\/posts\\/([^/]+)/)?.[1] || new URLSearchParams(location.search).get('post') || ''),
     visibleArticle: document.querySelector('#blog-reader')?.classList.contains('active') && !!document.querySelector('#reader-post-content')?.innerText.trim(),
     articleChars: document.querySelector('#reader-post-content')?.innerText.trim().length || 0,
     toolbar: [
@@ -3727,7 +3729,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v84-quality') && swText.includes('/style.css?v=20260608-quality-v14') && swText.includes('/app.js?v=20260608-quality-v41'),
+      swHasQualityVersion: swText.includes('atherix-static-v85-quality') && swText.includes('/style.css?v=20260608-quality-v14') && swText.includes('/app.js?v=20260608-quality-v42'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp'),
       swHasLocalFonts: swText.includes('/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2') && swText.includes('/assets/fonts/outfit-latin-wght-normal.woff2') && swText.includes('/assets/fonts/jetbrains-mono-latin-wght-normal.woff2')
@@ -4066,31 +4068,31 @@ async function run() {
   assert(legacyVaultHydrationState.survivorBest === 4321 && legacyVaultHydrationState.survivorMedal === 'gold' && legacyVaultHydrationState.totalScore >= 4321 && legacyVaultHydrationState.leaderboardTopGame === 'survivor' && legacyVaultHydrationState.leaderboardTopScore === 4321 && legacyVaultHydrationState.profileTopGame === 'survivor' && legacyVaultHydrationState.profileMedals >= 1 && legacyVaultHydrationState.masterySurvivorScore === 4321 && legacyVaultHydrationState.prizeTotal >= 4321 && legacyVaultHydrationState.prizeProgress > 0 && legacyVaultHydrationState.prizeUnlocked >= 3 && /4321/.test(legacyVaultHydrationState.totalText), `legacy arcade best imports should hydrate the premium career profile and season track: ${JSON.stringify(legacyVaultHydrationState)}`);
   assert(blogHubBefore.panel && blogHubBefore.total >= 1 && blogHubBefore.filters >= 3 && blogHubBefore.cards >= 1, `blog reading hub should render stats and filters: ${JSON.stringify(blogHubBefore)}`);
   assert(blogHubBefore.filterRole === 'group', `blog reader filters should expose button-group semantics, not tablist semantics: ${JSON.stringify(blogHubBefore)}`);
-  assert(blogHubBefore.cardLinks >= blogHubBefore.cards && /^\/\?post=/.test(blogHubBefore.firstCardHref) && blogHubBefore.pinnedLinks >= 1 && blogHubBefore.quickRole === 'link' && blogHubBefore.quickTabIndex === '0', `blog cards and featured entry should expose native article links: ${JSON.stringify(blogHubBefore)}`);
+  assert(blogHubBefore.cardLinks >= blogHubBefore.cards && /^\/posts\/[A-Za-z0-9_-]+\/$/.test(blogHubBefore.firstCardHref) && blogHubBefore.pinnedLinks >= 1 && blogHubBefore.quickRole === 'link' && blogHubBefore.quickTabIndex === '0', `blog cards and featured entry should expose native canonical article links: ${JSON.stringify(blogHubBefore)}`);
   assert(blogHubBefore.progressCards >= 1 && /42/.test(blogHubBefore.progressText) && !blogHubBefore.horizontalOverflow, `blog reading hub should show resumable progress without overflow: ${JSON.stringify(blogHubBefore)}`);
   assert(blogState.toolbar && blogState.bookmarkPressed, 'blog reader toolbar should render and toggle bookmark state');
-  assert(blogState.meta?.ogType === 'article' && blogState.meta?.canonical?.includes(`?post=${blogState.search.replace('?post=', '')}`) && blogState.meta?.ogUrl?.includes(blogState.search) && blogState.meta?.twitterTitle === blogState.meta?.title && blogState.meta?.description.length > 20 && blogState.meta?.articlePublished && blogState.meta?.articleTag, `blog reader should synchronize article SEO/social metadata on client navigation: ${JSON.stringify(blogState.meta)}`);
+  assert(blogState.meta?.ogType === 'article' && blogState.meta?.canonical?.includes(`/posts/${encodeURIComponent(blogState.postId)}/`) && blogState.meta?.ogUrl?.includes(`/posts/${encodeURIComponent(blogState.postId)}/`) && blogState.meta?.twitterTitle === blogState.meta?.title && blogState.meta?.description.length > 20 && blogState.meta?.articlePublished && blogState.meta?.articleTag, `blog reader should synchronize article SEO/social metadata on client navigation: ${JSON.stringify(blogState.meta)}`);
   assert(readerCompletionState.stored === '100' && readerCompletionState.pressed && /重新阅读/.test(readerCompletionState.label) && readerCompletionState.progress === '100%', `blog reader should support explicit completion: ${JSON.stringify(readerCompletionState)}`);
   assert(readerResetState.stored === '0' && !readerResetState.pressed && /标记读完/.test(readerResetState.label) && readerResetState.progress === '0%', `blog reader should support reread reset: ${JSON.stringify(readerResetState)}`);
   assert(blogState.nextPanel && blogState.nextCards >= 1 && blogState.nextFirstTitle && blogState.nextFirstPostId, `blog reader should recommend a next article: ${JSON.stringify(blogState)}`);
   assert(blogState.nextReasons.some(reason => /同主题延伸|拓展视角|未开始|读到|稍后读|精选|适合复盘/.test(reason)) && /^\d+%$/.test(blogState.nextProgress), `blog reader recommendations should explain ranking and progress: ${JSON.stringify(blogState)}`);
-  assert(readerNextOpenState.clicked && readerNextOpenState.visibleArticle && readerNextOpenState.title === readerNextOpenState.expectedTitle && readerNextOpenState.route.includes(`post=${encodeURIComponent(readerNextOpenState.expectedPostId)}`) && readerNextOpenState.nextPanel && readerNextOpenState.nextCards >= 1 && !readerNextOpenState.horizontalOverflow, `blog reader recommendation should open another article cleanly: ${JSON.stringify(readerNextOpenState)}`);
+  assert(readerNextOpenState.clicked && readerNextOpenState.visibleArticle && readerNextOpenState.title === readerNextOpenState.expectedTitle && readerNextOpenState.route.includes(`/posts/${encodeURIComponent(readerNextOpenState.expectedPostId)}/`) && readerNextOpenState.nextPanel && readerNextOpenState.nextCards >= 1 && !readerNextOpenState.horizontalOverflow, `blog reader recommendation should open another article cleanly: ${JSON.stringify(readerNextOpenState)}`);
   assert(readerToolState.shareButton && readerToolState.exportButton && readerToolState.modePressed && readerToolState.focusClass && readerToolState.storedMode === 'enabled' && !readerToolState.horizontalOverflow, `blog reader tools should support focus mode without overflow: ${JSON.stringify(readerToolState)}`);
   assert(readerExportState.clicks.length === 1 && /\.md$/i.test(readerExportState.clicks[0].download) && readerExportState.blobInfo?.size > 100 && /markdown/i.test(readerExportState.blobInfo.type), `blog reader should export the current article as markdown: ${JSON.stringify(readerExportState)}`);
   assert(blogState.tocActive && blogState.tocLinks >= 2, 'blog reader should build a table of contents from article headings');
   assert(/^\d+%$/.test(blogState.progress), 'blog reader should report reading progress');
   assert(blogHubAfterBookmark.activeFilter && blogHubAfterBookmark.bookmarkCount >= 1 && blogHubAfterBookmark.bookmarkedCards >= 1 && !blogHubAfterBookmark.horizontalOverflow, `blog reading hub should filter bookmarked articles: ${JSON.stringify(blogHubAfterBookmark)}`);
-  assert(badPostRouteState.missing.hash === '#blog' && badPostRouteState.missing.blogActive && !badPostRouteState.missing.readerActive && badPostRouteState.malformed.hash === '#blog' && badPostRouteState.malformed.blogActive && !badPostRouteState.malformed.readerActive && badPostRouteState.badQuery.pathname === '/' && badPostRouteState.badQuery.search === '' && badPostRouteState.badQuery.hash === '#blog' && badPostRouteState.badQuery.blogActive && !badPostRouteState.badQuery.readerActive && badPostRouteState.queryOpen.search === '?post=post-1' && badPostRouteState.queryOpen.readerActive && badPostRouteState.queryOpen.title, `bad blog routes should recover and query article routes should open: ${JSON.stringify(badPostRouteState)}`);
+  assert(badPostRouteState.missing.hash === '#blog' && badPostRouteState.missing.blogActive && !badPostRouteState.missing.readerActive && badPostRouteState.malformed.hash === '#blog' && badPostRouteState.malformed.blogActive && !badPostRouteState.malformed.readerActive && badPostRouteState.badQuery.pathname === '/' && badPostRouteState.badQuery.search === '' && badPostRouteState.badQuery.hash === '#blog' && badPostRouteState.badQuery.blogActive && !badPostRouteState.badQuery.readerActive && badPostRouteState.queryOpen.pathname === '/posts/post-1/' && badPostRouteState.queryOpen.search === '' && badPostRouteState.queryOpen.readerActive && badPostRouteState.queryOpen.title, `bad blog routes should recover and query article routes should open canonically: ${JSON.stringify(badPostRouteState)}`);
   assert(
     badPostRouteState.legacyHashOpen?.readerActive &&
-      badPostRouteState.legacyHashOpen?.pathname === '/' &&
-      badPostRouteState.legacyHashOpen?.search === '?post=post-1' &&
+      badPostRouteState.legacyHashOpen?.pathname === '/posts/post-1/' &&
+      badPostRouteState.legacyHashOpen?.search === '' &&
       badPostRouteState.legacyHashOpen?.hash === '' &&
       (badPostRouteState.legacyHashOpen?.title || '').length > 4,
-    `legacy hash post route should open the reader and canonicalize to ?post=: ${JSON.stringify(badPostRouteState.legacyHashOpen)}`
+    `legacy hash post route should open the reader and canonicalize to /posts/:id/: ${JSON.stringify(badPostRouteState.legacyHashOpen)}`
   );
   assert(emptyReaderHashState.blogActive && !emptyReaderHashState.readerActive && emptyReaderHashState.hash === '#blog', `bare #blog-reader route should recover to the blog list instead of an active empty reader: ${JSON.stringify(emptyReaderHashState)}`);
-  assert(nativeArticleLinkState.found && /\\?post=/.test(nativeArticleLinkState.href) && nativeArticleLinkState.ctrlAllowed && !nativeArticleLinkState.ctrlDefaultPrevented && !nativeArticleLinkState.plainAllowed && nativeArticleLinkState.plainDefaultPrevented, `article links should preserve native modified-click behavior while SPA-handling plain clicks: ${JSON.stringify(nativeArticleLinkState)}`);
+  assert(nativeArticleLinkState.found && /^\/posts\/[A-Za-z0-9_-]+\/$/.test(nativeArticleLinkState.href) && nativeArticleLinkState.ctrlAllowed && !nativeArticleLinkState.ctrlDefaultPrevented && !nativeArticleLinkState.plainAllowed && nativeArticleLinkState.plainDefaultPrevented, `article links should preserve native modified-click behavior while SPA-handling plain clicks: ${JSON.stringify(nativeArticleLinkState)}`);
   assert(accessibilityBaseline.navCurrent.length === 1 && accessibilityBaseline.navCurrent[0] === 'home', `primary nav should expose a single aria-current page on boot: ${JSON.stringify(accessibilityBaseline.navCurrent)}`);
   assert(guestbookA11yState.avatarButtons >= 10 && guestbookA11yState.avatarButtonTypes === guestbookA11yState.avatarButtons && guestbookA11yState.activeAvatar === guestbookA11yState.hiddenAvatar && guestbookA11yState.activePressed === 'true' && guestbookA11yState.inactivePressed === 'false' && guestbookA11yState.activeAfterReset === guestbookA11yState.hiddenAfterReset && guestbookA11yState.pressedAfterReset.length === 1 && guestbookA11yState.pressedAfterReset[0] === guestbookA11yState.activeAfterReset && guestbookA11yState.emojiButtons >= 12 && guestbookA11yState.focusedEmoji && guestbookA11yState.triggerExpandedAfterClose === 'false' && guestbookA11yState.contentValue.length > 0 && !guestbookA11yState.horizontalOverflow, `guestbook avatar and emoji controls should be keyboard-accessible buttons with synced reset state: ${JSON.stringify(guestbookA11yState)}`);
   assert(
@@ -5128,7 +5130,7 @@ function summarizeSmokeResult(result) {
       hubCards: result.blogHubBefore?.cards,
       filterRole: result.blogHubBefore?.filterRole,
       emptyReaderRecovers: result.emptyReaderHashState?.blogActive && !result.emptyReaderHashState?.readerActive,
-      legacyHashCanonical: result.badPostRouteState?.legacyHashOpen?.search === '?post=post-1' && result.badPostRouteState?.legacyHashOpen?.hash === '',
+      legacyHashCanonical: result.badPostRouteState?.legacyHashOpen?.pathname === '/posts/post-1/' && result.badPostRouteState?.legacyHashOpen?.hash === '',
       modifiedClickNative: result.nativeArticleLinkState?.ctrlAllowed && !result.nativeArticleLinkState?.ctrlDefaultPrevented,
       readerOpened: result.blogState?.visibleArticle,
       articleChars: result.blogState?.articleChars,

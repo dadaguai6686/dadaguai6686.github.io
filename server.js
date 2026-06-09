@@ -17,7 +17,20 @@ const { authenticateToken, JWT_SECRET } = require('./auth');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
-const publicSiteUrl = (process.env.PUBLIC_SITE_URL || 'https://dadaguai6686.github.io').replace(/\/+$/, '');
+function normalizePublicSiteUrl(value) {
+  const fallback = 'https://dadaguai6686.github.io';
+  try {
+    const url = new URL(String(value || fallback).trim() || fallback);
+    if (!['http:', 'https:'].includes(url.protocol)) return fallback;
+    if (url.username || url.password || url.search || url.hash) return fallback;
+    const pathname = url.pathname.replace(/\/+$/, '');
+    return `${url.origin}${pathname}`;
+  } catch {
+    return fallback;
+  }
+}
+
+const publicSiteUrl = normalizePublicSiteUrl(process.env.PUBLIC_SITE_URL || 'https://dadaguai6686.github.io');
 const defaultPageTitle = 'Atherix - 个人博客与数字空间';
 const defaultPageDescription = 'Atherix的个人主页与技术博客。集成精美的Bento Dashboard、数字化工具箱（JSON格式化、图片WebP压缩、Markdown编辑器、番茄钟）以及个人项目展示与留言板。';
 const defaultOgImageUrl = `${publicSiteUrl}/assets/atherix-og-card.png`;
@@ -339,29 +352,83 @@ function truncateMetaText(value, max = 180) {
 
 function replaceHtmlTagContent(html, tagName, value) {
   const safeValue = escapeXml(value);
-  return html.replace(new RegExp(`<${tagName}>[\\s\\S]*?<\\/${tagName}>`, 'i'), `<${tagName}>${safeValue}</${tagName}>`);
+  return html.replace(new RegExp(`<${tagName}>[\\s\\S]*?<\\/${tagName}>`, 'i'), () => `<${tagName}>${safeValue}</${tagName}>`);
 }
 
 function replaceMetaContent(html, attrName, attrValue, value) {
   const safeAttr = escapeXml(value);
   const pattern = new RegExp(`(<meta\\s+${attrName}="${attrValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\s+content=")[^"]*("\\s*>)`, 'i');
-  return html.replace(pattern, `$1${safeAttr}$2`);
+  return html.replace(pattern, (_match, open, close) => `${open}${safeAttr}${close}`);
 }
 
 function replaceCanonicalHref(html, value) {
-  return html.replace(/(<link\s+rel="canonical"\s+href=")[^"]*("\s*>)/i, `$1${escapeXml(value)}$2`);
+  return html.replace(/(<link\s+rel="canonical"\s+href=")[^"]*("\s*>)/i, (_match, open, close) => `${open}${escapeXml(value)}${close}`);
 }
 
-function appendArticleMeta(html, post, url) {
+function serializeJsonLd(value) {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003C')
+    .replace(/>/g, '\\u003E')
+    .replace(/&/g, '\\u0026')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
+
+function buildArticleJsonLd(post, url, description) {
+  const published = post?.date || undefined;
+  const tag = post?.tag || '未分类';
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BlogPosting',
+    mainEntityOfPage: {
+      '@type': 'WebPage',
+      '@id': url
+    },
+    headline: truncateMetaText(post?.title || '文章', 110),
+    description,
+    image: [defaultOgImageUrl],
+    url,
+    datePublished: published,
+    dateModified: published,
+    inLanguage: 'zh-CN',
+    articleSection: tag,
+    keywords: [tag].filter(Boolean),
+    author: {
+      '@type': 'Person',
+      name: 'Atherix',
+      url: publicSiteUrl
+    },
+    publisher: {
+      '@type': 'Organization',
+      name: 'Atherix Digital Space',
+      logo: {
+        '@type': 'ImageObject',
+        url: `${publicSiteUrl}/assets/atherix-icon-512.png`
+      }
+    }
+  };
+}
+
+function cspWithInlineScriptHash(hash) {
+  if (!hash) return contentSecurityPolicy;
+  return contentSecurityPolicy.replace("script-src 'self'", `script-src 'self' 'sha256-${hash}'`);
+}
+
+function appendArticleMeta(html, post, url, jsonLd) {
   const extras = [
+    '<meta property="article:author" content="Atherix">',
     post?.date ? `<meta property="article:published_time" content="${escapeXml(post.date)}">` : '',
+    post?.date ? `<meta property="og:updated_time" content="${escapeXml(post.date)}">` : '',
+    post?.tag ? `<meta property="article:section" content="${escapeXml(post.tag)}">` : '',
     post?.tag ? `<meta property="article:tag" content="${escapeXml(post.tag)}">` : ''
-  ].filter(Boolean).join('\n  ');
-  return extras ? html.replace('</head>', `  ${extras}\n</head>`) : html;
+  ].filter(Boolean);
+  if (jsonLd) extras.push(`<script type="application/ld+json">${jsonLd}</script>`);
+  const block = extras.join('\n  ');
+  return block ? html.replace('</head>', () => `  ${block}\n</head>`) : html;
 }
 
 function publicArticleUrl(postId = '') {
-  return `${publicSiteUrl}/?post=${encodeURIComponent(postId || '')}`;
+  return `${publicSiteUrl}/posts/${encodeURIComponent(postId || '')}/`;
 }
 
 function postDateValue(post) {
@@ -441,6 +508,8 @@ function renderIndexHtmlWithArticleMeta(post) {
   const title = `${truncateMetaText(post?.title || '文章', 90)} - Atherix`;
   const description = truncateMetaText(post?.excerpt || post?.content || defaultPageDescription, 180);
   const url = publicArticleUrl(post?.id || '');
+  const jsonLd = serializeJsonLd(buildArticleJsonLd(post, url, description));
+  const jsonLdHash = crypto.createHash('sha256').update(jsonLd).digest('base64');
   let html = template;
   html = replaceHtmlTagContent(html, 'title', title);
   html = replaceMetaContent(html, 'name', 'description', description);
@@ -454,11 +523,12 @@ function renderIndexHtmlWithArticleMeta(post) {
   html = replaceMetaContent(html, 'name', 'twitter:description', description);
   html = replaceMetaContent(html, 'name', 'twitter:image', defaultOgImageUrl);
   html = replaceCanonicalHref(html, url);
-  return appendArticleMeta(html, post, url);
+  html = appendArticleMeta(html, post, url, jsonLd);
+  return { html, csp: cspWithInlineScriptHash(jsonLdHash), jsonLdHash };
 }
 
 function sendArticleIndexHtml(req, res, next) {
-  const postId = String(req.query.post || '').trim();
+  const postId = String(req.params?.postId || req.query.post || '').trim();
   if (!postId) return next();
   if (!/^[A-Za-z0-9_-]{1,80}$/.test(postId)) return next();
   db.get('SELECT id, title, excerpt, content, tag, date, readTime, pinned FROM posts WHERE id = ?', [postId], (err, post) => {
@@ -467,9 +537,11 @@ function sendArticleIndexHtml(req, res, next) {
       return next();
     }
     try {
+      const rendered = renderIndexHtmlWithArticleMeta(post);
       res.type('html');
       res.setHeader('Cache-Control', 'no-cache');
-      res.send(renderIndexHtmlWithArticleMeta(post));
+      res.setHeader('Content-Security-Policy', rendered.csp);
+      res.send(rendered.html);
     } catch (renderErr) {
       console.warn('[article-meta]', renderErr.message);
       next();
@@ -609,7 +681,9 @@ app.use((req, res, next) => {
   if (suspiciousPathPart) {
     return res.status(404).send('Not found');
   }
-  if (publicRootFiles.has(requestPath) || publicPathPrefixes.some(prefix => requestPath.startsWith(prefix))) {
+  const publicArticlePagePath = /^\/posts\/[A-Za-z0-9_-]{1,80}\/(?:index\.html)?$/.test(requestPath) ||
+    /^\/posts\/[A-Za-z0-9_-]{1,80}$/.test(requestPath);
+  if (publicRootFiles.has(requestPath) || publicArticlePagePath || publicPathPrefixes.some(prefix => requestPath.startsWith(prefix))) {
     return next();
   }
   if (blockedRootFiles.has(requestPath) ||
@@ -646,7 +720,7 @@ app.get('/sitemap.xml', (req, res) => {
   });
 });
 
-app.get(['/', '/index.html'], sendArticleIndexHtml);
+app.get(['/', '/index.html', '/posts/:postId', '/posts/:postId/', '/posts/:postId/index.html'], sendArticleIndexHtml);
 
 app.use('/uploads', guardStaticUpload, express.static(uploadDir, {
   maxAge: '7d',

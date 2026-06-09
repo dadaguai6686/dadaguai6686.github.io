@@ -3,18 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Atherix - 个人博客与数字空间</title>
+  <title>Canvas 客户端图像压缩的原理与实战 - Atherix</title>
   <!-- SEO Meta Tags -->
-  <meta name="description" content="Atherix的个人主页与技术博客。集成精美的Bento Dashboard、数字化工具箱（JSON格式化、图片WebP压缩、Markdown编辑器、番茄钟）以及个人项目展示与留言板。">
+  <meta name="description" content="探讨如何直接在前端对上传的 PNG/JPEG 进行高效压缩并转换为 WebP 格式，减小后端存储负担。">
   <meta name="keywords" content="个人博客, Bento Layout, 开发者工具, Markdown编辑器, WebP压缩, 番茄钟, 留言板">
   <meta name="author" content="Atherix">
   <meta name="robots" content="index, follow">
   <meta name="theme-color" content="#0b0b12">
   <meta name="color-scheme" content="dark light">
-  <meta property="og:title" content="Atherix - 个人博客与数字空间">
-  <meta property="og:description" content="一个集个人博客、开发者工具箱、项目展示与互动游戏于一体的原生 Web 数字空间。">
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://dadaguai6686.github.io/">
+  <meta property="og:title" content="Canvas 客户端图像压缩的原理与实战 - Atherix">
+  <meta property="og:description" content="探讨如何直接在前端对上传的 PNG/JPEG 进行高效压缩并转换为 WebP 格式，减小后端存储负担。">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://dadaguai6686.github.io/posts/post-3/">
   <meta property="og:site_name" content="Atherix Digital Space">
   <meta property="og:locale" content="zh_CN">
   <meta property="og:image" content="https://dadaguai6686.github.io/assets/atherix-og-card.png">
@@ -24,11 +24,11 @@
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="Atherix Digital Space branded preview card">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Atherix - 个人博客与数字空间">
-  <meta name="twitter:description" content="个人博客、开发者工具箱、项目展示与互动街机游戏组成的原生 Web 数字空间。">
+  <meta name="twitter:title" content="Canvas 客户端图像压缩的原理与实战 - Atherix">
+  <meta name="twitter:description" content="探讨如何直接在前端对上传的 PNG/JPEG 进行高效压缩并转换为 WebP 格式，减小后端存储负担。">
   <meta name="twitter:image" content="https://dadaguai6686.github.io/assets/atherix-og-card.png">
   <meta name="twitter:image:alt" content="Atherix Digital Space branded preview card">
-  <link rel="canonical" href="https://dadaguai6686.github.io/">
+  <link rel="canonical" href="https://dadaguai6686.github.io/posts/post-3/">
   <link rel="alternate" type="application/rss+xml" title="Atherix Digital Space Feed" href="https://dadaguai6686.github.io/feed.xml">
   <link rel="icon" href="/assets/atherix-icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/assets/atherix-icon-192.png">
@@ -43,6 +43,12 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <!-- Lucide Icons Local -->
   <script src="/lucide.min.js"></script>
+  <meta property="article:author" content="Atherix">
+  <meta property="article:published_time" content="2026-05-10">
+  <meta property="og:updated_time" content="2026-05-10">
+  <meta property="article:section" content="前端开发">
+  <meta property="article:tag" content="前端开发">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","mainEntityOfPage":{"@type":"WebPage","@id":"https://dadaguai6686.github.io/posts/post-3/"},"headline":"Canvas 客户端图像压缩的原理与实战","description":"探讨如何直接在前端对上传的 PNG/JPEG 进行高效压缩并转换为 WebP 格式，减小后端存储负担。","image":["https://dadaguai6686.github.io/assets/atherix-og-card.png"],"url":"https://dadaguai6686.github.io/posts/post-3/","datePublished":"2026-05-10","dateModified":"2026-05-10","inLanguage":"zh-CN","articleSection":"前端开发","keywords":["前端开发"],"author":{"@type":"Person","name":"Atherix","url":"https://dadaguai6686.github.io"},"publisher":{"@type":"Organization","name":"Atherix Digital Space","logo":{"@type":"ImageObject","url":"https://dadaguai6686.github.io/assets/atherix-icon-512.png"}}}</script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">跳到主要内容</a>
@@ -109,11 +115,11 @@
 
   <!-- Main Content Areas -->
   <main id="main-content" tabindex="-1">
-    
+
     <!-- SECTION 1: HOME (Bento Dashboard) -->
     <section class="view-section active" id="home">
       <div class="bento-grid">
-        
+
         <!-- Profile Card (col-span-2, row-span-2) -->
         <div class="glass-card col-span-2 row-span-2 profile-card">
           <div class="profile-header">
@@ -228,7 +234,7 @@
               <div class="track-artist" id="track-artist">Ambient Therapy</div>
             </div>
           </div>
-          
+
           <div class="waveform-viz" id="waveform-visualizer">
             <!-- Bars will be generated via JS -->
           </div>
@@ -277,7 +283,7 @@
               <span>待办清单</span>
             </div>
           </div>
-          
+
           <!-- Tab 1: Note Area -->
           <div class="todo-tab-content active" id="tab-note-content">
             <textarea class="scratchpad-textarea" id="scratchpad" placeholder="随时在此记录想法，自动保存..." style="min-height: 98px;"></textarea>
@@ -286,7 +292,7 @@
               <span>本地自动保存</span>
             </div>
           </div>
-          
+
           <!-- Tab 2: Todo Area -->
           <div class="todo-tab-content" id="tab-todo-content" style="display: none;">
             <div class="todo-input-row" style="display: flex; gap: 0.4rem; margin-bottom: 0.5rem;">
@@ -331,7 +337,7 @@
       </div>
 
       <div class="blog-layout">
-        
+
         <!-- Blog Main Content (Post list) -->
         <div class="blog-main">
           <div class="blog-search-bar">
@@ -447,7 +453,7 @@
     <!-- SECTION 3: WEB TOOLBOX -->
     <section class="view-section" id="toolbox">
       <div class="toolbox-layout">
-        
+
         <!-- Toolbox Left Sidebar Nav -->
         <aside class="toolbox-sidebar" role="tablist" aria-label="工具箱工具">
           <button type="button" class="tool-nav-btn active" id="tool-tab-json" data-tool="json" role="tab" aria-selected="true" aria-controls="tool-json" tabindex="0">
@@ -486,7 +492,7 @@
 
         <!-- Toolbox Right Active Tool Panel -->
         <div class="glass-card tool-content-wrapper">
-          
+
           <!-- Tool 1: JSON Formatter -->
           <div class="tool-panel active" id="tool-json" role="tabpanel" aria-labelledby="tool-tab-json" tabindex="0">
             <div class="tool-header">
@@ -770,7 +776,7 @@
                   <label for="piano-delay-toggle" style="font-size: 0.85rem; color: var(--text-secondary); cursor: pointer; user-select: none;">空间混响延时特效</label>
                 </div>
               </div>
-              
+
               <div class="piano-keyboard-wrapper" id="piano-wrapper" style="position: relative; height: 200px; width: 100%; max-width: 520px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; margin-bottom: 1rem; transition: height 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column;">
                 <canvas id="rhythm-canvas" width="520" height="160" style="display: none; width: 100%; height: 160px; background: rgba(10, 8, 20, 0.95); border-bottom: 1px solid var(--border-color); box-shadow: inset 0 -10px 20px rgba(0,0,0,0.5);"></canvas>
                 <div class="piano-keyboard" id="piano-keyboard-container" style="position: relative; display: flex; width: 100%; height: 100%; transition: height 0.3s ease;">
@@ -783,7 +789,7 @@
                   <div class="piano-key white-key" data-note="A4" data-key="H" style="width: 12.5%; height: 100%; border-right: 1px solid var(--border-color); cursor: pointer; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 1rem; color: var(--text-muted); font-size: 0.75rem; transition: background 0.1s, box-shadow 0.1s; background: rgba(255,255,255,0.9); user-select: none;"><span>A4<br>(H)</span></div>
                   <div class="piano-key white-key" data-note="B4" data-key="J" style="width: 12.5%; height: 100%; border-right: 1px solid var(--border-color); cursor: pointer; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 1rem; color: var(--text-muted); font-size: 0.75rem; transition: background 0.1s, box-shadow 0.1s; background: rgba(255,255,255,0.9); user-select: none;"><span>B4<br>(J)</span></div>
                   <div class="piano-key white-key" data-note="C5" data-key="K" style="width: 12.5%; height: 100%; cursor: pointer; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 1rem; color: var(--text-muted); font-size: 0.75rem; transition: background 0.1s, box-shadow 0.1s; background: rgba(255,255,255,0.9); user-select: none;"><span>C5<br>(K)</span></div>
-                  
+
                   <!-- Black Keys -->
                   <div class="piano-key black-key" data-note="C#4" data-key="W" style="position: absolute; left: 8.5%; width: 8%; height: 60%; background: #111; z-index: 10; border-radius: 0 0 3px 3px; cursor: pointer; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 0.5rem; color: #aaa; font-size: 0.6rem; transition: background 0.1s, box-shadow 0.1s; user-select: none;"><span>W</span></div>
                   <div class="piano-key black-key" data-note="D#4" data-key="E" style="position: absolute; left: 21%; width: 8%; height: 60%; background: #111; z-index: 10; border-radius: 0 0 3px 3px; cursor: pointer; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 0.5rem; color: #aaa; font-size: 0.6rem; transition: background 0.1s, box-shadow 0.1s; user-select: none;"><span>E</span></div>
@@ -967,10 +973,10 @@
     <!-- SECTION 6: RETRO ARCADE GAME -->
     <section class="view-section" id="game" style="display: none;">
       <div class="arcade-page-container" style="max-width: 900px; margin: 0 auto; padding: 1rem 0;">
-        
+
         <!-- Arcade Cabinet Container -->
         <div class="arcade-cabinet-bezel glass-card" style="border: 2px solid var(--accent); box-shadow: 0 0 25px rgba(139, 92, 246, 0.35); background: rgba(15, 12, 30, 0.95); padding: 1.5rem; border-radius: 12px; position: relative;">
-          
+
           <!-- Cabinet Banner -->
           <div class="arcade-title-banner" style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid rgba(139, 92, 246, 0.3); padding-bottom: 0.8rem; margin-bottom: 1.2rem;">
             <div style="display: flex; align-items: center; gap: 0.6rem; font-size: 1.3rem; font-weight: 800; color: #fff; text-shadow: 0 0 10px var(--accent);">
@@ -981,7 +987,7 @@
               CABINET MODEL V4 · 8-STAGE CAMPAIGN
             </div>
           </div>
-          
+
           <!-- Arcade Dashboard -->
           <div class="arcade-stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.8rem; margin-bottom: 1.2rem; background: rgba(255,255,255,0.02); padding: 0.8rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
             <div class="stat-box" style="display: flex; flex-direction: column; gap: 0.2rem; text-align: center; border-right: 1px solid rgba(255,255,255,0.05); padding: 0 0.4rem;">
@@ -1025,7 +1031,7 @@
               <span id="game-best-time" class="stat-value" style="font-size: 0.95rem; font-weight: 800; color: #F59E0B; font-family: 'JetBrains Mono', monospace;">--</span>
             </div>
           </div>
-          
+
           <!-- Bezel Screen Container -->
           <div class="runner-mission-strip" id="runner-mission-strip" data-state="idle" aria-label="主线任务航线">
             <div class="runner-mission-copy">
@@ -1040,7 +1046,7 @@
           </div>
           <div class="arcade-bezel-screen" style="position: relative; width: 100%; border: 3px solid #1e1b4b; border-radius: 8px; overflow: hidden; background: #000; aspect-ratio: 2/1; display: flex; justify-content: center; align-items: center; box-shadow: inset 0 0 20px rgba(0,0,0,0.8), 0 0 10px rgba(139,92,246,0.15);">
             <canvas id="arcade-canvas" width="800" height="400" style="display: block; width: 100%; height: 100%; image-rendering: pixelated;"></canvas>
-            
+
             <!-- Dynamic Overlay Screen (Start/GameOver/Win) -->
             <div class="arcade-screen-overlay" id="game-overlay-screen" data-runner-overlay-state="start" data-runner-overlay-tone="start" aria-hidden="false" style="position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(10,8,20,0.92); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 1.5rem; z-index: 10;">
               <h2 id="game-overlay-title" style="color: #fff; font-size: 2.3rem; font-weight: 800; margin-bottom: 0.6rem; letter-spacing: 2px; text-shadow: 0 0 15px var(--accent); animation: pulse 2.5s infinite;">CYBER ASTRO-RUNNER</h2>
@@ -1049,7 +1055,7 @@
                 <i data-lucide="play"></i>
                 <span>开始任务</span>
               </button>
-              
+
               <div class="game-instructions-box" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 0.8rem 1.2rem; border-radius: 8px; font-size: 0.76rem; color: var(--text-secondary); line-height: 1.4; text-align: left; max-width: 460px; width: 90%;">
                 <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;"><span style="color: #fff;">左右移动:</span> <span><strong>A / D</strong> 或 <strong>&larr; / &rarr;</strong></span></div>
                 <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;"><span style="color: #fff;">跳跃 / 二段跳:</span> <span><strong>Space</strong> 或 <strong>W</strong></span></div>
@@ -1080,10 +1086,10 @@
               </div>
             </div>
           </div>
-          
+
           <!-- Arcade Cabinet Control Panel -->
           <div class="arcade-control-panel" style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; border-top: 2px solid rgba(139, 92, 246, 0.3); padding-top: 1rem; margin-top: 1.2rem; flex-wrap: wrap;">
-            
+
             <!-- Selectors -->
             <div style="display: flex; gap: 0.8rem; flex-wrap: wrap;">
               <div style="display: flex; flex-direction: column; gap: 0.2rem;">
@@ -1092,7 +1098,7 @@
                   <option value="0">第一关: 宇宙轨道 (Easy)</option>
                 </select>
               </div>
-              
+
               <div style="display: flex; flex-direction: column; gap: 0.2rem;">
                 <label for="game-music-select" style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 600;"><i data-lucide="music" style="width:12px; height:12px; display:inline; vertical-align:middle;"></i> 选择 8-bit BGM</label>
                 <select id="game-music-select" style="background: #111; color: #fff; border: 1px solid var(--border-color); padding: 0.3rem 0.6rem; border-radius: 4px; font-size: 0.8rem; cursor: pointer; outline: none; transition: border 0.2s;">
@@ -1104,7 +1110,7 @@
                 </select>
               </div>
             </div>
-            
+
             <!-- Joystick simulation -->
             <div class="joystick-simulation" style="display: flex; align-items: center; gap: 0.6rem; background: rgba(255,255,255,0.02); padding: 0.4rem 0.8rem; border-radius: 20px; border: 1px solid rgba(255,255,255,0.05);">
               <div style="width: 28px; height: 28px; background: #222; border-radius: 50%; display: flex; justify-content: center; align-items: center; border: 2px solid #555; position: relative;">
@@ -1112,14 +1118,14 @@
               </div>
               <span style="font-size: 0.72rem; color: var(--text-secondary); font-family: monospace;">STICK CONTROL</span>
             </div>
-            
+
             <!-- Action buttons -->
             <div class="runner-touch-pad" id="runner-touch-controls" aria-label="主线游戏触控控制器">
               <span class="runner-gamepad-status" id="runner-gamepad-status" data-tone="idle">PAD 待机</span>
               <button type="button" class="action-btn" id="game-restart-btn" style="height: 32px; font-size: 0.8rem; padding: 0 1rem; border-radius: 4px; border: 1px solid rgba(139,92,246,0.3); background: rgba(139,92,246,0.1); color: #fff; cursor: pointer; display: flex; align-items: center; gap: 0.3rem;">
                 <i data-lucide="rotate-ccw" style="width: 14px; height: 14px;"></i> 重新加载关卡
               </button>
-              
+
               <div class="runner-dpad" aria-label="移动方向">
                 <button type="button" id="btn-left-led" data-runner-control="left" aria-label="向左移动">◀</button>
                 <button type="button" id="btn-right-led" data-runner-control="right" aria-label="向右移动">▶</button>
@@ -1133,9 +1139,9 @@
                 <button type="button" id="btn-bgm-led" data-runner-control="bgm" aria-label="切换音乐">BGM</button>
               </div>
             </div>
-            
+
           </div>
-          
+
         </div>
 
         <div class="arcade-library glass-card">

@@ -216,7 +216,7 @@ function init() {
       id: 'post-1',
       title: '如何构建一个极速的无框架博客？',
       excerpt: '探索现代原生 Web API 的潜能，摆脱重度前端框架依赖，打造秒开的个人网站性能体验。',
-      content: `# 如何构建一个极速的无框架博客？\n\n在现代 Web 开发中，我们经常陷入“框架过载”的境地。为了展示几篇文字和几个交互组件，我们常常打包数百 KB 甚至数 MB 的 JavaScript 代码。\n\n本篇文章将探讨如何回归初心，利用原生 Web 技术的卓越性能，打造极致速度的个人数字花园。\n\n## 为什么选择无框架？\n\n1. **零构建步骤**：你可以直接用文本编辑器编写 HTML、CSS 和 JS，在任何浏览器中双击即可运行。\n2. **瞬时加载 (Instant Load)**：没有复杂的运行时加载、虚拟 DOM 对比或巨大的第三方库。Lighthouse 性能评分轻松拉满 100 分。\n3. **极佳的可读性与复古情怀**：代码干净纯粹，对搜索引擎爬虫极度友好，维护生命周期几乎是无限的。\n\n## 核心技术选型\n\n要实现极致的无框架体验，我们可以依赖以下现代 Web 标准：\n\n- **CSS Grid & Custom Properties (变量)**：轻松解决复杂布局 and 暗黑模式切换。\n- **Vanilla ES6 JavaScript**：用于局部路由管理、交互式小工具及数据同步。\n- **Lucide Icons**：矢量化、轻量级的图标管理方案。\n\n\`\`\`javascript\n// 极简的原生路由实现\nfunction navigateTo(routeId) {\n  document.querySelectorAll('.view-section').forEach(sec => {\n    sec.classList.remove('active');\n  });\n  const target = document.getElementById(routeId);\n  if (target) target.classList.add('active');\n}\n\`\`\`\n\n## 结论\n\n无框架并不是逆行，而是一种对性能、掌控力以及环保编码（Green Coding）的追求。欢迎你在我的工具箱里尝试这些纯原生开发的实用组件！`,
+      content: `# 如何构建一个极速的无框架博客？\n\n在现代 Web 开发中，我们经常陷入“框架过载”的境地。为了展示几篇文字和几个交互组件，我们常常打包数百 KB 甚至数 MB 的 JavaScript 代码。\n\n本篇文章将探讨如何回归初心，利用原生 Web 技术的卓越性能，打造极致速度的个人数字花园。\n\n## 为什么选择无框架？\n\n1. **零构建步骤**：你可以直接用文本编辑器编写 HTML、CSS 和 JS，在任何浏览器中双击即可运行。\n2. **瞬时加载 (Instant Load)**：没有复杂的运行时加载、虚拟 DOM 对比或巨大的第三方库。Lighthouse 性能评分轻松拉满 100 分。\n3. **极佳的可读性与复古情怀**：代码干净纯粹，对搜索引擎爬虫极度友好，维护生命周期几乎是无限的。\n\n## 核心技术选型\n\n要实现极致的无框架体验，我们可以依赖以下现代 Web 标准：\n\n- **CSS Grid & Custom Properties (变量)**：轻松解决复杂布局和暗黑模式切换。\n- **Vanilla ES6 JavaScript**：用于局部路由管理、交互式小工具及数据同步。\n- **Lucide Icons**：矢量化、轻量级的图标管理方案。\n\n\`\`\`javascript\n// 极简的原生路由实现\nfunction navigateTo(routeId) {\n  document.querySelectorAll('.view-section').forEach(sec => {\n    sec.classList.remove('active');\n  });\n  const target = document.getElementById(routeId);\n  if (target) target.classList.add('active');\n}\n\`\`\`\n\n## 结论\n\n无框架并不是逆行，而是一种对性能、掌控力以及环保编码（Green Coding）的追求。欢迎你在我的工具箱里尝试这些纯原生开发的实用组件！`,
       tag: '前端开发',
       date: '2026-05-18',
       readTime: '6 分钟阅读',
@@ -231,8 +231,31 @@ function init() {
       date: '2026-05-15',
       readTime: '8 分钟阅读',
       pinned: true
+    },
+    {
+      id: 'post-3',
+      title: 'Canvas 客户端图像压缩的原理与实战',
+      excerpt: '探讨如何直接在前端对上传的 PNG/JPEG 进行高效压缩并转换为 WebP 格式，减小后端存储负担。',
+      content: `# Canvas 客户端图像压缩的原理与实战\n\n在这个充满高分辨率照片的时代，将几兆大小的图片直接上传到服务器会消耗极大的带宽与存储。为了优化，我们应该在前端对图片先进行一层“预压缩”。\n\n本博客将详解本站“图片 WebP 压缩”工具的核心算法。\n\n## Canvas 图像绘制与读取\n\n压缩的第一步是将用户上传的 File 对象转换为 \`HTMLImageElement\`，并绘制到 \`<canvas>\` 画布上。\n\n\`\`\`javascript\nconst img = new Image();\nimg.src = URL.createObjectURL(file);\nimg.onload = () => {\n  const canvas = document.createElement('canvas');\n  const ctx = canvas.getContext('2d');\n  \n  // 可以根据需要缩放宽高\n  canvas.width = img.naturalWidth;\n  canvas.height = img.naturalHeight;\n  \n  ctx.drawImage(img, 0, 0);\n};\n\`\`\`\n\n## 压缩并转为 WebP\n\nCanvas 提供了一个极其强大的 API：\`toDataURL(type, encoderOptions)\` 或 \`toBlob(callback, type, encoderOptions)\`。\n\n- **type**：目标格式（推荐使用 \`image/webp\`，体积比 JPEG/PNG 小很多）。\n- **encoderOptions**：压缩质量数值，范围从 0.0 到 1.0。\n\n\`\`\`javascript\ncanvas.toBlob((blob) => {\n  // blob 即为压缩后的二进制图片数据\n  const compressedUrl = URL.createObjectURL(blob);\n  // 可提供下载或直接上传\n}, 'image/webp', 0.8); // 0.8 代表 80% 质量\n\`\`\`\n\n## 跨浏览器支持与性能调优\n\n通过这个机制，本站的工具能帮您瞬间将 3MB 的大图压缩到 200KB 左右，且视觉上几乎没有无损压缩痕迹！`,
+      tag: '前端开发',
+      date: '2026-05-10',
+      readTime: '5 分钟阅读',
+      pinned: false
     }
   ];
+
+  function withRequiredDefaultPosts(posts) {
+    const merged = new Map(defaultMockPosts.map(post => [post.id, { ...post }]));
+    (Array.isArray(posts) ? posts : []).filter(Boolean).forEach(post => {
+      if (!post.id) return;
+      merged.set(post.id, { ...merged.get(post.id), ...post });
+    });
+    return [...merged.values()].sort((a, b) => {
+      const pinnedDelta = Number(Boolean(b.pinned)) - Number(Boolean(a.pinned));
+      if (pinnedDelta) return pinnedDelta;
+      return Date.parse(b.date || '') - Date.parse(a.date || '');
+    });
+  }
 
   const defaultMockProjects = [
     {
@@ -696,11 +719,26 @@ function init() {
   let suppressHashSync = false;
 
   function articleRoutePath(postId = '') {
-    return `/?post=${encodeURIComponent(postId || '')}`;
+    return `/posts/${encodeURIComponent(postId || '')}/`;
   }
 
   function articleHref(postId = '') {
     return articleRoutePath(postId);
+  }
+
+  function isSafeArticleId(postId = '') {
+    return /^[A-Za-z0-9_-]{1,80}$/.test(String(postId || ''));
+  }
+
+  function articleIdFromPath(pathname = window.location.pathname) {
+    const match = String(pathname || '').match(/^\/posts\/([^/]+)(?:\/(?:index\.html)?)?$/);
+    if (!match) return '';
+    try {
+      const postId = decodeURIComponent(match[1]);
+      return isSafeArticleId(postId) ? postId : '';
+    } catch {
+      return '';
+    }
   }
 
   const defaultDocumentMeta = {
@@ -803,11 +841,15 @@ function init() {
   function syncLocationHash(targetId, postId = '') {
     if (suppressHashSync) return;
     const nextUrl = new URL(window.location.href);
-    nextUrl.pathname = '/';
-    nextUrl.search = '';
-    nextUrl.hash = targetId === 'blog-reader' && postId ? '' : `#${targetId}`;
     if (targetId === 'blog-reader' && postId) {
-      nextUrl.searchParams.set('post', postId);
+      const articleUrl = new URL(articleRoutePath(postId), window.location.origin);
+      nextUrl.pathname = articleUrl.pathname;
+      nextUrl.search = '';
+      nextUrl.hash = '';
+    } else {
+      nextUrl.pathname = '/';
+      nextUrl.search = '';
+      nextUrl.hash = `#${targetId}`;
     }
     const nextRoute = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`;
     const currentRouteUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
@@ -1883,10 +1925,11 @@ function init() {
   async function loadBlogPosts() {
     try {
       const data = await fetchAPI('/api/posts');
-      blogPosts = Array.isArray(data) ? data.filter(Boolean) : defaultMockPosts;
+      const remotePosts = Array.isArray(data) ? data.filter(Boolean) : [];
+      blogPosts = remotePosts.length ? remotePosts : defaultMockPosts;
     } catch (e) {
       // Fallback
-      blogPosts = getLocalArray('fallback_posts', defaultMockPosts);
+      blogPosts = withRequiredDefaultPosts(getLocalArray('fallback_posts', defaultMockPosts));
     }
     
     // Save locally for fallback
@@ -2497,6 +2540,15 @@ function init() {
 
   function resolveInitialRoute() {
     let rawHash = '';
+    const pathPostId = articleIdFromPath();
+    if (pathPostId) {
+      const canonicalPath = articleRoutePath(pathPostId);
+      if (`${window.location.pathname}${window.location.search}${window.location.hash}` !== canonicalPath) {
+        window.history.replaceState(null, '', canonicalPath);
+      }
+      readArticle(pathPostId);
+      return;
+    }
     try {
       rawHash = decodeURIComponent(window.location.hash || '').replace(/^#/, '');
     } catch {
@@ -2507,6 +2559,9 @@ function init() {
     }
     const queryPostId = new URLSearchParams(window.location.search).get('post');
     if (queryPostId) {
+      if (isSafeArticleId(queryPostId)) {
+        window.history.replaceState(null, '', articleRoutePath(queryPostId));
+      }
       readArticle(queryPostId);
       return;
     }
@@ -3546,7 +3601,7 @@ function init() {
     const imported = new Set(importedKeys);
     if (imported.has('theme')) initTheme();
     if ([...imported].some(key => key.startsWith('atherix_reader_') || key === 'fallback_posts')) {
-      blogPosts = getLocalArray('fallback_posts', blogPosts.length ? blogPosts : defaultMockPosts);
+      blogPosts = withRequiredDefaultPosts(getLocalArray('fallback_posts', blogPosts.length ? blogPosts : defaultMockPosts));
       renderBlogList();
       renderPinnedBlogs();
       renderTagCloud();

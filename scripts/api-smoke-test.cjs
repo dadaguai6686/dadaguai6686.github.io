@@ -1,4 +1,5 @@
 const { spawn, spawnSync } = require('child_process');
+const crypto = require('crypto');
 const fs = require('fs');
 const http = require('http');
 const jwt = require('jsonwebtoken');
@@ -76,6 +77,30 @@ function rawHttpGet(pathname, headers = {}) {
     });
     req.on('error', reject);
   });
+}
+
+function extractArticleJsonLd(html) {
+  const match = String(html || '').match(/<script\s+type="application\/ld\+json">([\s\S]*?)<\/script>/i);
+  assert(match, 'article shell should include JSON-LD structured data');
+  return {
+    raw: match[1],
+    parsed: JSON.parse(match[1])
+  };
+}
+
+function sha256Base64(value) {
+  return crypto.createHash('sha256').update(value).digest('base64');
+}
+
+function cspDirective(header, directive) {
+  return String(header || '')
+    .split(';')
+    .map(part => part.trim())
+    .find(part => part.startsWith(`${directive} `)) || '';
+}
+
+function countOccurrences(text, needle) {
+  return String(text || '').split(needle).length - 1;
 }
 
 async function waitForServer() {
@@ -292,11 +317,12 @@ async function run() {
     assert(serviceWorkerText.includes('/feed.xml') && serviceWorkerText.includes('/sitemap.xml'), 'service worker should precache discovery metadata');
     assert(serviceWorkerText.includes('/assets/atherix-og-card.png') && serviceWorkerText.includes('/assets/atherix-icon-512.png'), 'service worker should precache branded PWA assets');
     assert(serviceWorkerText.includes('/assets/atherix-profile-avatar.png') && serviceWorkerText.includes('/assets/project-bento-dashboard.webp') && serviceWorkerText.includes('/assets/project-arcade-suite.webp'), 'service worker should precache local profile and portfolio visual assets');
-    assert(serviceWorkerText.includes('atherix-static-v84-quality'), 'service worker should use the latest quality cache version');
+    assert(serviceWorkerText.includes('atherix-static-v85-quality'), 'service worker should use the latest quality cache version');
     assert(serviceWorkerText.includes('APP_SHELL_ASSETS') && serviceWorkerText.includes('OPTIONAL_STATIC_ASSETS') && serviceWorkerText.includes('Promise.allSettled'), 'service worker install should keep optional assets from breaking the critical app shell cache');
     assert(serviceWorkerText.includes('canRefreshNavigationShell') && serviceWorkerText.includes('!url.search'), 'service worker should avoid caching article deep-link responses as the generic app shell');
     assert(serviceWorkerText.includes('NAVIGATION_FALLBACK_URL') && serviceWorkerText.includes('navigationPreload') && serviceWorkerText.includes('X-Atherix-Offline-Shell'), 'service worker should provide a navigation-preload offline app shell');
-    assert(serviceWorkerText.includes('/style.css?v=20260608-quality-v14') && serviceWorkerText.includes('/app.js?v=20260608-quality-v41'), 'service worker should precache the latest versioned app assets');
+    assert(serviceWorkerText.includes('/style.css?v=20260608-quality-v14') && serviceWorkerText.includes('/app.js?v=20260608-quality-v42'), 'service worker should precache the latest versioned app assets');
+    assert(serviceWorkerText.includes('STATIC_ARTICLE_PATHS') && serviceWorkerText.includes('/posts/post-1/') && serviceWorkerText.includes('caches.match(request)'), 'service worker should precache canonical article shells and prefer them for offline navigation');
     assert(serviceWorkerText.includes('/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2') && serviceWorkerText.includes('/assets/fonts/outfit-latin-wght-normal.woff2') && serviceWorkerText.includes('/assets/fonts/jetbrains-mono-latin-wght-normal.woff2'), 'service worker should precache bundled local font assets');
     assert(serviceWorkerText.includes('networkFirstCacheFallback') && serviceWorkerText.includes('staleWhileRevalidate') && serviceWorkerText.includes('offlineResponseFor') && serviceWorkerText.includes('cacheResponseQuietly'), 'service worker should use explicit offline-safe caching strategies');
     assert(serviceWorkerText.includes('DISCOVERY_ASSET_PATHS') && serviceWorkerText.includes('/feed.xml') && serviceWorkerText.includes('/sitemap.xml') && serviceWorkerText.includes('/robots.txt'), 'service worker should keep discovery metadata network-first before cache fallback');
@@ -307,8 +333,8 @@ async function run() {
     assert(indexText.includes('rel="canonical" href="https://dadaguai6686.github.io/"'), 'index should expose an absolute canonical URL');
     assert(indexText.includes('type="application/rss+xml"'), 'index should link the RSS feed');
     assert(indexText.includes('href="/style.css') && indexText.includes('src="/app.js') && indexText.includes('src="/lucide.min.js"'), 'local app assets should use root-absolute URLs for deep links');
-    assert(indexText.includes('href="/style.css?v=20260608-quality-v14"') && indexText.includes('src="/app.js?v=20260608-quality-v41"'), 'index should reference the latest versioned app assets');
-    assert(indexText.includes('rel="preload" href="/style.css?v=20260608-quality-v14" as="style"') && indexText.includes('rel="preload" href="/app.js?v=20260608-quality-v41" as="script"') && indexText.includes('rel="preload" href="/lucide.min.js" as="script"'), 'index should preload critical local app assets');
+    assert(indexText.includes('href="/style.css?v=20260608-quality-v14"') && indexText.includes('src="/app.js?v=20260608-quality-v42"'), 'index should reference the latest versioned app assets');
+    assert(indexText.includes('rel="preload" href="/style.css?v=20260608-quality-v14" as="style"') && indexText.includes('rel="preload" href="/app.js?v=20260608-quality-v42" as="script"') && indexText.includes('rel="preload" href="/lucide.min.js" as="script"'), 'index should preload critical local app assets');
     assert(indexText.includes('href="/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2" as="font"') && indexText.includes('href="/assets/fonts/outfit-latin-wght-normal.woff2" as="font"') && indexText.includes('href="/assets/fonts/jetbrains-mono-latin-wght-normal.woff2" as="font"'), 'index should preload bundled local font assets');
     assert(indexText.includes('Atherix 高级街机') && indexText.includes('Premium Arcade Suite') && indexText.includes('高级街机生涯实验室'), 'index shell should present the premium arcade suite before runtime hydration');
     assert(indexText.includes('主线跑酷') && indexText.includes('霓虹漂移') && indexText.includes('裂隙战术') && indexText.includes('战术芯片'), 'index shell should advertise the full seven-line arcade career');
@@ -340,7 +366,7 @@ async function run() {
     const bundledFont = await fetch(`${baseUrl}/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2`);
     const bundledFontBytes = await bundledFont.arrayBuffer();
     assert(bundledFont.status === 200 && bundledFontBytes.byteLength > 10000, 'bundled local web font should be publicly served');
-    const appScript = await fetch(`${baseUrl}/app.js?v=20260608-quality-v41`);
+    const appScript = await fetch(`${baseUrl}/app.js?v=20260608-quality-v42`);
     const appScriptCacheControl = appScript.headers.get('cache-control') || '';
     assert(appScriptCacheControl.includes('max-age=31536000') && appScriptCacheControl.includes('immutable'), 'versioned app script should use long-lived immutable caching');
     const appScriptText = await appScript.text();
@@ -353,21 +379,43 @@ async function run() {
     const compressedStyleSheet = await rawHttpGet('/style.css?v=20260608-quality-v14', { 'Accept-Encoding': 'gzip' });
     assert(compressedStyleSheet.status === 200 && compressedStyleSheet.headers['content-encoding'] === 'gzip', `versioned stylesheet should be gzip-compressed for repeat visits: ${JSON.stringify(compressedStyleSheet.headers)}`);
     assert(compressedStyleSheet.body.length < Buffer.byteLength(styleText, 'utf8') * 0.75, 'compressed stylesheet should be materially smaller than the source CSS');
-    const compressedAppScript = await rawHttpGet('/app.js?v=20260608-quality-v41', { 'Accept-Encoding': 'gzip' });
+    const compressedAppScript = await rawHttpGet('/app.js?v=20260608-quality-v42', { 'Accept-Encoding': 'gzip' });
     assert(compressedAppScript.status === 200 && compressedAppScript.headers['content-encoding'] === 'gzip', `versioned app script should be gzip-compressed for repeat visits: ${JSON.stringify(compressedAppScript.headers)}`);
     assert(compressedAppScript.body.length < Buffer.byteLength(appScriptText, 'utf8') * 0.75, 'compressed app script should be materially smaller than the source JS');
 
-    const articleShell = await fetch(`${baseUrl}/?post=post-1`);
+    const articleCanonicalUrl = 'https://dadaguai6686.github.io/posts/post-1/';
+    const articleShell = await fetch(`${baseUrl}/posts/post-1/`);
     const articleShellText = await articleShell.text();
     assert(articleShell.status === 200 && articleShellText.includes('<title>如何构建一个极速的无框架博客？ - Atherix</title>'), 'article deep links should render an article-specific title');
-    assert(articleShellText.includes('rel="canonical" href="https://dadaguai6686.github.io/?post=post-1"'), 'article deep links should render an article canonical URL');
-    assert(articleShellText.includes('property="og:type" content="article"') && articleShellText.includes('property="og:url" content="https://dadaguai6686.github.io/?post=post-1"'), 'article deep links should render article Open Graph metadata');
+    assert(articleShell.headers.get('cache-control') === 'no-cache', 'article deep links should avoid stale HTML cache');
+    assert(articleShellText.includes(`rel="canonical" href="${articleCanonicalUrl}"`) && countOccurrences(articleShellText, 'rel="canonical"') === 1, 'article deep links should render a single canonical article URL');
+    assert(articleShellText.includes('property="og:type" content="article"') && articleShellText.includes(`property="og:url" content="${articleCanonicalUrl}"`), 'article deep links should render article Open Graph metadata');
     assert(articleShellText.includes('name="twitter:title" content="如何构建一个极速的无框架博客？ - Atherix"'), 'article deep links should render article Twitter metadata');
-    assert(articleShellText.includes('property="article:published_time" content="2026-05-18"') && articleShellText.includes('property="article:tag" content="前端开发"'), 'article deep links should render article publication metadata');
+    assert(articleShellText.includes('property="article:published_time" content="2026-05-18"') && articleShellText.includes('property="article:author" content="Atherix"') && articleShellText.includes('property="article:section" content="前端开发"') && articleShellText.includes('property="article:tag" content="前端开发"'), 'article deep links should render article publication metadata');
+    const articleJsonLd = extractArticleJsonLd(articleShellText);
+    assert(articleJsonLd.parsed['@type'] === 'BlogPosting' && articleJsonLd.parsed.headline === '如何构建一个极速的无框架博客？' && articleJsonLd.parsed.url === articleCanonicalUrl && articleJsonLd.parsed.mainEntityOfPage?.['@id'] === articleCanonicalUrl && articleJsonLd.parsed.image?.[0] === 'https://dadaguai6686.github.io/assets/atherix-og-card.png', `article JSON-LD should describe the canonical blog post: ${JSON.stringify(articleJsonLd.parsed)}`);
+    const articleScriptSrc = cspDirective(articleShell.headers.get('content-security-policy'), 'script-src');
+    assert(articleScriptSrc.includes(`'sha256-${sha256Base64(articleJsonLd.raw)}'`) && !articleScriptSrc.includes("'unsafe-inline'"), `article CSP should allow only the exact JSON-LD hash for inline structured data: ${articleScriptSrc}`);
+
+    const legacyArticleShell = await fetch(`${baseUrl}/?post=post-1`);
+    const legacyArticleShellText = await legacyArticleShell.text();
+    assert(legacyArticleShell.status === 200 && legacyArticleShellText.includes(`rel="canonical" href="${articleCanonicalUrl}"`) && legacyArticleShellText.includes(`property="og:url" content="${articleCanonicalUrl}"`), 'legacy query article URLs should still render but point canonical metadata at /posts/:id/');
+
+    const indexArticleShell = await fetch(`${baseUrl}/index.html?post=post-1`);
+    const indexArticleShellText = await indexArticleShell.text();
+    assert(indexArticleShell.status === 200 && indexArticleShellText.includes(`rel="canonical" href="${articleCanonicalUrl}"`), 'index.html article query deep links should render article metadata');
+
+    const staticArticleShell = await fetch(`${baseUrl}/posts/post-1/index.html`);
+    const staticArticleShellText = await staticArticleShell.text();
+    assert(staticArticleShell.status === 200 && staticArticleShellText.includes(`rel="canonical" href="${articleCanonicalUrl}"`) && extractArticleJsonLd(staticArticleShellText).parsed.url === articleCanonicalUrl, 'article index.html paths should render article metadata');
 
     const invalidArticleShell = await fetch(`${baseUrl}/?post=..%2Fserver`);
     const invalidArticleShellText = await invalidArticleShell.text();
     assert(invalidArticleShell.status === 200 && invalidArticleShellText.includes('<title>Atherix - 个人博客与数字空间</title>') && !invalidArticleShellText.includes('property="og:type" content="article"'), 'invalid article deep links should fall back to the default app shell');
+
+    const missingArticleShell = await fetch(`${baseUrl}/posts/not-found-valid-id/`);
+    const missingArticleShellText = await missingArticleShell.text();
+    assert(missingArticleShell.status === 200 && missingArticleShellText.includes('<title>Atherix - 个人博客与数字空间</title>') && !missingArticleShellText.includes('property="og:type" content="article"'), 'valid but missing canonical article paths should fall back to the default app shell');
 
     const spaRoute = await fetch(`${baseUrl}/blog/deep-link`);
     const spaRouteText = await spaRoute.text();
@@ -423,7 +471,7 @@ async function run() {
     const sitemap = await fetch(`${baseUrl}/sitemap.xml`);
     const sitemapText = await sitemap.text();
     assert(sitemap.status === 200 && sitemapText.includes('<loc>https://dadaguai6686.github.io/</loc>'), 'sitemap should expose an absolute public URL');
-    assert(sitemapText.includes('<loc>https://dadaguai6686.github.io/?post=post-1</loc>'), 'sitemap should expose article discovery URLs');
+    assert(sitemapText.includes('<loc>https://dadaguai6686.github.io/posts/post-1/</loc>'), 'sitemap should expose canonical article discovery URLs');
     assert(sitemap.headers.get('cache-control')?.includes('max-age=300'), 'dynamic sitemap should have a short public cache window');
 
     const robots = await fetch(`${baseUrl}/robots.txt`);
@@ -432,8 +480,8 @@ async function run() {
 
     const feed = await fetch(`${baseUrl}/feed.xml`);
     const feedText = await feed.text();
-    assert(feed.status === 200 && feedText.includes('<rss version="2.0"') && feedText.includes('<link>https://dadaguai6686.github.io/?post=post-1</link>'), 'RSS feed should be publicly served with seeded post links');
-    assert(feedText.includes('<guid isPermaLink="true">https://dadaguai6686.github.io/?post=post-1</guid>'), 'RSS feed should use permalink article GUIDs');
+    assert(feed.status === 200 && feedText.includes('<rss version="2.0"') && feedText.includes('<link>https://dadaguai6686.github.io/posts/post-1/</link>'), 'RSS feed should be publicly served with canonical seeded post links');
+    assert(feedText.includes('<guid isPermaLink="true">https://dadaguai6686.github.io/posts/post-1/</guid>'), 'RSS feed should use permalink article GUIDs');
     assert(feedText.includes('<url>https://dadaguai6686.github.io/assets/atherix-og-card.png</url>'), 'RSS feed should expose the branded channel image');
     assert(feed.headers.get('cache-control')?.includes('max-age=300'), 'dynamic RSS feed should have a short public cache window');
 
@@ -554,6 +602,37 @@ async function run() {
     });
     assert(wrongAlgorithmVerify.status === 403, 'auth verify should reject JWTs signed with unexpected algorithms');
 
+    const maliciousPostId = `smoke-meta-${Date.now()}`;
+    const maliciousPost = await fetch(`${baseUrl}/api/posts`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${loginBody.token}`
+      },
+      body: JSON.stringify({
+        id: maliciousPostId,
+        title: `Smoke $1$2$&$' </title><script>alert(1)</script>`,
+        excerpt: `quoted " onmouseover="alert(1) </script><img src=x onerror=alert(1)>`,
+        content: '# Smoke Unsafe Meta\n\n</script><img src=x onerror=alert(1)>',
+        tag: `测试$&"><script>`,
+        readTime: '1 分钟阅读'
+      })
+    });
+    assert(maliciousPost.status === 200, 'admin should be able to create a post with characters that need safe meta serialization');
+    const maliciousArticle = await fetch(`${baseUrl}/posts/${maliciousPostId}/`);
+    const maliciousArticleText = await maliciousArticle.text();
+    const maliciousJsonLd = extractArticleJsonLd(maliciousArticleText);
+    const maliciousScriptSrc = cspDirective(maliciousArticle.headers.get('content-security-policy'), 'script-src');
+    assert(maliciousArticle.status === 200 && maliciousJsonLd.parsed['@type'] === 'BlogPosting', 'malicious meta smoke article should still render valid structured data');
+    assert((maliciousArticleText.match(/<script\b/gi) || []).length === 3 && !maliciousArticleText.includes('</title><script') && !maliciousArticleText.includes('</script><img'), 'article meta serialization should not allow title/excerpt/script breakout markup');
+    assert(maliciousJsonLd.raw.includes('\\u003C/script') && !maliciousJsonLd.raw.includes('</script>') && maliciousJsonLd.parsed.headline.includes('$1$2$&'), 'JSON-LD should safely encode HTML-breaking characters while preserving literal replacement tokens');
+    assert(maliciousScriptSrc.includes(`'sha256-${sha256Base64(maliciousJsonLd.raw)}'`), 'malicious article JSON-LD should be covered by an exact CSP hash');
+    const deletedMaliciousPost = await fetch(`${baseUrl}/api/posts/${encodeURIComponent(maliciousPostId)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${loginBody.token}` }
+    });
+    assert(deletedMaliciousPost.status === 200, 'malicious meta smoke post should be cleaned up');
+
     const invalidDatePost = await fetch(`${baseUrl}/api/posts`, {
       method: 'POST',
       headers: {
@@ -619,8 +698,8 @@ async function run() {
     const discoveryCreatedFeedText = await discoveryCreatedFeed.text();
     const discoveryCreatedSitemap = await fetch(`${baseUrl}/sitemap.xml`);
     const discoveryCreatedSitemapText = await discoveryCreatedSitemap.text();
-    assert(discoveryCreatedFeedText.includes(`<link>https://dadaguai6686.github.io/?post=${smokePostId}</link>`) && discoveryCreatedFeedText.includes('<title>Smoke Test Draft</title>'), 'dynamic RSS feed should include newly created admin posts');
-    assert(discoveryCreatedSitemapText.includes(`<loc>https://dadaguai6686.github.io/?post=${smokePostId}</loc>`), 'dynamic sitemap should include newly created admin posts');
+    assert(discoveryCreatedFeedText.includes(`<link>https://dadaguai6686.github.io/posts/${smokePostId}/</link>`) && discoveryCreatedFeedText.includes('<title>Smoke Test Draft</title>'), 'dynamic RSS feed should include newly created admin posts');
+    assert(discoveryCreatedSitemapText.includes(`<loc>https://dadaguai6686.github.io/posts/${smokePostId}/</loc>`), 'dynamic sitemap should include newly created admin posts');
 
     const updatedPostWithoutDate = await fetch(`${baseUrl}/api/posts/${encodeURIComponent(smokePostId)}`, {
       method: 'PUT',
@@ -664,7 +743,7 @@ async function run() {
     const discoveryUpdatedSitemap = await fetch(`${baseUrl}/sitemap.xml`);
     const discoveryUpdatedSitemapText = await discoveryUpdatedSitemap.text();
     assert(discoveryUpdatedFeedText.includes('<title>Smoke Test Draft Updated</title>') && discoveryUpdatedFeedText.includes('<description>updated draft</description>'), 'dynamic RSS feed should reflect updated post titles and excerpts');
-    assert(discoveryUpdatedSitemapText.includes(`<loc>https://dadaguai6686.github.io/?post=${smokePostId}</loc>`) && discoveryUpdatedSitemapText.includes(`<lastmod>${createdSmokePost.date}</lastmod>`), 'dynamic sitemap should preserve the article URL and original lastmod after date-less edits');
+    assert(discoveryUpdatedSitemapText.includes(`<loc>https://dadaguai6686.github.io/posts/${smokePostId}/</loc>`) && discoveryUpdatedSitemapText.includes(`<lastmod>${createdSmokePost.date}</lastmod>`), 'dynamic sitemap should preserve the article URL and original lastmod after date-less edits');
 
     const deletedPost = await fetch(`${baseUrl}/api/posts/${encodeURIComponent(smokePostId)}`, {
       method: 'DELETE',

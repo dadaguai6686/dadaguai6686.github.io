@@ -1,15 +1,21 @@
-const CACHE_VERSION = 'atherix-static-v84-quality';
+const CACHE_VERSION = 'atherix-static-v85-quality';
 const NAVIGATION_FALLBACK_URL = '/index.html';
 const DISCOVERY_ASSET_PATHS = new Set(['/feed.xml', '/sitemap.xml', '/robots.txt']);
+const STATIC_ARTICLE_PATHS = [
+  '/posts/post-1/',
+  '/posts/post-2/',
+  '/posts/post-3/'
+];
 const APP_SHELL_ASSETS = [
   '/',
   NAVIGATION_FALLBACK_URL,
   '/style.css?v=20260608-quality-v14',
-  '/app.js?v=20260608-quality-v41',
+  '/app.js?v=20260608-quality-v42',
   '/lucide.min.js',
   '/manifest.webmanifest',
   '/sitemap.xml',
-  '/feed.xml'
+  '/feed.xml',
+  ...STATIC_ARTICLE_PATHS
 ];
 const OPTIONAL_STATIC_ASSETS = [
   '/assets/atherix-icon.svg',
@@ -140,7 +146,7 @@ async function navigationFallback(preloadResponse, request) {
     if (canRefreshShell) cacheResponseQuietly(NAVIGATION_FALLBACK_URL, response);
     return response;
   } catch {
-    const cached = await caches.match(NAVIGATION_FALLBACK_URL) || await caches.match('/');
+    const cached = await caches.match(request) || await caches.match(NAVIGATION_FALLBACK_URL) || await caches.match('/');
     if (cached) {
       const body = await cached.text();
       const headers = new Headers(cached.headers);
