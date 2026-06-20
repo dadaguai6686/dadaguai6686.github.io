@@ -3688,6 +3688,16 @@ async function run() {
       medalCards: document.querySelectorAll('#premium-career-medals .career-medal-card').length,
       achievements: document.querySelectorAll('#premium-career-achievements .career-achievement').length,
       unlocked: document.querySelectorAll('#premium-career-achievements .career-achievement.is-unlocked').length,
+      groups: Array.from(document.querySelectorAll('#premium-career-achievements .career-achievement-group')).map(group => ({
+        id: group.getAttribute('data-achievement-group') || '',
+        label: group.querySelector('.career-achievement-group-head strong')?.textContent || '',
+        countText: group.querySelector('.career-achievement-group-head b')?.textContent || '',
+        cards: group.querySelectorAll('.career-achievement').length,
+        unlocked: group.querySelectorAll('.career-achievement.is-unlocked').length,
+        progress: group.querySelectorAll('.career-achievement-progress i').length
+      })),
+      inViewport: rect ? rect.top >= 0 && rect.left >= 0 && rect.bottom <= window.innerHeight && rect.right <= window.innerWidth : false,
+      cardRect: rect ? { top: Math.round(rect.top), left: Math.round(rect.left), bottom: Math.round(rect.bottom), right: Math.round(rect.right) } : null,
       visibleInViewport: dialog ? getComputedStyle(dialog).display !== 'none' : false,
       horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
     };
@@ -3850,7 +3860,7 @@ async function run() {
       swHasNavigationPreload: swText.includes('navigationPreload'),
       swHasOfflineShellHeader: swText.includes('X-Atherix-Offline-Shell'),
       swHasFallbackUrl: swText.includes('NAVIGATION_FALLBACK_URL'),
-      swHasQualityVersion: swText.includes('atherix-static-v92-quality') && swText.includes('/style.css?v=20260609-quality-v20') && swText.includes('/app.js?v=20260609-quality-v49'),
+      swHasQualityVersion: swText.includes('atherix-static-v94-quality') && swText.includes('/style.css?v=20260609-quality-v21') && swText.includes('/app.js?v=20260609-quality-v51'),
       swHasNetworkFirstDiscovery: swText.includes('DISCOVERY_ASSET_PATHS') && swText.includes('/feed.xml') && swText.includes('/sitemap.xml') && swText.includes('/robots.txt'),
       swHasLocalProjectAssets: swText.includes('/assets/project-bento-dashboard.webp') && swText.includes('/assets/project-arcade-suite.webp'),
       swHasLocalFonts: swText.includes('/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2') && swText.includes('/assets/fonts/outfit-latin-wght-normal.woff2') && swText.includes('/assets/fonts/jetbrains-mono-latin-wght-normal.woff2')
@@ -5041,7 +5051,11 @@ async function run() {
     `heist lockdown should become a recorded defeat with blocked movement and replayable coaching: ${JSON.stringify(heistLockdownState)}`
   );
   assert(careerDialogState.open && careerDialogState.ariaHidden === 'false', `career dialog should open: ${JSON.stringify(careerDialogState)}`);
-  assert(careerDialogState.medalCards >= 7 && careerDialogState.achievements >= 16 && careerDialogState.unlocked >= 1, `career dialog should show medals and achievements: ${JSON.stringify(careerDialogState)}`);
+  const careerAchievementGroupTotal = (careerDialogState.groups || []).reduce((sum, group) => sum + Number(group.cards || 0), 0);
+  const careerAchievementUnlockedTotal = (careerDialogState.groups || []).reduce((sum, group) => sum + Number(group.unlocked || 0), 0);
+  assert(careerDialogState.medalCards >= 7 && careerDialogState.achievements === 40 && careerDialogState.unlocked >= 1, `career dialog should show all medals and the complete achievement codex: ${JSON.stringify(careerDialogState)}`);
+  assert(careerDialogState.inViewport, `career dialog should open as an actual viewport modal: ${JSON.stringify(careerDialogState)}`);
+  assert((careerDialogState.groups || []).length >= 8 && careerAchievementGroupTotal === 40 && careerAchievementUnlockedTotal === careerDialogState.unlocked && (careerDialogState.groups || []).every(group => group.id && group.label && /^\d+\/\d+$/.test(group.countText) && group.cards >= 2 && group.progress === 1), `career dialog should group the full achievement codex with readable progress: ${JSON.stringify(careerDialogState)}`);
   assert(/RANK/.test(careerDialogState.summary) && careerDialogState.daily.length > 10 && careerDialogState.visibleInViewport && !careerDialogState.horizontalOverflow, `career dialog should show readable summary and daily challenge: ${JSON.stringify(careerDialogState)}`);
   assert(!careerDialogClosed.open && careerDialogClosed.ariaHidden === 'true', `career dialog should close cleanly: ${JSON.stringify(careerDialogClosed)}`);
   const chainCursorBefore = chainKeyboardState.before?.cursor || {};

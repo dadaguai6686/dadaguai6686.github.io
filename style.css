@@ -7434,16 +7434,141 @@ body.command-open {
 
 .career-dialog-achievements {
   display: grid;
+  gap: 0.75rem;
+  max-height: min(46vh, 460px);
+  overflow: auto;
+  padding-right: 0.18rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(34, 211, 238, 0.55) rgba(15, 23, 42, 0.35);
+}
+
+.career-achievement-group {
+  --achievement-accent: #38bdf8;
+  border: 1px solid color-mix(in srgb, var(--achievement-accent) 38%, transparent);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--achievement-accent) 12%, transparent), transparent 48%),
+    rgba(15, 23, 42, 0.58);
+  overflow: hidden;
+}
+
+.career-achievement-group-survivor {
+  --achievement-accent: #34d399;
+}
+
+.career-achievement-group-boss {
+  --achievement-accent: #fb7185;
+}
+
+.career-achievement-group-drift,
+.career-achievement-group-runner {
+  --achievement-accent: #22d3ee;
+}
+
+.career-achievement-group-heist {
+  --achievement-accent: #a78bfa;
+}
+
+.career-achievement-group-chain {
+  --achievement-accent: #fbbf24;
+}
+
+.career-achievement-group-tactics {
+  --achievement-accent: #60a5fa;
+}
+
+.career-achievement-group-meta {
+  --achievement-accent: #f472b6;
+}
+
+.career-achievement-group-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.75rem;
+  padding: 0.72rem 0.78rem 0.55rem;
+}
+
+.career-achievement-group-head span {
+  display: block;
+  color: color-mix(in srgb, var(--achievement-accent) 72%, #ffffff);
+  font-size: 0.64rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.career-achievement-group-head strong {
+  display: block;
+  margin-top: 0.16rem;
+  color: #f8fafc;
+  font-size: 0.94rem;
+}
+
+.career-achievement-group-head small {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+.career-achievement-group-head b {
+  min-width: 46px;
+  border: 1px solid color-mix(in srgb, var(--achievement-accent) 40%, transparent);
+  border-radius: 999px;
+  padding: 0.18rem 0.42rem;
+  background: color-mix(in srgb, var(--achievement-accent) 14%, rgba(15, 23, 42, 0.7));
+  color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+.career-achievement-progress {
+  height: 4px;
+  margin: 0 0.78rem 0.68rem;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+  overflow: hidden;
+}
+
+.career-achievement-progress i {
+  display: block;
+  width: var(--achievement-progress, 0%);
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--achievement-accent), #f8fafc);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--achievement-accent) 44%, transparent);
+}
+
+.career-achievement-list {
+  display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.5rem;
+  gap: 0.48rem;
+  padding: 0 0.65rem 0.68rem;
 }
 
 .career-achievement {
-  min-height: 52px;
-  padding: 0.55rem 0.65rem;
+  min-height: 78px;
+  padding: 0.58rem 0.62rem;
   border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 8px;
   background: rgba(15, 23, 42, 0.5);
+}
+
+.career-achievement-state {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin-bottom: 0.28rem;
+  border-radius: 999px;
+  padding: 0.1rem 0.34rem;
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.58rem;
+  font-weight: 900;
 }
 
 .career-achievement b,
@@ -7465,11 +7590,18 @@ body.command-open {
 
 .career-achievement.is-unlocked {
   border-color: rgba(52, 211, 153, 0.32);
-  background: rgba(52, 211, 153, 0.08);
+  background:
+    radial-gradient(circle at top right, rgba(52, 211, 153, 0.16), transparent 48%),
+    rgba(52, 211, 153, 0.08);
 }
 
 .career-achievement.is-unlocked b {
   color: #d1fae5;
+}
+
+.career-achievement.is-unlocked .career-achievement-state {
+  background: rgba(52, 211, 153, 0.16);
+  color: #bbf7d0;
 }
 
 .mini-game-tabs {
@@ -8861,6 +8993,13 @@ body.command-open {
   .career-dialog-grid,
   .career-dialog-achievements {
     grid-template-columns: 1fr;
+  }
+  .career-achievement-list {
+    grid-template-columns: 1fr;
+  }
+  .career-achievement-group-head {
+    gap: 0.55rem;
+    padding-inline: 0.68rem;
   }
   .premium-career-heading h3 {
     font-size: 1.32rem;

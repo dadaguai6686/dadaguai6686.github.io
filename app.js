@@ -1230,8 +1230,14 @@ function init() {
     document.body.classList.add('command-open');
     renderCommandResults();
     restoreFocusTo(commandSearchInput);
-    requestAnimationFrame(() => restoreFocusTo(commandSearchInput));
-    setTimeout(() => restoreFocusTo(commandSearchInput), 80);
+    requestAnimationFrame(() => {
+      if (commandPalette.getAttribute('aria-hidden') === 'true') return;
+      restoreFocusTo(commandSearchInput);
+    });
+    setTimeout(() => {
+      if (commandPalette.getAttribute('aria-hidden') === 'true') return;
+      restoreFocusTo(commandSearchInput);
+    }, 80);
   }
 
   function closeCommandPalette(options = {}) {
@@ -1469,6 +1475,7 @@ function init() {
     modalEl.setAttribute('aria-hidden', 'false');
     modalEl.style.display = 'flex';
     setTimeout(() => {
+      if (modalEl.getAttribute('aria-hidden') === 'true') return;
       modalEl.classList.add('active');
       focusInitialElement(modalEl);
     }, 50);
@@ -6059,6 +6066,69 @@ function init() {
       { id: 'daily_clear', label: '今日制霸', desc: '完成每日街机挑战' },
       { id: 'league_clear', label: '联赛冠军', desc: '完成一条每日挑战联赛路线' }
     ];
+    const achievementDefById = new Map(achievementDefs.map(def => [def.id, def]));
+    const achievementGroups = [
+      {
+        id: 'runner',
+        label: '主线远征',
+        kicker: 'CAMPAIGN',
+        summary: '航线合约、最终星门与主线通关节奏。',
+        ids: ['runner_contract', 'runner_final']
+      },
+      {
+        id: 'survivor',
+        label: '星核幸存者',
+        kicker: 'SURVIVAL',
+        summary: '构筑升级、90 秒生存、异常事件与精英赏金。',
+        ids: ['survivor_level_4', 'survivor_90', 'survivor_anomaly', 'survivor_bounty', 'survivor_synergy']
+      },
+      {
+        id: 'boss',
+        label: '棱镜 Boss',
+        kicker: 'DUEL',
+        summary: '相位转换、擦弹专注、破盾与处决窗口。',
+        ids: ['boss_phase_2', 'boss_clear', 'boss_focus_surge', 'boss_counter_chain', 'boss_prism_shatter', 'boss_overbreak']
+      },
+      {
+        id: 'drift',
+        label: '霓虹漂移',
+        kicker: 'VELOCITY',
+        summary: '完赛、零损、赞助合约、贴边与尾流窗口。',
+        ids: ['drift_clear', 'drift_clean', 'drift_combo', 'drift_sponsor', 'drift_near_miss', 'drift_slipstream']
+      },
+      {
+        id: 'heist',
+        label: '赛博潜入',
+        kicker: 'STEALTH',
+        summary: '隐身、缓存、终端协议、制服与幽影扫荡。',
+        ids: ['heist_ghost', 'heist_clean', 'heist_cache', 'heist_protocol', 'heist_takedown', 'heist_ghost_sweep']
+      },
+      {
+        id: 'chain',
+        label: '连锁炼金',
+        kicker: 'ALCHEMY',
+        summary: '大连锁、配方、共鸣与大师炼成爆发。',
+        ids: ['chain_combo_9', 'chain_recipe', 'chain_resonance', 'chain_masterwork', 'chain_clear']
+      },
+      {
+        id: 'tactics',
+        label: '裂隙战术',
+        kicker: 'TACTICS',
+        summary: '撤离路线、清场、相位超载与指挥矩阵。',
+        ids: ['tactics_clear', 'tactics_sweep', 'tactics_clean', 'tactics_surge', 'tactics_counter', 'tactics_command']
+      },
+      {
+        id: 'meta',
+        label: '赛季荣誉',
+        kicker: 'LEGACY',
+        summary: '宿敌、契约、每日挑战与联赛冠军。',
+        ids: ['rival_defeat', 'contract_clear', 'daily_clear', 'league_clear']
+      }
+    ];
+    const achievementGroupById = new Map();
+    achievementGroups.forEach(group => {
+      group.ids.forEach(id => achievementGroupById.set(id, group.id));
+    });
     const dailyChallenges = [
       { id: 'survivor_1200', label: '星核幸存者得分 1200+', game: 'survivor', target: 1200, check: (game, score) => game === 'survivor' && score >= 1200 },
       { id: 'boss_900', label: '棱镜 Boss 得分 900+', game: 'boss', target: 900, check: (game, score) => game === 'boss' && score >= 900 },
@@ -8400,15 +8470,54 @@ function init() {
         }).join('');
       }
       if (achievementsEl) {
-        achievementsEl.innerHTML = achievementDefs.map(def => {
-          const unlocked = career.achievements.includes(def.id);
+        const unlockedSet = new Set(career.achievements || []);
+        const groupedHtml = achievementGroups.map(group => {
+          const defs = group.ids.map(id => achievementDefById.get(id)).filter(Boolean);
+          const unlockedInGroup = defs.filter(def => unlockedSet.has(def.id)).length;
+          const progress = defs.length ? Math.round((unlockedInGroup / defs.length) * 100) : 0;
           return `
-            <span class="career-achievement ${unlocked ? 'is-unlocked' : 'is-locked'}" title="${escapeHTML(def.desc)}">
-              <b>${escapeHTML(def.label)}</b>
-              <small>${escapeHTML(unlocked ? '已解锁' : def.desc)}</small>
-            </span>
+            <section class="career-achievement-group career-achievement-group-${escapeHTML(group.id)}" data-achievement-group="${escapeHTML(group.id)}" aria-label="${escapeHTML(group.label)} ${unlockedInGroup}/${defs.length}">
+              <div class="career-achievement-group-head">
+                <div>
+                  <span>${escapeHTML(group.kicker)}</span>
+                  <strong>${escapeHTML(group.label)}</strong>
+                  <small>${escapeHTML(group.summary)}</small>
+                </div>
+                <b>${unlockedInGroup}/${defs.length}</b>
+              </div>
+              <div class="career-achievement-progress" aria-hidden="true">
+                <i style="--achievement-progress: ${progress}%"></i>
+              </div>
+              <div class="career-achievement-list">
+                ${defs.map(def => {
+                  const unlocked = unlockedSet.has(def.id);
+                  return `
+                    <article class="career-achievement ${unlocked ? 'is-unlocked' : 'is-locked'}" data-achievement-id="${escapeHTML(def.id)}" data-achievement-state="${unlocked ? 'unlocked' : 'locked'}" title="${escapeHTML(def.desc)}">
+                      <span class="career-achievement-state">${unlocked ? 'UNLOCKED' : 'LOCKED'}</span>
+                      <b>${escapeHTML(def.label)}</b>
+                      <small>${escapeHTML(unlocked ? '已解锁' : def.desc)}</small>
+                    </article>
+                  `;
+                }).join('')}
+              </div>
+            </section>
           `;
         }).join('');
+        const orphanHtml = achievementDefs
+          .filter(def => !achievementGroupById.has(def.id))
+          .map(def => {
+            const unlocked = unlockedSet.has(def.id);
+            return `
+              <article class="career-achievement ${unlocked ? 'is-unlocked' : 'is-locked'}" data-achievement-id="${escapeHTML(def.id)}" data-achievement-state="${unlocked ? 'unlocked' : 'locked'}" title="${escapeHTML(def.desc)}">
+                <span class="career-achievement-state">${unlocked ? 'UNLOCKED' : 'LOCKED'}</span>
+                <b>${escapeHTML(def.label)}</b>
+                <small>${escapeHTML(unlocked ? '已解锁' : def.desc)}</small>
+              </article>
+            `;
+          }).join('');
+        achievementsEl.innerHTML = orphanHtml
+          ? `${groupedHtml}<section class="career-achievement-group career-achievement-group-meta">${orphanHtml}</section>`
+          : groupedHtml;
       }
     }
 
@@ -8610,6 +8719,10 @@ function init() {
     const careerDialog = document.getElementById('premium-career-dialog');
     const careerOpenBtn = document.getElementById('premium-career-open');
     const careerCloseBtn = document.getElementById('premium-career-close');
+
+    if (careerDialog && careerDialog.parentElement !== document.body) {
+      document.body.appendChild(careerDialog);
+    }
 
     function setCareerDialogOpen(open) {
       if (!careerDialog) return;
@@ -19795,6 +19908,7 @@ function init() {
 
   function setPauseOverlayVisible(visible) {
     if (!gamePauseOverlay) return;
+    if (!visible) moveFocusBeforeHiding(gamePauseOverlay, [gameLauncherCard, mainContent]);
     gamePauseOverlay.style.display = visible ? 'flex' : 'none';
     gamePauseOverlay.setAttribute('aria-hidden', visible ? 'false' : 'true');
   }
@@ -19869,7 +19983,10 @@ function init() {
     safeCreateIcons(gameOverlay);
     updateRunnerMissionStrip();
     if (focusAction && gameOverlayAction) {
-      setTimeout(() => gameOverlayAction.focus({ preventScroll: true }), 0);
+      setTimeout(() => {
+        if (gameOverlay.getAttribute('aria-hidden') === 'true' || gameOverlay.style.display === 'none') return;
+        gameOverlayAction.focus({ preventScroll: true });
+      }, 0);
     }
   }
 

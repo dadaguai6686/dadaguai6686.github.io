@@ -317,11 +317,11 @@ async function run() {
     assert(serviceWorkerText.includes('/feed.xml') && serviceWorkerText.includes('/sitemap.xml'), 'service worker should precache discovery metadata');
     assert(serviceWorkerText.includes('/assets/atherix-og-card.png') && serviceWorkerText.includes('/assets/atherix-icon-512.png'), 'service worker should precache branded PWA assets');
     assert(serviceWorkerText.includes('/assets/atherix-profile-avatar.png') && serviceWorkerText.includes('/assets/project-bento-dashboard.webp') && serviceWorkerText.includes('/assets/project-arcade-suite.webp'), 'service worker should precache local profile and portfolio visual assets');
-    assert(serviceWorkerText.includes('atherix-static-v92-quality'), 'service worker should use the latest quality cache version');
+    assert(serviceWorkerText.includes('atherix-static-v94-quality'), 'service worker should use the latest quality cache version');
     assert(serviceWorkerText.includes('APP_SHELL_ASSETS') && serviceWorkerText.includes('OPTIONAL_STATIC_ASSETS') && serviceWorkerText.includes('Promise.allSettled'), 'service worker install should keep optional assets from breaking the critical app shell cache');
     assert(serviceWorkerText.includes('canRefreshNavigationShell') && serviceWorkerText.includes('!url.search'), 'service worker should avoid caching article deep-link responses as the generic app shell');
     assert(serviceWorkerText.includes('NAVIGATION_FALLBACK_URL') && serviceWorkerText.includes('navigationPreload') && serviceWorkerText.includes('X-Atherix-Offline-Shell'), 'service worker should provide a navigation-preload offline app shell');
-    assert(serviceWorkerText.includes('/style.css?v=20260609-quality-v20') && serviceWorkerText.includes('/app.js?v=20260609-quality-v49'), 'service worker should precache the latest versioned app assets');
+    assert(serviceWorkerText.includes('/style.css?v=20260609-quality-v21') && serviceWorkerText.includes('/app.js?v=20260609-quality-v51'), 'service worker should precache the latest versioned app assets');
     assert(serviceWorkerText.includes('STATIC_ARTICLE_PATHS') && serviceWorkerText.includes('/posts/post-1/') && serviceWorkerText.includes('caches.match(request)'), 'service worker should precache canonical article shells and prefer them for offline navigation');
     assert(serviceWorkerText.includes('/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2') && serviceWorkerText.includes('/assets/fonts/outfit-latin-wght-normal.woff2') && serviceWorkerText.includes('/assets/fonts/jetbrains-mono-latin-wght-normal.woff2'), 'service worker should precache bundled local font assets');
     assert(serviceWorkerText.includes('networkFirstCacheFallback') && serviceWorkerText.includes('staleWhileRevalidate') && serviceWorkerText.includes('offlineResponseFor') && serviceWorkerText.includes('cacheResponseQuietly'), 'service worker should use explicit offline-safe caching strategies');
@@ -333,12 +333,12 @@ async function run() {
     assert(indexText.includes('rel="canonical" href="https://dadaguai6686.github.io/"'), 'index should expose an absolute canonical URL');
     assert(indexText.includes('type="application/rss+xml"'), 'index should link the RSS feed');
     assert(indexText.includes('href="/style.css') && indexText.includes('src="/app.js') && indexText.includes('src="/lucide.min.js"'), 'local app assets should use root-absolute URLs for deep links');
-    assert(indexText.includes('href="/style.css?v=20260609-quality-v20"') && indexText.includes('src="/app.js?v=20260609-quality-v49"'), 'index should reference the latest versioned app assets');
-    assert(indexText.includes('rel="preload" href="/style.css?v=20260609-quality-v20" as="style"') && indexText.includes('rel="preload" href="/app.js?v=20260609-quality-v49" as="script"') && indexText.includes('rel="preload" href="/lucide.min.js" as="script"'), 'index should preload critical local app assets');
+    assert(indexText.includes('href="/style.css?v=20260609-quality-v21"') && indexText.includes('src="/app.js?v=20260609-quality-v51"'), 'index should reference the latest versioned app assets');
+    assert(indexText.includes('rel="preload" href="/style.css?v=20260609-quality-v21" as="style"') && indexText.includes('rel="preload" href="/app.js?v=20260609-quality-v51" as="script"') && indexText.includes('rel="preload" href="/lucide.min.js" as="script"'), 'index should preload critical local app assets');
     assert(indexText.includes('href="/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2" as="font"') && indexText.includes('href="/assets/fonts/outfit-latin-wght-normal.woff2" as="font"') && indexText.includes('href="/assets/fonts/jetbrains-mono-latin-wght-normal.woff2" as="font"'), 'index should preload bundled local font assets');
     assert(indexText.includes('Atherix 高级街机') && indexText.includes('Premium Arcade Suite') && indexText.includes('高级街机生涯实验室'), 'index shell should present the premium arcade suite before runtime hydration');
     assert(indexText.includes('主线跑酷') && indexText.includes('霓虹漂移') && indexText.includes('裂隙战术') && indexText.includes('战术芯片'), 'index shell should advertise the full seven-line arcade career');
-    assert(indexText.includes('<strong>35</strong>成就'), 'index shell should expose the current arcade achievement count');
+    assert(indexText.includes('<strong>40</strong>成就'), 'index shell should expose the current arcade achievement count');
     assert(indexText.includes('arcade-shell-mode-card') && indexText.includes('Cyber Astro-Runner') && indexText.includes('Rift Tactics'), 'index shell should include premium arcade mode cards');
     assert(indexText.includes('class="nav-item active" data-target="home" aria-label="打开首页"') && indexText.includes('data-target="game" aria-label="打开街机游戏"') && indexText.includes('data-target="guestbook" aria-label="打开留言"'), 'mobile nav buttons should keep explicit accessible labels when text is hidden');
     assert(indexText.includes('type="search" class="blog-search-input" id="blog-search"') && indexText.includes('aria-label="搜索文章标题、简介或内容"') && indexText.includes('autocomplete="off"'), 'blog search should be a labelled search input, not placeholder-only text');
@@ -353,7 +353,7 @@ async function run() {
     assert(indexText.includes('rel="apple-touch-icon" href="/assets/atherix-icon-192.png"'), 'index should expose an Apple touch icon');
     assert(indexText.includes('data-target="home" aria-label="打开首页" title="首页" aria-current="page"'), 'home navigation should expose aria-current on the static shell');
 
-    const styleSheet = await fetch(`${baseUrl}/style.css?v=20260609-quality-v20`);
+    const styleSheet = await fetch(`${baseUrl}/style.css?v=20260609-quality-v21`);
     const styleCacheControl = styleSheet.headers.get('cache-control') || '';
     assert(styleCacheControl.includes('max-age=31536000') && styleCacheControl.includes('immutable'), 'versioned stylesheet should use long-lived immutable caching');
     const styleText = await styleSheet.text();
@@ -367,7 +367,7 @@ async function run() {
     const bundledFont = await fetch(`${baseUrl}/assets/fonts/plus-jakarta-sans-latin-wght-normal.woff2`);
     const bundledFontBytes = await bundledFont.arrayBuffer();
     assert(bundledFont.status === 200 && bundledFontBytes.byteLength > 10000, 'bundled local web font should be publicly served');
-    const appScript = await fetch(`${baseUrl}/app.js?v=20260609-quality-v49`);
+    const appScript = await fetch(`${baseUrl}/app.js?v=20260609-quality-v51`);
     const appScriptCacheControl = appScript.headers.get('cache-control') || '';
     assert(appScriptCacheControl.includes('max-age=31536000') && appScriptCacheControl.includes('immutable'), 'versioned app script should use long-lived immutable caching');
     const appScriptText = await appScript.text();
@@ -378,10 +378,10 @@ async function run() {
     assert(appScriptText.includes('premiumRestartConfirmMs') && appScriptText.includes('CONFIRM RESTART') && appScriptText.includes('restartRequest: () =>'), 'premium arcade realtime restarts should require an explicit confirmation step');
     assert(appScriptText.includes('normalizeCareerState') && appScriptText.includes('normalizeCareerRuns') && appScriptText.includes('persistNormalizedCareer'), 'premium arcade career imports should be normalized before use');
     assert(serverText.includes('loginDummyPasswordHash') && serverText.includes('user?.password || loginDummyPasswordHash') && serverText.includes('!user || !passwordIsValid'), 'login should use a dummy bcrypt hash for missing users to reduce username-enumeration timing leaks');
-    const compressedStyleSheet = await rawHttpGet('/style.css?v=20260609-quality-v20', { 'Accept-Encoding': 'gzip' });
+    const compressedStyleSheet = await rawHttpGet('/style.css?v=20260609-quality-v21', { 'Accept-Encoding': 'gzip' });
     assert(compressedStyleSheet.status === 200 && compressedStyleSheet.headers['content-encoding'] === 'gzip', `versioned stylesheet should be gzip-compressed for repeat visits: ${JSON.stringify(compressedStyleSheet.headers)}`);
     assert(compressedStyleSheet.body.length < Buffer.byteLength(styleText, 'utf8') * 0.75, 'compressed stylesheet should be materially smaller than the source CSS');
-    const compressedAppScript = await rawHttpGet('/app.js?v=20260609-quality-v49', { 'Accept-Encoding': 'gzip' });
+    const compressedAppScript = await rawHttpGet('/app.js?v=20260609-quality-v51', { 'Accept-Encoding': 'gzip' });
     assert(compressedAppScript.status === 200 && compressedAppScript.headers['content-encoding'] === 'gzip', `versioned app script should be gzip-compressed for repeat visits: ${JSON.stringify(compressedAppScript.headers)}`);
     assert(compressedAppScript.body.length < Buffer.byteLength(appScriptText, 'utf8') * 0.75, 'compressed app script should be materially smaller than the source JS');
 
@@ -421,7 +421,7 @@ async function run() {
     const staticArticleShellText = await staticArticleShell.text();
     assert(staticArticleShell.status === 200 && staticArticleShellText.includes(`rel="canonical" href="${articleCanonicalUrl}"`) && extractArticleJsonLd(staticArticleShellText).parsed.url === articleCanonicalUrl, 'article index.html paths should render article metadata');
     const generatedStaticArticleText = fs.readFileSync(path.resolve(__dirname, '..', 'posts', 'post-1', 'index.html'), 'utf8');
-    assert(generatedStaticArticleText.includes('id="article-ssr-shell"') && generatedStaticArticleText.includes('<h1 id="article-ssr-title">如何构建一个极速的无框架博客？</h1>') && generatedStaticArticleText.includes('/style.css?v=20260609-quality-v20') && generatedStaticArticleText.includes('/app.js?v=20260609-quality-v49'), 'generated GitHub Pages article files should include the readable shell and latest app assets');
+    assert(generatedStaticArticleText.includes('id="article-ssr-shell"') && generatedStaticArticleText.includes('<h1 id="article-ssr-title">如何构建一个极速的无框架博客？</h1>') && generatedStaticArticleText.includes('/style.css?v=20260609-quality-v21') && generatedStaticArticleText.includes('/app.js?v=20260609-quality-v51'), 'generated GitHub Pages article files should include the readable shell and latest app assets');
 
     const invalidArticleShell = await fetch(`${baseUrl}/?post=..%2Fserver`);
     const invalidArticleShellText = await invalidArticleShell.text();
